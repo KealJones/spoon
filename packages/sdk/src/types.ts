@@ -93,14 +93,34 @@ export interface MetricsSnapshot {
   episodeCount: number;
   verifiedAnswerCount: number;
   rungDistribution: Array<[string, number]>;
+  phase6: {
+    /** Aggregate teacher-request evidence; not a per-domain weaning metric. */
+    teacherInteractionEpisodes: number;
+    teacherAssistedSuccesses: number;
+    teacherFreeSuccesses: number;
+    /** Bounded to the durable records inspected by the snapshot. */
+    managedSkillRecordsExamined: number;
+    /** Persisted replay verdicts where the challenger preserved correctness. */
+    replayPreservedSkillVerdicts: number;
+    replayRegressions: number;
+    transferEligibleSkillVerdicts: number;
+    currentlyPromotedSkills: number;
+    postPromotionSkillUses: number;
+    postPromotionSkillSuccesses: number;
+  };
   intuition: {
     indexedDocuments: number;
     invertedTermRows: number;
     retrievalQueries: number;
     candidatesExamined: number;
     rankingExamples: number;
+    rankingEvaluations: number;
+    rankingSearchWins: number;
+    semanticRecallEvaluations: number;
+    semanticRecallWins: number;
     supervisionTasks: number;
     groundedTasks: number;
+    groundingRatio: number;
   };
 }
 
