@@ -1,6 +1,6 @@
 # EKG implementation handoff
 
-Last updated: 2026-08-22 (explainable inspector, trusted capability validation)
+Last updated: 2026-08-22 (bounded representation training, goal derivation boundaries)
 
 This is the durable restart point for completing every phase in
 `IMPLEMENTATION-PLAN.md`. Update it whenever ownership, verification state, or
@@ -63,6 +63,12 @@ The latest committed increments are:
   and reconstructible retirement.
 - `ff867ba`, `48139f4` — consolidation lifecycle RPC/SDK surfaces, including
   registration, shadow evaluation, live promotion, listing, and retirement.
+- `9e09d4c` — bounded, versioned representation-training artifacts with
+  held-out coverage, explicit activation, intuition/engine/RPC/SDK facades, and
+  public SDK exports.
+- `318c7ce`, `240523e`, `2a99bdf` — goal-bound learning provenance, storage-level
+  standing-goal immutability, derived instrumental-goal provenance, and RPC/SDK
+  APIs for both derived-goal paths.
 
 The first usable chat command is now:
 
@@ -95,6 +101,12 @@ sandbox execution is currently a bounded fixture boundary rather than arbitrary
 neutral-IR execution, and the bundle still needs a full dependency-DAG
 reconstruction runner. Engine-side local validation is now trust-receipt-bound;
 the low-level capability store remains usable for isolated bundle tests.
+
+Representation training is intentionally a bounded term-weight artifact and
+does not yet replace the deterministic lexical/hash retrieval index with a
+semantic embedding model. Skill lifecycle records are durable and gated, but
+skills are not yet executable/ranked procedures. These are open implementation
+gaps, not claims of completion.
 
 The inspector narrative is available at `GET /api/episodes/:id` and from the
 episode detail view. It explains teacher/provider/model/proposal/validation,
@@ -153,10 +165,12 @@ abstention, and capability authority while redacting sensitive fields.
 - Focused verification most recently green: `durability` (3), `trust_ledger`
   (5), `adaptation` (16), `cycle` (33), plus strict Clippy for `ekg-engine`
   and `ekg-core`.
-- Next concrete work: close the remaining Phase 3 evidence gaps and Phase 4
-  durable consolidation gaps, then run the complete Rust/TypeScript gate and
-  perform a requirement-by-requirement audit of every plan exit criterion while
-  excluding `WHAT-IS-EKG-v3.md` and `ekg-benchmark-suite.zip`.
+- Next concrete work: run the complete Rust/TypeScript gate and perform a
+  requirement-by-requirement audit of every plan exit criterion. Treat the
+  semantic embedding/retrieval lifecycle, executable skill integration, full
+  capability reconstruction runner, and all-twelve-metric instrumentation as
+  explicit remaining gaps unless the code and tests provide direct evidence.
+  Exclude `WHAT-IS-EKG-v3.md` and `ekg-benchmark-suite.zip` from staging.
 
 ## Current live checkpoint (2026-08-22, adversarial remediation in flight)
 
