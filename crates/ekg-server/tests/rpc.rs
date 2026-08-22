@@ -30,6 +30,8 @@ fn call(server: &mut RpcServer, id: u64, method: &str, mut params: Value) -> Val
             | "procedure.create"
             | "procedure.update"
             | "procedure.delete"
+            | "capability.grant"
+            | "capability.revoke"
             | "adaptation.applyOffline"
             | "contradiction.record"
             | "contradiction.refine"
@@ -55,6 +57,65 @@ fn call(server: &mut RpcServer, id: u64, method: &str, mut params: Value) -> Val
     assert_eq!(response["id"], id);
     assert!(response.get("error").is_none(), "{response}");
     response["result"].clone()
+}
+
+#[test]
+fn capability_rpc_round_trip_keeps_imports_provisional_and_grants_local() {
+    let mut server = test_server();
+    let bundle = call(
+        &mut server,
+        1,
+        "capability.discover",
+        json!({
+            "source": "weather-api",
+            "fingerprint": "weather-v1",
+            "operations": [{
+                "name": "forecast",
+                "inputSchema": {"type": "object"},
+                "outputSchema": {"type": "object"},
+                "host": "api.example.test",
+                "method": "GET",
+                "responseFixture": {"temperature": 72}
+            }]
+        }),
+    );
+    let imported = call(
+        &mut server,
+        2,
+        "capability.import",
+        json!({"bundle": bundle}),
+    );
+    assert_eq!(imported["status"], "quarantined");
+    let content_id = imported["contentId"].as_str().unwrap();
+    let validation = call(
+        &mut server,
+        3,
+        "capability.revalidate",
+        json!({
+            "contentId": content_id,
+            "validation": {
+                "passed": true,
+                "validationEpisodes": ["local-validation"],
+                "environmentDigest": "local"
+            }
+        }),
+    );
+    assert_eq!(validation["status"], "provisional");
+    let permission = json!({"kind": "network_host", "host": "api.example.test"});
+    let granted = call(
+        &mut server,
+        4,
+        "capability.grant",
+        json!({"contentId": content_id, "permission": permission}),
+    );
+    assert_eq!(granted["granted"], true);
+    let exported = call(
+        &mut server,
+        5,
+        "capability.export",
+        json!({"contentId": content_id}),
+    );
+    assert_eq!(exported["bundle"]["contentId"], content_id);
 }
 
 #[test]

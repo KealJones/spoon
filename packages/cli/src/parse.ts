@@ -34,7 +34,7 @@ export type Command =
   | { kind: "contradiction.record"; request: Record<string, JsonValue> }
   | { kind: "contradiction.refine"; request: Record<string, JsonValue> }
   | { kind: "contradiction.uncertainty"; claimId: string }
-  | { kind: "cycle.run"; situation: string };
+  | { kind: "cycle.run"; situation: string; quiet: boolean };
 
 const usage = `Usage:
   ekg concept add <name>
@@ -56,7 +56,7 @@ const usage = `Usage:
   ekg contradiction record '<json>'
   ekg contradiction refine '<json>'
   ekg contradiction uncertainty <claim-id>
-  ekg ask <situation>`;
+  ekg ask [--quiet|-q] <situation>`;
 
 export function parseCommand(args: string[]): Command {
   const [resource, action, ...rest] = args;
@@ -163,7 +163,10 @@ export function parseCommand(args: string[]): Command {
     return { kind: "contradiction.uncertainty", claimId: rest[0]! };
   }
   if (resource === "ask" && action) {
-    return { kind: "cycle.run", situation: [action, ...rest].join(" ") };
+    const quiet = action === "--quiet" || action === "-q";
+    const question = quiet ? rest : [action, ...rest];
+    if (question.length === 0) throw new Error(usage);
+    return { kind: "cycle.run", situation: question.join(" "), quiet };
   }
 
   throw new Error(usage);

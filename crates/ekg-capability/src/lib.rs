@@ -67,6 +67,7 @@ pub enum NativePrimitive {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ResourceBounds {
     pub max_bytes: u64,
     pub max_steps: u64,
@@ -245,6 +246,7 @@ impl Default for ResourceBounds {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CapabilityTest {
     pub name: String,
     pub input: Value,
@@ -253,6 +255,7 @@ pub struct CapabilityTest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Provenance {
     pub source: String,
     pub discovered_at: i64,
@@ -261,6 +264,7 @@ pub struct Provenance {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Dependency {
     pub name: String,
     pub version: String,
@@ -277,6 +281,7 @@ pub enum CapabilityStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CapabilityProcedure {
     pub id: String,
     pub name: String,
@@ -294,6 +299,7 @@ pub struct CapabilityProcedure {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CapabilityBundle {
     pub format_version: u16,
     pub name: String,
@@ -306,6 +312,7 @@ pub struct CapabilityBundle {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ImportedCapability {
     pub content_id: String,
     pub name: String,
@@ -314,6 +321,7 @@ pub struct ImportedCapability {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LocalValidation {
     pub passed: bool,
     pub validation_episodes: Vec<String>,
@@ -321,6 +329,7 @@ pub struct LocalValidation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DiscoveredOperation {
     pub name: String,
     pub input_schema: Value,
@@ -331,6 +340,7 @@ pub struct DiscoveredOperation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct InterfaceDescription {
     pub source: String,
     pub fingerprint: String,

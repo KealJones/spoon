@@ -61,6 +61,16 @@ fn execution_records_and_evaluates_a_complete_episode() {
 
     let stored = engine.episodes().get(outcome.episode.id).unwrap();
     assert_eq!(stored.id, outcome.episode.id);
+    let regressions = engine
+        .episodes()
+        .list_verified_regression_cases(procedure.id, procedure.version)
+        .unwrap();
+    assert_eq!(regressions.len(), 1);
+    assert_eq!(regressions[0].test_case.expected_output, Value::Int(14));
+    assert_eq!(
+        regressions[0].test_case.from_episode,
+        Some(outcome.episode.id)
+    );
 }
 
 #[test]

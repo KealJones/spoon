@@ -6,9 +6,9 @@ use ekg_capability::{
 use ekg_core::{
     Concept, ConceptId, ContractCheckResult, EkgError, Episode, EpisodeCost, EpisodeId,
     EscalationRung, Evaluation, Lifecycle, ObservedFact, Procedure, ProcedureId, ReasoningTrace,
-    Relationship, RelationshipId, TraceStep, TraceStepStatus, Value, VerifiabilityTier,
+    Relationship, RelationshipId, TestCase, TraceStep, TraceStepStatus, Value, VerifiabilityTier,
 };
-use ekg_episode::{EpisodeFeedback, EpisodeStore};
+use ekg_episode::{EpisodeFeedback, EpisodeStore, VerifiedRegressionCase};
 use ekg_exec::{ConditionCheckStatus, Evaluator, ExecStepStatus, ExecTrace};
 use ekg_graph::{ActivationSpreadQuery, ActivationSpreadResult, GraphError, KnowledgeStore};
 use ekg_intuition::{
@@ -885,8 +885,64 @@ impl Engine {
         self.detect_contradictions_for_trusted_episode(episode)?;
         self.index_episode(episode)?;
         self.record_episode_learning(episode)?;
+        self.record_verified_regression(episode)?;
         self.runtime
             .complete_episode_saga(&episode.id.to_string())?;
+        Ok(())
+    }
+
+    /// Successful deterministic procedure episodes become local regression
+    /// evidence only after the episode has passed the full Engine trust saga.
+    /// This keeps the suite useful for promotion without allowing callers to
+    /// inject arbitrary expected outputs or verification tiers.
+    fn record_verified_regression(&self, episode: &Episode) -> Result<(), EngineError> {
+        let Some(evaluation) = episode.evaluation.as_ref() else {
+            return Ok(());
+        };
+        if !evaluation.success
+            || !matches!(
+                evaluation.tier,
+                VerifiabilityTier::Hard | VerifiabilityTier::Consensus
+            )
+        {
+            return Ok(());
+        }
+        let Some(observed_result) = episode.observed_result.clone() else {
+            return Ok(());
+        };
+        let Some(action) = episode.action.as_deref() else {
+            return Ok(());
+        };
+        let Some(versioned_procedure) = action.strip_prefix("procedure:") else {
+            return Ok(());
+        };
+        let Some((procedure_id, version)) = versioned_procedure.split_once('@') else {
+            return Ok(());
+        };
+        let Ok(procedure_id) = uuid::Uuid::parse_str(procedure_id) else {
+            return Ok(());
+        };
+        let Ok(procedure_version) = version.parse::<u32>() else {
+            return Ok(());
+        };
+        let test_case = TestCase {
+            inputs: episode
+                .context
+                .environment
+                .iter()
+                .map(|(name, value)| (name.clone(), value.clone()))
+                .collect(),
+            expected_output: observed_result,
+            from_episode: Some(episode.id),
+            tier: evaluation.tier,
+        };
+        self.episodes
+            .record_verified_regression_case(&VerifiedRegressionCase {
+                episode_id: episode.id,
+                procedure_id: ProcedureId(procedure_id),
+                procedure_version,
+                test_case,
+            })?;
         Ok(())
     }
 

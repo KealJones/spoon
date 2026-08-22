@@ -1,5 +1,5 @@
 use ekg_core::{
-    EkgError, Episode, EpisodeId, EscalationRung, ProcedureId, VerifiabilityTier,
+    EkgError, Episode, EpisodeId, EscalationRung, ProcedureId, TestCase, VerifiabilityTier,
     concept::ConceptId,
 };
 use ekg_exec::ExecTrace;
@@ -190,6 +190,16 @@ pub struct EpisodeQuery {
     pub limit: u32,
 }
 
+/// A verified, version-pinned regression case. These rows are explicit
+/// metadata: merely storing an episode never grants promotion authority.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VerifiedRegressionCase {
+    pub episode_id: EpisodeId,
+    pub procedure_id: ProcedureId,
+    pub procedure_version: u32,
+    pub test_case: TestCase,
+}
+
 impl Default for EpisodeQuery {
     fn default() -> Self {
         Self {
@@ -245,6 +255,18 @@ impl EpisodeStore {
 
                 CREATE INDEX IF NOT EXISTS idx_episodes_rung
                     ON episodes(rung_reached);
+
+                CREATE TABLE IF NOT EXISTS verified_regression_cases (
+                    episode_id TEXT NOT NULL,
+                    procedure_id TEXT NOT NULL,
+                    procedure_version INTEGER NOT NULL,
+                    test_case_json TEXT NOT NULL,
+                    PRIMARY KEY (episode_id, procedure_id, procedure_version),
+                    FOREIGN KEY (episode_id) REFERENCES episodes(id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_verified_regressions_procedure
+                    ON verified_regression_cases(procedure_id, procedure_version);
 
                 CREATE TABLE IF NOT EXISTS episode_concepts (
                     episode_id TEXT NOT NULL,
@@ -1048,6 +1070,83 @@ impl EpisodeStore {
 
     pub fn get(&self, id: EpisodeId) -> Result<Episode, EkgError> {
         self.get_with_finalization(id, true)
+    }
+
+    /// Records a regression case only for a successful Hard/Consensus episode.
+    /// Deferred evidence is intentionally excluded from the promotion suite.
+    pub fn record_verified_regression_case(
+        &self,
+        case: &VerifiedRegressionCase,
+    ) -> Result<(), EkgError> {
+        if !matches!(
+            case.test_case.tier,
+            VerifiabilityTier::Hard | VerifiabilityTier::Consensus
+        ) {
+            return Err(EkgError::Other(
+                "regression cases require Hard or Consensus evidence".into(),
+            ));
+        }
+        let episode = self.get(case.episode_id)?;
+        if episode
+            .evaluation
+            .as_ref()
+            .is_none_or(|evaluation| !evaluation.success)
+        {
+            return Err(EkgError::Other(
+                "regression cases require a successful episode".into(),
+            ));
+        }
+        let json = serde_json::to_string(&case.test_case)
+            .map_err(|e| EkgError::Serialization(e.to_string()))?;
+        self.conn
+            .execute(
+                "INSERT OR REPLACE INTO verified_regression_cases
+             (episode_id, procedure_id, procedure_version, test_case_json)
+             VALUES (?1, ?2, ?3, ?4)",
+                params![
+                    case.episode_id.to_string(),
+                    case.procedure_id.to_string(),
+                    case.procedure_version,
+                    json
+                ],
+            )
+            .map_err(|e| EkgError::Storage(e.to_string()))?;
+        Ok(())
+    }
+
+    pub fn list_verified_regression_cases(
+        &self,
+        procedure_id: ProcedureId,
+        procedure_version: u32,
+    ) -> Result<Vec<VerifiedRegressionCase>, EkgError> {
+        let mut statement = self
+            .conn
+            .prepare(
+                "SELECT episode_id, test_case_json FROM verified_regression_cases
+             WHERE procedure_id = ?1 AND procedure_version = ?2 ORDER BY episode_id",
+            )
+            .map_err(|e| EkgError::Storage(e.to_string()))?;
+        statement
+            .query_map(
+                params![procedure_id.to_string(), procedure_version],
+                |row| {
+                    let episode_id: String = row.get(0)?;
+                    let test_case_json: String = row.get(1)?;
+                    Ok((episode_id, test_case_json))
+                },
+            )
+            .map_err(|e| EkgError::Storage(e.to_string()))?
+            .map(|row| {
+                let (episode_id, json) = row.map_err(|e| EkgError::Storage(e.to_string()))?;
+                Ok(VerifiedRegressionCase {
+                    episode_id: EpisodeId(parse_uuid(&episode_id)?),
+                    procedure_id,
+                    procedure_version,
+                    test_case: serde_json::from_str(&json)
+                        .map_err(|e| EkgError::Serialization(e.to_string()))?,
+                })
+            })
+            .collect()
     }
 
     /// Returns an explicitly unfinished episode for recovery/finalization.

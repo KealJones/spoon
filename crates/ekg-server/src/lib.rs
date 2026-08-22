@@ -13,7 +13,7 @@ use ekg_core::{
 use ekg_engine::{
     AdaptationPlanId, AdaptationPlanRequest, ApplyAdaptationRequest, CycleBudget, CycleId,
     CycleInput, CycleOutcome, CycleProgress, Engine, EngineError, FailureAnalysisRequest,
-    TeacherProposalWire,
+    InterfaceDescription, LocalValidation, Permission, TeacherProposalWire,
 };
 use ekg_episode::{EpisodeFeedback, EpisodeQuery, FeedbackSource};
 use ekg_graph::GraphError;
@@ -247,6 +247,60 @@ impl RpcServer {
                         .traverse(input.concept_id()?, &input.kind, input.max_hops)
                         .map_err(app_error)?,
                 )
+            }
+            "capability.discover" => {
+                let input: InterfaceDescription = decode(params)?;
+                encode(
+                    self.engine
+                        .discover_capability(&input)
+                        .map_err(engine_error)?,
+                )
+            }
+            "capability.import" => {
+                let input: CapabilityBundleParam = decode(params)?;
+                let bytes = serde_json::to_vec(&input.bundle).map_err(|error| {
+                    RpcFault::new(-32602, "invalid capability bundle")
+                        .with_data(json!({"cause": error.to_string()}))
+                })?;
+                encode(
+                    self.engine
+                        .import_capability_bundle(&bytes)
+                        .map_err(engine_error)?,
+                )
+            }
+            "capability.export" => {
+                let input: CapabilityIdParam = decode(params)?;
+                let bytes = self
+                    .engine
+                    .export_capability_bundle(&input.content_id)
+                    .map_err(engine_error)?;
+                let bundle: Value = serde_json::from_slice(&bytes).map_err(|error| {
+                    RpcFault::new(-32603, "capability serialization failed")
+                        .with_data(json!({"cause": error.to_string()}))
+                })?;
+                encode(json!({"bundle": bundle}))
+            }
+            "capability.revalidate" => {
+                let input: CapabilityRevalidateParam = decode(params)?;
+                encode(
+                    self.engine
+                        .revalidate_capability(&input.content_id, &input.validation)
+                        .map_err(engine_error)?,
+                )
+            }
+            "capability.grant" => {
+                let input: CapabilityPermissionParam = decode(params)?;
+                self.engine
+                    .grant_capability_permission(&input.content_id, &input.permission)
+                    .map_err(engine_error)?;
+                Ok(json!({"granted": true}))
+            }
+            "capability.revoke" => {
+                let input: CapabilityPermissionParam = decode(params)?;
+                self.engine
+                    .revoke_capability_permission(&input.content_id, &input.permission)
+                    .map_err(engine_error)?;
+                Ok(json!({"revoked": true}))
             }
             "procedure.create" => {
                 let input: CreateProcedure = decode(params)?;
@@ -568,10 +622,37 @@ fn requires_admin(method: &str) -> bool {
             | "procedure.create"
             | "procedure.update"
             | "procedure.delete"
+            | "capability.grant"
+            | "capability.revoke"
             | "adaptation.applyOffline"
             | "contradiction.record"
             | "contradiction.refine"
     )
+}
+
+#[derive(Debug, Deserialize)]
+struct CapabilityBundleParam {
+    bundle: Value,
+}
+
+#[derive(Debug, Deserialize)]
+struct CapabilityIdParam {
+    #[serde(rename = "contentId")]
+    content_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CapabilityRevalidateParam {
+    #[serde(rename = "contentId")]
+    content_id: String,
+    validation: LocalValidation,
+}
+
+#[derive(Debug, Deserialize)]
+struct CapabilityPermissionParam {
+    #[serde(rename = "contentId")]
+    content_id: String,
+    permission: Permission,
 }
 
 pub fn run_stdio<R: BufRead, W: Write>(

@@ -2,7 +2,7 @@ use ekg_core::{
     Concept, ConceptId, EkgError, Episode, EpisodeId, MutabilityClass, Procedure, ProcedureId,
     Relationship, RelationshipId,
 };
-use ekg_episode::{EpisodeFeedback, EpisodeQuery, EpisodeStore};
+use ekg_episode::{EpisodeFeedback, EpisodeQuery, EpisodeStore, VerifiedRegressionCase};
 use ekg_graph::{ActivationSpreadQuery, ActivationSpreadResult, GraphError, KnowledgeStore};
 
 /// Read-only graph projection exposed by [`crate::Engine`]. Persistence crates
@@ -148,5 +148,14 @@ impl EpisodeView<'_> {
 
     pub fn query(&self, query: &EpisodeQuery) -> Result<Vec<Episode>, EkgError> {
         self.store.query(query)
+    }
+
+    pub fn list_verified_regression_cases(
+        &self,
+        procedure_id: ProcedureId,
+        procedure_version: u32,
+    ) -> Result<Vec<VerifiedRegressionCase>, EkgError> {
+        self.store
+            .list_verified_regression_cases(procedure_id, procedure_version)
     }
 }

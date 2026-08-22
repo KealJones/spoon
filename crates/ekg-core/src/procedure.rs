@@ -95,7 +95,7 @@ impl Param {
 /// Tier 1 verified -> hard regression test.
 /// Tier 2 verified -> consistency test.
 /// Tier 3 only -> not a test, too noisy to gate on. (section 27)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TestCase {
     pub inputs: Vec<(String, Value)>,
     pub expected_output: Value,

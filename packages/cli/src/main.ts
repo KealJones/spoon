@@ -106,10 +106,30 @@ async function main(): Promise<void> {
 
   try {
     const result = await execute(client, command);
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    if (command.kind === "cycle.run" && command.quiet) {
+      process.stdout.write(`${formatQuietAnswer(result)}\n`);
+    } else {
+      process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    }
   } finally {
     client.close();
   }
+}
+
+function formatQuietAnswer(result: unknown): string {
+  if (!isRecord(result)) return JSON.stringify(result);
+  const answer = result.answer;
+  if (answer !== null && answer !== undefined) {
+    return typeof answer === "string" ? answer : JSON.stringify(answer);
+  }
+  const disposition = result.disposition;
+  return typeof disposition === "string"
+    ? `No direct answer (${disposition}).`
+    : "No direct answer.";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 main().catch((error: unknown) => {
