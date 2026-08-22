@@ -56,6 +56,13 @@ The latest committed increments are:
 - `de0ce7f` — procedure-bound capability authorization in Engine/RPC/SDK.
 - `79cbc87` — successful capability revalidation now requires local UUID episode
   evidence with an exact Engine trust receipt and a strong evaluation.
+- `b1386d1` — bounded chronological, query-conditioned held-out ranking
+  evaluation with persisted search-win evidence and metrics.
+- `f48a0fd` — durable skill candidate/shadow/promoted/retired lifecycle with
+  receipt-gated registration, replay gate, authenticated live-win promotion,
+  and reconstructible retirement.
+- `ff867ba`, `48139f4` — consolidation lifecycle RPC/SDK surfaces, including
+  registration, shadow evaluation, live promotion, listing, and retirement.
 
 The first usable chat command is now:
 
@@ -80,8 +87,8 @@ Capability acquisition now has typed discovery, canonical deterministic
 bundles, quarantine imports, local validation, revocable grants, primitive
 policy checks, a safe clock observation adapter, RPC and SDK methods. Goals and
 curiosity gaps are durable, bounded, and standing goals are immutable. Phase 4
-skill discovery and compression are intentionally report/planning-only until
-the promotion gate is the authority for mutation.
+skill lifecycle records are durable and promotion-gated; compression and
+single-success/failure discovery remain conservative planning/report paths.
 
 Capability limitations are explicit: network transport remains adapter-injected,
 sandbox execution is currently a bounded fixture boundary rather than arbitrary
@@ -104,15 +111,14 @@ abstention, and capability authority while redacting sensitive fields.
   limitation is that the independent subagent audit was unavailable after the
   delegated agents exhausted their usage. Root remediation and adversarial
   coverage are recorded with that limitation rather than overstated.
-- Phase 3 is now in progress. The first increment is implemented and verified
-  in `ekg-intuition`: bounded inverted-term recall, persisted outcome-aware
-  ranking, representation/self-supervision tasks, grounded epistemic
-  challenges, and Engine integration/rebuild on reopen.
+- Phase 3 is now in progress. `ekg-intuition` has bounded inverted-term recall,
+  persisted outcome-aware ranking, trusted recall, and a chronological,
+  query-conditioned held-out ranking evaluator with durable search-win metrics.
 - Phase 3 progress and remaining work are recorded in
   `.agents/scratchpad/ekg/phase-3-intuition/progress.md`. Typed activation
   spread, ranked local interpretation, trusted recall, stale-index cleanup,
-  and larger-corpus evidence are now implemented; the phase still needs
-  held-out baseline/rung evidence and representation-version evaluation.
+  and larger-corpus evidence are now implemented; the phase still needs a real
+  semantic embedding/trainer lifecycle and causal cross-query/rung evidence.
 
 - Phase 4 now has a pure replay promotion gate: correctness regressions reject
   shadow eligibility, and a measurable compression/search/coverage/transfer
@@ -121,8 +127,8 @@ abstention, and capability authority while redacting sensitive fields.
 - Phase 5 capability foundation is implemented in `ekg-capability`: typed
   native primitive policy, explicit discovery/synthesis, canonical content-
   addressed bundles, quarantine import, local sandbox revalidation, and
-  separate revocable local grants. Engine facades are available; RPC/SDK/CLI
-  surfaces and full primitive adapters remain next.
+  separate revocable local grants. Engine and RPC/SDK facades are available;
+  network transport and a full neutral-IR reconstruction runner remain next.
 
 ## Current restart point (authoritative)
 
