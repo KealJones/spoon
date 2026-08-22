@@ -266,25 +266,25 @@ impl Engine {
         statement: &str,
         parent_id: Option<&str>,
     ) -> Result<crate::goals::Goal, EngineError> {
-        Ok(self.goals.create_goal(kind, statement, parent_id)?)
+        self.goals.create_goal(kind, statement, parent_id)
     }
 
     pub fn list_goals(&self) -> Result<Vec<crate::goals::Goal>, EngineError> {
-        Ok(self.goals.list_goals()?)
+        self.goals.list_goals()
     }
 
     pub fn record_curiosity_gap(
         &self,
         gap: &crate::goals::CuriosityGap,
     ) -> Result<(), EngineError> {
-        Ok(self.goals.record_gap(gap)?)
+        self.goals.record_gap(gap)
     }
 
     pub fn rank_curiosity_gaps(
         &self,
         limit: u32,
     ) -> Result<Vec<crate::goals::CuriosityGap>, EngineError> {
-        Ok(self.goals.rank_gaps(limit)?)
+        self.goals.rank_gaps(limit)
     }
 
     pub fn discover_skill_candidates(
