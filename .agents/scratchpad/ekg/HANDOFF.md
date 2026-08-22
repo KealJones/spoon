@@ -72,6 +72,9 @@ The latest committed increments are:
 - `153aed2` — promoted managed skills can execute only when their trusted
   source episodes identify one stable versioned procedure; failure critics,
   candidates, and retired skills fail closed.
+- `c1aa4a3` — metrics snapshots/RPC now expose durable strong-answer baseline
+  coverage (`verifiedAnswerCount`), explicitly distinguished from successful
+  follow-up reruns.
 
 The first usable chat command is now:
 
