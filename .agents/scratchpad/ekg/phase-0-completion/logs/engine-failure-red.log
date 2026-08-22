@@ -1,0 +1,9 @@
+   Compiling ekg-engine v0.1.0 (/Users/kealjones/Git/Personal/ekg/crates/ekg-engine)
+error[E0599]: no variant named `ExecutionFailed` found for enum `EngineError`
+   --> crates/ekg-engine/tests/seed_cycle.rs:134:22
+    |
+134 |     let EngineError::ExecutionFailed { episode_id, .. } = error else {
+    |                      ^^^^^^^^^^^^^^^ variant not found in `EngineError`
+
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `ekg-engine` (test "seed_cycle") due to 1 previous error

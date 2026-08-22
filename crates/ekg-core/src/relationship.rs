@@ -14,6 +14,12 @@ impl RelationshipId {
     }
 }
 
+impl Default for RelationshipId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl std::fmt::Display for RelationshipId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
@@ -36,11 +42,7 @@ pub struct Relationship {
 }
 
 impl Relationship {
-    pub fn new(
-        source: ConceptId,
-        target: ConceptId,
-        kind: impl Into<String>,
-    ) -> Self {
+    pub fn new(source: ConceptId, target: ConceptId, kind: impl Into<String>) -> Self {
         Self {
             id: RelationshipId::new(),
             source,

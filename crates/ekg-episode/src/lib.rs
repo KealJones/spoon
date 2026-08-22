@@ -1,3 +1,3 @@
 pub mod store;
 
-pub use store::EpisodeStore;
+pub use store::{EpisodeQuery, EpisodeStore};

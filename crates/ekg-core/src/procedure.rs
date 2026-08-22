@@ -17,6 +17,12 @@ impl ProcedureId {
     }
 }
 
+impl Default for ProcedureId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl std::fmt::Display for ProcedureId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)

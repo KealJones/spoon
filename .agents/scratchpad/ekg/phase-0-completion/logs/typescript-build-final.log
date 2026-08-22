@@ -1,0 +1,6 @@
+$ pnpm -r --if-present build
+Scope: 2 of 3 workspace projects
+packages/sdk build$ tsc -p tsconfig.json
+packages/sdk build: Done
+packages/cli build$ tsc -p tsconfig.json
+packages/cli build: Done

@@ -1,8 +1,8 @@
-use rusqlite::{params, Connection, OptionalExtension, Row};
+use rusqlite::{Connection, OptionalExtension, Row, params};
 use uuid::Uuid;
 
 use ekg_core::{
-    Concept, ConceptId, Confidence, Contract, Lifecycle, MutabilityClass, Param, Procedure,
+    Concept, ConceptId, Confidence, Contract, Expr, Lifecycle, MutabilityClass, Param, Procedure,
     ProcedureId, Relationship, RelationshipId, ScopeCondition, TestCase,
 };
 
@@ -17,6 +17,37 @@ use crate::schema;
 /// text, since it's read/written wholesale and never queried by sub-field.
 pub struct KnowledgeStore {
     conn: Connection,
+}
+
+/// An entity whose downstream dependencies should be inspected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DependencyTarget {
+    Concept(ConceptId),
+    Procedure(ProcedureId),
+}
+
+/// Why a procedure depends on the report's target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ProcedureDependencyKind {
+    AttachedToConcept,
+    CallsProcedure,
+}
+
+/// A current graph entity that depends on another concept or procedure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Dependent {
+    Concept(ConceptId),
+    Procedure {
+        id: ProcedureId,
+        kind: ProcedureDependencyKind,
+    },
+}
+
+/// The current entities that would be affected by changing `target`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DependencyReport {
+    pub target: DependencyTarget,
+    pub dependents: Vec<Dependent>,
 }
 
 impl KnowledgeStore {
@@ -106,6 +137,34 @@ impl KnowledgeStore {
         Ok(())
     }
 
+    /// Deletes a concept only when no live relationship or procedure
+    /// references it.
+    pub fn delete_concept(&self, id: ConceptId) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        let dependent_count: i64 = tx.query_row(
+            "SELECT \
+                (SELECT COUNT(*) FROM relationships WHERE source = ?1 OR target = ?1) + \
+                (SELECT COUNT(*) FROM procedures WHERE concept_id = ?1)",
+            params![id.0.to_string()],
+            |row| row.get(0),
+        )?;
+        if dependent_count > 0 {
+            return Err(GraphError::HasDependents(format!(
+                "concept {id} has {dependent_count} live reference(s)"
+            )));
+        }
+
+        let changed = tx.execute(
+            "DELETE FROM concepts WHERE id = ?1",
+            params![id.0.to_string()],
+        )?;
+        if changed == 0 {
+            return Err(GraphError::NotFound(format!("concept {id}")));
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     pub fn list_concepts(&self) -> Result<Vec<Concept>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, name, description, mutability, confidence_json, lifecycle, \
@@ -113,6 +172,22 @@ impl KnowledgeStore {
              FROM concepts ORDER BY name",
         )?;
         let rows = stmt.query_map([], Self::concept_from_row)?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()?
+            .into_iter()
+            .collect()
+    }
+
+    /// Returns concepts with exactly the requested mutability class.
+    pub fn get_concepts_by_mutability(&self, mutability: MutabilityClass) -> Result<Vec<Concept>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, name, description, mutability, confidence_json, lifecycle, \
+                    created_at, updated_at \
+             FROM concepts WHERE mutability = ?1 ORDER BY name",
+        )?;
+        let rows = stmt.query_map(
+            params![serde_json::to_string(&mutability)?],
+            Self::concept_from_row,
+        )?;
         rows.collect::<rusqlite::Result<Vec<_>>>()?
             .into_iter()
             .collect()
@@ -185,7 +260,10 @@ impl KnowledgeStore {
                     lifecycle, created_at \
              FROM relationships WHERE source = ?1",
         )?;
-        let rows = stmt.query_map(params![concept_id.0.to_string()], Self::relationship_from_row)?;
+        let rows = stmt.query_map(
+            params![concept_id.0.to_string()],
+            Self::relationship_from_row,
+        )?;
         rows.collect::<rusqlite::Result<Vec<_>>>()?
             .into_iter()
             .collect()
@@ -197,7 +275,10 @@ impl KnowledgeStore {
                     lifecycle, created_at \
              FROM relationships WHERE target = ?1",
         )?;
-        let rows = stmt.query_map(params![concept_id.0.to_string()], Self::relationship_from_row)?;
+        let rows = stmt.query_map(
+            params![concept_id.0.to_string()],
+            Self::relationship_from_row,
+        )?;
         rows.collect::<rusqlite::Result<Vec<_>>>()?
             .into_iter()
             .collect()
@@ -213,6 +294,40 @@ impl KnowledgeStore {
         rows.collect::<rusqlite::Result<Vec<_>>>()?
             .into_iter()
             .collect()
+    }
+
+    pub fn update_relationship(&self, rel: &Relationship) -> Result<()> {
+        let changed = self.conn.execute(
+            "UPDATE relationships SET \
+                source = ?2, target = ?3, kind = ?4, strength = ?5, scope_json = ?6, \
+                evidence_json = ?7, lifecycle = ?8 \
+             WHERE id = ?1",
+            params![
+                rel.id.0.to_string(),
+                rel.source.0.to_string(),
+                rel.target.0.to_string(),
+                rel.kind,
+                rel.strength,
+                serde_json::to_string(&rel.scope)?,
+                serde_json::to_string(&rel.evidence)?,
+                serde_json::to_string(&rel.lifecycle)?,
+            ],
+        )?;
+        if changed == 0 {
+            return Err(GraphError::NotFound(format!("relationship {}", rel.id)));
+        }
+        Ok(())
+    }
+
+    pub fn delete_relationship(&self, id: RelationshipId) -> Result<()> {
+        let changed = self.conn.execute(
+            "DELETE FROM relationships WHERE id = ?1",
+            params![id.0.to_string()],
+        )?;
+        if changed == 0 {
+            return Err(GraphError::NotFound(format!("relationship {id}")));
+        }
+        Ok(())
     }
 
     fn relationship_from_row(row: &Row) -> rusqlite::Result<Result<Relationship>> {
@@ -246,7 +361,8 @@ impl KnowledgeStore {
     // ---------------------------------------------------------------
 
     pub fn insert_procedure(&self, proc: &Procedure) -> Result<()> {
-        self.conn.execute(
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute(
             "INSERT INTO procedures \
                 (id, name, params_json, body_json, contract_json, test_cases_json, \
                  concept_id, version, lifecycle, created_at, updated_at) \
@@ -265,6 +381,8 @@ impl KnowledgeStore {
                 proc.updated_at,
             ],
         )?;
+        Self::insert_procedure_snapshot(&tx, proc)?;
+        tx.commit()?;
         Ok(())
     }
 
@@ -295,7 +413,8 @@ impl KnowledgeStore {
     }
 
     pub fn update_procedure(&self, proc: &Procedure) -> Result<()> {
-        let changed = self.conn.execute(
+        let tx = self.conn.unchecked_transaction()?;
+        let changed = tx.execute(
             "UPDATE procedures SET \
                 name = ?2, params_json = ?3, body_json = ?4, contract_json = ?5, \
                 test_cases_json = ?6, concept_id = ?7, version = ?8, lifecycle = ?9, \
@@ -317,7 +436,85 @@ impl KnowledgeStore {
         if changed == 0 {
             return Err(GraphError::NotFound(format!("procedure {}", proc.id)));
         }
+        Self::insert_procedure_snapshot(&tx, proc)?;
+        tx.commit()?;
         Ok(())
+    }
+
+    /// Deletes only the current procedure. Historical snapshots remain
+    /// available for replay, auditing, and provenance.
+    pub fn delete_procedure(&self, id: ProcedureId) -> Result<()> {
+        let changed = self.conn.execute(
+            "DELETE FROM procedures WHERE id = ?1",
+            params![id.0.to_string()],
+        )?;
+        if changed == 0 {
+            return Err(GraphError::NotFound(format!("procedure {id}")));
+        }
+        Ok(())
+    }
+
+    /// Returns a historical procedure snapshot at an exact version.
+    pub fn get_procedure_version(
+        &self,
+        id: ProcedureId,
+        version: u32,
+    ) -> Result<Option<Procedure>> {
+        self.conn
+            .query_row(
+                "SELECT id, name, params_json, body_json, contract_json, test_cases_json, \
+                        concept_id, version, lifecycle, created_at, updated_at \
+                 FROM procedure_versions WHERE id = ?1 AND version = ?2",
+                params![id.0.to_string(), version],
+                Self::procedure_from_row,
+            )
+            .optional()?
+            .transpose()
+    }
+
+    /// Lists all historical snapshots for a procedure, oldest version first.
+    pub fn list_procedure_versions(&self, id: ProcedureId) -> Result<Vec<Procedure>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, name, params_json, body_json, contract_json, test_cases_json, \
+                    concept_id, version, lifecycle, created_at, updated_at \
+             FROM procedure_versions WHERE id = ?1 ORDER BY version ASC",
+        )?;
+        let rows = stmt.query_map(params![id.0.to_string()], Self::procedure_from_row)?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()?
+            .into_iter()
+            .collect()
+    }
+
+    /// Returns the contract that belonged to a procedure at an exact version.
+    pub fn get_contract_version(&self, id: ProcedureId, version: u32) -> Result<Option<Contract>> {
+        let contract_json = self
+            .conn
+            .query_row(
+                "SELECT contract_json FROM procedure_versions \
+                 WHERE id = ?1 AND version = ?2",
+                params![id.0.to_string(), version],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        contract_json
+            .map(|json| serde_json::from_str(&json).map_err(GraphError::from))
+            .transpose()
+    }
+
+    /// Lists contract snapshots with their procedure versions, oldest first.
+    pub fn list_contract_versions(&self, id: ProcedureId) -> Result<Vec<(u32, Contract)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT version, contract_json FROM procedure_versions \
+             WHERE id = ?1 ORDER BY version ASC",
+        )?;
+        let rows = stmt.query_map(params![id.0.to_string()], |row| {
+            Ok((row.get::<_, u32>(0)?, row.get::<_, String>(1)?))
+        })?;
+
+        rows.collect::<rusqlite::Result<Vec<_>>>()?
+            .into_iter()
+            .map(|(version, json)| Ok((version, serde_json::from_str(&json)?)))
+            .collect()
     }
 
     pub fn list_procedures(&self) -> Result<Vec<Procedure>> {
@@ -330,6 +527,29 @@ impl KnowledgeStore {
         rows.collect::<rusqlite::Result<Vec<_>>>()?
             .into_iter()
             .collect()
+    }
+
+    fn insert_procedure_snapshot(conn: &Connection, proc: &Procedure) -> Result<()> {
+        conn.execute(
+            "INSERT INTO procedure_versions \
+                (id, name, params_json, body_json, contract_json, test_cases_json, \
+                 concept_id, version, lifecycle, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![
+                proc.id.0.to_string(),
+                proc.name,
+                serde_json::to_string(&proc.params)?,
+                serde_json::to_string(&proc.body)?,
+                serde_json::to_string(&proc.contract)?,
+                serde_json::to_string(&proc.test_cases)?,
+                proc.concept.map(|c| c.0.to_string()),
+                proc.version,
+                serde_json::to_string(&proc.lifecycle)?,
+                proc.created_at,
+                proc.updated_at,
+            ],
+        )?;
+        Ok(())
     }
 
     fn procedure_from_row(row: &Row) -> rusqlite::Result<Result<Procedure>> {
@@ -380,6 +600,10 @@ impl KnowledgeStore {
         kind: &str,
         max_hops: u32,
     ) -> Result<Vec<(ConceptId, u32)>> {
+        if max_hops == 0 {
+            return Ok(Vec::new());
+        }
+
         let mut stmt = self.conn.prepare(
             "WITH RECURSIVE walk(id, hops) AS ( \
                 SELECT target, 1 FROM relationships WHERE source = ?1 AND kind = ?2 \
@@ -390,14 +614,11 @@ impl KnowledgeStore {
              ) \
              SELECT id, MIN(hops) AS hops FROM walk GROUP BY id ORDER BY hops",
         )?;
-        let rows = stmt.query_map(
-            params![start.0.to_string(), kind, max_hops as i64],
-            |row| {
-                let id: String = row.get(0)?;
-                let hops: i64 = row.get(1)?;
-                Ok((id, hops))
-            },
-        )?;
+        let rows = stmt.query_map(params![start.0.to_string(), kind, max_hops as i64], |row| {
+            let id: String = row.get(0)?;
+            let hops: i64 = row.get(1)?;
+            Ok((id, hops))
+        })?;
 
         let mut out = Vec::new();
         for row in rows {
@@ -411,9 +632,9 @@ impl KnowledgeStore {
     /// relationship that targets it. In a relationship `A --kind--> B`,
     /// `A` depends on `B`, so `get_dependents(B)` returns `A`.
     pub fn get_dependents(&self, concept_id: ConceptId) -> Result<Vec<ConceptId>> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT DISTINCT source FROM relationships WHERE target = ?1")?;
+        let mut stmt = self.conn.prepare(
+            "SELECT DISTINCT source FROM relationships WHERE target = ?1 ORDER BY source",
+        )?;
         let rows = stmt.query_map(params![concept_id.0.to_string()], |row| {
             let id: String = row.get(0)?;
             Ok(id)
@@ -426,12 +647,105 @@ impl KnowledgeStore {
         }
         Ok(out)
     }
+
+    /// Reports current graph entities that depend on a concept or procedure.
+    ///
+    /// A concept is depended on by relationship sources and by procedures
+    /// attached to it. A procedure is depended on by procedures whose bodies
+    /// call it, including calls nested inside other expressions.
+    pub fn get_dependency_report(&self, target: DependencyTarget) -> Result<DependencyReport> {
+        let dependents = match target {
+            DependencyTarget::Concept(concept_id) => {
+                let mut dependents = self
+                    .get_dependents(concept_id)?
+                    .into_iter()
+                    .map(Dependent::Concept)
+                    .collect::<Vec<_>>();
+                let mut stmt = self
+                    .conn
+                    .prepare("SELECT id FROM procedures WHERE concept_id = ?1 ORDER BY name, id")?;
+                let rows = stmt.query_map(params![concept_id.0.to_string()], |row| {
+                    row.get::<_, String>(0)
+                })?;
+                for row in rows {
+                    dependents.push(Dependent::Procedure {
+                        id: ProcedureId(Uuid::parse_str(&row?)?),
+                        kind: ProcedureDependencyKind::AttachedToConcept,
+                    });
+                }
+                dependents
+            }
+            DependencyTarget::Procedure(procedure_id) => self
+                .list_procedures()?
+                .into_iter()
+                .filter(|procedure| Self::expression_calls(&procedure.body, procedure_id))
+                .map(|procedure| Dependent::Procedure {
+                    id: procedure.id,
+                    kind: ProcedureDependencyKind::CallsProcedure,
+                })
+                .collect(),
+        };
+
+        Ok(DependencyReport { target, dependents })
+    }
+
+    fn expression_calls(expression: &Expr, target: ProcedureId) -> bool {
+        match expression {
+            Expr::Literal(_) | Expr::Var(_) => false,
+            Expr::BinOp { left, right, .. } => {
+                Self::expression_calls(left, target) || Self::expression_calls(right, target)
+            }
+            Expr::UnOp { operand, .. } => Self::expression_calls(operand, target),
+            Expr::Call { procedure, args } => {
+                *procedure == target
+                    || args
+                        .iter()
+                        .any(|argument| Self::expression_calls(argument, target))
+            }
+            Expr::If { cond, then, else_ } => {
+                Self::expression_calls(cond, target)
+                    || Self::expression_calls(then, target)
+                    || Self::expression_calls(else_, target)
+            }
+            Expr::Let { value, body, .. } => {
+                Self::expression_calls(value, target) || Self::expression_calls(body, target)
+            }
+            Expr::Block(expressions) | Expr::ListExpr(expressions) => expressions
+                .iter()
+                .any(|expression| Self::expression_calls(expression, target)),
+            Expr::Index { collection, index } => {
+                Self::expression_calls(collection, target) || Self::expression_calls(index, target)
+            }
+            Expr::FieldAccess { object, .. } => Self::expression_calls(object, target),
+            Expr::Map {
+                collection, body, ..
+            } => Self::expression_calls(collection, target) || Self::expression_calls(body, target),
+            Expr::Filter {
+                collection,
+                predicate,
+                ..
+            } => {
+                Self::expression_calls(collection, target)
+                    || Self::expression_calls(predicate, target)
+            }
+            Expr::Reduce {
+                collection,
+                init,
+                body,
+                ..
+            } => {
+                Self::expression_calls(collection, target)
+                    || Self::expression_calls(init, target)
+                    || Self::expression_calls(body, target)
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ekg_core::{Expr, Value};
+    use ekg_core::{Condition, Expr, Value};
 
     fn concept(name: &str) -> Concept {
         Concept::new(name, MutabilityClass::DefeasibleGeneral)
@@ -490,6 +804,35 @@ mod tests {
     }
 
     #[test]
+    fn concepts_can_be_filtered_by_mutability_class() {
+        let store = KnowledgeStore::in_memory().unwrap();
+        let definitional = Concept::new("addition", MutabilityClass::Definitional);
+        let procedural = Concept::new("bake", MutabilityClass::Procedural);
+        let another_definitional = Concept::new("multiplication", MutabilityClass::Definitional);
+        for concept in [&definitional, &procedural, &another_definitional] {
+            store.insert_concept(concept).unwrap();
+        }
+
+        let matches = store
+            .get_concepts_by_mutability(MutabilityClass::Definitional)
+            .unwrap();
+
+        assert_eq!(
+            matches
+                .iter()
+                .map(|concept| concept.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["addition", "multiplication"]
+        );
+        assert!(
+            store
+                .get_concepts_by_mutability(MutabilityClass::Normative)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
     fn create_relationship_between_concepts() {
         let store = KnowledgeStore::in_memory().unwrap();
         let a = concept("mammal");
@@ -513,6 +856,103 @@ mod tests {
 
         let by_kind = store.get_relationships_by_kind("is-a").unwrap();
         assert_eq!(by_kind.len(), 1);
+    }
+
+    #[test]
+    fn update_relationship_roundtrip() {
+        let store = KnowledgeStore::in_memory().unwrap();
+        let a = concept("a");
+        let b = concept("b");
+        store.insert_concept(&a).unwrap();
+        store.insert_concept(&b).unwrap();
+
+        let mut rel = Relationship::new(a.id, b.id, "possible-link");
+        store.insert_relationship(&rel).unwrap();
+
+        rel.kind = "confirmed-link".into();
+        rel.strength = 0.95;
+        rel.lifecycle = Lifecycle::Validated;
+        store.update_relationship(&rel).unwrap();
+
+        let updated = store.get_relationship(rel.id).unwrap().unwrap();
+        assert_eq!(updated.kind, "confirmed-link");
+        assert_eq!(updated.strength, 0.95);
+        assert_eq!(updated.lifecycle, Lifecycle::Validated);
+    }
+
+    #[test]
+    fn delete_relationship_removes_it() {
+        let store = KnowledgeStore::in_memory().unwrap();
+        let a = concept("a");
+        let b = concept("b");
+        store.insert_concept(&a).unwrap();
+        store.insert_concept(&b).unwrap();
+        let rel = Relationship::new(a.id, b.id, "link");
+        store.insert_relationship(&rel).unwrap();
+
+        store.delete_relationship(rel.id).unwrap();
+
+        assert!(store.get_relationship(rel.id).unwrap().is_none());
+        assert!(matches!(
+            store.delete_relationship(rel.id),
+            Err(GraphError::NotFound(_))
+        ));
+    }
+
+    #[test]
+    fn delete_concept_removes_an_unreferenced_concept() {
+        let store = KnowledgeStore::in_memory().unwrap();
+        let c = concept("temporary");
+        store.insert_concept(&c).unwrap();
+
+        store.delete_concept(c.id).unwrap();
+
+        assert!(store.get_concept(c.id).unwrap().is_none());
+    }
+
+    #[test]
+    fn delete_concept_rejects_relationship_and_procedure_dependencies() {
+        let store = KnowledgeStore::in_memory().unwrap();
+        let relationship_dependency = concept("relationship dependency");
+        let procedure_dependency = concept("procedure dependency");
+        let source = concept("source");
+        for c in [&relationship_dependency, &procedure_dependency, &source] {
+            store.insert_concept(c).unwrap();
+        }
+        store
+            .insert_relationship(&Relationship::new(
+                source.id,
+                relationship_dependency.id,
+                "depends-on",
+            ))
+            .unwrap();
+        store
+            .insert_procedure(
+                &Procedure::new("implementation", Vec::new(), Expr::Literal(Value::Null))
+                    .with_concept(procedure_dependency.id),
+            )
+            .unwrap();
+
+        assert!(matches!(
+            store.delete_concept(relationship_dependency.id),
+            Err(GraphError::HasDependents(_))
+        ));
+        assert!(matches!(
+            store.delete_concept(procedure_dependency.id),
+            Err(GraphError::HasDependents(_))
+        ));
+        assert!(
+            store
+                .get_concept(relationship_dependency.id)
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            store
+                .get_concept(procedure_dependency.id)
+                .unwrap()
+                .is_some()
+        );
     }
 
     #[test]
@@ -542,6 +982,21 @@ mod tests {
     }
 
     #[test]
+    fn traverse_with_zero_hops_returns_nothing() {
+        let store = KnowledgeStore::in_memory().unwrap();
+        let a = concept("a");
+        let b = concept("b");
+        for concept in [&a, &b] {
+            store.insert_concept(concept).unwrap();
+        }
+        store
+            .insert_relationship(&Relationship::new(a.id, b.id, "leads-to"))
+            .unwrap();
+
+        assert!(store.traverse(a.id, "leads-to", 0).unwrap().is_empty());
+    }
+
+    #[test]
     fn get_dependents_finds_sources() {
         let store = KnowledgeStore::in_memory().unwrap();
         let base = concept("database");
@@ -555,6 +1010,91 @@ mod tests {
 
         let dependents = store.get_dependents(base.id).unwrap();
         assert_eq!(dependents, vec![dependent.id]);
+    }
+
+    #[test]
+    fn concept_dependency_report_includes_concepts_and_attached_procedures() {
+        let store = KnowledgeStore::in_memory().unwrap();
+        let base = concept("base");
+        let dependent = concept("dependent");
+        let unrelated = concept("unrelated");
+        for concept in [&base, &dependent, &unrelated] {
+            store.insert_concept(concept).unwrap();
+        }
+        store
+            .insert_relationship(&Relationship::new(dependent.id, base.id, "depends-on"))
+            .unwrap();
+        store
+            .insert_relationship(&Relationship::new(unrelated.id, dependent.id, "depends-on"))
+            .unwrap();
+        let attached = Procedure::new("attached", Vec::new(), Expr::Literal(Value::Null))
+            .with_concept(base.id);
+        let unrelated_proc = Procedure::new("unrelated", Vec::new(), Expr::Literal(Value::Null))
+            .with_concept(unrelated.id);
+        store.insert_procedure(&attached).unwrap();
+        store.insert_procedure(&unrelated_proc).unwrap();
+
+        let report = store
+            .get_dependency_report(DependencyTarget::Concept(base.id))
+            .unwrap();
+
+        assert_eq!(report.target, DependencyTarget::Concept(base.id));
+        assert_eq!(
+            report.dependents,
+            vec![
+                Dependent::Concept(dependent.id),
+                Dependent::Procedure {
+                    id: attached.id,
+                    kind: ProcedureDependencyKind::AttachedToConcept,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn procedure_dependency_report_finds_nested_callers() {
+        let store = KnowledgeStore::in_memory().unwrap();
+        let callee = Procedure::new("callee", Vec::new(), Expr::Literal(Value::Int(1)));
+        store.insert_procedure(&callee).unwrap();
+        let direct_caller = Procedure::new(
+            "direct caller",
+            Vec::new(),
+            Expr::Call {
+                procedure: callee.id,
+                args: Vec::new(),
+            },
+        );
+        let nested_caller = Procedure::new(
+            "nested caller",
+            Vec::new(),
+            Expr::Block(vec![Expr::ListExpr(vec![Expr::Call {
+                procedure: callee.id,
+                args: Vec::new(),
+            }])]),
+        );
+        let unrelated = Procedure::new("unrelated", Vec::new(), Expr::Literal(Value::Null));
+        for procedure in [&direct_caller, &nested_caller, &unrelated] {
+            store.insert_procedure(procedure).unwrap();
+        }
+
+        let report = store
+            .get_dependency_report(DependencyTarget::Procedure(callee.id))
+            .unwrap();
+
+        assert_eq!(report.target, DependencyTarget::Procedure(callee.id));
+        assert_eq!(
+            report.dependents,
+            vec![
+                Dependent::Procedure {
+                    id: direct_caller.id,
+                    kind: ProcedureDependencyKind::CallsProcedure,
+                },
+                Dependent::Procedure {
+                    id: nested_caller.id,
+                    kind: ProcedureDependencyKind::CallsProcedure,
+                },
+            ]
+        );
     }
 
     #[test]
@@ -592,5 +1132,127 @@ mod tests {
 
         let all = store.list_procedures().unwrap();
         assert_eq!(all.len(), 1);
+    }
+
+    #[test]
+    fn inserting_a_procedure_records_version_one() {
+        let store = KnowledgeStore::in_memory().unwrap();
+        let proc = Procedure::new("identity", vec![Param::named("x")], Expr::Var("x".into()));
+
+        store.insert_procedure(&proc).unwrap();
+
+        let stored = store
+            .get_procedure_version(proc.id, 1)
+            .unwrap()
+            .expect("version one exists");
+        assert_eq!(stored.id, proc.id);
+        assert_eq!(stored.name, "identity");
+        assert_eq!(stored.version, 1);
+
+        let contracts = store.list_contract_versions(proc.id).unwrap();
+        assert_eq!(contracts.len(), 1);
+        assert_eq!(contracts[0].0, 1);
+    }
+
+    #[test]
+    fn procedure_updates_preserve_earlier_procedure_and_contract_snapshots() {
+        let store = KnowledgeStore::in_memory().unwrap();
+        let mut proc = Procedure::new("answer", Vec::new(), Expr::Literal(Value::Int(41)))
+            .with_contract(Contract {
+                promises: vec![Condition::described("returns the old answer")],
+                ..Contract::default()
+            });
+        store.insert_procedure(&proc).unwrap();
+
+        proc.body = Expr::Literal(Value::Int(42));
+        proc.contract.promises = vec![Condition::described("returns the new answer")];
+        proc.version = 2;
+        proc.updated_at += 1;
+        store.update_procedure(&proc).unwrap();
+
+        let original = store
+            .get_procedure_version(proc.id, 1)
+            .unwrap()
+            .expect("original version remains queryable");
+        let updated = store
+            .get_procedure_version(proc.id, 2)
+            .unwrap()
+            .expect("updated version is recorded");
+        assert!(matches!(original.body, Expr::Literal(Value::Int(41))));
+        assert!(matches!(updated.body, Expr::Literal(Value::Int(42))));
+
+        let original_contract = store
+            .get_contract_version(proc.id, 1)
+            .unwrap()
+            .expect("original contract remains queryable");
+        let updated_contract = store
+            .get_contract_version(proc.id, 2)
+            .unwrap()
+            .expect("updated contract is recorded");
+        assert_eq!(
+            original_contract.promises[0].description,
+            "returns the old answer"
+        );
+        assert_eq!(
+            updated_contract.promises[0].description,
+            "returns the new answer"
+        );
+    }
+
+    #[test]
+    fn procedure_and_contract_versions_are_listed_in_version_order() {
+        let store = KnowledgeStore::in_memory().unwrap();
+        let mut proc = Procedure::new("counter", Vec::new(), Expr::Literal(Value::Int(1)));
+        store.insert_procedure(&proc).unwrap();
+
+        for version in [2, 3] {
+            proc.version = version;
+            proc.body = Expr::Literal(Value::Int(version.into()));
+            proc.contract.promises = vec![Condition::described(format!("version {version}"))];
+            proc.updated_at += 1;
+            store.update_procedure(&proc).unwrap();
+        }
+
+        let procedures = store.list_procedure_versions(proc.id).unwrap();
+        assert_eq!(
+            procedures
+                .iter()
+                .map(|proc| proc.version)
+                .collect::<Vec<_>>(),
+            vec![1, 2, 3]
+        );
+
+        let contracts = store.list_contract_versions(proc.id).unwrap();
+        assert_eq!(
+            contracts
+                .iter()
+                .map(|(version, _)| *version)
+                .collect::<Vec<_>>(),
+            vec![1, 2, 3]
+        );
+        assert_eq!(contracts[0].1.promises.len(), 0);
+        assert_eq!(contracts[1].1.promises[0].description, "version 2");
+        assert_eq!(contracts[2].1.promises[0].description, "version 3");
+    }
+
+    #[test]
+    fn delete_procedure_preserves_immutable_history() {
+        let store = KnowledgeStore::in_memory().unwrap();
+        let mut proc = Procedure::new("historical", Vec::new(), Expr::Literal(Value::Int(1)));
+        store.insert_procedure(&proc).unwrap();
+        proc.version = 2;
+        proc.body = Expr::Literal(Value::Int(2));
+        store.update_procedure(&proc).unwrap();
+
+        store.delete_procedure(proc.id).unwrap();
+
+        assert!(store.get_procedure(proc.id).unwrap().is_none());
+        assert_eq!(store.list_procedure_versions(proc.id).unwrap().len(), 2);
+        assert!(store.get_procedure_version(proc.id, 1).unwrap().is_some());
+        assert!(store.get_contract_version(proc.id, 2).unwrap().is_some());
+        assert!(matches!(
+            store.delete_procedure(proc.id),
+            Err(GraphError::NotFound(_))
+        ));
     }
 }

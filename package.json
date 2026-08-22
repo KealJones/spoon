@@ -1,0 +1,19 @@
+{
+  "name": "ekg-workspace",
+  "private": true,
+  "packageManager": "pnpm@11.1.0",
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "test": "pnpm -r --if-present test",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "format": "prettier --write \"packages/**/*.{ts,json}\" \"*.{json,yaml}\"",
+    "depcheck": "pnpm -r --if-present depcheck"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "depcheck": "^1.4.7",
+    "prettier": "^3.6.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}

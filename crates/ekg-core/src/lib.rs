@@ -1,23 +1,23 @@
-pub mod value;
-pub mod expr;
 pub mod concept;
-pub mod relationship;
 pub mod contract;
-pub mod procedure;
 pub mod episode;
-pub mod evidence;
 pub mod error;
+pub mod evidence;
+pub mod expr;
+pub mod procedure;
+pub mod relationship;
+pub mod value;
 
-pub use value::Value;
-pub use expr::{Expr, BinOp, UnOp};
-pub use concept::{Concept, ConceptId, MutabilityClass, Lifecycle};
-pub use relationship::{Relationship, RelationshipId};
-pub use contract::{Contract, Condition, CostEstimate};
-pub use procedure::{Procedure, ProcedureId, Param, TestCase};
+pub use concept::{Concept, ConceptId, Lifecycle, MutabilityClass};
+pub use contract::{Condition, Contract, CostEstimate};
 pub use episode::{
-    Episode, EpisodeId, Interpretation, AssembledContext, Assumption,
-    KnowledgeCandidate, ReasoningTrace, TraceStep, ContractCheckResult,
-    EscalationRung, Evaluation, EpisodeCost,
+    AssembledContext, Assumption, ContractCheckResult, Episode, EpisodeCost, EpisodeId,
+    EscalationRung, Evaluation, Interpretation, KnowledgeCandidate, ReasoningTrace, TraceStep,
+    TraceStepStatus,
 };
-pub use evidence::{VerifiabilityTier, Confidence, ScopeCondition, Source, SourceKind};
 pub use error::EkgError;
+pub use evidence::{Confidence, Evidence, ScopeCondition, Source, SourceKind, VerifiabilityTier};
+pub use expr::{BinOp, Expr, UnOp};
+pub use procedure::{Param, Procedure, ProcedureId, TestCase};
+pub use relationship::{Relationship, RelationshipId};
+pub use value::Value;

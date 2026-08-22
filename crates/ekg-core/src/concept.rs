@@ -12,6 +12,12 @@ impl ConceptId {
     }
 }
 
+impl Default for ConceptId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl std::fmt::Display for ConceptId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
@@ -37,8 +43,9 @@ pub enum MutabilityClass {
 }
 
 /// Where a piece of knowledge is in its lifecycle.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Lifecycle {
+    #[default]
     Active,
     Validated,
     Provisional,
@@ -47,12 +54,6 @@ pub enum Lifecycle {
     Superseded,
     Retired,
     Invalid,
-}
-
-impl Default for Lifecycle {
-    fn default() -> Self {
-        Self::Active
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

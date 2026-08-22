@@ -103,7 +103,9 @@ impl fmt::Display for Value {
             Value::List(items) => {
                 write!(f, "[")?;
                 for (i, item) in items.iter().enumerate() {
-                    if i > 0 { write!(f, ", ")?; }
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
                     write!(f, "{item}")?;
                 }
                 write!(f, "]")
@@ -111,7 +113,9 @@ impl fmt::Display for Value {
             Value::Map(map) => {
                 write!(f, "{{")?;
                 for (i, (k, v)) in map.iter().enumerate() {
-                    if i > 0 { write!(f, ", ")?; }
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
                     write!(f, "{k}: {v}")?;
                 }
                 write!(f, "}}")
@@ -121,23 +125,33 @@ impl fmt::Display for Value {
 }
 
 impl From<i64> for Value {
-    fn from(n: i64) -> Self { Value::Int(n) }
+    fn from(n: i64) -> Self {
+        Value::Int(n)
+    }
 }
 
 impl From<f64> for Value {
-    fn from(n: f64) -> Self { Value::Float(n) }
+    fn from(n: f64) -> Self {
+        Value::Float(n)
+    }
 }
 
 impl From<bool> for Value {
-    fn from(b: bool) -> Self { Value::Bool(b) }
+    fn from(b: bool) -> Self {
+        Value::Bool(b)
+    }
 }
 
 impl From<String> for Value {
-    fn from(s: String) -> Self { Value::Text(s) }
+    fn from(s: String) -> Self {
+        Value::Text(s)
+    }
 }
 
 impl From<&str> for Value {
-    fn from(s: &str) -> Self { Value::Text(s.to_string()) }
+    fn from(s: &str) -> Self {
+        Value::Text(s.to_string())
+    }
 }
 
 impl<T: Into<Value>> From<Vec<T>> for Value {

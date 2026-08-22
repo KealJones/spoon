@@ -6,6 +6,8 @@ edition.workspace = true
 [dependencies]
 ekg-core.workspace = true
 ekg-engine.workspace = true
+ekg-episode.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+uuid.workspace = true

@@ -9,5 +9,7 @@ pub mod eval;
 pub mod trace;
 
 pub use error::EkgError;
-pub use eval::{Env, ExecResult, ExecutionBudget, Evaluator};
-pub use trace::{ExecStep, ExecTrace};
+pub use eval::{Env, Evaluator, ExecResult, ExecutionAttempt, ExecutionBudget};
+pub use trace::{
+    ConditionCheck, ConditionCheckStatus, ContractChecks, ExecStep, ExecStepStatus, ExecTrace,
+};

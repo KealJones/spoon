@@ -7,4 +7,6 @@ mod schema;
 mod store;
 
 pub use error::{GraphError, Result};
-pub use store::KnowledgeStore;
+pub use store::{
+    DependencyReport, DependencyTarget, Dependent, KnowledgeStore, ProcedureDependencyKind,
+};

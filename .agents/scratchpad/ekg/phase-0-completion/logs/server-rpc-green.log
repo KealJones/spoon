@@ -1,0 +1,29 @@
+   Compiling ekg-server v0.1.0 (/Users/kealjones/Git/Personal/ekg/crates/ekg-server)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.42s
+     Running unittests src/lib.rs (target/debug/deps/ekg_server-f6679477226a1683)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/ekg_server-e100683f51ebea32)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/rpc.rs (target/debug/deps/rpc-f49561a94d5cd1ad)
+
+running 3 tests
+test malformed_json_and_unknown_methods_return_json_rpc_errors ... ok
+test concepts_can_be_created_and_listed ... ok
+test kitchen_cycle_executes_records_and_replays_double ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Doc-tests ekg_server
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

@@ -38,10 +38,42 @@ pub struct ExecStep {
     pub input: Option<Value>,
     pub output: Value,
     pub procedure_called: Option<ProcedureId>,
+    /// The exact version that was executed. Older serialized traces may not
+    /// carry this field and therefore cannot be replayed safely.
+    #[serde(default)]
+    pub procedure_version: Option<u32>,
+    /// Results of every declared contract condition for this call. Conditions
+    /// without executable checks remain visible as `NotExecutable` rather
+    /// than disappearing from the trace.
+    #[serde(default)]
+    pub contract_checks: ContractChecks,
+    /// Whether the call completed successfully. This is authoritative even
+    /// when the output is Null, which can be either a legitimate procedure
+    /// result or the placeholder for a call that produced no value.
+    #[serde(default)]
+    pub status: ExecStepStatus,
 }
 
 impl ExecStep {
     pub fn for_call(procedure: ProcedureId, name: &str, args: &[Value], output: Value) -> Self {
+        Self::for_versioned_call(
+            procedure,
+            name,
+            args,
+            output,
+            None,
+            ContractChecks::default(),
+        )
+    }
+
+    pub fn for_versioned_call(
+        procedure: ProcedureId,
+        name: &str,
+        args: &[Value],
+        output: Value,
+        version: Option<u32>,
+        contract_checks: ContractChecks,
+    ) -> Self {
         let input = if args.is_empty() {
             None
         } else {
@@ -52,6 +84,43 @@ impl ExecStep {
             input,
             output,
             procedure_called: Some(procedure),
+            procedure_version: version,
+            contract_checks,
+            status: ExecStepStatus::Succeeded,
         }
     }
+}
+
+/// The terminal status of a traced procedure call.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ExecStepStatus {
+    #[default]
+    Succeeded,
+    Failed {
+        error: String,
+    },
+}
+
+/// Contract-check evidence captured for one procedure call.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContractChecks {
+    pub requires: Vec<ConditionCheck>,
+    pub promises: Vec<ConditionCheck>,
+    pub fails_when: Vec<ConditionCheck>,
+}
+
+/// The result of checking one declared contract condition.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConditionCheck {
+    pub description: String,
+    pub status: ConditionCheckStatus,
+}
+
+/// Whether a condition upheld its part of the contract. For `fails_when`, a
+/// false expression is `Passed` and a true expression is `Violated`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ConditionCheckStatus {
+    Passed,
+    Violated,
+    NotExecutable,
 }

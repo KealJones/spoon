@@ -12,25 +12,13 @@ use crate::expr::Expr;
 /// 2. Make credit local (which contract was violated?)
 /// 3. Make cost visible (how much does each move cost?)
 /// 4. Make scope explicit (where defeasibility lives)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Contract {
     pub requires: Vec<Condition>,
     pub promises: Vec<Condition>,
     pub fails_when: Vec<Condition>,
     pub costs: CostEstimate,
     pub confidence: Confidence,
-}
-
-impl Default for Contract {
-    fn default() -> Self {
-        Self {
-            requires: Vec::new(),
-            promises: Vec::new(),
-            fails_when: Vec::new(),
-            costs: CostEstimate::default(),
-            confidence: Confidence::default(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,17 +43,8 @@ impl Condition {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CostEstimate {
     pub operations: u32,
     pub description: String,
-}
-
-impl Default for CostEstimate {
-    fn default() -> Self {
-        Self {
-            operations: 0,
-            description: String::new(),
-        }
-    }
 }

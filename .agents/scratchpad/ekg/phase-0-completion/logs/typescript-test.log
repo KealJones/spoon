@@ -1,0 +1,29 @@
+$ pnpm -r --if-present test
+Scope: 2 of 3 workspace projects
+packages/sdk test$ tsx --test test/*.test.ts
+packages/sdk test: ✔ client maps graph, execution, episode, and replay calls to RPC methods (0.720708ms)
+packages/sdk test: ✔ SDK completes the DOUBLE kitchen cycle through the Rust stdio server (2359.205709ms)
+packages/sdk test: ✔ stream transport correlates newline-delimited responses (1.162834ms)
+packages/sdk test: ✔ stream transport rejects structured JSON-RPC errors (0.304917ms)
+packages/sdk test: ℹ tests 4
+packages/sdk test: ℹ suites 0
+packages/sdk test: ℹ pass 4
+packages/sdk test: ℹ fail 0
+packages/sdk test: ℹ cancelled 0
+packages/sdk test: ℹ skipped 0
+packages/sdk test: ℹ todo 0
+packages/sdk test: ℹ duration_ms 2520.026208
+packages/sdk test: Done
+packages/cli test$ tsx --test test/*.test.ts
+packages/cli test: ✔ parses concept creation (0.640458ms)
+packages/cli test: ✔ parses procedure execution bindings as JSON values (0.086417ms)
+packages/cli test: ✔ rejects unknown commands with usage text (0.175416ms)
+packages/cli test: ℹ tests 3
+packages/cli test: ℹ suites 0
+packages/cli test: ℹ pass 3
+packages/cli test: ℹ fail 0
+packages/cli test: ℹ cancelled 0
+packages/cli test: ℹ skipped 0
+packages/cli test: ℹ todo 0
+packages/cli test: ℹ duration_ms 126.846917
+packages/cli test: Done

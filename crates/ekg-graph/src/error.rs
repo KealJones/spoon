@@ -14,6 +14,9 @@ pub enum GraphError {
     #[error("not found: {0}")]
     NotFound(String),
 
+    #[error("has dependents: {0}")]
+    HasDependents(String),
+
     #[error("invalid uuid: {0}")]
     InvalidUuid(#[from] uuid::Error),
 }

@@ -105,9 +105,11 @@ version = "0.1.0"
 dependencies = [
  "ekg-core",
  "ekg-engine",
+ "ekg-episode",
  "serde",
  "serde_json",
  "thiserror",
+ "uuid",
 ]
 
 [[package]]

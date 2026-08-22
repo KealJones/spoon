@@ -1,0 +1,16 @@
+   Compiling ekg-core v0.1.0 (/Users/kealjones/Git/Personal/ekg/crates/ekg-core)
+error[E0425]: cannot find type `Evidence` in this scope
+  --> crates/ekg-core/src/evidence.rs:84:23
+   |
+84 |         let restored: Evidence = serde_json::from_str(&json).unwrap();
+   |                       ^^^^^^^^ not found in this scope
+
+error[E0433]: cannot find type `Evidence` in this scope
+  --> crates/ekg-core/src/evidence.rs:72:24
+   |
+72 |         let evidence = Evidence::new(
+   |                        ^^^^^^^^ use of undeclared type `Evidence`
+
+Some errors have detailed explanations: E0425, E0433.
+For more information about an error, try `rustc --explain E0425`.
+error: could not compile `ekg-core` (lib test) due to 2 previous errors

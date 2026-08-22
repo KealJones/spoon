@@ -26,6 +26,9 @@ pub enum EkgError {
     #[error("division by zero")]
     DivisionByZero,
 
+    #[error("arithmetic overflow during {operation}")]
+    ArithmeticOverflow { operation: String },
+
     #[error("index out of bounds: {index} in collection of length {length}")]
     IndexOutOfBounds { index: i64, length: usize },
 

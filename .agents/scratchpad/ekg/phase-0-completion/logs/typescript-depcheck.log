@@ -1,0 +1,8 @@
+$ pnpm -r --if-present depcheck
+Scope: 2 of 3 workspace projects
+packages/sdk depcheck$ depcheck
+packages/sdk depcheck: No depcheck issue
+packages/sdk depcheck: Done
+packages/cli depcheck$ depcheck
+packages/cli depcheck: No depcheck issue
+packages/cli depcheck: Done

@@ -15,6 +15,12 @@ impl EpisodeId {
     }
 }
 
+impl Default for EpisodeId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl std::fmt::Display for EpisodeId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
@@ -40,10 +46,15 @@ pub struct Episode {
     pub context: AssembledContext,
     pub knowledge_considered: Vec<KnowledgeCandidate>,
     pub reasoning_trace: ReasoningTrace,
-    pub prediction: Option<String>,
+    pub prediction: Option<Value>,
     pub action: Option<String>,
     pub observed_result: Option<Value>,
     pub evaluation: Option<Evaluation>,
+    /// Lossless serialized execution trace used for deterministic replay.
+    /// Kept as neutral JSON here so the core data model does not depend on a
+    /// particular execution runtime crate.
+    #[serde(default)]
+    pub execution_trace: Option<serde_json::Value>,
     pub cost: EpisodeCost,
     pub created_at: i64,
 }
@@ -61,6 +72,7 @@ impl Episode {
             action: None,
             observed_result: None,
             evaluation: None,
+            execution_trace: None,
             cost: EpisodeCost::default(),
             created_at: now_unix(),
         }
@@ -121,20 +133,40 @@ pub struct TraceStep {
     pub input: Option<Value>,
     pub output: Option<Value>,
     pub rung: EscalationRung,
+    #[serde(default)]
+    pub status: TraceStepStatus,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum TraceStepStatus {
+    #[default]
+    Succeeded,
+    Failed {
+        error: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContractCheckResult {
     pub all_requires_met: bool,
+    #[serde(default = "default_true")]
+    pub all_promises_met: bool,
+    #[serde(default = "default_true")]
+    pub no_failure_conditions_met: bool,
     pub violations: Vec<String>,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// The escalation ladder. Attempts ordered cheapest-first.
 /// The rung reached is itself a measurement - a system whose problems
 /// increasingly resolve at rungs 1-3 is getting smarter. (section 17)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum EscalationRung {
     /// Do I already know the answer? Direct retrieval.
+    #[default]
     Recall = 1,
     /// Do I have a skill for this? Execute a known procedure.
     Run = 2,
@@ -148,12 +180,6 @@ pub enum EscalationRung {
     Ask = 6,
     /// Say so. A correct and underrated answer.
     Abstain = 7,
-}
-
-impl Default for EscalationRung {
-    fn default() -> Self {
-        Self::Recall
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

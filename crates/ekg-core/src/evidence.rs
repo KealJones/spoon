@@ -18,25 +18,13 @@ pub enum VerifiabilityTier {
 /// Belief carried as several separate things, not a single number.
 /// A scalar cannot separate "barely examined" from "extensively tested"
 /// or "works everywhere" from "works in 80% of contexts." (section 9)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Confidence {
     pub support_count: u32,
     pub contradiction_count: u32,
     pub scope: Vec<ScopeCondition>,
     pub sources: Vec<Source>,
     pub last_tested: Option<i64>,
-}
-
-impl Default for Confidence {
-    fn default() -> Self {
-        Self {
-            support_count: 0,
-            contradiction_count: 0,
-            scope: Vec::new(),
-            sources: Vec::new(),
-            last_tested: None,
-        }
-    }
 }
 
 impl Confidence {
@@ -72,4 +60,57 @@ pub enum SourceKind {
     SelfVerified,
     Inferred,
     Observed,
+}
+
+/// A provenance-bearing observation used to support or contradict knowledge.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Evidence {
+    pub tier: VerifiabilityTier,
+    pub source: Source,
+    pub timestamp: i64,
+    pub linked_episode: Option<EpisodeId>,
+}
+
+impl Evidence {
+    pub fn new(tier: VerifiabilityTier, source: Source, timestamp: i64) -> Self {
+        Self {
+            tier,
+            source,
+            timestamp,
+            linked_episode: None,
+        }
+    }
+
+    pub fn linked_to(mut self, episode: EpisodeId) -> Self {
+        self.linked_episode = Some(episode);
+        self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn evidence_roundtrip_preserves_provenance_and_episode_link() {
+        let episode = EpisodeId::new();
+        let evidence = Evidence::new(
+            VerifiabilityTier::Hard,
+            Source {
+                kind: SourceKind::SelfVerified,
+                id: "arithmetic-check".into(),
+                reliability: 1.0,
+            },
+            123,
+        )
+        .linked_to(episode);
+
+        let json = serde_json::to_string(&evidence).unwrap();
+        let restored: Evidence = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(restored.tier, VerifiabilityTier::Hard);
+        assert_eq!(restored.source.id, "arithmetic-check");
+        assert_eq!(restored.timestamp, 123);
+        assert_eq!(restored.linked_episode, Some(episode));
+    }
 }
