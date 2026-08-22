@@ -496,6 +496,20 @@ export class EkgClient {
     });
   }
 
+  rankActiveManagedSkills(query: string, limit = 128): Promise<ManagedSkill[]> {
+    return this.transport.request<ManagedSkill[]>("consolidation.rankActive", { query, limit });
+  }
+
+  executeBestManagedSkill<T = unknown>(
+    query: string,
+    inputs: Record<string, JsonValue> = {},
+    prediction?: JsonValue,
+  ): Promise<T> {
+    return this.transport.request<T>("consolidation.executeBest", {
+      query, inputs, ...(prediction === undefined ? {} : { prediction }),
+    });
+  }
+
   executeManagedSkill<T = unknown>(
     skillId: string,
     inputs: Record<string, JsonValue> = {},

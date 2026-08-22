@@ -473,6 +473,25 @@ impl Engine {
         self.skills.list_active(limit)
     }
 
+    /// Ranks non-retired skills using query fit and durable post-activation
+    /// outcomes. Ranking is advisory and cannot promote or execute a skill.
+    pub fn rank_active_managed_skills(
+        &self,
+        query: &str,
+        limit: u32,
+    ) -> Result<Vec<crate::ManagedSkill>, EngineError> {
+        self.skills.rank_active(query, limit)
+    }
+
+    pub fn select_executable_managed_skill(
+        &self,
+        query: &str,
+    ) -> Result<Option<crate::ManagedSkill>, EngineError> {
+        Ok(self.skills.rank_active(query, 512)?.into_iter().find(|skill| {
+            skill.lifecycle == crate::SkillLifecycle::Promoted && !skill.candidate.failure_critic
+        }))
+    }
+
     pub fn register_single_success_skill(
         &self,
         episode_id: EpisodeId,
@@ -648,7 +667,21 @@ impl Engine {
                 "promoted skill has no source episodes".into(),
             ));
         };
-        self.execute_procedure(procedure_id, inputs, prediction)
+        let outcome = self.execute_procedure(procedure_id, inputs, prediction)?;
+        self.skills.record_experience(skill_id, outcome.episode.succeeded())?;
+        Ok(outcome)
+    }
+
+    pub fn execute_best_managed_skill(
+        &self,
+        query: &str,
+        inputs: BTreeMap<String, Value>,
+        prediction: Option<Value>,
+    ) -> Result<ExecutionOutcome, EngineError> {
+        let skill = self.select_executable_managed_skill(query)?.ok_or_else(|| {
+            EngineError::InvalidInput("no promoted executable skill matches query".into())
+        })?;
+        self.execute_managed_skill(&skill.id, inputs, prediction)
     }
 
     /// Retirement changes ranking eligibility but retains the candidate,

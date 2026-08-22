@@ -30,6 +30,9 @@ pub struct ManagedSkill {
     pub promotion_verdict: Option<PromotionVerdict>,
     /// Successful, receipt-backed live shadow observations.
     pub shadow_live_wins: u32,
+    pub experience_uses: u32,
+    pub experience_successes: u32,
+    pub experience_failures: u32,
     pub retirement: Option<RetirementRecord>,
     pub created_at: i64,
     pub updated_at: i64,
@@ -79,6 +82,17 @@ impl SkillStore {
             CREATE INDEX IF NOT EXISTS idx_ekg_managed_skills_lifecycle
                 ON ekg_managed_skills(lifecycle, updated_at DESC);",
         )?;
+        for column in [
+            "experience_uses INTEGER NOT NULL DEFAULT 0",
+            "experience_successes INTEGER NOT NULL DEFAULT 0",
+            "experience_failures INTEGER NOT NULL DEFAULT 0",
+        ] {
+            let name = column.split_whitespace().next().unwrap();
+            let exists: bool = self.conn.query_row(
+                "SELECT COUNT(*) > 0 FROM pragma_table_info('ekg_managed_skills') WHERE name = ?1",
+                params![name], |row| row.get(0))?;
+            if !exists { self.conn.execute(&format!("ALTER TABLE ekg_managed_skills ADD COLUMN {column}"), [])?; }
+        }
         Ok(())
     }
 
@@ -104,6 +118,9 @@ impl SkillStore {
             lifecycle: SkillLifecycle::Candidate,
             promotion_verdict: None,
             shadow_live_wins: 0,
+            experience_uses: 0,
+            experience_successes: 0,
+            experience_failures: 0,
             retirement: None,
             created_at: now,
             updated_at: now,
@@ -111,8 +128,9 @@ impl SkillStore {
         self.conn.execute(
             "INSERT INTO ekg_managed_skills
              (id, candidate_json, lifecycle, promotion_verdict_json, shadow_live_wins,
+              experience_uses, experience_successes, experience_failures,
               retirement_json, created_at, updated_at)
-             VALUES (?1, ?2, ?3, NULL, 0, NULL, ?4, ?4)",
+             VALUES (?1, ?2, ?3, NULL, 0, 0, 0, 0, NULL, ?4, ?4)",
             params![
                 skill.id,
                 candidate_json,
@@ -128,7 +146,8 @@ impl SkillStore {
         self.conn
             .query_row(
                 "SELECT id, candidate_json, lifecycle, promotion_verdict_json,
-                        shadow_live_wins, retirement_json, created_at, updated_at
+                        shadow_live_wins, experience_uses, experience_successes,
+                        experience_failures, retirement_json, created_at, updated_at
                  FROM ekg_managed_skills WHERE id = ?1",
                 params![id],
                 row_to_skill,
@@ -140,7 +159,8 @@ impl SkillStore {
     pub(crate) fn list(&self, limit: u32) -> Result<Vec<ManagedSkill>, EngineError> {
         let mut statement = self.conn.prepare(
             "SELECT id, candidate_json, lifecycle, promotion_verdict_json,
-                    shadow_live_wins, retirement_json, created_at, updated_at
+                    shadow_live_wins, experience_uses, experience_successes,
+                    experience_failures, retirement_json, created_at, updated_at
              FROM ekg_managed_skills ORDER BY updated_at DESC, id ASC LIMIT ?1",
         )?;
         let rows = statement.query_map(params![limit.clamp(1, 512)], row_to_skill)?;
@@ -150,13 +170,43 @@ impl SkillStore {
     pub(crate) fn list_active(&self, limit: u32) -> Result<Vec<ManagedSkill>, EngineError> {
         let mut statement = self.conn.prepare(
             "SELECT id, candidate_json, lifecycle, promotion_verdict_json,
-                    shadow_live_wins, retirement_json, created_at, updated_at
+                    shadow_live_wins, experience_uses, experience_successes,
+                    experience_failures, retirement_json, created_at, updated_at
              FROM ekg_managed_skills
              WHERE lifecycle != 'retired'
              ORDER BY updated_at DESC, id ASC LIMIT ?1",
         )?;
         let rows = statement.query_map(params![limit.clamp(1, 512)], row_to_skill)?;
         rows.map(|row| row.map_err(EngineError::from)).collect()
+    }
+
+    pub(crate) fn rank_active(&self, query: &str, limit: u32) -> Result<Vec<ManagedSkill>, EngineError> {
+        let mut skills = self.list_active(512)?;
+        let terms: Vec<String> = query.split_whitespace()
+            .map(str::to_ascii_lowercase).filter(|term| !term.is_empty()).collect();
+        skills.sort_by(|left, right| {
+            fn score(skill: &ManagedSkill, terms: &[String]) -> (u32, u32, u32, u32, &str) {
+                let text = format!("{} {}", skill.candidate.name, skill.candidate.rationale).to_ascii_lowercase();
+                let matches = terms.iter().filter(|term| text.contains(term.as_str())).count() as u32;
+                (matches, skill.experience_successes, skill.shadow_live_wins,
+                    skill.experience_uses.saturating_sub(skill.experience_failures), skill.id.as_str())
+            }
+            score(right, &terms).cmp(&score(left, &terms))
+        });
+        skills.truncate(limit.clamp(1, 512) as usize);
+        Ok(skills)
+    }
+
+    pub(crate) fn record_experience(&self, id: &str, succeeded: bool) -> Result<(), EngineError> {
+        self.required(id)?;
+        let now = unix_time();
+        self.conn.execute(
+            "UPDATE ekg_managed_skills SET experience_uses = experience_uses + 1,
+             experience_successes = experience_successes + ?2,
+             experience_failures = experience_failures + ?3, updated_at = ?4 WHERE id = ?1",
+            params![id, i64::from(succeeded), i64::from(!succeeded), now],
+        )?;
+        self.record_event(id, "experience", serde_json::json!({"succeeded": succeeded}).to_string(), now)
     }
 
     pub(crate) fn record_replay_verdict(
@@ -291,9 +341,12 @@ fn row_to_skill(row: &rusqlite::Row<'_>) -> rusqlite::Result<ManagedSkill> {
         lifecycle,
         promotion_verdict: verdict.map(|value| decode(3, value)).transpose()?,
         shadow_live_wins: row.get(4)?,
-        retirement: retirement.map(|value| decode(5, value)).transpose()?,
-        created_at: row.get(6)?,
-        updated_at: row.get(7)?,
+        experience_uses: row.get(5)?,
+        experience_successes: row.get(6)?,
+        experience_failures: row.get(7)?,
+        retirement: retirement.map(|value| decode(8, value)).transpose()?,
+        created_at: row.get(9)?,
+        updated_at: row.get(10)?,
     })
 }
 
