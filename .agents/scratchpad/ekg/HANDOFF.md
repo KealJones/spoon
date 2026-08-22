@@ -1,6 +1,6 @@
 # EKG implementation handoff
 
-Last updated: 2026-08-22 (Phase 2 remediation continues; no live subagents)
+Last updated: 2026-08-22 (Phase 3 implementation and verification)
 
 This is the durable restart point for completing every phase in
 `IMPLEMENTATION-PLAN.md`. Update it whenever ownership, verification state, or
@@ -28,7 +28,7 @@ the next executable step changes.
   gate included 131 Rust tests and 32 TypeScript tests plus strict workspace
   format, clippy, build, typecheck, package build, depcheck, and diff checks.
 
-## Current phase: Phase 2 — Credit assignment and adaptation
+## Current phase: Phase 3 — Intuition + self-supervision
 
 ## Pause checkpoint (2026-08-22)
 
@@ -40,15 +40,21 @@ the next executable step changes.
   limitation is that the independent subagent audit was unavailable after the
   delegated agents exhausted their usage. Root remediation and adversarial
   coverage are recorded with that limitation rather than overstated.
-- Work is intentionally paused before Phase 3. Resume by updating the plan,
-  reading the Phase 3 section and current repository state, and leaving the
-  Phase 5 capability design queued as already documented.
+- Phase 3 is now in progress. The first increment is implemented and verified
+  in `ekg-intuition`: bounded inverted-term recall, persisted outcome-aware
+  ranking, representation/self-supervision tasks, grounded epistemic
+  challenges, and Engine integration/rebuild on reopen.
+- Phase 3 progress and remaining work are recorded in
+  `.agents/scratchpad/ekg/phase-3-intuition/progress.md`. Typed activation
+  spread, ranked local interpretation, trusted recall, stale-index cleanup,
+  and larger-corpus evidence are now implemented; the phase still needs
+  held-out baseline/rung evidence and representation-version evaluation.
 
 ## Current restart point (authoritative)
 
-- Phase 2 remains **not exit-clean** until a renewed adversarial audit and the
-  full workspace gate both pass. The earlier agent entries below are historical;
-  all three subagents exhausted their usage and are no longer active.
+- Phase 2 is committed and its remediation gate is green. The earlier agent
+  entries below are historical; independent audit capacity was unavailable,
+  so that limitation remains recorded rather than overstated.
 - The plan now contains an explicit cost-routing policy: Luna for coordinator,
   routine edits, fixtures, and focused checks; Terra for normal substantive
   implementation/integration; Sol only for named adversarial/security/
@@ -67,11 +73,9 @@ the next executable step changes.
 - Focused verification most recently green: `durability` (3), `trust_ledger`
   (5), `adaptation` (16), `cycle` (33), plus strict Clippy for `ekg-engine`
   and `ekg-core`.
-- Next concrete work: strengthen the metric-7 corpus beyond contract-pointer
-  templates, then run the full Rust/TypeScript gate, audit all P2 exit
-  requirements against current code, update phase records, and commit only the
-  intended Phase 2 files (excluding `WHAT-IS-EKG-v3.md` and
-  `ekg-benchmark-suite.zip`).
+- Next concrete work: finish Phase 3 held-out ranking/rung evidence, then run
+  the complete Rust/TypeScript gate and commit the Phase 3 increment while
+  excluding `WHAT-IS-EKG-v3.md` and `ekg-benchmark-suite.zip`.
 
 ## Current live checkpoint (2026-08-22, adversarial remediation in flight)
 

@@ -21,6 +21,16 @@ pub use cycle::{
     CycleBudget, CycleDisposition, CycleId, CycleInput, CycleOutcome, CycleProgress,
     TeacherProposalWire, TeacherRequestWire,
 };
+pub use ekg_graph::{
+    ActivatedConcept, ActivationHop, ActivationSeed, ActivationSpreadQuery, ActivationSpreadResult,
+    MAX_ACTIVATION_CANDIDATES, MAX_ACTIVATION_EXPANSIONS, MAX_ACTIVATION_HOPS,
+    MAX_ACTIVATION_SEEDS, MAX_ACTIVATION_TRAVERSALS, RelationshipDirection, TraversalDirection,
+    TypedRelationshipTraversal,
+};
+pub use ekg_intuition::{
+    EpistemicChallengeKind, IntuitionMetrics, RankingExample, RecallCandidate, RecallDocument,
+    RecallKind, SupervisionTask,
+};
 pub use engine::{Engine, EngineError, ExecutionOutcome, ReplayOutcome};
 pub use trust::{TrustEvidenceKind, TrustReceipt};
 pub use view::{EpisodeView, GraphView};

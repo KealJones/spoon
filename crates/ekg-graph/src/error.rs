@@ -45,6 +45,9 @@ pub enum GraphError {
     #[error("invalid provisional knowledge bundle: {0}")]
     InvalidKnowledgeBundle(String),
 
+    #[error("invalid activation spread query: {0}")]
+    InvalidActivationQuery(String),
+
     #[error("idempotency key {key} was already used for a different graph change set")]
     IdempotencyConflict { key: String },
 

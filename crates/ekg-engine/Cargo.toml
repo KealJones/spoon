@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 ekg-core.workspace = true
 ekg-graph.workspace = true
+ekg-intuition.workspace = true
 ekg-exec.workspace = true
 ekg-episode.workspace = true
 ekg-reason.workspace = true

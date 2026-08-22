@@ -3,7 +3,7 @@ use ekg_core::{
     Relationship, RelationshipId,
 };
 use ekg_episode::{EpisodeFeedback, EpisodeQuery, EpisodeStore};
-use ekg_graph::{GraphError, KnowledgeStore};
+use ekg_graph::{ActivationSpreadQuery, ActivationSpreadResult, GraphError, KnowledgeStore};
 
 /// Read-only graph projection exposed by [`crate::Engine`]. Persistence crates
 /// remain independently usable, but embedding through Engine cannot reach raw
@@ -99,6 +99,13 @@ impl GraphView<'_> {
         max_hops: u32,
     ) -> Result<Vec<(ConceptId, u32)>, GraphError> {
         self.store.traverse(start, kind, max_hops)
+    }
+
+    pub fn activation_spread(
+        &self,
+        query: &ActivationSpreadQuery,
+    ) -> Result<ActivationSpreadResult, GraphError> {
+        self.store.activation_spread(query)
     }
 }
 

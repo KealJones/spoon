@@ -7,7 +7,11 @@ use ekg_core::{
 };
 use ekg_episode::{EpisodeFeedback, EpisodeStore};
 use ekg_exec::{ConditionCheckStatus, Evaluator, ExecStepStatus, ExecTrace};
-use ekg_graph::{GraphError, KnowledgeStore};
+use ekg_graph::{ActivationSpreadQuery, ActivationSpreadResult, GraphError, KnowledgeStore};
+use ekg_intuition::{
+    EpistemicChallengeKind, IntuitionMetrics, IntuitionStore, RankingExample, RecallCandidate,
+    RecallDocument, RecallKind, SupervisionTask,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
@@ -26,6 +30,8 @@ pub enum EngineError {
     Credit(#[from] ekg_credit::CreditError),
     #[error(transparent)]
     Adapt(#[from] ekg_adapt::AdaptError),
+    #[error(transparent)]
+    Intuition(#[from] ekg_intuition::IntuitionError),
     #[error(transparent)]
     Sqlite(#[from] rusqlite::Error),
     #[error("{0}")]
@@ -70,6 +76,7 @@ pub struct Engine {
     pub(crate) lesson_stages: crate::lesson::LessonStageStore,
     pub(crate) runtime: crate::runtime::RuntimeStore,
     pub(crate) trust: crate::trust::TrustLedger,
+    pub(crate) intuition: IntuitionStore,
     pub(crate) instance_id: uuid::Uuid,
     pub(crate) admin_enabled: bool,
 }
@@ -87,6 +94,7 @@ impl Engine {
             lesson_stages: crate::lesson::LessonStageStore::open(path)?,
             runtime: crate::runtime::RuntimeStore::open(path)?,
             trust: crate::trust::TrustLedger::open(path)?,
+            intuition: IntuitionStore::open(path)?,
             instance_id: uuid::Uuid::new_v4(),
             admin_enabled: false,
         };
@@ -99,6 +107,7 @@ impl Engine {
         engine.recover_pending_lessons()?;
         engine.recover_pending_adaptations()?;
         engine.reconcile_observed_fact_contradictions()?;
+        engine.rebuild_intuition_index()?;
         Ok(engine)
     }
 
@@ -114,6 +123,7 @@ impl Engine {
             lesson_stages: crate::lesson::LessonStageStore::in_memory()?,
             runtime: crate::runtime::RuntimeStore::in_memory()?,
             trust: crate::trust::TrustLedger::in_memory()?,
+            intuition: IntuitionStore::in_memory()?,
             instance_id: uuid::Uuid::new_v4(),
             admin_enabled: false,
         })
@@ -134,6 +144,108 @@ impl Engine {
     pub fn with_max_steps(mut self, max_steps: u32) -> Self {
         self.max_steps = max_steps;
         self
+    }
+
+    /// Retrieves a bounded, inverted-index candidate set. This is a
+    /// representation/search operation only; candidates remain untrusted
+    /// until ordinary Engine reasoning and evidence gates use them.
+    pub fn recall_candidates(
+        &self,
+        query: &str,
+        candidate_limit: usize,
+    ) -> Result<Vec<RecallCandidate>, EngineError> {
+        Ok(self.intuition.retrieve(query, candidate_limit)?)
+    }
+
+    pub fn rank_recall_candidates(
+        &self,
+        query: &str,
+        candidate_limit: usize,
+    ) -> Result<Vec<RecallCandidate>, EngineError> {
+        Ok(self.intuition.rank(query, candidate_limit)?)
+    }
+
+    /// Retrieves graph-neighborhood candidates through a hard-bounded typed
+    /// activation spread. The returned activation is relevance, not trust.
+    pub fn activation_candidates(
+        &self,
+        query: &ActivationSpreadQuery,
+    ) -> Result<ActivationSpreadResult, EngineError> {
+        Ok(self.graph.activation_spread(query)?)
+    }
+
+    pub fn record_ranking_example(&self, example: &RankingExample) -> Result<(), EngineError> {
+        Ok(self.intuition.record_ranking_example(example)?)
+    }
+
+    pub fn generate_self_supervision(
+        &self,
+        source_episode: Option<&str>,
+        input: serde_json::Value,
+        target: serde_json::Value,
+        kind: &str,
+        grounded: bool,
+    ) -> Result<SupervisionTask, EngineError> {
+        if grounded {
+            let source = source_episode.ok_or_else(|| {
+                EngineError::InvalidInput(
+                    "grounded supervision requires a source episode receipt".into(),
+                )
+            })?;
+            let uuid = uuid::Uuid::parse_str(source).map_err(|_| {
+                EngineError::InvalidInput("grounded supervision source episode is invalid".into())
+            })?;
+            let episode = self.episodes.get(EpisodeId(uuid))?;
+            if self.trust.receipt_for_episode(&episode)?.is_none() {
+                return Err(EngineError::InvalidInput(
+                    "grounded supervision requires an exact Engine trust receipt".into(),
+                ));
+            }
+        }
+        Ok(self.intuition.generate_self_supervision(
+            source_episode,
+            input,
+            target,
+            kind,
+            grounded,
+        )?)
+    }
+
+    pub fn intuition_metrics(&self) -> Result<IntuitionMetrics, EngineError> {
+        Ok(self.intuition.metrics()?)
+    }
+
+    pub fn generate_epistemic_challenge(
+        &self,
+        source_episode: Option<&str>,
+        kind: EpistemicChallengeKind,
+        input: serde_json::Value,
+        expected: serde_json::Value,
+        grounded: bool,
+    ) -> Result<SupervisionTask, EngineError> {
+        if grounded {
+            let source = source_episode.ok_or_else(|| {
+                EngineError::InvalidInput(
+                    "grounded challenge requires a source episode receipt".into(),
+                )
+            })?;
+            let uuid = uuid::Uuid::parse_str(source).map_err(|_| {
+                EngineError::InvalidInput("grounded challenge source episode is invalid".into())
+            })?;
+            let episode = self.episodes.get(EpisodeId(uuid))?;
+            if self.trust.receipt_for_episode(&episode)?.is_none() {
+                return Err(EngineError::InvalidInput(
+                    "grounded challenge requires an exact Engine trust receipt".into(),
+                ));
+            }
+        }
+        Ok(self.intuition.generate_epistemic_challenge(
+            source_episode,
+            kind,
+            input,
+            expected,
+            grounded,
+        )?)
     }
 
     pub fn graph(&self) -> crate::GraphView<'_> {
@@ -164,12 +276,16 @@ impl Engine {
 
     pub fn admin_insert_concept(&self, concept: &Concept) -> Result<(), EngineError> {
         self.require_admin()?;
-        Ok(self.graph.insert_concept(concept)?)
+        self.graph.insert_concept(concept)?;
+        self.index_concept(concept)?;
+        Ok(())
     }
 
     pub fn admin_update_concept(&self, concept: &Concept) -> Result<(), EngineError> {
         self.require_admin()?;
-        Ok(self.graph.update_concept(concept)?)
+        self.graph.update_concept(concept)?;
+        self.index_concept(concept)?;
+        Ok(())
     }
 
     pub fn admin_revise_concept(
@@ -178,12 +294,84 @@ impl Engine {
         expected_version: u32,
     ) -> Result<u32, EngineError> {
         self.require_admin()?;
-        Ok(self.graph.revise_concept(concept, expected_version)?)
+        let version = self.graph.revise_concept(concept, expected_version)?;
+        self.index_concept(concept)?;
+        Ok(version)
     }
 
     pub fn admin_delete_concept(&self, id: ConceptId) -> Result<(), EngineError> {
         self.require_admin()?;
-        Ok(self.graph.delete_concept(id)?)
+        self.graph.delete_concept(id)?;
+        self.intuition.remove_document(&format!("concept:{id}"))?;
+        Ok(())
+    }
+
+    pub(crate) fn index_concept(&self, concept: &Concept) -> Result<(), EngineError> {
+        self.intuition.index_document(&RecallDocument {
+            id: format!("concept:{}", concept.id),
+            kind: RecallKind::Concept,
+            text: format!(
+                "{} {}",
+                concept.name,
+                concept.description.as_deref().unwrap_or_default()
+            ),
+            concept_ids: vec![concept.id.to_string()],
+            created_at: concept.created_at,
+        })?;
+        Ok(())
+    }
+
+    pub(crate) fn index_procedure(&self, procedure: &Procedure) -> Result<(), EngineError> {
+        self.intuition
+            .remove_documents_with_prefix(&format!("procedure:{}:", procedure.id))?;
+        self.intuition.index_document(&RecallDocument {
+            id: format!("procedure:{}:{}", procedure.id, procedure.version),
+            kind: RecallKind::Procedure,
+            text: format!(
+                "{} {:?} {:?}",
+                procedure.name, procedure.params, procedure.contract
+            ),
+            concept_ids: procedure
+                .concept
+                .map(|id| vec![id.to_string()])
+                .unwrap_or_default(),
+            created_at: procedure.created_at,
+        })?;
+        Ok(())
+    }
+
+    fn index_episode(&self, episode: &Episode) -> Result<(), EngineError> {
+        self.intuition.index_document(&RecallDocument {
+            id: format!("episode:{}", episode.id),
+            kind: RecallKind::Episode,
+            text: format!(
+                "{} {}",
+                episode.situation,
+                episode.action.as_deref().unwrap_or_default()
+            ),
+            concept_ids: episode
+                .context
+                .entities
+                .iter()
+                .map(ToString::to_string)
+                .collect(),
+            created_at: episode.created_at,
+        })?;
+        Ok(())
+    }
+
+    fn rebuild_intuition_index(&self) -> Result<(), EngineError> {
+        self.intuition.clear_documents()?;
+        for concept in self.graph.list_concepts()? {
+            self.index_concept(&concept)?;
+        }
+        for procedure in self.graph.list_procedures()? {
+            self.index_procedure(&procedure)?;
+        }
+        for episode in self.episodes.list_recent(u32::MAX)? {
+            self.index_episode(&episode)?;
+        }
+        Ok(())
     }
 
     pub fn admin_insert_relationship(
@@ -220,12 +408,16 @@ impl Engine {
 
     pub fn admin_insert_procedure(&self, procedure: &Procedure) -> Result<(), EngineError> {
         self.require_admin()?;
-        Ok(self.graph.insert_procedure(procedure)?)
+        self.graph.insert_procedure(procedure)?;
+        self.index_procedure(procedure)?;
+        Ok(())
     }
 
     pub fn admin_update_procedure(&self, procedure: &Procedure) -> Result<(), EngineError> {
         self.require_admin()?;
-        Ok(self.graph.update_procedure(procedure)?)
+        self.graph.update_procedure(procedure)?;
+        self.index_procedure(procedure)?;
+        Ok(())
     }
 
     pub fn admin_revise_procedure(
@@ -234,12 +426,17 @@ impl Engine {
         expected_version: u32,
     ) -> Result<(), EngineError> {
         self.require_admin()?;
-        Ok(self.graph.revise_procedure(procedure, expected_version)?)
+        self.graph.revise_procedure(procedure, expected_version)?;
+        self.index_procedure(procedure)?;
+        Ok(())
     }
 
     pub fn admin_delete_procedure(&self, id: ProcedureId) -> Result<(), EngineError> {
         self.require_admin()?;
-        Ok(self.graph.delete_procedure(id)?)
+        self.graph.delete_procedure(id)?;
+        self.intuition
+            .remove_documents_with_prefix(&format!("procedure:{id}:"))?;
+        Ok(())
     }
 
     pub fn admin_insert_episode(&self, episode: &Episode) -> Result<(), EngineError> {
@@ -611,8 +808,41 @@ impl Engine {
         // A saga remains until every derived authority item and contradiction
         // has been written, so a restart completes this exact immutable work.
         self.detect_contradictions_for_trusted_episode(episode)?;
+        self.index_episode(episode)?;
+        self.record_episode_learning(episode)?;
         self.runtime
             .complete_episode_saga(&episode.id.to_string())?;
+        Ok(())
+    }
+
+    /// Convert the episode's explicit considered/used material into ranking
+    /// supervision. This is representation learning only: it records what
+    /// happened, but never changes graph truth, lifecycle, or trust receipts.
+    fn record_episode_learning(&self, episode: &Episode) -> Result<(), EngineError> {
+        let query = episode.situation.clone();
+        let succeeded = episode.succeeded();
+        let rung = episode.cost.rung_reached as u8;
+        for candidate in &episode.knowledge_considered {
+            self.record_ranking_example(&RankingExample {
+                query: query.clone(),
+                candidate_id: format!("concept:{}", candidate.concept),
+                used: candidate.was_used,
+                succeeded,
+                rung,
+            })?;
+        }
+        for procedure in &episode.context.relevant_procedures {
+            self.record_ranking_example(&RankingExample {
+                query: query.clone(),
+                candidate_id: format!("procedure:{}:{}", procedure.id, procedure.version),
+                used: episode
+                    .action
+                    .as_deref()
+                    .is_some_and(|action| action.contains(&procedure.id.to_string())),
+                succeeded,
+                rung,
+            })?;
+        }
         Ok(())
     }
 

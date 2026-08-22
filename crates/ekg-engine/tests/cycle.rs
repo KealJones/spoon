@@ -1,9 +1,6 @@
 use std::collections::BTreeMap;
 
-use ekg_core::{
-    BinOp, Concept, Episode, Evaluation, Expr, MutabilityClass, Param, Procedure, Value,
-    VerifiabilityTier,
-};
+use ekg_core::{BinOp, Concept, Expr, MutabilityClass, Param, Procedure, Value};
 use ekg_engine::{
     CycleBudget, CycleDisposition, CycleInput, CycleProgress, Engine, TeacherProposalWire,
 };
@@ -353,6 +350,7 @@ fn run_matches_a_linked_procedure_without_domain_special_cases() {
     assert_eq!(outcome.episode.situation, "what is double 7?");
     assert_eq!(outcome.episode.cost.rung_reached as u8, 2);
     assert_eq!(engine.episodes().count().unwrap(), 1);
+    assert!(engine.intuition_metrics().unwrap().ranking_examples > 0);
 }
 
 #[test]
@@ -673,18 +671,18 @@ fn inactive_concepts_and_procedures_are_not_executed() {
 #[test]
 fn exact_verified_history_resolves_at_recall() {
     let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
-    let mut prior = Episode::new("what is double 7?");
-    prior.observed_result = Some(Value::Int(14));
-    prior.evaluation = Some(Evaluation {
-        tier: VerifiabilityTier::Hard,
-        success: true,
-        details: "verified earlier".into(),
-        surprise: Some(0.0),
-    });
-    engine.admin_insert_episode(&prior).unwrap();
+    let concept = Concept::new("recall arithmetic", MutabilityClass::Definitional);
+    engine.admin_insert_concept(&concept).unwrap();
+    let procedure = Procedure::new("RECALL DOUBLE", Vec::new(), Expr::Literal(Value::Int(14)))
+        .with_concept(concept.id);
+    engine.admin_insert_procedure(&procedure).unwrap();
+    let prior = engine
+        .execute_procedure(procedure.id, BTreeMap::new(), Some(Value::Int(14)))
+        .unwrap()
+        .episode;
 
     let progress = engine
-        .begin_cycle(cycle_input("what is double 7?", true))
+        .begin_cycle(cycle_input("execute RECALL DOUBLE", true))
         .unwrap();
     let CycleProgress::Completed(outcome) = progress else {
         panic!("verified history should recall");
@@ -693,6 +691,7 @@ fn exact_verified_history_resolves_at_recall() {
     assert_eq!(outcome.answer, Some(Value::Int(14)));
     assert_eq!(outcome.episode.cost.rung_reached as u8, 1);
     assert_eq!(engine.episodes().count().unwrap(), 2);
+    assert!(engine.trust_receipt_for_episode(&prior).unwrap().is_some());
 }
 
 #[test]

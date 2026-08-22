@@ -19,7 +19,7 @@ use crate::schema;
 /// data (confidence, scope, contracts, procedure bodies) is stored as JSON
 /// text, since it's read/written wholesale and never queried by sub-field.
 pub struct KnowledgeStore {
-    conn: Connection,
+    pub(crate) conn: Connection,
 }
 
 const MAX_KNOWLEDGE_BUNDLE_CONCEPTS: usize = 8;

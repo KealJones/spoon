@@ -2,9 +2,9 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use ekg_core::{
-    Assumption, BinOp, Concept, ConceptId, Condition, Contract, Episode, EpisodeCost,
-    EscalationRung, Evaluation, Expr, KnowledgeCandidate, Lifecycle, MutabilityClass, Param,
-    Procedure, ReasoningTrace, Relationship, TraceStep, TraceStepStatus, UnOp, Value,
+    Assumption, BinOp, Concept, ConceptId, Condition, Contract, EkgError, Episode, EpisodeCost,
+    EpisodeId, EscalationRung, Evaluation, Expr, KnowledgeCandidate, Lifecycle, MutabilityClass,
+    Param, Procedure, ReasoningTrace, Relationship, TraceStep, TraceStepStatus, UnOp, Value,
     VerifiabilityTier,
 };
 use ekg_exec::ExecTrace;
@@ -19,6 +19,7 @@ use uuid::Uuid;
 
 use crate::engine::{Engine, EngineError, bind_inputs, is_current_executable, reasoning_trace};
 use crate::lesson::DurableLessonStage;
+use ekg_intuition::RecallKind;
 
 const MAX_TEACHER_CONTEXT_ITEMS: usize = 64;
 const MAX_TEACHER_TEXT_CHARS: usize = 2_048;
@@ -319,6 +320,12 @@ impl Engine {
                 &stage.relationships,
                 &stage.procedures,
             )?;
+            for concept in &stage.concepts {
+                self.index_concept(concept)?;
+            }
+            for procedure in &stage.procedures {
+                self.index_procedure(procedure)?;
+            }
             let episode_exists = self
                 .episodes
                 .list_recent(u32::MAX)?
@@ -775,9 +782,22 @@ impl Engine {
     }
 
     fn recall(&self, input: &CycleInput) -> Result<Option<Value>, EngineError> {
-        for episode in self.episodes.list_recent(u32::MAX)? {
+        let candidates = self.recall_candidates(&input.situation, 64)?;
+        for candidate in candidates {
+            let Some(id) = candidate.id.strip_prefix("episode:") else {
+                continue;
+            };
+            let Ok(uuid) = Uuid::parse_str(id) else {
+                continue;
+            };
+            let episode = match self.episodes.get(EpisodeId(uuid)) {
+                Ok(episode) => episode,
+                Err(EkgError::NotFound(_)) => continue,
+                Err(error) => return Err(error.into()),
+            };
             if episode.situation != input.situation
                 || episode.context.environment != input.environment
+                || self.trust_receipt_for_episode(&episode)?.is_none()
                 || !episode.evaluation.as_ref().is_some_and(|evaluation| {
                     evaluation.success
                         && matches!(
@@ -810,18 +830,24 @@ impl Engine {
         &self,
         situation: &str,
     ) -> Result<Vec<ResolvedInterpretation>, EngineError> {
-        let lowered = situation.to_lowercase();
-        let mut matches = self
-            .graph
-            .list_concepts()?
-            .into_iter()
-            .filter_map(|concept| {
-                usable_lifecycle(concept.lifecycle)
-                    .then(|| concept_name_match_score(&lowered, &concept.name))
-                    .flatten()
-                    .map(|score| (concept, score))
-            })
-            .collect::<Vec<_>>();
+        let mut matches = Vec::new();
+        for candidate in self.rank_recall_candidates(situation, 64)? {
+            if candidate.kind != RecallKind::Concept {
+                continue;
+            }
+            let Some(id) = candidate.id.strip_prefix("concept:") else {
+                continue;
+            };
+            let Ok(uuid) = Uuid::parse_str(id) else {
+                continue;
+            };
+            let Some(concept) = self.graph.get_concept(ConceptId(uuid))? else {
+                continue;
+            };
+            if usable_lifecycle(concept.lifecycle) {
+                matches.push((concept, candidate.learned_score));
+            }
+        }
         matches.sort_by(|(left_concept, left_score), (right_concept, right_score)| {
             right_score
                 .partial_cmp(left_score)
@@ -1489,14 +1515,24 @@ impl Engine {
                 let integration = match &knowledge_to_learn {
                     None => Ok(()),
                     Some(KnowledgeToLearn::LegacyProcedure) => {
-                        self.graph.insert_procedure(procedure)
+                        self.graph.insert_procedure(procedure)?;
+                        self.index_procedure(procedure)
                     }
-                    Some(KnowledgeToLearn::Lesson(lesson)) => self.graph.insert_knowledge_bundle(
-                        &lesson.idempotency_key,
-                        &lesson.concepts,
-                        &lesson.relationships,
-                        &lesson.procedures,
-                    ),
+                    Some(KnowledgeToLearn::Lesson(lesson)) => {
+                        self.graph.insert_knowledge_bundle(
+                            &lesson.idempotency_key,
+                            &lesson.concepts,
+                            &lesson.relationships,
+                            &lesson.procedures,
+                        )?;
+                        for concept in &lesson.concepts {
+                            self.index_concept(concept)?;
+                        }
+                        for procedure in &lesson.procedures {
+                            self.index_procedure(procedure)?;
+                        }
+                        Ok(())
+                    }
                 };
                 if let Err(error) = integration {
                     if let Some(stage) = &durable_lesson_stage {
@@ -2112,64 +2148,6 @@ fn chosen_concept(items: &[ResolvedInterpretation]) -> Option<ConceptId> {
 fn uniquely_resolved(items: &[ResolvedInterpretation]) -> Option<&ResolvedInterpretation> {
     let chosen = chosen_concept(items)?;
     items.iter().find(|item| item.concept.id == chosen)
-}
-
-fn contains_term(haystack: &str, needle: &str) -> bool {
-    if needle.is_empty() {
-        return false;
-    }
-    haystack.match_indices(needle).any(|(index, _)| {
-        let before = haystack[..index].chars().next_back();
-        let after = haystack[index + needle.len()..].chars().next();
-        before.is_none_or(|character| !character.is_alphanumeric())
-            && after.is_none_or(|character| !character.is_alphanumeric())
-    })
-}
-
-fn concept_name_match_score(situation: &str, concept_name: &str) -> Option<f64> {
-    let lowered_name = concept_name.to_lowercase();
-    if contains_term(situation, &lowered_name) {
-        return Some(2.0);
-    }
-    let meaningful = lowered_name
-        .split(|character: char| !character.is_alphanumeric())
-        .filter(|token| {
-            token.chars().count() >= 3
-                && !matches!(
-                    *token,
-                    "the" | "and" | "for" | "with" | "from" | "into" | "value" | "scalar"
-                )
-        })
-        .collect::<Vec<_>>();
-    if meaningful.is_empty() {
-        return None;
-    }
-    let situation_lexemes = situation
-        .split(|character: char| !character.is_alphanumeric())
-        .filter(|token| token.chars().count() >= 3)
-        .map(normalize_lexeme)
-        .collect::<HashSet<_>>();
-    let matched = meaningful
-        .iter()
-        .filter(|token| situation_lexemes.contains(&normalize_lexeme(token)))
-        .count();
-    (matched > 0).then_some(matched as f64 / meaningful.len() as f64)
-}
-
-fn normalize_lexeme(token: &str) -> String {
-    let mut normalized = token.to_lowercase();
-    for suffix in ["ing", "ed", "es", "s"] {
-        if normalized.len() > suffix.len() + 3
-            && let Some(stem) = normalized.strip_suffix(suffix)
-        {
-            normalized = stem.to_owned();
-            break;
-        }
-    }
-    if normalized.len() > 4 && normalized.ends_with('e') {
-        normalized.pop();
-    }
-    normalized
 }
 
 fn extract_literals(situation: &str) -> Vec<Value> {
