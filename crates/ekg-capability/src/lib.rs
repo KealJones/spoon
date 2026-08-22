@@ -163,6 +163,162 @@ impl NativePrimitiveExecutor {
         };
         Ok(PrimitiveExecution { receipt, output })
     }
+
+    pub fn read_file(
+        &self,
+        request: &PrimitiveRequest,
+    ) -> Result<PrimitiveExecution, CapabilityError> {
+        let receipt = self.policy.authorize(request)?;
+        let PrimitiveRequest::FileRead { path, bytes } = request else {
+            return Err(CapabilityError::Invalid(
+                "file reader requires a FileRead request".into(),
+            ));
+        };
+        let file = std::fs::symlink_metadata(path)
+            .map_err(|error| CapabilityError::Invalid(format!("file metadata failed: {error}")))?;
+        if file.file_type().is_symlink() {
+            return Err(CapabilityError::Invalid(
+                "symlink file targets are not allowed".into(),
+            ));
+        }
+        let resolved = std::fs::canonicalize(path).map_err(|error| {
+            CapabilityError::Invalid(format!("file canonicalization failed: {error}"))
+        })?;
+        let prefix = receipt_permission_path(&receipt.permission)?;
+        let resolved_prefix = std::fs::canonicalize(prefix).map_err(|error| {
+            CapabilityError::Invalid(format!("file permission scope is unavailable: {error}"))
+        })?;
+        if !resolved.starts_with(resolved_prefix) {
+            return Err(CapabilityError::PermissionRequired(
+                "resolved file path escaped its permission scope".into(),
+            ));
+        }
+        let bytes_out = std::fs::read(&resolved)
+            .map_err(|error| CapabilityError::Invalid(format!("file read failed: {error}")))?;
+        enforce_bytes(bytes_out.len() as u64, *bytes, &self.policy.bounds)?;
+        Ok(PrimitiveExecution {
+            receipt,
+            output: serde_json::json!({"bytes": bytes_out}),
+        })
+    }
+
+    pub fn write_file(
+        &self,
+        request: &PrimitiveRequest,
+        payload: &Value,
+    ) -> Result<PrimitiveExecution, CapabilityError> {
+        let receipt = self.policy.authorize(request)?;
+        let PrimitiveRequest::FileWrite { path, bytes } = request else {
+            return Err(CapabilityError::Invalid(
+                "file writer requires a FileWrite request".into(),
+            ));
+        };
+        let payload = payload_bytes(payload)?;
+        enforce_bytes(payload.len() as u64, *bytes, &self.policy.bounds)?;
+        if let Ok(file) = std::fs::symlink_metadata(path)
+            && file.file_type().is_symlink()
+        {
+            return Err(CapabilityError::Invalid(
+                "symlink file targets are not allowed".into(),
+            ));
+        }
+        let parent = Path::new(path).parent().ok_or_else(|| {
+            CapabilityError::Invalid("file write target has no parent directory".into())
+        })?;
+        let resolved_parent = std::fs::canonicalize(parent).map_err(|error| {
+            CapabilityError::Invalid(format!("file parent canonicalization failed: {error}"))
+        })?;
+        let prefix = receipt_permission_path(&receipt.permission)?;
+        let resolved_prefix = std::fs::canonicalize(prefix).map_err(|error| {
+            CapabilityError::Invalid(format!("file permission scope is unavailable: {error}"))
+        })?;
+        if !resolved_parent.starts_with(resolved_prefix) {
+            return Err(CapabilityError::PermissionRequired(
+                "resolved file parent escaped its permission scope".into(),
+            ));
+        }
+        std::fs::write(path, &payload)
+            .map_err(|error| CapabilityError::Invalid(format!("file write failed: {error}")))?;
+        Ok(PrimitiveExecution {
+            receipt,
+            output: serde_json::json!({"bytesWritten": payload.len()}),
+        })
+    }
+
+    /// Bounded fixture execution. It deliberately does not spawn a process or
+    /// interpret bundle-controlled code; a real sandbox adapter must be
+    /// injected by the host and can consume this receipt boundary.
+    pub fn sandbox_fixture(
+        &self,
+        request: &PrimitiveRequest,
+        input: &Value,
+    ) -> Result<PrimitiveExecution, CapabilityError> {
+        let receipt = self.policy.authorize(request)?;
+        let PrimitiveRequest::SandboxExecute { profile, steps } = request else {
+            return Err(CapabilityError::Invalid(
+                "sandbox executor requires a SandboxExecute request".into(),
+            ));
+        };
+        let input_bytes = canonical_json(input)?;
+        enforce_bytes(
+            input_bytes.len() as u64,
+            self.policy.bounds.max_bytes,
+            &self.policy.bounds,
+        )?;
+        Ok(PrimitiveExecution {
+            receipt,
+            output: serde_json::json!({
+                "sandboxed": true,
+                "profile": profile,
+                "steps": steps,
+                "input": input,
+                "inputDigest": digest_json(input)?
+            }),
+        })
+    }
+}
+
+fn receipt_permission_path(permission: &Permission) -> Result<&str, CapabilityError> {
+    match permission {
+        Permission::FileReadPrefix { path_prefix }
+        | Permission::FileWritePrefix { path_prefix } => Ok(path_prefix),
+        _ => Err(CapabilityError::Invalid(
+            "receipt is not bound to a file permission".into(),
+        )),
+    }
+}
+
+fn payload_bytes(payload: &Value) -> Result<Vec<u8>, CapabilityError> {
+    match payload {
+        Value::String(value) => Ok(value.as_bytes().to_vec()),
+        Value::Array(values) => values
+            .iter()
+            .map(|value| {
+                value
+                    .as_u64()
+                    .and_then(|value| u8::try_from(value).ok())
+                    .ok_or_else(|| {
+                        CapabilityError::Invalid("file payload must contain bytes".into())
+                    })
+            })
+            .collect(),
+        _ => Err(CapabilityError::Invalid(
+            "file payload must be a string or byte array".into(),
+        )),
+    }
+}
+
+fn enforce_bytes(
+    actual: u64,
+    declared: u64,
+    bounds: &ResourceBounds,
+) -> Result<(), CapabilityError> {
+    if actual > declared || actual > bounds.max_bytes {
+        return Err(CapabilityError::Invalid(
+            "resource byte bound exceeded".into(),
+        ));
+    }
+    Ok(())
 }
 
 impl PrimitivePolicy {
@@ -1291,5 +1447,52 @@ mod tests {
         assert_eq!(execution.receipt.primitive, NativePrimitive::Observe);
         assert_eq!(execution.output["source"], "native:clock");
         assert!(execution.output["unixSeconds"].is_number());
+    }
+
+    #[test]
+    fn file_adapters_stay_inside_a_real_scoped_directory() {
+        let root = std::env::temp_dir().join(format!("ekg-native-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).unwrap();
+        let target = root.join("fixture.txt");
+        let prefix = root.to_string_lossy().to_string();
+        let policy = PrimitivePolicy {
+            file_read_prefixes: BTreeSet::from([prefix.clone()]),
+            file_write_prefixes: BTreeSet::from([prefix]),
+            sandbox_profiles: BTreeSet::from(["fixture".into()]),
+            bounds: ResourceBounds {
+                max_bytes: 64,
+                ..ResourceBounds::default()
+            },
+            ..PrimitivePolicy::default()
+        };
+        let executor = NativePrimitiveExecutor::new(policy);
+        executor
+            .write_file(
+                &PrimitiveRequest::FileWrite {
+                    path: target.to_string_lossy().into(),
+                    bytes: 7,
+                },
+                &serde_json::json!("fixture"),
+            )
+            .unwrap();
+        let read = executor
+            .read_file(&PrimitiveRequest::FileRead {
+                path: target.to_string_lossy().into(),
+                bytes: 7,
+            })
+            .unwrap();
+        assert_eq!(
+            read.output["bytes"],
+            serde_json::json!([102, 105, 120, 116, 117, 114, 101])
+        );
+        let sandbox = executor.sandbox_fixture(
+            &PrimitiveRequest::SandboxExecute {
+                profile: "fixture".into(),
+                steps: 1,
+            },
+            &serde_json::json!({"input": 1}),
+        );
+        assert_eq!(sandbox.unwrap().output["sandboxed"], true);
+        std::fs::remove_dir_all(root).unwrap();
     }
 }
