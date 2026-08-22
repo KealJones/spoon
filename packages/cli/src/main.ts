@@ -141,6 +141,17 @@ function formatExplanation(result: unknown): string {
     `Answer: ${formatValue(result.answer)}`,
     `Episode: ${stringValue(episode.id) ?? "unknown"}`,
   ];
+  const context = isRecord(episode.context) ? episode.context : {};
+  const considered = Array.isArray(episode.knowledge_considered)
+    ? episode.knowledge_considered.length
+    : Array.isArray(episode.knowledgeConsidered)
+      ? episode.knowledgeConsidered.length
+      : 0;
+  lines.push(
+    `Context: ${considered} knowledge candidates considered, ${
+      Array.isArray(context.assumptions) ? context.assumptions.length : 0
+    } assumptions`,
+  );
   const teacher = episode.teacher_interaction ?? episode.teacherInteraction;
   if (isRecord(teacher)) {
     const provenance = isRecord(teacher.provenance) ? teacher.provenance : teacher;
@@ -161,6 +172,12 @@ function formatExplanation(result: unknown): string {
       }`,
     );
     if (stringValue(evaluation.details)) lines.push(`Why: ${stringValue(evaluation.details)}`);
+  }
+  const observed = episode.observed_result ?? episode.observedResult;
+  const prediction = episode.prediction;
+  if (prediction !== undefined || observed !== undefined) {
+    lines.push(`Predicted: ${formatValue(prediction)}`);
+    lines.push(`Observed: ${formatValue(observed)}`);
   }
   const action = stringValue(episode.action);
   lines.push(`Learned/reused: ${action && action !== "answer-only" ? action : "no reusable procedure"}`);
