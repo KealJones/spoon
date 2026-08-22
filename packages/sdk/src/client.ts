@@ -43,6 +43,7 @@ import type {
   RefineContradictionInput,
   RankingEvaluation,
   RepresentationModel,
+  SemanticRecallEvaluation,
   RpcTransport,
   TeacherProposalWire,
 } from "./types.js";
@@ -383,6 +384,16 @@ export class EkgClient {
     return this.transport.request<RepresentationModel>(
       "intuition.activateRepresentation",
       this.withAdminToken({ modelId }),
+    );
+  }
+
+  evaluateSemanticRecall(
+    candidateLimit: number,
+    holdoutQueries: number,
+  ): Promise<SemanticRecallEvaluation> {
+    return this.transport.request<SemanticRecallEvaluation>(
+      "intuition.evaluateSemanticRecall",
+      { candidateLimit, holdoutQueries },
     );
   }
 

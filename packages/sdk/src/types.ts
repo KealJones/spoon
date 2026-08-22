@@ -131,6 +131,18 @@ export interface RepresentationModel {
   createdAt: number;
 }
 
+export interface SemanticRecallEvaluation {
+  id: number;
+  candidateLimit: number;
+  trainingQueries: number;
+  heldOutQueries: number;
+  heldOutSuccesses: number;
+  lexicalScoredSuccesses: number;
+  semanticScoredSuccesses: number;
+  semanticImprovesRecall: boolean;
+  createdAt: number;
+}
+
 export type GoalKind = "task" | "standing" | "instrumental" | "learning";
 
 export interface Goal {

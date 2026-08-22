@@ -55,6 +55,7 @@ export type {
   PromotionReplay,
   RankingEvaluation,
   RepresentationModel,
+  SemanticRecallEvaluation,
   ManagedSkill,
   SkillLifecycle,
   SkillShadowWinInput,
