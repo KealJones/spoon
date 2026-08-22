@@ -91,6 +91,7 @@ export interface ImportedCapability {
 
 export interface MetricsSnapshot {
   episodeCount: number;
+  verifiedAnswerCount: number;
   rungDistribution: Array<[string, number]>;
   intuition: {
     indexedDocuments: number;
