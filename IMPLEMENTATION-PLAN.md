@@ -742,6 +742,25 @@ catastrophic failures live here.
 - Procedure inspector (contract, test cases, version history)
 - Contradiction viewer
 - Dependency graph (what depends on what)
+- Human-readable episode narrative (“What happened?” view):
+  - the original request and the escalation path taken;
+  - whether a teacher was used, which provider/model/source answered, and the
+    teacher's structured proposal summarized in plain language;
+  - validation status, rejected/provisional/verified checks, and the exact
+    reason a proposal was accepted, retried, or discarded;
+  - what EKG learned (new concept/procedure/contract/test), what it deliberately
+    did not learn, and the provenance episode that supports each change;
+  - execution steps, contract checks, observed result, evaluation tier,
+    confidence/surprise, cost, and the reason for any abstention;
+  - capability permissions/effects and local revalidation status when a
+    capability participated.
+- Narrative rendering is a read-only projection over immutable episode,
+  teacher-interaction, trust, and provenance records. It must redact secrets,
+  bearer tokens, cookies, raw environment values, and sensitive payloads, and
+  must retain a raw-JSON drill-down for forensic inspection rather than
+  replacing the underlying evidence.
+- CLI parity: `ask --explain` (or an equivalent human-readable episode command)
+  should print the same bounded narrative without requiring the web inspector.
 
 ### P6.2 - Section 38 Metrics Dashboard
 
