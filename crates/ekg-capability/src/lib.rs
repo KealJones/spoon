@@ -121,6 +121,11 @@ pub struct InvocationReceipt {
     pub permission: Permission,
     pub payload_digest: String,
     pub bounds: ResourceBounds,
+    /// The receipt stores a digest rather than the request payload.
+    pub redacted: bool,
+    /// Whether the primitive contract permits deterministic replay of the
+    /// invocation without relying on ambient external state.
+    pub replayable: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -452,6 +457,10 @@ impl PrimitivePolicy {
             ));
         }
         let payload_digest = digest_json(request)?;
+        let replayable = matches!(
+            primitive,
+            NativePrimitive::FileRead | NativePrimitive::SandboxExecute
+        );
         Ok(InvocationReceipt {
             primitive,
             effect,
@@ -459,6 +468,8 @@ impl PrimitivePolicy {
             permission,
             payload_digest,
             bounds: self.bounds.clone(),
+            redacted: true,
+            replayable,
         })
     }
 }

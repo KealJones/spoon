@@ -210,6 +210,8 @@ export interface PrimitiveExecution {
     target: string;
     payloadDigest: string;
     bounds: { maxBytes: number; maxSteps: number; maxMillis: number };
+    redacted: boolean;
+    replayable: boolean;
   };
   output: JsonValue;
 }

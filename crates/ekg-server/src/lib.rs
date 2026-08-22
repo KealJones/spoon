@@ -374,11 +374,19 @@ impl RpcServer {
             }
             "consolidation.register" => {
                 let input: SkillCandidate = decode(params)?;
-                encode(self.engine.register_skill_candidate(&input).map_err(engine_error)?)
+                encode(
+                    self.engine
+                        .register_skill_candidate(&input)
+                        .map_err(engine_error)?,
+                )
             }
             "consolidation.list" => {
                 let input: LimitParam = decode(params)?;
-                encode(self.engine.list_managed_skills(input.limit.unwrap_or(128)).map_err(engine_error)?)
+                encode(
+                    self.engine
+                        .list_managed_skills(input.limit.unwrap_or(128))
+                        .map_err(engine_error)?,
+                )
             }
             "consolidation.evaluateShadow" => {
                 let input: SkillShadowReplayParam = decode(params)?;

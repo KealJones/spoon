@@ -1,8 +1,8 @@
+use ekg_core::{Evaluation, Value, VerifiabilityTier};
 use ekg_engine::{
     CapabilityStatus, DiscoveredOperation, Engine, InterfaceDescription, LocalValidation,
     Permission,
 };
-use ekg_core::{Evaluation, Value, VerifiabilityTier};
 use std::collections::BTreeMap;
 
 #[test]
@@ -33,7 +33,10 @@ fn engine_keeps_imported_capabilities_quarantined_until_local_validation_and_gra
     let validation_episode = engine
         .record_authenticated_observation(
             "weather.forecast",
-            Value::Map(BTreeMap::from([(String::from("temperature"), Value::Int(72))])),
+            Value::Map(BTreeMap::from([(
+                String::from("temperature"),
+                Value::Int(72),
+            )])),
             BTreeMap::new(),
             Evaluation {
                 tier: VerifiabilityTier::Hard,
