@@ -5,7 +5,7 @@
 //! supplied fixtures, and invocation requires an explicit local grant.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
+use std::path::{Component, Path};
 
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
@@ -19,6 +19,9 @@ pub const MAX_DEPENDENCIES: usize = 128;
 pub const MAX_TESTS: usize = 256;
 pub const MAX_SCHEMA_BYTES: usize = 32 * 1024;
 pub const MAX_BUNDLE_BYTES: usize = 512 * 1024;
+pub const MAX_RESOURCE_BYTES: u64 = 64 * 1024 * 1024;
+pub const MAX_RESOURCE_STEPS: u64 = 1_000_000;
+pub const MAX_RESOURCE_MILLIS: u64 = 60_000;
 
 #[derive(Debug, Error)]
 pub enum CapabilityError {
@@ -115,6 +118,7 @@ pub struct InvocationReceipt {
     pub primitive: NativePrimitive,
     pub effect: Effect,
     pub target: String,
+    pub permission: Permission,
     pub payload_digest: String,
     pub bounds: ResourceBounds,
 }
@@ -166,7 +170,7 @@ impl PrimitivePolicy {
         &self,
         request: &PrimitiveRequest,
     ) -> Result<InvocationReceipt, CapabilityError> {
-        let (primitive, effect, target, amount) = match request {
+        let (primitive, effect, target, permission, amount) = match request {
             PrimitiveRequest::Network {
                 host,
                 method,
@@ -181,32 +185,33 @@ impl PrimitivePolicy {
                     NativePrimitive::NetworkRequest,
                     Effect::Network,
                     host.clone(),
+                    Permission::NetworkHost { host: host.clone() },
                     *body_bytes,
                 )
             }
             PrimitiveRequest::FileRead { path, bytes } => {
-                if !path_allowed(path, &self.file_read_prefixes) {
-                    return Err(CapabilityError::PermissionRequired(format!(
-                        "file read {path}"
-                    )));
-                }
+                let path_prefix = matching_path_prefix(path, &self.file_read_prefixes)?
+                    .ok_or_else(|| {
+                        CapabilityError::PermissionRequired(format!("file read {path}"))
+                    })?;
                 (
                     NativePrimitive::FileRead,
                     Effect::FileRead,
                     path.clone(),
+                    Permission::FileReadPrefix { path_prefix },
                     *bytes,
                 )
             }
             PrimitiveRequest::FileWrite { path, bytes } => {
-                if !path_allowed(path, &self.file_write_prefixes) {
-                    return Err(CapabilityError::PermissionRequired(format!(
-                        "file write {path}"
-                    )));
-                }
+                let path_prefix = matching_path_prefix(path, &self.file_write_prefixes)?
+                    .ok_or_else(|| {
+                        CapabilityError::PermissionRequired(format!("file write {path}"))
+                    })?;
                 (
                     NativePrimitive::FileWrite,
                     Effect::FileWrite,
                     path.clone(),
+                    Permission::FileWritePrefix { path_prefix },
                     *bytes,
                 )
             }
@@ -220,6 +225,9 @@ impl PrimitivePolicy {
                     NativePrimitive::Observe,
                     Effect::Observation,
                     target.clone(),
+                    Permission::ObserveTarget {
+                        target: target.clone(),
+                    },
                     0,
                 )
             }
@@ -238,6 +246,9 @@ impl PrimitivePolicy {
                     NativePrimitive::SandboxExecute,
                     Effect::SandboxedExecution,
                     profile.clone(),
+                    Permission::SandboxProfile {
+                        profile: profile.clone(),
+                    },
                     *steps,
                 )
             }
@@ -252,23 +263,48 @@ impl PrimitivePolicy {
             primitive,
             effect,
             target,
+            permission,
             payload_digest,
             bounds: self.bounds.clone(),
         })
     }
 }
 
-fn path_allowed(path: &str, prefixes: &BTreeSet<String>) -> bool {
+fn matching_path_prefix(
+    path: &str,
+    prefixes: &BTreeSet<String>,
+) -> Result<Option<String>, CapabilityError> {
     let candidate = Path::new(path);
-    if candidate
-        .components()
-        .any(|component| matches!(component, std::path::Component::ParentDir))
-    {
-        return false;
+    validate_absolute_path(candidate, "requested file path")?;
+    let mut matches = Vec::new();
+    for prefix in prefixes {
+        let prefix_path = Path::new(prefix);
+        validate_absolute_path(prefix_path, "file permission prefix")?;
+        if prefix_path.parent().is_none() {
+            return Err(CapabilityError::Invalid(
+                "filesystem root cannot be used as a scoped file prefix".into(),
+            ));
+        }
+        if candidate.starts_with(prefix_path) {
+            matches.push(prefix.clone());
+        }
     }
-    prefixes
-        .iter()
-        .any(|prefix| candidate.starts_with(Path::new(prefix)))
+    Ok(matches.into_iter().max_by_key(|prefix| prefix.len()))
+}
+
+fn validate_absolute_path(path: &Path, label: &str) -> Result<(), CapabilityError> {
+    if !path.is_absolute()
+        || path.as_os_str().is_empty()
+        || path.to_string_lossy().contains('\0')
+        || path
+            .components()
+            .any(|component| matches!(component, Component::ParentDir | Component::CurDir))
+    {
+        return Err(CapabilityError::Invalid(format!(
+            "{label} must be an absolute normalized path"
+        )));
+    }
+    Ok(())
 }
 
 fn digest_json<T: Serialize>(value: &T) -> Result<String, CapabilityError> {
@@ -538,14 +574,22 @@ pub fn validate_bundle(bundle: &CapabilityBundle) -> Result<(), CapabilityError>
             "manifest or count bounds failed".into(),
         ));
     }
+    if !is_sha256_digest(&bundle.content_id)
+        || bundle.provenance.source.trim().is_empty()
+        || bundle.provenance.interface_fingerprint.trim().is_empty()
+    {
+        return Err(CapabilityError::InvalidBundle(
+            "bundle identity or provenance is invalid".into(),
+        ));
+    }
     reject_secrets(bundle)?;
     reject_local_authority(bundle)?;
-    let mut dependency_hashes = BTreeSet::new();
+    let mut dependency_names = BTreeSet::new();
     for dependency in &bundle.dependencies {
         if dependency.name.trim().is_empty()
             || dependency.version.trim().is_empty()
-            || dependency.content_hash.trim().is_empty()
-            || !dependency_hashes.insert(dependency.content_hash.clone())
+            || !is_sha256_digest(&dependency.content_hash)
+            || !dependency_names.insert(dependency.name.clone())
         {
             return Err(CapabilityError::InvalidBundle(
                 "dependency identity or closure is invalid".into(),
@@ -555,7 +599,10 @@ pub fn validate_bundle(bundle: &CapabilityBundle) -> Result<(), CapabilityError>
     let mut ids = BTreeSet::new();
     for procedure in &bundle.procedures {
         if procedure.id.trim().is_empty()
+            || procedure.name.trim().is_empty()
+            || procedure.version == 0
             || !ids.insert(procedure.id.clone())
+            || procedure.tests.is_empty()
             || procedure.tests.len() > MAX_TESTS
             || procedure.dependencies.len() > MAX_DEPENDENCIES
         {
@@ -570,6 +617,8 @@ pub fn validate_bundle(bundle: &CapabilityBundle) -> Result<(), CapabilityError>
                 "procedures must declare permissions and effects".into(),
             ));
         }
+        validate_resource_bounds(&procedure.bounds)?;
+        validate_primitive_declarations(procedure)?;
         for test in &procedure.tests {
             if test.name.trim().is_empty() {
                 return Err(CapabilityError::InvalidBundle(
@@ -577,8 +626,15 @@ pub fn validate_bundle(bundle: &CapabilityBundle) -> Result<(), CapabilityError>
                 ));
             }
         }
+        let mut procedure_dependencies = BTreeSet::new();
         for dependency in &procedure.dependencies {
-            if !dependency_hashes.contains(&dependency.content_hash) {
+            let identity = (
+                dependency.name.as_str(),
+                dependency.version.as_str(),
+                dependency.content_hash.as_str(),
+            );
+            if !procedure_dependencies.insert(identity) || !bundle.dependencies.contains(dependency)
+            {
                 return Err(CapabilityError::InvalidBundle(
                     "procedure dependency is missing from bundle closure".into(),
                 ));
@@ -586,6 +642,80 @@ pub fn validate_bundle(bundle: &CapabilityBundle) -> Result<(), CapabilityError>
         }
     }
     Ok(())
+}
+
+fn validate_resource_bounds(bounds: &ResourceBounds) -> Result<(), CapabilityError> {
+    if bounds.max_bytes == 0
+        || bounds.max_bytes > MAX_RESOURCE_BYTES
+        || bounds.max_steps == 0
+        || bounds.max_steps > MAX_RESOURCE_STEPS
+        || bounds.max_millis == 0
+        || bounds.max_millis > MAX_RESOURCE_MILLIS
+    {
+        return Err(CapabilityError::InvalidBundle(
+            "procedure resource bounds are invalid".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_primitive_declarations(procedure: &CapabilityProcedure) -> Result<(), CapabilityError> {
+    let expected_effect = match procedure.primitive {
+        NativePrimitive::NetworkRequest => Effect::Network,
+        NativePrimitive::FileRead => Effect::FileRead,
+        NativePrimitive::FileWrite => Effect::FileWrite,
+        NativePrimitive::Observe => Effect::Observation,
+        NativePrimitive::SandboxExecute => Effect::SandboxedExecution,
+    };
+    if procedure.effects.as_slice() != [expected_effect] {
+        return Err(CapabilityError::InvalidBundle(
+            "primitive effect declaration is inconsistent".into(),
+        ));
+    }
+    let permissions_match = procedure.permissions.iter().all(|permission| {
+        matches!(
+            (&procedure.primitive, permission),
+            (
+                NativePrimitive::NetworkRequest,
+                Permission::NetworkHost { .. }
+            ) | (NativePrimitive::FileRead, Permission::FileReadPrefix { .. })
+                | (
+                    NativePrimitive::FileWrite,
+                    Permission::FileWritePrefix { .. }
+                )
+                | (NativePrimitive::Observe, Permission::ObserveTarget { .. })
+                | (
+                    NativePrimitive::SandboxExecute,
+                    Permission::SandboxProfile { .. }
+                )
+        )
+    });
+    if !permissions_match {
+        return Err(CapabilityError::InvalidBundle(
+            "primitive permission declaration is inconsistent".into(),
+        ));
+    }
+    for permission in &procedure.permissions {
+        let value = match permission {
+            Permission::NetworkHost { host } => host,
+            Permission::FileReadPrefix { path_prefix }
+            | Permission::FileWritePrefix { path_prefix } => path_prefix,
+            Permission::ObserveTarget { target } => target,
+            Permission::SandboxProfile { profile } => profile,
+        };
+        if value.trim().is_empty() || value.chars().any(char::is_control) {
+            return Err(CapabilityError::InvalidBundle(
+                "permission scope is invalid".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn is_sha256_digest(value: &str) -> bool {
+    value
+        .strip_prefix("sha256:")
+        .is_some_and(|hex| hex.len() == 64 && hex.bytes().all(|byte| byte.is_ascii_hexdigit()))
 }
 
 fn validate_schema(schema: &Value) -> Result<(), CapabilityError> {
@@ -601,7 +731,8 @@ fn validate_schema(schema: &Value) -> Result<(), CapabilityError> {
 fn reject_secrets(value: &impl Serialize) -> Result<(), CapabilityError> {
     let json = serde_json::to_value(value)?;
     let mut keys = Vec::new();
-    collect_keys(&json, &mut keys);
+    let mut strings = Vec::new();
+    collect_material(&json, &mut keys, &mut strings);
     if keys.iter().any(|key| {
         [
             "secret",
@@ -613,9 +744,10 @@ fn reject_secrets(value: &impl Serialize) -> Result<(), CapabilityError> {
         ]
         .iter()
         .any(|needle| key.contains(needle))
-    }) {
+    }) || strings.iter().any(|value| contains_secret_value(value))
+    {
         return Err(CapabilityError::InvalidBundle(
-            "secret-bearing field is prohibited".into(),
+            "secret-bearing field or value is prohibited".into(),
         ));
     }
     Ok(())
@@ -636,14 +768,69 @@ fn reject_local_authority(value: &impl Serialize) -> Result<(), CapabilityError>
         ]
         .iter()
         .any(|needle| key.contains(needle))
-    }) || strings.iter().any(|value| {
-        value.starts_with('/') || value.starts_with("file://") || value.contains("\\\\")
-    }) {
+    }) || strings
+        .iter()
+        .any(|value| contains_machine_local_material(value))
+    {
         return Err(CapabilityError::InvalidBundle(
             "local authority or environment-specific path is prohibited".into(),
         ));
     }
     Ok(())
+}
+
+fn contains_secret_value(value: &str) -> bool {
+    let trimmed = value.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    let credential_header = lower.starts_with("bearer ") || lower.starts_with("basic ");
+    credential_header
+        || lower.contains("-----begin private key-----")
+        || lower.contains("-----begin rsa private key-----")
+        || lower.contains("-----begin ec private key-----")
+}
+
+fn contains_machine_local_material(value: &str) -> bool {
+    let trimmed = value.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    let bytes = trimmed.as_bytes();
+    let windows_absolute = bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && matches!(bytes[2], b'/' | b'\\');
+    trimmed.starts_with('/')
+        || trimmed.starts_with("~/")
+        || trimmed.starts_with("\\\\")
+        || windows_absolute
+        || lower.starts_with("file://")
+        || contains_environment_reference(trimmed)
+}
+
+fn contains_environment_reference(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    for (index, byte) in bytes.iter().enumerate() {
+        if *byte == b'$' {
+            let tail = &bytes[index + 1..];
+            if tail.first() == Some(&b'{')
+                || tail
+                    .first()
+                    .is_some_and(|next| next.is_ascii_uppercase() || *next == b'_')
+            {
+                return true;
+            }
+        }
+        if *byte == b'%' {
+            let tail = &bytes[index + 1..];
+            if let Some(end) = tail.iter().position(|candidate| *candidate == b'%')
+                && end > 0
+                && tail[..end]
+                    .iter()
+                    .all(|candidate| candidate.is_ascii_uppercase() || *candidate == b'_')
+            {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn collect_material(value: &Value, keys: &mut Vec<String>, strings: &mut Vec<String>) {
@@ -658,19 +845,6 @@ fn collect_material(value: &Value, keys: &mut Vec<String>, strings: &mut Vec<Str
             .iter()
             .for_each(|item| collect_material(item, keys, strings)),
         Value::String(value) => strings.push(value.clone()),
-        _ => {}
-    }
-}
-
-fn collect_keys(value: &Value, keys: &mut Vec<String>) {
-    match value {
-        Value::Object(map) => {
-            for (key, child) in map {
-                keys.push(key.to_lowercase());
-                collect_keys(child, keys);
-            }
-        }
-        Value::Array(items) => items.iter().for_each(|item| collect_keys(item, keys)),
         _ => {}
     }
 }
@@ -768,13 +942,25 @@ impl CapabilityStore {
     }
 
     pub fn grant(&self, content_id: &str, permission: &Permission) -> Result<(), CapabilityError> {
-        let exists: bool = self.conn.query_row(
-            "SELECT EXISTS(SELECT 1 FROM capability_bundles WHERE content_id = ?1)",
-            params![content_id],
-            |row| row.get(0),
+        let bundle_json: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT bundle_json FROM capability_bundles WHERE content_id = ?1",
+                params![content_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        let bundle: CapabilityBundle = serde_json::from_str(
+            &bundle_json.ok_or_else(|| CapabilityError::Invalid("capability not found".into()))?,
         )?;
-        if !exists {
-            return Err(CapabilityError::Invalid("capability not found".into()));
+        if !bundle
+            .procedures
+            .iter()
+            .any(|procedure| procedure.permissions.contains(permission))
+        {
+            return Err(CapabilityError::Invalid(
+                "permission was not declared by the capability".into(),
+            ));
         }
         self.conn.execute(
             "INSERT INTO capability_grants(content_id, permission_json, revoked) VALUES (?1, ?2, 0)
@@ -809,6 +995,17 @@ impl CapabilityStore {
             ));
         }
         if validation.passed {
+            if validation.environment_digest.trim().is_empty()
+                || validation.validation_episodes.is_empty()
+                || validation
+                    .validation_episodes
+                    .iter()
+                    .any(|episode| episode.trim().is_empty())
+            {
+                return Err(CapabilityError::Invalid(
+                    "local validation requires environment and episode evidence".into(),
+                ));
+            }
             for procedure in &bundle.procedures {
                 run_sandbox_tests(procedure)?;
             }
@@ -842,18 +1039,34 @@ impl CapabilityStore {
         content_id: &str,
         permissions: &[Permission],
     ) -> Result<(), CapabilityError> {
-        let status: Option<String> = self
+        if permissions.is_empty() {
+            return Err(CapabilityError::PermissionRequired(
+                "at least one declared permission".into(),
+            ));
+        }
+        let stored: Option<(String, String)> = self
             .conn
             .query_row(
-                "SELECT status FROM capability_bundles WHERE content_id = ?1",
+                "SELECT status, bundle_json FROM capability_bundles WHERE content_id = ?1",
                 params![content_id],
-                |row| row.get(0),
+                |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .optional()?;
-        if status.as_deref() != Some("provisional") && status.as_deref() != Some("active") {
+        let (status, bundle_json) = stored.ok_or(CapabilityError::NotRevalidated)?;
+        if status != "provisional" && status != "active" {
             return Err(CapabilityError::NotRevalidated);
         }
+        let bundle: CapabilityBundle = serde_json::from_str(&bundle_json)?;
         for permission in permissions {
+            if !bundle
+                .procedures
+                .iter()
+                .any(|procedure| procedure.permissions.contains(permission))
+            {
+                return Err(CapabilityError::PermissionRequired(format!(
+                    "undeclared {permission:?}"
+                )));
+            }
             let granted: bool = self.conn.query_row(
                 "SELECT EXISTS(SELECT 1 FROM capability_grants WHERE content_id = ?1 AND permission_json = ?2 AND revoked = 0)",
                 params![content_id, serde_json::to_string(permission)?],
@@ -987,6 +1200,14 @@ mod tests {
         );
         assert!(
             policy
+                .authorize(&PrimitiveRequest::FileRead {
+                    path: "tmp/ekg/file".into(),
+                    bytes: 1,
+                })
+                .is_err()
+        );
+        assert!(
+            policy
                 .authorize(&PrimitiveRequest::Network {
                     host: "evil.example.test".into(),
                     method: "GET".into(),
@@ -1006,6 +1227,52 @@ mod tests {
                     profile: "pure".into(),
                     steps: 11,
                 })
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn bundle_rejects_secret_values_and_machine_local_material() {
+        for reconstruction in [
+            serde_json::json!({"header":"Bearer exported-credential"}),
+            serde_json::json!({"recipe":"C:\\Users\\alice\\build.cmd"}),
+            serde_json::json!({"recipe":"${HOME}/private/tool"}),
+        ] {
+            let mut bundle = discover_interface(&interface()).unwrap();
+            bundle.reconstruction = reconstruction;
+            bundle.content_id = bundle_content_id(&bundle).unwrap();
+            assert!(matches!(
+                export_bundle(&bundle),
+                Err(CapabilityError::InvalidBundle(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn bundle_rejects_mismatched_authority_and_unbounded_resources() {
+        let mut bundle = discover_interface(&interface()).unwrap();
+        bundle.procedures[0].effects = vec![Effect::Observation];
+        bundle.content_id = bundle_content_id(&bundle).unwrap();
+        assert!(validate_bundle(&bundle).is_err());
+
+        let mut bundle = discover_interface(&interface()).unwrap();
+        bundle.procedures[0].bounds.max_bytes = u64::MAX;
+        bundle.content_id = bundle_content_id(&bundle).unwrap();
+        assert!(validate_bundle(&bundle).is_err());
+    }
+
+    #[test]
+    fn registry_rejects_ambient_or_empty_permission_checks() {
+        let bundle = discover_interface(&interface()).unwrap();
+        let store = CapabilityStore::in_memory().unwrap();
+        let imported = store.import(&export_bundle(&bundle).unwrap()).unwrap();
+        let ambient = Permission::ObserveTarget {
+            target: "clock".into(),
+        };
+        assert!(store.grant(&imported.content_id, &ambient).is_err());
+        assert!(
+            store
+                .require_permissions(&imported.content_id, &[])
                 .is_err()
         );
     }
