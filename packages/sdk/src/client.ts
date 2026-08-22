@@ -16,6 +16,8 @@ import type {
   CapabilityPermission,
   CuriosityGap,
   EpisodeCompressionPlan,
+  EpisodeCompressionRecord,
+  EpisodeCompressionResult,
   DiscoveredOperation,
   EpisodeFilter,
   EpisodeFeedback,
@@ -392,6 +394,20 @@ export class EkgClient {
   episodeCompressionPlan(limit = 128): Promise<EpisodeCompressionPlan> {
     return this.transport.request<EpisodeCompressionPlan>(
       "consolidation.compressionPlan",
+      { limit },
+    );
+  }
+
+  compressEpisodeHistory(limit = 128): Promise<EpisodeCompressionResult> {
+    return this.transport.request<EpisodeCompressionResult>(
+      "consolidation.compress",
+      this.withAdminToken({ limit }),
+    );
+  }
+
+  listEpisodeCompressionRecords(limit = 128): Promise<EpisodeCompressionRecord[]> {
+    return this.transport.request<EpisodeCompressionRecord[]>(
+      "consolidation.compressedList",
       { limit },
     );
   }

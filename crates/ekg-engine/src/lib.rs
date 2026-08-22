@@ -1,6 +1,7 @@
 //! Orchestration and cognition-cycle services.
 
 pub mod adaptation;
+mod compression;
 pub mod credit;
 pub mod cycle;
 pub mod engine;
@@ -12,6 +13,7 @@ mod skills;
 mod trust;
 mod view;
 
+pub use compression::{EpisodeCompressionRecord, EpisodeCompressionResult};
 pub use credit::{
     CounterfactualMutation, FailureAnalysis, FailureAnalysisBudget, FailureAnalysisCost,
     FailureAnalysisRequest, FailureEvidence, FailureEvidenceSource,

@@ -203,6 +203,18 @@ export interface EpisodeCompressionPlan {
   forgottenAsKnownGap: string[];
 }
 
+export interface EpisodeCompressionResult {
+  plan: EpisodeCompressionPlan;
+  archivedEpisodeIds: string[];
+}
+
+export interface EpisodeCompressionRecord {
+  episodeId: string;
+  summary: JsonValue;
+  archivedEpisode: JsonValue;
+  createdAt: number;
+}
+
 export interface PrimitiveExecution {
   receipt: {
     primitive: string;

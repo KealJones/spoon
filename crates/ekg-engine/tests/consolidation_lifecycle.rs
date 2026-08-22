@@ -102,3 +102,27 @@ fn raw_admin_episode_cannot_back_a_skill_candidate() {
     };
     assert!(engine.register_skill_candidate(&candidate).is_err());
 }
+
+#[test]
+fn compression_materializes_summaries_without_deleting_source_episodes() {
+    let engine = Engine::in_memory_with_admin("compression-test").unwrap();
+    let procedure = double();
+    engine.admin_insert_procedure(&procedure).unwrap();
+    for value in 1..=4 {
+        engine
+            .execute_procedure(procedure.id, inputs(value), Some(Value::Int(value * 2)))
+            .unwrap();
+    }
+    let before = engine.episodes().list_recent(32).unwrap().len();
+    let result = engine.compress_episode_history(32).unwrap();
+    assert!(!result.plan.summarize.is_empty());
+    assert_eq!(
+        result.archived_episode_ids.len(),
+        result.plan.summarize.len()
+    );
+    assert_eq!(engine.episodes().list_recent(32).unwrap().len(), before);
+    assert_eq!(
+        engine.list_episode_compression_records(32).unwrap().len(),
+        result.archived_episode_ids.len()
+    );
+}

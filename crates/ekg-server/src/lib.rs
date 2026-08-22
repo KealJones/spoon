@@ -372,6 +372,22 @@ impl RpcServer {
                         .map_err(engine_error)?,
                 )
             }
+            "consolidation.compress" => {
+                let input: LimitParam = decode(params)?;
+                encode(
+                    self.engine
+                        .compress_episode_history(input.limit.unwrap_or(128))
+                        .map_err(engine_error)?,
+                )
+            }
+            "consolidation.compressedList" => {
+                let input: LimitParam = decode(params)?;
+                encode(
+                    self.engine
+                        .list_episode_compression_records(input.limit.unwrap_or(128))
+                        .map_err(engine_error)?,
+                )
+            }
             "consolidation.register" => {
                 let input: SkillCandidate = decode(params)?;
                 encode(
@@ -763,6 +779,7 @@ fn requires_admin(method: &str) -> bool {
             | "consolidation.evaluateShadow"
             | "consolidation.promoteLive"
             | "consolidation.retire"
+            | "consolidation.compress"
             | "adaptation.applyOffline"
             | "contradiction.record"
             | "contradiction.refine"

@@ -86,6 +86,7 @@ pub struct Engine {
     pub(crate) contradictions: ekg_adapt::ContradictionStore,
     pub(crate) lesson_stages: crate::lesson::LessonStageStore,
     pub(crate) runtime: crate::runtime::RuntimeStore,
+    pub(crate) compression: crate::compression::CompressionStore,
     pub(crate) trust: crate::trust::TrustLedger,
     pub(crate) intuition: IntuitionStore,
     pub(crate) capabilities: CapabilityStore,
@@ -107,6 +108,7 @@ impl Engine {
             contradictions: ekg_adapt::ContradictionStore::open(path)?,
             lesson_stages: crate::lesson::LessonStageStore::open(path)?,
             runtime: crate::runtime::RuntimeStore::open(path)?,
+            compression: crate::compression::CompressionStore::open(path)?,
             trust: crate::trust::TrustLedger::open(path)?,
             intuition: IntuitionStore::open(path)?,
             capabilities: CapabilityStore::open(path)
@@ -140,6 +142,7 @@ impl Engine {
             contradictions: ekg_adapt::ContradictionStore::in_memory()?,
             lesson_stages: crate::lesson::LessonStageStore::in_memory()?,
             runtime: crate::runtime::RuntimeStore::in_memory()?,
+            compression: crate::compression::CompressionStore::in_memory()?,
             trust: crate::trust::TrustLedger::in_memory()?,
             intuition: IntuitionStore::in_memory()?,
             capabilities: CapabilityStore::in_memory()
@@ -361,6 +364,24 @@ impl Engine {
     ) -> Result<ekg_adapt::EpisodeCompressionPlan, EngineError> {
         let episodes = self.episodes.list_recent(limit.clamp(1, 512))?;
         Ok(ekg_adapt::plan_episode_compression(&episodes))
+    }
+
+    /// Materializes a bounded compression plan without mutating or deleting
+    /// the source episodes. Failed episodes are rejected by the store.
+    pub fn compress_episode_history(
+        &self,
+        limit: u32,
+    ) -> Result<crate::EpisodeCompressionResult, EngineError> {
+        let episodes = self.episodes.list_recent(limit.clamp(1, 512))?;
+        let plan = ekg_adapt::plan_episode_compression(&episodes);
+        self.compression.apply(&episodes, plan)
+    }
+
+    pub fn list_episode_compression_records(
+        &self,
+        limit: u32,
+    ) -> Result<Vec<crate::EpisodeCompressionRecord>, EngineError> {
+        self.compression.list(limit)
     }
 
     /// Persists a discovered skill only when each cited episode is exact,
