@@ -41,12 +41,21 @@ The latest committed increments are:
 - `4ded797` — first policy-gated native observation adapter (`native:clock`),
   with an invocation receipt; generic network/observation remains closed until
   an explicit adapter is supplied.
+- `99b3a0a` — `ask --explain` / trailing `--explain`, a bounded human-readable
+  episode narrative showing teacher use, proposal/validation, answer,
+  evaluation, learning/reuse, cost, and episode identity.
+- `1185d9c` — adversarial capability hardening: normalized file scopes,
+  permission-bound receipts, secret/path rejection, dependency/hash closure,
+  effect/permission consistency, hard resource limits, and evidence metadata.
 
 The first usable chat command is now:
 
 ```text
 EKG_DB=/tmp/ekg-playground.sqlite pnpm exec tsx packages/cli/src/main.ts ask --quiet "what is double 7?"
 ```
+
+For the bounded human-readable episode summary (teacher use, proposal,
+validation, learning/reuse, evaluation, and cost), use `ask --explain`.
 
 The dashboard can be opened with:
 
@@ -60,10 +69,14 @@ Ctrl-C. The full JSON CLI output remains available by omitting `--quiet`.
 
 Capability acquisition now has typed discovery, canonical deterministic
 bundles, quarantine imports, local validation, revocable grants, primitive
-policy checks, a safe clock observation adapter, RPC and SDK methods. Goals and curiosity gaps are durable,
-bounded, and standing goals are immutable. Phase 4 skill discovery and
-compression are intentionally report/planning-only until the promotion gate
-is the authority for mutation.
+policy checks, a safe clock observation adapter, RPC and SDK methods. Goals and
+curiosity gaps are durable, bounded, and standing goals are immutable. Phase 4
+skill discovery and compression are intentionally report/planning-only until
+the promotion gate is the authority for mutation.
+
+Capability limitations are explicit: network/file/sandbox adapters, grounded
+local-validation lookup, procedure-bound permission resolution, and a full
+neutral-IR reconstruction runner remain Phase 5 follow-up work.
 
 ## Pause checkpoint (2026-08-22)
 
