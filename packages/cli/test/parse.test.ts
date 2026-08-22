@@ -59,6 +59,11 @@ test("parses quiet natural-language cycle requests", () => {
     situation: "what time is it?",
     quiet: true,
   });
+  assert.deepEqual(parseCommand(["ask", "what", "is", "double", "7?", "--quiet"]), {
+    kind: "cycle.run",
+    situation: "what is double 7?",
+    quiet: true,
+  });
 });
 
 test("parses the explicit failure adaptation workflow", () => {

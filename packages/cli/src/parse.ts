@@ -163,8 +163,14 @@ export function parseCommand(args: string[]): Command {
     return { kind: "contradiction.uncertainty", claimId: rest[0]! };
   }
   if (resource === "ask" && action) {
-    const quiet = action === "--quiet" || action === "-q";
-    const question = quiet ? rest : [action, ...rest];
+    const leadingQuiet = action === "--quiet" || action === "-q";
+    const trailingQuiet = rest.at(-1) === "--quiet" || rest.at(-1) === "-q";
+    const quiet = leadingQuiet || trailingQuiet;
+    const question = leadingQuiet
+      ? rest
+      : trailingQuiet
+        ? [action, ...rest.slice(0, -1)]
+        : [action, ...rest];
     if (question.length === 0) throw new Error(usage);
     return { kind: "cycle.run", situation: question.join(" "), quiet };
   }
