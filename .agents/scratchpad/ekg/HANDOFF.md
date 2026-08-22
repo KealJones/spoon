@@ -1,6 +1,6 @@
 # EKG implementation handoff
 
-Last updated: 2026-08-22 (quiet CLI, capability surfaces, goals, metrics, inspector)
+Last updated: 2026-08-22 (explainable inspector, trusted capability validation)
 
 This is the durable restart point for completing every phase in
 `IMPLEMENTATION-PLAN.md`. Update it whenever ownership, verification state, or
@@ -49,6 +49,13 @@ The latest committed increments are:
 - `1185d9c` — adversarial capability hardening: normalized file scopes,
   permission-bound receipts, secret/path rejection, dependency/hash closure,
   effect/permission consistency, hard resource limits, and evidence metadata.
+- `47e83cc` — bounded file read/write and sandbox-fixture native adapters.
+- `a34a943` — exposes the Phase 3 grounding ratio metric.
+- `4cdf7b2` — read-only inspector episode narrative endpoint/UI with recursive
+  redaction and raw JSON drill-down.
+- `de0ce7f` — procedure-bound capability authorization in Engine/RPC/SDK.
+- `79cbc87` — successful capability revalidation now requires local UUID episode
+  evidence with an exact Engine trust receipt and a strong evaluation.
 
 The first usable chat command is now:
 
@@ -76,9 +83,16 @@ curiosity gaps are durable, bounded, and standing goals are immutable. Phase 4
 skill discovery and compression are intentionally report/planning-only until
 the promotion gate is the authority for mutation.
 
-Capability limitations are explicit: network/file/sandbox adapters, grounded
-local-validation lookup, procedure-bound permission resolution, and a full
-neutral-IR reconstruction runner remain Phase 5 follow-up work.
+Capability limitations are explicit: network transport remains adapter-injected,
+sandbox execution is currently a bounded fixture boundary rather than arbitrary
+neutral-IR execution, and the bundle still needs a full dependency-DAG
+reconstruction runner. Engine-side local validation is now trust-receipt-bound;
+the low-level capability store remains usable for isolated bundle tests.
+
+The inspector narrative is available at `GET /api/episodes/:id` and from the
+episode detail view. It explains teacher/provider/model/proposal/validation,
+learning or reuse, prediction/observation/evaluation/cost, escalation,
+abstention, and capability authority while redacting sensitive fields.
 
 ## Pause checkpoint (2026-08-22)
 
@@ -133,8 +147,9 @@ neutral-IR reconstruction runner remain Phase 5 follow-up work.
 - Focused verification most recently green: `durability` (3), `trust_ledger`
   (5), `adaptation` (16), `cycle` (33), plus strict Clippy for `ekg-engine`
   and `ekg-core`.
-- Next concrete work: finish Phase 3 held-out ranking/rung evidence, then run
-  the complete Rust/TypeScript gate and commit the Phase 3 increment while
+- Next concrete work: close the remaining Phase 3 evidence gaps and Phase 4
+  durable consolidation gaps, then run the complete Rust/TypeScript gate and
+  perform a requirement-by-requirement audit of every plan exit criterion while
   excluding `WHAT-IS-EKG-v3.md` and `ekg-benchmark-suite.zip`.
 
 ## Current live checkpoint (2026-08-22, adversarial remediation in flight)

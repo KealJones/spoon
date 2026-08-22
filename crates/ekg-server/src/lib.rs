@@ -343,6 +343,18 @@ impl RpcServer {
                         .map_err(engine_error)?,
                 )
             }
+            "intuition.evaluateRanking" => {
+                let input: RankingEvaluationParam = decode(params)?;
+                encode(
+                    self.engine
+                        .evaluate_recall_ranking(
+                            &input.query,
+                            input.candidate_limit,
+                            input.holdout_examples,
+                        )
+                        .map_err(engine_error)?,
+                )
+            }
             "consolidation.discover" => {
                 let input: LimitParam = decode(params)?;
                 encode(
@@ -747,6 +759,14 @@ struct GoalCreateParam {
 #[serde(rename_all = "camelCase")]
 struct CuriosityRankParam {
     limit: Option<u32>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RankingEvaluationParam {
+    query: String,
+    candidate_limit: usize,
+    holdout_examples: usize,
 }
 
 #[derive(Debug, Deserialize)]

@@ -12,6 +12,7 @@ use thiserror::Error;
 
 const VECTOR_DIMENSIONS: usize = 32;
 const MAX_QUERY_TERMS: usize = 64;
+const MAX_RANKING_EVALUATION_HOLDOUT: usize = 256;
 
 #[derive(Debug, Error)]
 pub enum IntuitionError {
@@ -73,6 +74,33 @@ pub struct RankingExample {
     pub rung: u8,
 }
 
+/// A time-split, query-conditioned evaluation of the ranker.  It compares
+/// the learned ordering with the activation-only ordering on examples that
+/// were withheld from the ranking evidence.  It is an evaluation of search
+/// policy, never evidence that a retrieved claim is true.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RankingEvaluation {
+    pub id: i64,
+    pub query: String,
+    pub candidate_limit: usize,
+    pub training_examples: u64,
+    pub held_out_examples: u64,
+    pub held_out_successes: u64,
+    /// Successful held-out choices that were present in the bounded candidate
+    /// pool and therefore could be scored by both policies.
+    pub scored_successes: u64,
+    pub baseline_mean_rank: Option<f64>,
+    pub learned_mean_rank: Option<f64>,
+    pub baseline_mean_reciprocal_rank: Option<f64>,
+    pub learned_mean_reciprocal_rank: Option<f64>,
+    /// True only when the held-out evidence shows a strictly lower average
+    /// successful-candidate rank.  Missing or unscorable evidence is never a
+    /// win.
+    pub learned_improves_search: bool,
+    pub created_at: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SupervisionTask {
     pub id: i64,
@@ -111,6 +139,8 @@ pub struct IntuitionMetrics {
     pub retrieval_queries: u64,
     pub candidates_examined: u64,
     pub ranking_examples: u64,
+    pub ranking_evaluations: u64,
+    pub ranking_search_wins: u64,
     pub supervision_tasks: u64,
     pub grounded_tasks: u64,
     /// The observed share of supervision tasks that have an external
@@ -170,6 +200,23 @@ impl IntuitionStore {
              );
              CREATE INDEX IF NOT EXISTS idx_recall_ranking_query_candidate
                  ON recall_ranking_examples(query, candidate_id);
+             CREATE TABLE IF NOT EXISTS recall_ranking_evaluations (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 query TEXT NOT NULL,
+                 candidate_limit INTEGER NOT NULL,
+                 training_examples INTEGER NOT NULL,
+                 held_out_examples INTEGER NOT NULL,
+                 held_out_successes INTEGER NOT NULL,
+                 scored_successes INTEGER NOT NULL,
+                 baseline_mean_rank REAL,
+                 learned_mean_rank REAL,
+                 baseline_mean_reciprocal_rank REAL,
+                 learned_mean_reciprocal_rank REAL,
+                 learned_improves_search INTEGER NOT NULL,
+                 created_at INTEGER NOT NULL
+             );
+             CREATE INDEX IF NOT EXISTS idx_recall_ranking_evaluations_query
+                 ON recall_ranking_evaluations(query, id DESC);
              CREATE TABLE IF NOT EXISTS supervision_tasks (
                  id INTEGER PRIMARY KEY AUTOINCREMENT,
                  kind TEXT NOT NULL,
@@ -259,6 +306,15 @@ impl IntuitionStore {
         query: &str,
         candidate_limit: usize,
     ) -> Result<Vec<RecallCandidate>, IntuitionError> {
+        self.candidates_for_query(query, candidate_limit, true)
+    }
+
+    fn candidates_for_query(
+        &self,
+        query: &str,
+        candidate_limit: usize,
+        track_retrieval: bool,
+    ) -> Result<Vec<RecallCandidate>, IntuitionError> {
         if candidate_limit == 0 || candidate_limit > 1_024 {
             return Err(IntuitionError::Invalid(
                 "candidate limit must be 1..=1024".into(),
@@ -319,21 +375,23 @@ impl IntuitionStore {
                 terms_matched: matched as usize,
             });
         }
-        candidates.sort_by(|left, right| right.activation.total_cmp(&left.activation));
-        for candidate in &candidates {
+        candidates.sort_by(compare_activation);
+        if track_retrieval {
+            for candidate in &candidates {
+                self.conn.execute(
+                    "UPDATE recall_documents SET retrieval_count = retrieval_count + 1 WHERE id = ?1",
+                    params![candidate.id],
+                )?;
+            }
             self.conn.execute(
-                "UPDATE recall_documents SET retrieval_count = retrieval_count + 1 WHERE id = ?1",
-                params![candidate.id],
+                "INSERT INTO intuition_stats(id, retrieval_queries, candidates_examined)
+                 VALUES (1, 1, ?1)
+                 ON CONFLICT(id) DO UPDATE SET
+                     retrieval_queries = intuition_stats.retrieval_queries + 1,
+                     candidates_examined = intuition_stats.candidates_examined + excluded.candidates_examined",
+                params![candidates.len() as i64],
             )?;
         }
-        self.conn.execute(
-            "INSERT INTO intuition_stats(id, retrieval_queries, candidates_examined)
-             VALUES (1, 1, ?1)
-             ON CONFLICT(id) DO UPDATE SET
-                 retrieval_queries = intuition_stats.retrieval_queries + 1,
-                 candidates_examined = intuition_stats.candidates_examined + excluded.candidates_examined",
-            params![candidates.len() as i64],
-        )?;
         Ok(candidates)
     }
 
@@ -344,27 +402,29 @@ impl IntuitionStore {
         query: &str,
         candidate_limit: usize,
     ) -> Result<Vec<RecallCandidate>, IntuitionError> {
-        let mut candidates = self.retrieve(query, candidate_limit)?;
+        let mut candidates = self.candidates_for_query(query, candidate_limit, true)?;
         let weights = self.learned_weights()?;
         for candidate in &mut candidates {
             let outcome = self.candidate_success_rate(query, &candidate.id)?;
-            candidate.learned_score = weights.0 * candidate.similarity
-                + weights.1 * candidate.recency
-                + weights.2 * candidate.frequency
-                + weights.3 * candidate.activation
-                + 0.35 * outcome;
+            candidate.learned_score = score_candidate(candidate, weights, outcome);
         }
-        candidates.sort_by(|left, right| right.learned_score.total_cmp(&left.learned_score));
+        candidates.sort_by(compare_learned_score);
         Ok(candidates)
     }
 
     pub fn record_ranking_example(&self, example: &RankingExample) -> Result<(), IntuitionError> {
+        let query = canonical_query(&example.query)?;
+        if example.candidate_id.trim().is_empty() {
+            return Err(IntuitionError::Invalid(
+                "ranking examples need a candidate id".into(),
+            ));
+        }
         self.conn.execute(
             "INSERT INTO recall_ranking_examples
                 (query, candidate_id, used, succeeded, rung, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
-                example.query,
+                query,
                 example.candidate_id,
                 i64::from(example.used),
                 i64::from(example.succeeded),
@@ -373,6 +433,169 @@ impl IntuitionStore {
             ],
         )?;
         Ok(())
+    }
+
+    /// Evaluates the query-specific ranking policy using a chronological
+    /// holdout.  The newest `holdout_examples` outcomes are never consulted
+    /// when scoring candidates, so this cannot report a training-set win as a
+    /// search improvement.  Evaluation is bounded by both the candidate pool
+    /// and a small fixed holdout limit, and does not mutate retrieval counts.
+    pub fn evaluate_ranking(
+        &self,
+        query: &str,
+        candidate_limit: usize,
+        holdout_examples: usize,
+    ) -> Result<RankingEvaluation, IntuitionError> {
+        if candidate_limit == 0 || candidate_limit > 1_024 {
+            return Err(IntuitionError::Invalid(
+                "candidate limit must be 1..=1024".into(),
+            ));
+        }
+        if holdout_examples == 0 || holdout_examples > MAX_RANKING_EVALUATION_HOLDOUT {
+            return Err(IntuitionError::Invalid(format!(
+                "ranking evaluation holdout must be 1..={MAX_RANKING_EVALUATION_HOLDOUT}"
+            )));
+        }
+        let query = canonical_query(query)?;
+        let mut statement = self.conn.prepare(
+            "SELECT id, candidate_id, used, succeeded
+             FROM recall_ranking_examples
+             WHERE query = ?1
+             ORDER BY id DESC
+             LIMIT ?2",
+        )?;
+        let mut held_out = statement
+            .query_map(params![query, holdout_examples as i64], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)? != 0,
+                    row.get::<_, i64>(3)? != 0,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        held_out.reverse();
+        let first_held_out_id = held_out.first().map(|example| example.0);
+        let training_examples = match first_held_out_id {
+            Some(cutoff) => self.conn.query_row(
+                "SELECT COUNT(*) FROM recall_ranking_examples
+                 WHERE query = ?1 AND id < ?2",
+                params![query, cutoff],
+                |row| row.get::<_, i64>(0),
+            )? as u64,
+            None => 0,
+        };
+        let candidates = self.candidates_for_query(&query, candidate_limit, false)?;
+        let mut baseline = candidates.clone();
+        baseline.sort_by(compare_activation);
+        let mut learned = candidates;
+        let cutoff = first_held_out_id.unwrap_or(i64::MAX);
+        let weights = self.learned_weights_before(cutoff)?;
+        for candidate in &mut learned {
+            let outcome = self.candidate_success_rate_before(&query, &candidate.id, cutoff)?;
+            candidate.learned_score = score_candidate(candidate, weights, outcome);
+        }
+        learned.sort_by(compare_learned_score);
+
+        let held_out_successes = held_out
+            .iter()
+            .filter(|(_, _, used, succeeded)| *used && *succeeded)
+            .count() as u64;
+        let mut scored_successes = 0u64;
+        let mut baseline_rank_total = 0u64;
+        let mut learned_rank_total = 0u64;
+        let mut baseline_reciprocal_rank_total = 0.0;
+        let mut learned_reciprocal_rank_total = 0.0;
+        for (_, candidate_id, used, succeeded) in &held_out {
+            if !used || !succeeded {
+                continue;
+            }
+            let Some(baseline_rank) = rank_of(&baseline, candidate_id) else {
+                continue;
+            };
+            let Some(learned_rank) = rank_of(&learned, candidate_id) else {
+                continue;
+            };
+            scored_successes += 1;
+            baseline_rank_total += baseline_rank as u64;
+            learned_rank_total += learned_rank as u64;
+            baseline_reciprocal_rank_total += 1.0 / baseline_rank as f64;
+            learned_reciprocal_rank_total += 1.0 / learned_rank as f64;
+        }
+        let denominator = scored_successes as f64;
+        let baseline_mean_rank =
+            (scored_successes > 0).then(|| baseline_rank_total as f64 / denominator);
+        let learned_mean_rank =
+            (scored_successes > 0).then(|| learned_rank_total as f64 / denominator);
+        let baseline_mean_reciprocal_rank =
+            (scored_successes > 0).then(|| baseline_reciprocal_rank_total / denominator);
+        let learned_mean_reciprocal_rank =
+            (scored_successes > 0).then(|| learned_reciprocal_rank_total / denominator);
+        let learned_improves_search = training_examples > 0
+            && learned_mean_rank
+                .zip(baseline_mean_rank)
+                .is_some_and(|(learned, baseline)| learned < baseline);
+        let created_at = unix_time();
+        self.conn.execute(
+            "INSERT INTO recall_ranking_evaluations
+                (query, candidate_limit, training_examples, held_out_examples,
+                 held_out_successes, scored_successes, baseline_mean_rank,
+                 learned_mean_rank, baseline_mean_reciprocal_rank,
+                 learned_mean_reciprocal_rank, learned_improves_search, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            params![
+                query,
+                candidate_limit as i64,
+                training_examples as i64,
+                held_out.len() as i64,
+                held_out_successes as i64,
+                scored_successes as i64,
+                baseline_mean_rank,
+                learned_mean_rank,
+                baseline_mean_reciprocal_rank,
+                learned_mean_reciprocal_rank,
+                i64::from(learned_improves_search),
+                created_at,
+            ],
+        )?;
+        Ok(RankingEvaluation {
+            id: self.conn.last_insert_rowid(),
+            query,
+            candidate_limit,
+            training_examples,
+            held_out_examples: held_out.len() as u64,
+            held_out_successes,
+            scored_successes,
+            baseline_mean_rank,
+            learned_mean_rank,
+            baseline_mean_reciprocal_rank,
+            learned_mean_reciprocal_rank,
+            learned_improves_search,
+            created_at,
+        })
+    }
+
+    pub fn latest_ranking_evaluation(
+        &self,
+        query: &str,
+    ) -> Result<Option<RankingEvaluation>, IntuitionError> {
+        let query = canonical_query(query)?;
+        self.conn
+            .query_row(
+                "SELECT id, query, candidate_limit, training_examples,
+                        held_out_examples, held_out_successes, scored_successes,
+                        baseline_mean_rank, learned_mean_rank,
+                        baseline_mean_reciprocal_rank,
+                        learned_mean_reciprocal_rank, learned_improves_search,
+                        created_at
+                 FROM recall_ranking_evaluations
+                 WHERE query = ?1
+                 ORDER BY id DESC LIMIT 1",
+                params![query],
+                row_to_ranking_evaluation,
+            )
+            .optional()
+            .map_err(IntuitionError::from)
     }
 
     pub fn generate_self_supervision(
@@ -469,6 +692,17 @@ impl IntuitionStore {
                 .query_row("SELECT COUNT(*) FROM recall_ranking_examples", [], |row| {
                     row.get::<_, i64>(0)
                 })?;
+        let ranking_evaluations = self.conn.query_row(
+            "SELECT COUNT(*) FROM recall_ranking_evaluations",
+            [],
+            |row| row.get::<_, i64>(0),
+        )?;
+        let ranking_search_wins = self.conn.query_row(
+            "SELECT COUNT(*) FROM recall_ranking_evaluations
+             WHERE learned_improves_search = 1",
+            [],
+            |row| row.get::<_, i64>(0),
+        )?;
         let supervision_tasks =
             self.conn
                 .query_row("SELECT COUNT(*) FROM supervision_tasks", [], |row| {
@@ -490,6 +724,8 @@ impl IntuitionStore {
             retrieval_queries: retrieval_queries as u64,
             candidates_examined: candidates_examined as u64,
             ranking_examples: ranking_examples as u64,
+            ranking_evaluations: ranking_evaluations as u64,
+            ranking_search_wins: ranking_search_wins as u64,
             supervision_tasks: supervision_tasks as u64,
             grounded_tasks: grounded_tasks as u64,
             grounding_ratio,
@@ -497,14 +733,22 @@ impl IntuitionStore {
     }
 
     fn learned_weights(&self) -> Result<(f64, f64, f64, f64), IntuitionError> {
+        self.learned_weights_before(i64::MAX)
+    }
+
+    fn learned_weights_before(
+        &self,
+        cutoff_exclusive: i64,
+    ) -> Result<(f64, f64, f64, f64), IntuitionError> {
         let mut statement = self.conn.prepare(
             "SELECT used, succeeded, rung FROM recall_ranking_examples
-                 ORDER BY id DESC LIMIT 4096",
+             WHERE id < ?1
+             ORDER BY id DESC LIMIT 4096",
         )?;
         let mut total = 0.0;
         let mut success = 0.0;
         let mut cheap = 0.0;
-        for row in statement.query_map([], |row| {
+        for row in statement.query_map(params![cutoff_exclusive], |row| {
             Ok((
                 row.get::<_, i64>(0)?,
                 row.get::<_, i64>(1)?,
@@ -533,16 +777,26 @@ impl IntuitionStore {
         query: &str,
         candidate_id: &str,
     ) -> Result<f64, IntuitionError> {
+        self.candidate_success_rate_before(query, candidate_id, i64::MAX)
+    }
+
+    fn candidate_success_rate_before(
+        &self,
+        query: &str,
+        candidate_id: &str,
+        cutoff_exclusive: i64,
+    ) -> Result<f64, IntuitionError> {
+        let query = canonical_query(query)?;
         let stats: Option<(i64, i64)> = self
             .conn
             .query_row(
                 "SELECT COALESCE(SUM(used * succeeded), 0), COALESCE(SUM(used), 0)
                  FROM (
                      SELECT used, succeeded FROM recall_ranking_examples
-                     WHERE query = ?1 AND candidate_id = ?2
+                     WHERE query = ?1 AND candidate_id = ?2 AND id < ?3
                      ORDER BY id DESC LIMIT 256
                  )",
-                params![query, candidate_id],
+                params![query, candidate_id, cutoff_exclusive],
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .optional()?;
@@ -551,6 +805,69 @@ impl IntuitionStore {
         };
         Ok((successes.max(0) as f64 + 1.0) / (uses.max(0) as f64 + 2.0))
     }
+}
+
+fn compare_activation(left: &RecallCandidate, right: &RecallCandidate) -> std::cmp::Ordering {
+    right
+        .activation
+        .total_cmp(&left.activation)
+        .then_with(|| left.id.cmp(&right.id))
+}
+
+fn compare_learned_score(left: &RecallCandidate, right: &RecallCandidate) -> std::cmp::Ordering {
+    right
+        .learned_score
+        .total_cmp(&left.learned_score)
+        .then_with(|| left.id.cmp(&right.id))
+}
+
+fn score_candidate(
+    candidate: &RecallCandidate,
+    weights: (f64, f64, f64, f64),
+    outcome: f64,
+) -> f64 {
+    weights.0 * candidate.similarity
+        + weights.1 * candidate.recency
+        + weights.2 * candidate.frequency
+        + weights.3 * candidate.activation
+        + 0.35 * outcome
+}
+
+fn rank_of(candidates: &[RecallCandidate], candidate_id: &str) -> Option<usize> {
+    candidates
+        .iter()
+        .position(|candidate| candidate.id == candidate_id)
+        .map(|index| index + 1)
+}
+
+fn row_to_ranking_evaluation(row: &rusqlite::Row<'_>) -> rusqlite::Result<RankingEvaluation> {
+    Ok(RankingEvaluation {
+        id: row.get(0)?,
+        query: row.get(1)?,
+        candidate_limit: row.get::<_, i64>(2)? as usize,
+        training_examples: row.get::<_, i64>(3)? as u64,
+        held_out_examples: row.get::<_, i64>(4)? as u64,
+        held_out_successes: row.get::<_, i64>(5)? as u64,
+        scored_successes: row.get::<_, i64>(6)? as u64,
+        baseline_mean_rank: row.get(7)?,
+        learned_mean_rank: row.get(8)?,
+        baseline_mean_reciprocal_rank: row.get(9)?,
+        learned_mean_reciprocal_rank: row.get(10)?,
+        learned_improves_search: row.get::<_, i64>(11)? != 0,
+        created_at: row.get(12)?,
+    })
+}
+
+/// A deterministic query key makes ranking evidence query-conditioned without
+/// treating case, punctuation, or token order as different situations.
+fn canonical_query(query: &str) -> Result<String, IntuitionError> {
+    let terms = tokenize(query);
+    if terms.is_empty() {
+        return Err(IntuitionError::Invalid(
+            "ranking query must contain at least one meaningful term".into(),
+        ));
+    }
+    Ok(terms.join(" "))
 }
 
 fn parse_kind(kind: &str) -> RecallKind {
@@ -680,6 +997,117 @@ mod tests {
                 .all(|candidate| candidate.learned_score.is_finite())
         );
         assert_eq!(store.metrics().unwrap().ranking_examples, 1);
+    }
+
+    #[test]
+    fn ranking_evaluation_uses_a_bounded_time_split_and_records_evidence() {
+        let store = IntuitionStore::in_memory().unwrap();
+        store
+            .index_document(&document("a", RecallKind::Concept, "math arithmetic", 1))
+            .unwrap();
+        store
+            .index_document(&document("b", RecallKind::Concept, "math arithmetic", 1))
+            .unwrap();
+        store
+            .record_ranking_example(&RankingExample {
+                query: "math".into(),
+                candidate_id: "a".into(),
+                used: true,
+                succeeded: true,
+                rung: 1,
+            })
+            .unwrap();
+        store
+            .record_ranking_example(&RankingExample {
+                query: "math".into(),
+                candidate_id: "b".into(),
+                used: true,
+                succeeded: true,
+                rung: 1,
+            })
+            .unwrap();
+        let evaluation = store.evaluate_ranking("math", 2, 1).unwrap();
+        assert_eq!(evaluation.held_out_examples, 1);
+        assert_eq!(evaluation.training_examples, 1);
+        assert_eq!(store.metrics().unwrap().ranking_evaluations, 1);
+        assert!(store.latest_ranking_evaluation("math").unwrap().is_some());
+    }
+
+    #[test]
+    fn time_split_evaluation_proves_a_query_conditioned_search_win() {
+        let store = IntuitionStore::in_memory().unwrap();
+        // The activation-only ordering is deterministically `a`, then `b`.
+        // Repeated historical success for `b` should move `b` first without
+        // consulting the final held-out success.
+        store
+            .index_document(&document("a", RecallKind::Concept, "rank demo", 1))
+            .unwrap();
+        store
+            .index_document(&document("b", RecallKind::Concept, "rank demo", 1))
+            .unwrap();
+        for _ in 0..3 {
+            store
+                .record_ranking_example(&RankingExample {
+                    query: "Rank demo!".into(),
+                    candidate_id: "b".into(),
+                    used: true,
+                    succeeded: true,
+                    rung: 1,
+                })
+                .unwrap();
+        }
+        store
+            .record_ranking_example(&RankingExample {
+                query: "rank demo".into(),
+                candidate_id: "b".into(),
+                used: true,
+                succeeded: true,
+                rung: 1,
+            })
+            .unwrap();
+
+        let evaluation = store.evaluate_ranking("demo rank", 2, 1).unwrap();
+        assert_eq!(evaluation.training_examples, 3);
+        assert_eq!(evaluation.held_out_examples, 1);
+        assert_eq!(evaluation.held_out_successes, 1);
+        assert_eq!(evaluation.scored_successes, 1);
+        assert_eq!(evaluation.baseline_mean_rank, Some(2.0));
+        assert_eq!(evaluation.learned_mean_rank, Some(1.0));
+        assert!(evaluation.learned_improves_search);
+
+        let stored = store
+            .latest_ranking_evaluation("rank demo")
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.id, evaluation.id);
+        let metrics = store.metrics().unwrap();
+        assert_eq!(metrics.ranking_evaluations, 1);
+        assert_eq!(metrics.ranking_search_wins, 1);
+    }
+
+    #[test]
+    fn time_split_evaluation_never_calls_untrained_or_unscorable_data_a_win() {
+        let store = IntuitionStore::in_memory().unwrap();
+        store
+            .index_document(&document("a", RecallKind::Concept, "rank demo", 1))
+            .unwrap();
+        store
+            .record_ranking_example(&RankingExample {
+                query: "rank demo".into(),
+                candidate_id: "missing-document".into(),
+                used: true,
+                succeeded: true,
+                rung: 1,
+            })
+            .unwrap();
+
+        let evaluation = store.evaluate_ranking("rank demo", 1, 1).unwrap();
+        assert_eq!(evaluation.training_examples, 0);
+        assert_eq!(evaluation.held_out_successes, 1);
+        assert_eq!(evaluation.scored_successes, 0);
+        assert_eq!(evaluation.baseline_mean_rank, None);
+        assert_eq!(evaluation.learned_mean_rank, None);
+        assert!(!evaluation.learned_improves_search);
     }
 
     #[test]

@@ -33,6 +33,7 @@ import type {
   SkillCandidate,
   RecordContradictionInput,
   RefineContradictionInput,
+  RankingEvaluation,
   RpcTransport,
   TeacherProposalWire,
 } from "./types.js";
@@ -342,6 +343,17 @@ export class EkgClient {
 
   metricsSnapshot(): Promise<MetricsSnapshot> {
     return this.transport.request<MetricsSnapshot>("metrics.snapshot", {});
+  }
+
+  evaluateRecallRanking(
+    query: string,
+    candidateLimit: number,
+    holdoutExamples: number,
+  ): Promise<RankingEvaluation> {
+    return this.transport.request<RankingEvaluation>(
+      "intuition.evaluateRanking",
+      { query, candidateLimit, holdoutExamples },
+    );
   }
 
   createGoal(

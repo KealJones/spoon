@@ -103,6 +103,22 @@ export interface MetricsSnapshot {
   };
 }
 
+export interface RankingEvaluation {
+  id: number;
+  query: string;
+  candidateLimit: number;
+  trainingExamples: number;
+  heldOutExamples: number;
+  heldOutSuccesses: number;
+  scoredSuccesses: number;
+  baselineMeanRank?: number | null;
+  learnedMeanRank?: number | null;
+  baselineMeanReciprocalRank?: number | null;
+  learnedMeanReciprocalRank?: number | null;
+  learnedImprovesSearch: boolean;
+  createdAt: number;
+}
+
 export type GoalKind = "task" | "standing" | "instrumental" | "learning";
 
 export interface Goal {
