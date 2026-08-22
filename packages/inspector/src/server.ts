@@ -1,10 +1,12 @@
 import { createServer, type ServerResponse } from "node:http";
+import { fileURLToPath } from "node:url";
 
 import { EkgClient, StdioTransport } from "@ekg/sdk";
 
 const port = Number.parseInt(process.env.EKG_INSPECTOR_PORT ?? "4317", 10);
 const transport = StdioTransport.spawn(
-  process.env.EKG_SERVER ?? "target/debug/ekg-server",
+  process.env.EKG_SERVER ??
+    fileURLToPath(new URL("../../../target/debug/ekg-server", import.meta.url)),
 );
 const client = new EkgClient(transport, {
   adminToken: process.env.EKG_ADMIN_TOKEN,
