@@ -4,6 +4,7 @@ import type {
   AdaptationReceipt,
   AdaptationRecord,
   ApplyAdaptationInput,
+  AuthenticatedObservationInput,
   ConceptInput,
   ClaimUncertainty,
   Contradiction,
@@ -190,6 +191,15 @@ export class EkgClient {
 
   recordFeedback(input: FeedbackInput): Promise<EpisodeFeedback> {
     return this.transport.request<EpisodeFeedback>("feedback.record", input);
+  }
+
+  recordAuthenticatedObservation<T = JsonValue>(
+    input: AuthenticatedObservationInput,
+  ): Promise<T> {
+    return this.transport.request<T>(
+      "observation.recordAuthenticated",
+      this.withAdminToken(input),
+    );
   }
 
   analyzeFailure<T = Record<string, JsonValue>>(

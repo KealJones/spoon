@@ -22,6 +22,19 @@ export interface FeedbackInput {
   idempotencyKey: string;
 }
 
+export interface AuthenticatedObservationInput {
+  predicate: string;
+  value: JsonValue;
+  scope?: Record<string, JsonValue>;
+  evaluation: {
+    tier: "Hard" | "Consensus";
+    success: boolean;
+    details: string;
+    surprise?: number | null;
+  };
+  verifierIdentity: string;
+}
+
 export interface EpisodeFeedback extends FeedbackInput {
   id: string;
   evaluation: {

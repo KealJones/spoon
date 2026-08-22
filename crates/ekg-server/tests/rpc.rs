@@ -32,6 +32,7 @@ fn call(server: &mut RpcServer, id: u64, method: &str, mut params: Value) -> Val
             | "procedure.delete"
             | "capability.grant"
             | "capability.revoke"
+            | "observation.recordAuthenticated"
             | "adaptation.applyOffline"
             | "contradiction.record"
             | "contradiction.refine"
@@ -87,6 +88,24 @@ fn capability_rpc_round_trip_keeps_imports_provisional_and_grants_local() {
     );
     assert_eq!(imported["status"], "quarantined");
     let content_id = imported["contentId"].as_str().unwrap();
+    let validation_episode = call(
+        &mut server,
+        2,
+        "observation.recordAuthenticated",
+        json!({
+            "predicate": "weather.forecast",
+            "value": {"temperature": 72},
+            "scope": {},
+            "evaluation": {
+                "tier": "Hard",
+                "success": true,
+                "details": "fixture matched",
+                "surprise": 0.0
+            },
+            "verifierIdentity": "rpc-test"
+        }),
+    );
+    let validation_episode_id = validation_episode["id"].as_str().unwrap();
     let validation = call(
         &mut server,
         3,
@@ -95,7 +114,7 @@ fn capability_rpc_round_trip_keeps_imports_provisional_and_grants_local() {
             "contentId": content_id,
             "validation": {
                 "passed": true,
-                "validationEpisodes": ["local-validation"],
+                "validationEpisodes": [validation_episode_id],
                 "environmentDigest": "local"
             }
         }),

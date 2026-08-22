@@ -443,6 +443,20 @@ impl RpcServer {
                         .map_err(engine_error)?,
                 )
             }
+            "observation.recordAuthenticated" => {
+                let input: AuthenticatedObservationParams = decode(params)?;
+                encode(
+                    self.engine
+                        .record_authenticated_observation(
+                            input.predicate,
+                            input.value,
+                            input.scope,
+                            input.evaluation,
+                            &input.verifier_identity,
+                        )
+                        .map_err(engine_error)?,
+                )
+            }
             "feedback.record" => {
                 let input: RecordFeedbackParams = decode(params)?;
                 let episode = self
@@ -681,6 +695,7 @@ fn requires_admin(method: &str) -> bool {
             | "procedure.delete"
             | "capability.grant"
             | "capability.revoke"
+            | "observation.recordAuthenticated"
             | "adaptation.applyOffline"
             | "contradiction.record"
             | "contradiction.refine"
@@ -1625,6 +1640,17 @@ struct RecordFeedbackParams {
     episode_id: String,
     observed_result: EkgValue,
     idempotency_key: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct AuthenticatedObservationParams {
+    predicate: String,
+    value: EkgValue,
+    #[serde(default)]
+    scope: BTreeMap<String, EkgValue>,
+    evaluation: Evaluation,
+    verifier_identity: String,
 }
 
 impl RecordFeedbackParams {
