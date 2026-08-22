@@ -1,0 +1,28 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/ekg-core",
+    "crates/ekg-graph",
+    "crates/ekg-exec",
+    "crates/ekg-episode",
+    "crates/ekg-engine",
+    "crates/ekg-server",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[workspace.dependencies]
+ekg-core = { path = "crates/ekg-core" }
+ekg-graph = { path = "crates/ekg-graph" }
+ekg-exec = { path = "crates/ekg-exec" }
+ekg-episode = { path = "crates/ekg-episode" }
+ekg-engine = { path = "crates/ekg-engine" }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+thiserror = "2"

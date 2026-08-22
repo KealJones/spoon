@@ -1,0 +1,13 @@
+[package]
+name = "ekg-engine"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ekg-core.workspace = true
+ekg-graph.workspace = true
+ekg-exec.workspace = true
+ekg-episode.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

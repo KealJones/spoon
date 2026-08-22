@@ -1,0 +1,12 @@
+[package]
+name = "ekg-graph"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ekg-core.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+thiserror.workspace = true
