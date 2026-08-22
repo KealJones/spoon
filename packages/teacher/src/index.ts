@@ -3,11 +3,16 @@ export {
   runCommand,
   type ClaudeTeacherOptions,
 } from "./claude.js";
+export { CodexTeacher, type CodexTeacherOptions } from "./codex.js";
 export { TeacherError } from "./errors.js";
 export { HumanTeacher, type HumanTeacherOptions } from "./human.js";
 export { OllamaTeacher, type OllamaTeacherOptions } from "./ollama.js";
 export { OpenAITeacher, type OpenAITeacherOptions } from "./openai.js";
-export { buildTeacherPrompt, TEACHER_SYSTEM_PROMPT } from "./prompt.js";
+export {
+  buildTeacherPrompt,
+  REUSABLE_LESSON_PROTOCOL,
+  TEACHER_SYSTEM_PROMPT,
+} from "./prompt.js";
 export { SourceReliabilityTracker } from "./reliability.js";
 export { validateSchema } from "./schema.js";
 export { fingerprintTeacherRequest } from "./shared.js";

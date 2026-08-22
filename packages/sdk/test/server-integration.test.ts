@@ -12,14 +12,18 @@ test(
   async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), "ekg-kitchen-"));
     const previousDatabase = process.env.EKG_DB;
+    const previousAdminToken = process.env.EKG_ADMIN_TOKEN;
     process.env.EKG_DB = path.join(directory, "ekg.db");
+    process.env.EKG_ADMIN_TOKEN = "sdk-integration-admin";
     const transport = StdioTransport.spawn("cargo", [
       "run",
       "--quiet",
       "-p",
       "ekg-server",
     ]);
-    const client = new EkgClient(transport);
+    const client = new EkgClient(transport, {
+      adminToken: "sdk-integration-admin",
+    });
 
     try {
       const procedure = await client.createProcedure<{ id: string }>({
@@ -114,6 +118,8 @@ test(
       client.close();
       if (previousDatabase === undefined) delete process.env.EKG_DB;
       else process.env.EKG_DB = previousDatabase;
+      if (previousAdminToken === undefined) delete process.env.EKG_ADMIN_TOKEN;
+      else process.env.EKG_ADMIN_TOKEN = previousAdminToken;
       await rm(directory, { recursive: true, force: true });
     }
   },

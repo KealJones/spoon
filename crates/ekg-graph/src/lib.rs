@@ -8,5 +8,7 @@ mod store;
 
 pub use error::{GraphError, Result};
 pub use store::{
-    DependencyReport, DependencyTarget, Dependent, KnowledgeStore, ProcedureDependencyKind,
+    AppliedLifecycleChange, DependencyReport, DependencyTarget, Dependent, KnowledgeStore,
+    LifecycleChange, LifecycleChangeReceipt, LifecycleChangeSet, LifecycleTarget,
+    ProcedureDependencyKind, RelationshipDependency, RelationshipDependencyDirection,
 };

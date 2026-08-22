@@ -58,7 +58,7 @@ export interface TeacherRequest {
   desiredOutput: ProposalSchema;
 }
 
-export type ProviderKind = "claude" | "openai" | "ollama" | "human";
+export type ProviderKind = "claude" | "codex" | "openai" | "ollama" | "human";
 
 export interface ProposalProvenance {
   provider: ProviderKind;

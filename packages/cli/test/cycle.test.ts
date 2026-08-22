@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -12,6 +11,7 @@ import {
   type RpcTransport,
 } from "@ekg/sdk";
 import {
+  CodexTeacher,
   ProposalValidationPipeline,
   fingerprintTeacherRequest,
   type Teacher,
@@ -19,7 +19,7 @@ import {
   type TeacherRequest,
 } from "@ekg/teacher";
 
-import { runCycle } from "../src/cycle.js";
+import { createConfiguredTeacher, runCycle } from "../src/cycle.js";
 
 class FakeTeacher implements Pick<Teacher, "propose" | "validationPipeline"> {
   calls: TeacherRequest[] = [];
@@ -123,6 +123,34 @@ class AbortCycleTransport implements RpcTransport {
   }
 }
 
+class RetryCycleTransport implements RpcTransport {
+  readonly calls: Array<{ method: string; params: unknown }> = [];
+  #resumes = 0;
+
+  async request<T>(method: string, params: unknown): Promise<T> {
+    this.calls.push({ method, params });
+    if (
+      method === "cycle.begin" ||
+      (method === "cycle.resume" && this.#resumes++ === 0)
+    ) {
+      return {
+        status: "need_teacher",
+        cycleId: "cycle-retry",
+        request: {
+          situation: "what is double 7?",
+          context: {},
+          specificQuestion:
+            method === "cycle.begin"
+              ? "return reusable knowledge"
+              : "lesson could not be safely compiled; correct it",
+          desiredOutput: { type: "object" },
+        },
+      } as T;
+    }
+    return completed() as T;
+  }
+}
+
 function completed(): CycleProgress {
   return {
     status: "completed",
@@ -170,6 +198,31 @@ test("provider failures abort the pending cycle instead of abandoning it", async
   });
 });
 
+test("a malformed lesson can consume one bounded retry and then complete", async () => {
+  const transport = new RetryCycleTransport();
+  const teacher = new FakeTeacher();
+
+  const outcome = await runCycle(
+    new EkgClient(transport),
+    "what is double 7?",
+    teacher,
+    { maxTeacherTurns: 2 },
+  );
+
+  assert.equal(outcome.status, "completed");
+  assert.equal(teacher.calls.length, 2);
+  assert.match(teacher.calls[1]?.specificQuestion ?? "", /safely compiled/);
+  assert.deepEqual(
+    transport.calls.map((call) => call.method),
+    ["cycle.begin", "cycle.resume", "cycle.resume"],
+  );
+});
+
+test("Codex CLI can be selected without an API key or explicit model", () => {
+  const teacher = createConfiguredTeacher({ EKG_TEACHER: "codex" });
+  assert.ok(teacher instanceof CodexTeacher);
+});
+
 test(
   "fake teacher teaches a procedure once and the Rust cycle reuses it locally",
   { timeout: 30_000 },
@@ -178,17 +231,16 @@ test(
       path.join(os.tmpdir(), "ekg-teacher-cycle-"),
     );
     const previousDatabase = process.env.EKG_DB;
+    const previousAdminToken = process.env.EKG_ADMIN_TOKEN;
     process.env.EKG_DB = path.join(directory, "ekg.db");
+    process.env.EKG_ADMIN_TOKEN = "cli-integration-admin";
     const client = new EkgClient(
       StdioTransport.spawn("cargo", ["run", "--quiet", "-p", "ekg-server"]),
+      { adminToken: "cli-integration-admin" },
     );
 
     try {
-      const concept = await client.createConcept<{ id: string }>({
-        name: "DOUBLE",
-        mutability: "Definitional",
-      });
-      const teacher = new ProcedureTeacher(concept.id);
+      const teacher = new ReusableLessonTeacher();
 
       const taught = await runCycle(client, "what is double 7?", teacher);
       const reused = await runCycle(client, "please double 8", teacher);
@@ -203,63 +255,75 @@ test(
       client.close();
       if (previousDatabase === undefined) delete process.env.EKG_DB;
       else process.env.EKG_DB = previousDatabase;
+      if (previousAdminToken === undefined) delete process.env.EKG_ADMIN_TOKEN;
+      else process.env.EKG_ADMIN_TOKEN = previousAdminToken;
       await rm(directory, { recursive: true, force: true });
     }
   },
 );
 
-class ProcedureTeacher implements Pick<
+class ReusableLessonTeacher implements Pick<
   Teacher,
   "propose" | "validationPipeline"
 > {
   readonly calls: TeacherRequest[] = [];
   validationCalls = 0;
 
-  constructor(private readonly conceptId: string) {}
-
   async propose(request: TeacherRequest): Promise<TeacherProposal> {
     this.calls.push(request);
-    const now = Math.floor(Date.now() / 1_000);
     return {
       content: {
-        interpretations: [
-          {
-            concept: { id: this.conceptId },
-            weight: 1,
+        proposalKind: "reusable_lesson",
+        interpretations: [],
+        lesson: {
+          primitiveSet: "pure_rpn_v1",
+          concepts: [
+            {
+              key: "double",
+              name: "DOUBLE",
+              description: "Multiply any numeric input by two",
+            },
+          ],
+          relationships: [],
+          procedures: [
+            {
+              key: "double-procedure",
+              name: "DOUBLE",
+              concept: { kind: "new_concept", key: "double" },
+              parameters: [{ name: "x", description: "numeric input" }],
+              body: {
+                instructions: [
+                  { op: "load_parameter", name: "x" },
+                  { op: "push_literal", value: 2 },
+                  { op: "multiply" },
+                ],
+              },
+              contract: {
+                requires: [],
+                promises: [
+                  {
+                    description: "result is twice x",
+                    check: {
+                      instructions: [
+                        { op: "load_result" },
+                        { op: "load_parameter", name: "x" },
+                        { op: "push_literal", value: 2 },
+                        { op: "multiply" },
+                        { op: "equal" },
+                      ],
+                    },
+                  },
+                ],
+                failsWhen: [],
+              },
+            },
+          ],
+          invocation: {
+            procedureKey: "double-procedure",
             inputs: [{ name: "x", value: 7 }],
           },
-        ],
-        procedure: JSON.stringify({
-          id: randomUUID(),
-          name: "DOUBLE",
-          params: [{ name: "x", description: null }],
-          body: {
-            BinOp: {
-              op: "Mul",
-              left: { Var: "x" },
-              right: { Literal: 2 },
-            },
-          },
-          contract: {
-            requires: [],
-            promises: [],
-            fails_when: [],
-            costs: { operations: 1, description: "one multiplication" },
-            confidence: {
-              support_count: 0,
-              contradiction_count: 0,
-              scope: [],
-              sources: [],
-              last_tested: null,
-            },
-          },
-          test_cases: [],
-          concept: this.conceptId,
-          version: 1,
-          lifecycle: "Provisional",
-          created_at: now,
-          updated_at: now,
-        }),
+        },
+        procedure: null,
         answer: 14,
         abstainReason: null,
       },

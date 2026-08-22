@@ -5,6 +5,7 @@ import {
 } from "@ekg/sdk";
 import {
   ClaudeTeacher,
+  CodexTeacher,
   HumanTeacher,
   OllamaTeacher,
   OpenAITeacher,
@@ -28,6 +29,7 @@ export async function runCycle(
   teacher?: TeacherClient,
   options: CycleRunOptions = {},
 ): Promise<CompletedCycleProgress> {
+  const maxTeacherTurns = options.maxTeacherTurns ?? 2;
   let progress = await client.beginCycle({
     situation,
     environment: {},
@@ -35,15 +37,33 @@ export async function runCycle(
     budget: {
       maxExecSteps: options.maxExecSteps ?? 10_000,
       maxContextItems: options.maxContextItems ?? 64,
-      maxTeacherTurns: options.maxTeacherTurns ?? 1,
+      maxTeacherTurns,
     },
     teacherAllowed: teacher !== undefined,
   });
 
-  if (progress.status === "need_teacher") {
+  let teacherTurns = 0;
+  let activeCycleId: string | undefined;
+  while (progress.status === "need_teacher") {
     if (teacher === undefined) {
       throw new Error("The engine requested a teacher, but none is configured");
     }
+    if (activeCycleId !== undefined && activeCycleId !== progress.cycleId) {
+      progress = await client.abortCycle(
+        progress.cycleId,
+        "teacher continuation changed cycle identity",
+      );
+      break;
+    }
+    activeCycleId = progress.cycleId;
+    if (teacherTurns >= maxTeacherTurns) {
+      progress = await client.abortCycle(
+        progress.cycleId,
+        "teacher continuation exceeded the configured turn budget",
+      );
+      break;
+    }
+    teacherTurns += 1;
     const request = toTeacherRequest(progress.request);
     try {
       const proposal = await teacher.propose(request);
@@ -79,6 +99,11 @@ export function createConfiguredTeacher(
   switch (provider) {
     case "claude":
       return new ClaudeTeacher({ model });
+    case "codex":
+      return new CodexTeacher({
+        model,
+        command: environment.EKG_CODEX_COMMAND,
+      });
     case "ollama":
       return new OllamaTeacher({ model });
     case "human":
@@ -90,7 +115,7 @@ export function createConfiguredTeacher(
       return new OpenAITeacher({ model });
     default:
       throw new Error(
-        `Unknown EKG_TEACHER '${provider}'; expected claude, openai, ollama, or human`,
+        `Unknown EKG_TEACHER '${provider}'; expected claude, codex, openai, ollama, or human`,
       );
   }
 }

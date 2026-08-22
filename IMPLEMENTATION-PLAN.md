@@ -14,6 +14,55 @@ to concrete engineering work.
 - **Goal**: Usable open-source product
 - **Persistence**: SQLite for graph + episodes (simple, embeddable, inspectable)
 - **Protocol**: JSON-RPC over stdio between Rust server and TS shell
+- **Capability substrate**: A deliberately small, policy-enforced native
+  primitive set (network request, scoped file access, observation, and
+  sandboxed execution). Everything richer is acquired as typed, contracted,
+  decomposable knowledge rather than added as a privileged one-off tool.
+- **Capability portability**: Reconstructible, content-addressed bundles may
+  carry procedures, dependency graphs, schemas, tests, and provenance. They
+  never carry trust, ambient authority, secret values, or unverified
+  environment assumptions. Imports enter quarantine as Provisional and must
+  pass local permission checks and local revalidation before promotion.
+
+### Execution model routing and spend policy
+
+The coordinator should normally run on **GPT-5.6 Luna**. It owns the durable
+handoff, selects the next bounded task, runs focused checks, and delegates only
+when the risk or novelty warrants it. This keeps the long-running project
+moving cheaply without treating a low-cost model as the final authority on
+safety-critical design.
+
+| Work type | Default model / effort | Escalate when | Completion standard |
+| --- | --- | --- | --- |
+| Task triage, repository reading, scratchpad/handoff updates, formatting, focused test runs, fixture generation, mechanical TypeScript/Rust edits | Luna / low–medium | The edit changes a security, concurrency, persistence, or public-contract invariant | Local test plus a diff review by the coordinator |
+| Normal feature implementation, multi-file refactors, integration tests, debugging ordinary failures, API/schema design | Terra / medium–high | Two failed repair attempts, cross-crate invariants, or unclear plan/spec interaction | Focused suite and strict static checks |
+| Threat modeling, adversarial audit, durable recovery/concurrency design, capability sandbox/permission policy, mutation authorization, ambiguous architecture decisions | Sol / high | Always use for the named risk areas; do not use merely for a larger mechanical task | Written invariant analysis plus adversarial regression tests |
+| Independent final review of a phase | Terra / high, then Sol / high only for Phase 4–5 security/self-modification gates | A finding is disputed or the phase changes trust/authority boundaries | Requirement-by-requirement evidence, not only a green suite |
+
+**Delegation protocol.** Luna may keep several independent cheap tasks moving,
+but it should use at most one Terra or Sol task per shared mutable area at a
+time. Before any handoff it records: exact files owned, invariant being proved,
+commands to run, and the next recovery point in `.agents/scratchpad/ekg/HANDOFF.md`.
+The coordinator integrates changes and reruns the affected tests; a subagent's
+claim of success is never final evidence on its own.
+
+**Phase routing.**
+
+| Phase | Luna owns | Terra owns | Sol use (strictly limited) |
+| --- | --- | --- | --- |
+| P2 remaining gate | regression execution, metric fixtures, docs, mechanical API wiring | cross-crate integration and test repair | final trust/durability/adaptation audit |
+| P3 intuition/self-supervision | corpus preparation, benchmark runners, data plumbing | ranking/retrieval implementation and evaluation | only if learned ranking could alter authority or promotion decisions |
+| P4 consolidation/skill discovery | regression fixtures, reporting, routine package work | promotion gates, discovery pipeline, reconciliation | adversarial promotion and rollback review |
+| P5 curiosity/self-modification and capability acquisition/sharing | bundle fixtures, docs, import/export round trips, routine tests | native primitive implementations, typed procedure generation, local revalidation | sandbox escape, permissions/effects, secrets, provenance, and self-modification authorization |
+| P6 inspector/metrics | dashboard data transforms, snapshots, visual/test maintenance | server/SDK/dashboard integration and performance work | only for a security-sensitive exposure of evidence or authority |
+
+The practical switch policy is: start a bounded task on Luna; retry once there
+if the failure is mechanical; move to Terra for substantive code or a second
+failed repair; reserve Sol for a named high-risk invariant or final adversarial
+review. Do not use GPT-5.5 for this workflow: it is not the cost-efficient
+choice relative to Terra for the same class of work. The model picker’s live
+credit estimate remains authoritative for this account; this routing is a
+quality/cost policy, not a guarantee of app-specific credit consumption.
 
 ## Repository Structure
 
@@ -28,6 +77,8 @@ ekg/
     ekg-credit/        # credit assignment: contracts, replay, statistics
     ekg-reason/        # reasoning engine: contract-guided composition
     ekg-adapt/         # adaptation + knowledge reconciliation
+    ekg-capability/    # native primitives, interface discovery, capability
+                       # validation, portable bundle import/export
     ekg-engine/        # orchestrator: the full cycle from section 11
     ekg-server/        # JSON-RPC server exposing the engine
 
@@ -603,7 +654,54 @@ Value ranking:
 - Learning goals: from gaps, ranked by value, traceable to standing goals
 - Standing goals are immutable (normative mutability class)
 
-### P5.3 - Structural Self-Modification (section 33, stage 6)
+### P5.3 - Capability Acquisition (section 32)
+
+Give EKG a minimal native substrate from which it can acquire richer tools:
+
+- Native primitives are fixed, typed, and policy-enforced: scoped network
+  request, scoped file read/write, observation, and sandboxed execution.
+- Every primitive invocation declares effects, resource limits, permission
+  requirements, redaction rules, and replayability. There is no ambient file,
+  network, process, environment, or secret access.
+- Interface discovery may inspect user-authorized API descriptions, schemas,
+  command help, fixtures, or observed request/response examples. Discovery is
+  an episode with provenance; it does not itself grant permission to call the
+  discovered interface.
+- Synthesis produces neutral typed procedures, input/output schemas, contracts,
+  dependency pins, effect summaries, permission requirements, and tests.
+- Candidate capabilities run in a sandbox against mocks or explicitly granted
+  test targets. Promotion uses the Phase 4 gate and requires local contract,
+  permission, regression, and effect checks.
+- Capability execution resolves permissions at invocation time. Grants are
+  scoped, revocable local objects; procedures contain permission requirements,
+  never credentials.
+- Failures preserve traces and feed normal credit assignment, contract
+  refinement, repair, and retirement.
+
+### P5.4 - Reconstructible Capability Bundles (sections 32 and 34)
+
+Define a versioned, canonical bundle format containing:
+
+- Manifest, stable capability identity, procedures in neutral IR, dependency
+  DAG and exact versions/content hashes
+- Contracts, typed schemas, permission/effect declarations, resource bounds,
+  tests and fixtures, reconstruction recipe, compatibility constraints
+- Provenance for authorship/discovery, source-interface fingerprints, build
+  steps, validation episodes, and exported evidence references
+- No secret values, bearer tokens, cookies, raw environment variables,
+  machine-local paths, ambient grants, or local trust receipts
+
+Export is deterministic and content-addressed. Import verifies structure,
+hashes, dependency closure, schema compatibility, prohibited effects, and
+resource bounds before storing the entire bundle in quarantine. Imported
+concepts and procedures are always Provisional, imported evidence is historical
+provenance rather than local authorization, and imported permission
+requirements remain unsatisfied until the local operator grants them. Local
+tests and locally grounded observations must revalidate the capability before
+the ordinary promotion gate may activate it. Failed imports and failed
+revalidations remain inspectable and cannot partially mutate the active graph.
+
+### P5.5 - Structural Self-Modification (section 33, stage 6)
 
 Attempted last, deliberately. The biggest gains and only truly
 catastrophic failures live here.
@@ -617,6 +715,14 @@ catastrophic failures live here.
 ### P5 Exit Criteria
 
 - EKG directs its own learning within goal boundaries
+- EKG can discover an authorized interface and synthesize a typed, contracted,
+  sandbox-tested capability from the native primitives
+- Exported bundles reconstruct the same dependency DAG and tests on a clean
+  instance; deterministic re-export has the same content identity
+- Imported capabilities cannot execute before local permission resolution and
+  revalidation, and cannot inherit trust or secrets from the exporter
+- Malformed, incomplete, over-permissioned, secret-bearing, or dependency-
+  conflicting bundles fail atomically and remain outside the active graph
 - Structural changes pass regression suite
 - Goals remain immutable
 - Metric 3 (weaning): teacher calls declining per domain
@@ -683,6 +789,8 @@ Ranked by likelihood of sinking the project:
 8. Grounding ratio - how much self-supervision per grounded check (P3.4)
 9. Contract acquisition for new procedures (P2.4)
 10. Discriminating feature discovery for scope refinement (P2.6)
+11. Safe interface discovery under adversarial schemas and responses (P5.3)
+12. Portable reconstruction across runtime and environment drift (P5.4)
 
 These are where the experiment produces information regardless of outcome.
 
@@ -701,8 +809,8 @@ P3.1 -> P3.2 -> P3.3 -> P3.4                      (intuition, ~4-6 weeks)
                           |
 P4.1 -> P4.2 -> P4.3 -> P4.4 -> P4.5              (consolidation, ~3-4 weeks)
                                   |
-P5.1 -> P5.2 -> P5.3                               (curiosity, ~3-4 weeks)
-                  |
+P5.1 -> P5.2 -> P5.3 -> P5.4 -> P5.5               (curiosity + capability,
+                                  |                  ~5-8 weeks)
 P6.1 -> P6.2                                       (inspector, ~2-3 weeks)
 ```
 

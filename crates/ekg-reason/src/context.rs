@@ -141,6 +141,9 @@ impl KnowledgeContext {
             assumptions: self.assumptions.clone(),
             environment: self.environment.clone(),
             budget_remaining: Some(self.budget_remaining),
+            held_contradictions: Vec::new(),
+            applied_refinements: Vec::new(),
+            unresolved_refinements: Vec::new(),
         }
     }
 }

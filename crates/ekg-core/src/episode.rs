@@ -52,6 +52,11 @@ pub struct Episode {
     pub prediction: Option<Value>,
     pub action: Option<String>,
     pub observed_result: Option<Value>,
+    /// Predicate-bound observations established by this episode. A raw result
+    /// is not evidence for an arbitrary semantic claim; downstream reasoning
+    /// must match both the predicate and value of one of these facts.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub observed_facts: Vec<ObservedFact>,
     pub evaluation: Option<Evaluation>,
     /// Lossless serialized execution trace used for deterministic replay.
     /// Kept as neutral JSON here so the core data model does not depend on a
@@ -79,6 +84,7 @@ impl Episode {
             prediction: None,
             action: None,
             observed_result: None,
+            observed_facts: Vec::new(),
             evaluation: None,
             execution_trace: None,
             teacher_interaction: None,
@@ -124,6 +130,83 @@ pub struct AssembledContext {
     pub environment: BTreeMap<String, Value>,
     #[serde(default)]
     pub budget_remaining: Option<ContextBudget>,
+    /// Held contradiction identities inherited by this reasoning context.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub held_contradictions: Vec<i64>,
+    /// Scoped contradiction refinements selected by the current environment.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub applied_refinements: Vec<ContextRefinement>,
+    /// Refined predicates for which the current environment matches neither
+    /// (or ambiguously matches multiple) demonstrated scopes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unresolved_refinements: Vec<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ContextRefinement {
+    pub contradiction_id: i64,
+    pub claim_id: String,
+    pub predicate: String,
+    pub value: Value,
+}
+
+/// A canonical semantic observation plus the environment in which it held.
+/// Scope is retained for later discriminator discovery; it is not silently
+/// treated as proof that two disagreeing facts are incomparable.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ObservedFact {
+    /// Stable identity within the immutable source episode. Engine-created
+    /// facts use `<episode-id>:<ordinal>` so claims and receipts can refer to
+    /// the observation itself rather than to an ambiguous predicate string.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub id: String,
+    pub predicate: String,
+    pub value: Value,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub scope: BTreeMap<String, Value>,
+    /// Episode that established the fact. This is deliberately retained even
+    /// though the fact is embedded in that episode, because imported or
+    /// inspected fact references must be independently reconstructible.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_episode: Option<EpisodeId>,
+    /// Identity of an authenticated external verifier, when the fact did not
+    /// originate from deterministic local execution.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verifier: Option<String>,
+    /// Verification tier at the time this exact fact was established.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tier: Option<VerifiabilityTier>,
+    /// Canonical digest of the scoped environment. It is metadata for
+    /// auditing/import validation, never a transferable environment secret.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub environment_digest: Option<String>,
+}
+
+impl ObservedFact {
+    pub fn new(predicate: impl Into<String>, value: Value, scope: BTreeMap<String, Value>) -> Self {
+        Self {
+            id: String::new(),
+            predicate: predicate.into(),
+            value,
+            scope,
+            source_episode: None,
+            verifier: None,
+            tier: None,
+            environment_digest: None,
+        }
+    }
+
+    pub fn for_concept(concept: ConceptId, value: Value, scope: BTreeMap<String, Value>) -> Self {
+        Self::new(format!("concept:{concept}"), value, scope)
+    }
+
+    pub fn for_procedure(
+        procedure: ProcedureId,
+        value: Value,
+        scope: BTreeMap<String, Value>,
+    ) -> Self {
+        Self::new(format!("procedure:{procedure}:result"), value, scope)
+    }
 }
 
 /// A bounded graph edge retained in active and persisted context.
@@ -246,7 +329,7 @@ pub enum EscalationRung {
     Abstain = 7,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Evaluation {
     pub tier: VerifiabilityTier,
     pub success: bool,
@@ -285,5 +368,8 @@ mod tests {
         assert!(context.recent_episodes.is_empty());
         assert!(context.environment.is_empty());
         assert!(context.budget_remaining.is_none());
+        assert!(context.held_contradictions.is_empty());
+        assert!(context.applied_refinements.is_empty());
+        assert!(context.unresolved_refinements.is_empty());
     }
 }

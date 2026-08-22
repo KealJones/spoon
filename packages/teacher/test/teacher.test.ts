@@ -7,15 +7,34 @@ import {
   OllamaTeacher,
   OpenAITeacher,
   ProposalValidationPipeline,
+  REUSABLE_LESSON_PROTOCOL,
   SourceReliabilityTracker,
+  TEACHER_SYSTEM_PROMPT,
   TeacherError,
   fingerprintTeacherRequest,
   validateSchema,
+  buildTeacherPrompt,
   type CommandInvocation,
   type ProposalSchema,
   type TeacherProposal,
   type TeacherRequest,
 } from "../src/index.js";
+
+test("teacher protocol exposes bounded pure reusable lessons and observation guidance", () => {
+  assert.equal(REUSABLE_LESSON_PROTOCOL.primitiveSet, "pure_rpn_v1");
+  assert.ok(REUSABLE_LESSON_PROTOCOL.instructions.includes("multiply"));
+  assert.ok(
+    !(REUSABLE_LESSON_PROTOCOL.instructions as readonly string[]).includes(
+      "call",
+    ),
+  );
+
+  const prompt = `${TEACHER_SYSTEM_PROMPT}\n${buildTeacherPrompt(request)}`;
+  assert.match(prompt, /prefer a reusable lesson/i);
+  assert.match(prompt, /pure_rpn_v1/);
+  assert.match(prompt, /trusted sensor primitive/i);
+  assert.match(prompt, /never invent ids, timestamps, lifecycle/i);
+});
 
 const schema: ProposalSchema = {
   type: "object",

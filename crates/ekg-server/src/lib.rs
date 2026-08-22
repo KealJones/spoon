@@ -1,15 +1,22 @@
 use std::collections::BTreeMap;
 use std::io::{BufRead, Write};
 
+use ekg_adapt::{
+    Claim, Contradiction, ContradictionId, DemonstratedFeature, Implication, Refinement,
+    ScopeAssignment, Uncertainty,
+};
 use ekg_core::{
-    Assumption, Concept, ConceptId, Contract, EpisodeId, EscalationRung, Expr, MutabilityClass,
-    Param, Procedure, ProcedureId, Relationship, RelationshipId, Value as EkgValue,
+    Assumption, Concept, ConceptId, Contract, EpisodeId, EscalationRung, Evaluation, Expr,
+    MutabilityClass, Param, Procedure, ProcedureId, Relationship, RelationshipId,
+    Value as EkgValue,
 };
 use ekg_engine::{
-    CycleBudget, CycleId, CycleInput, CycleOutcome, CycleProgress, Engine, EngineError,
+    AdaptationPlanId, AdaptationPlanRequest, ApplyAdaptationRequest, CycleBudget, CycleId,
+    CycleInput, CycleOutcome, CycleProgress, Engine, EngineError, FailureAnalysisRequest,
     TeacherProposalWire,
 };
-use ekg_episode::EpisodeQuery;
+use ekg_episode::{EpisodeFeedback, EpisodeQuery, FeedbackSource};
+use ekg_graph::GraphError;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -17,19 +24,42 @@ use uuid::Uuid;
 
 pub struct RpcServer {
     engine: Engine,
+    admin_token: Option<String>,
+    feedback_source_identity: String,
 }
 
 impl RpcServer {
+    pub fn from_engine(engine: Engine) -> Self {
+        Self {
+            engine,
+            admin_token: None,
+            feedback_source_identity: "ekg-server".into(),
+        }
+    }
+
+    pub fn with_admin_token(mut self, token: impl Into<String>) -> Result<Self, EngineError> {
+        let token = token.into();
+        if !token.trim().is_empty() {
+            self.engine.enable_admin(&token)?;
+            self.admin_token = Some(token);
+        }
+        Ok(self)
+    }
+
+    pub fn with_feedback_source_identity(mut self, identity: impl Into<String>) -> Self {
+        let identity = identity.into();
+        if !identity.trim().is_empty() {
+            self.feedback_source_identity = identity;
+        }
+        self
+    }
+
     pub fn open(path: &str) -> Result<Self, EngineError> {
-        Ok(Self {
-            engine: Engine::open(path)?,
-        })
+        Ok(Self::from_engine(Engine::open(path)?))
     }
 
     pub fn in_memory() -> Result<Self, EngineError> {
-        Ok(Self {
-            engine: Engine::in_memory()?,
-        })
+        Ok(Self::from_engine(Engine::in_memory()?))
     }
 
     pub fn handle_line(&mut self, line: &str) -> String {
@@ -38,7 +68,10 @@ impl RpcServer {
             Err(error) => {
                 return serialize_response(RpcResponse::error(
                     Value::Null,
-                    RpcFault::new(-32700, "parse error").with_data(error.to_string()),
+                    RpcFault::new(-32700, "parse error").with_data(json!({
+                        "kind": "parse_error",
+                        "cause": error.to_string(),
+                    })),
                 ));
             }
         };
@@ -46,7 +79,8 @@ impl RpcServer {
         if request.jsonrpc != "2.0" || request.method.trim().is_empty() {
             return serialize_response(RpcResponse::error(
                 request.id,
-                RpcFault::new(-32600, "invalid request"),
+                RpcFault::new(-32600, "invalid request")
+                    .with_data(json!({ "kind": "invalid_request" })),
             ));
         }
 
@@ -57,16 +91,18 @@ impl RpcServer {
         serialize_response(response)
     }
 
-    fn dispatch(&mut self, method: &str, params: Value) -> Result<Value, RpcFault> {
+    fn dispatch(&mut self, method: &str, mut params: Value) -> Result<Value, RpcFault> {
+        if requires_admin(method) {
+            self.authorize_admin(&mut params)?;
+        }
         match method {
             "concept.create" => {
                 let input: CreateConcept = decode(params)?;
                 let mut concept = Concept::new(input.name, input.mutability);
                 concept.description = input.description;
                 self.engine
-                    .graph()
-                    .insert_concept(&concept)
-                    .map_err(app_error)?;
+                    .admin_insert_concept(&concept)
+                    .map_err(engine_error)?;
                 encode(concept)
             }
             "concept.get" => {
@@ -89,19 +125,51 @@ impl RpcServer {
             }
             "concept.list" => encode(self.engine.graph().list_concepts().map_err(app_error)?),
             "concept.update" => {
-                let concept: Concept = decode(params)?;
-                self.engine
+                let input: ReviseConceptParams = decode(params)?;
+                let version = self
+                    .engine
+                    .admin_revise_concept(&input.concept, input.expected_version)
+                    .map_err(engine_error)?;
+                encode(VersionedConceptWire {
+                    version,
+                    concept: input.concept,
+                })
+            }
+            "concept.getVersion" => {
+                let input: ConceptVersionParam = decode(params)?;
+                let concept = self
+                    .engine
                     .graph()
-                    .update_concept(&concept)
-                    .map_err(app_error)?;
-                encode(concept)
+                    .get_concept_version(input.concept_id()?, input.version)
+                    .map_err(graph_error)?;
+                encode(concept.map(|concept| VersionedConceptWire {
+                    version: input.version,
+                    concept,
+                }))
+            }
+            "concept.listVersions" => {
+                let input: ConceptIdParam = decode(params)?;
+                let concepts = self
+                    .engine
+                    .graph()
+                    .list_concept_versions(input.concept_id()?)
+                    .map_err(graph_error)?;
+                encode(
+                    concepts
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, concept)| VersionedConceptWire {
+                            version: index as u32 + 1,
+                            concept,
+                        })
+                        .collect::<Vec<_>>(),
+                )
             }
             "concept.delete" => {
                 let input: ConceptIdParam = decode(params)?;
                 self.engine
-                    .graph()
-                    .delete_concept(input.concept_id()?)
-                    .map_err(app_error)?;
+                    .admin_delete_concept(input.concept_id()?)
+                    .map_err(engine_error)?;
                 Ok(json!({ "deleted": true }))
             }
             "relationship.create" => {
@@ -110,9 +178,8 @@ impl RpcServer {
                     Relationship::new(input.source()?, input.target()?, input.kind);
                 relationship.strength = input.strength;
                 self.engine
-                    .graph()
-                    .insert_relationship(&relationship)
-                    .map_err(app_error)?;
+                    .admin_insert_relationship(&relationship)
+                    .map_err(engine_error)?;
                 encode(relationship)
             }
             "relationship.get" => {
@@ -125,19 +192,51 @@ impl RpcServer {
                 )
             }
             "relationship.update" => {
-                let relationship: Relationship = decode(params)?;
-                self.engine
+                let input: ReviseRelationshipParams = decode(params)?;
+                let version = self
+                    .engine
+                    .admin_revise_relationship(&input.relationship, input.expected_version)
+                    .map_err(engine_error)?;
+                encode(VersionedRelationshipWire {
+                    version,
+                    relationship: input.relationship,
+                })
+            }
+            "relationship.getVersion" => {
+                let input: RelationshipVersionParam = decode(params)?;
+                let relationship = self
+                    .engine
                     .graph()
-                    .update_relationship(&relationship)
-                    .map_err(app_error)?;
-                encode(relationship)
+                    .get_relationship_version(input.relationship_id()?, input.version)
+                    .map_err(graph_error)?;
+                encode(relationship.map(|relationship| VersionedRelationshipWire {
+                    version: input.version,
+                    relationship,
+                }))
+            }
+            "relationship.listVersions" => {
+                let input: RelationshipIdParam = decode(params)?;
+                let relationships = self
+                    .engine
+                    .graph()
+                    .list_relationship_versions(input.relationship_id()?)
+                    .map_err(graph_error)?;
+                encode(
+                    relationships
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, relationship)| VersionedRelationshipWire {
+                            version: index as u32 + 1,
+                            relationship,
+                        })
+                        .collect::<Vec<_>>(),
+                )
             }
             "relationship.delete" => {
                 let input: RelationshipIdParam = decode(params)?;
                 self.engine
-                    .graph()
-                    .delete_relationship(input.relationship_id()?)
-                    .map_err(app_error)?;
+                    .admin_delete_relationship(input.relationship_id()?)
+                    .map_err(engine_error)?;
                 Ok(json!({ "deleted": true }))
             }
             "graph.traverse" => {
@@ -158,9 +257,8 @@ impl RpcServer {
                     .map(|id| parse_uuid(&id).map(ConceptId))
                     .transpose()?;
                 self.engine
-                    .graph()
-                    .insert_procedure(&procedure)
-                    .map_err(app_error)?;
+                    .admin_insert_procedure(&procedure)
+                    .map_err(engine_error)?;
                 encode(procedure)
             }
             "procedure.get" => {
@@ -183,19 +281,47 @@ impl RpcServer {
             }
             "procedure.list" => encode(self.engine.graph().list_procedures().map_err(app_error)?),
             "procedure.update" => {
-                let procedure: Procedure = decode(params)?;
+                let input: ReviseProcedureParams = decode(params)?;
                 self.engine
+                    .admin_revise_procedure(&input.procedure, input.expected_version)
+                    .map_err(engine_error)?;
+                encode(VersionedProcedureWire {
+                    version: input.procedure.version,
+                    procedure: input.procedure,
+                })
+            }
+            "procedure.getVersion" => {
+                let input: ProcedureVersionParam = decode(params)?;
+                let procedure = self
+                    .engine
                     .graph()
-                    .update_procedure(&procedure)
-                    .map_err(app_error)?;
-                encode(procedure)
+                    .get_procedure_version(input.procedure_id()?, input.version)
+                    .map_err(graph_error)?;
+                encode(procedure.map(|procedure| VersionedProcedureWire {
+                    version: input.version,
+                    procedure,
+                }))
+            }
+            "procedure.listVersions" => {
+                let input: ProcedureIdParam = decode(params)?;
+                encode(
+                    self.engine
+                        .graph()
+                        .list_procedure_versions(input.procedure_id()?)
+                        .map_err(graph_error)?
+                        .into_iter()
+                        .map(|procedure| VersionedProcedureWire {
+                            version: procedure.version,
+                            procedure,
+                        })
+                        .collect::<Vec<_>>(),
+                )
             }
             "procedure.delete" => {
                 let input: ProcedureIdParam = decode(params)?;
                 self.engine
-                    .graph()
-                    .delete_procedure(input.procedure_id()?)
-                    .map_err(app_error)?;
+                    .admin_delete_procedure(input.procedure_id()?)
+                    .map_err(engine_error)?;
                 Ok(json!({ "deleted": true }))
             }
             "procedure.execute" => {
@@ -203,8 +329,157 @@ impl RpcServer {
                 encode(
                     self.engine
                         .execute_procedure(input.procedure_id()?, input.inputs, input.prediction)
-                        .map_err(app_error)?,
+                        .map_err(engine_error)?,
                 )
+            }
+            "feedback.record" => {
+                let input: RecordFeedbackParams = decode(params)?;
+                let episode = self
+                    .engine
+                    .episodes()
+                    .get(input.episode_id()?)
+                    .map_err(app_error)?;
+                let success = episode.prediction.as_ref() == Some(&input.observed_result);
+                let evaluation = Evaluation {
+                    tier: ekg_core::VerifiabilityTier::Deferred,
+                    success,
+                    details: "raw external observation; trust assigned by server".into(),
+                    surprise: episode
+                        .prediction
+                        .as_ref()
+                        .map(|_| if success { 0.0 } else { 1.0 }),
+                };
+                let feedback = EpisodeFeedback::new(
+                    episode.id,
+                    input.observed_result,
+                    evaluation,
+                    FeedbackSource::new(
+                        "rpc_observation",
+                        Some(self.feedback_source_identity.clone()),
+                    ),
+                    input.idempotency_key,
+                );
+                let stored = self
+                    .engine
+                    .record_external_feedback(&feedback)
+                    .map_err(app_error)?;
+                encode(EpisodeFeedbackWire::from(stored))
+            }
+            "credit.analyze" => {
+                let idempotency_key = take_optional_idempotency_key(&mut params)?;
+                let input: FailureAnalysisRequest = decode(params)?;
+                let analysis = match idempotency_key {
+                    Some(key) => self.engine.analyze_failure_idempotent(&key, input),
+                    None => self.engine.analyze_failure(input),
+                }
+                .map_err(credit_error)?;
+                encode(analysis)
+            }
+            "credit.get" => {
+                let input: CreditAnalysisIdParam = decode(params)?;
+                encode(
+                    self.engine
+                        .get_failure_analysis(&input.analysis_id)
+                        .map_err(credit_error)?,
+                )
+            }
+            "credit.getByKey" => {
+                let input: CreditAnalysisKeyParam = decode(params)?;
+                encode(
+                    self.engine
+                        .get_failure_analysis_by_key(&input.idempotency_key)
+                        .map_err(credit_error)?,
+                )
+            }
+            "adaptation.plan" => {
+                let input: AdaptationPlanRequest = decode(params)?;
+                encode(
+                    self.engine
+                        .plan_adaptation(input)
+                        .map_err(adaptation_error)?,
+                )
+            }
+            "adaptation.get" => {
+                let input: AdaptationPlanIdParam = decode(params)?;
+                encode(
+                    self.engine
+                        .get_adaptation(input.plan_id()?)
+                        .map_err(adaptation_error)?,
+                )
+            }
+            "adaptation.apply" => {
+                let input: ApplyAdaptationParams = decode(params)?;
+                encode(
+                    self.engine
+                        .apply_adaptation(input.into_request()?)
+                        .map_err(adaptation_error)?,
+                )
+            }
+            "adaptation.applyOffline" => {
+                let input: ApplyAdaptationParams = decode(params)?;
+                let request = input.into_request()?;
+                let capability = self
+                    .engine
+                    .issue_offline_capability(&request)
+                    .map_err(adaptation_error)?;
+                encode(
+                    self.engine
+                        .apply_adaptation_offline(request, &capability)
+                        .map_err(adaptation_error)?,
+                )
+            }
+            "contradiction.list" => {
+                let _: EmptyParams = decode(params)?;
+                let contradictions = self
+                    .engine
+                    .list_held_contradictions()
+                    .map_err(contradiction_error)?;
+                encode(
+                    contradictions
+                        .into_iter()
+                        .map(ContradictionWire::from)
+                        .collect::<Vec<_>>(),
+                )
+            }
+            "contradiction.get" => {
+                let input: ContradictionIdParam = decode(params)?;
+                let contradiction = self
+                    .engine
+                    .get_contradiction(input.contradiction_id()?)
+                    .map_err(contradiction_error)?;
+                encode(contradiction.map(ContradictionWire::from))
+            }
+            "contradiction.record" => {
+                let input: RecordContradictionParams = decode(params)?;
+                encode(ContradictionWire::from(
+                    self.engine
+                        .admin_record_contradiction(
+                            input.left.into(),
+                            input.right.into(),
+                            input.created_at,
+                        )
+                        .map_err(contradiction_error)?,
+                ))
+            }
+            "contradiction.refine" => {
+                let input: RefineContradictionParams = decode(params)?;
+                encode(RefinementWire::from(
+                    self.engine
+                        .admin_refine_contradiction(
+                            input.contradiction_id()?,
+                            input.discriminator.into_feature()?,
+                            input.updated_at,
+                        )
+                        .map_err(contradiction_error)?,
+                ))
+            }
+            "contradiction.uncertainty" => {
+                let input: ClaimIdParam = decode(params)?;
+                encode(UncertaintyWire::from(
+                    self.engine
+                        .uncertainty_for_claim(&input.claim_id)
+                        .map_err(contradiction_error)?,
+                ))
             }
             "episode.get" => {
                 let input: EpisodeIdParam = decode(params)?;
@@ -256,9 +531,47 @@ impl RpcServer {
                     .map_err(app_error)?;
                 encode_cycle_progress(progress)
             }
-            _ => Err(RpcFault::new(-32601, "method not found")),
+            _ => Err(RpcFault::new(-32601, "method not found").with_data(json!({
+                "kind": "method_not_found",
+                "method": method,
+            }))),
         }
     }
+
+    fn authorize_admin(&self, params: &mut Value) -> Result<(), RpcFault> {
+        let supplied = params
+            .as_object_mut()
+            .and_then(|object| object.remove("adminToken"))
+            .and_then(|value| value.as_str().map(str::to_owned));
+        if self.admin_token.as_deref().is_some()
+            && self.admin_token.as_deref() == supplied.as_deref()
+        {
+            return Ok(());
+        }
+        Err(
+            RpcFault::new(-32001, "admin authorization required").with_data(json!({
+                "kind": "admin_authorization_required"
+            })),
+        )
+    }
+}
+
+fn requires_admin(method: &str) -> bool {
+    matches!(
+        method,
+        "concept.create"
+            | "concept.update"
+            | "concept.delete"
+            | "relationship.create"
+            | "relationship.update"
+            | "relationship.delete"
+            | "procedure.create"
+            | "procedure.update"
+            | "procedure.delete"
+            | "adaptation.applyOffline"
+            | "contradiction.record"
+            | "contradiction.refine"
+    )
 }
 
 pub fn run_stdio<R: BufRead, W: Write>(
@@ -306,6 +619,32 @@ impl From<CycleOutcome> for CompletedCycleWire {
             disposition: outcome.disposition,
             answer: outcome.answer,
             episode: outcome.episode,
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct EpisodeFeedbackWire {
+    id: Uuid,
+    episode_id: EpisodeId,
+    observed_result: EkgValue,
+    evaluation: Evaluation,
+    source: FeedbackSource,
+    idempotency_key: String,
+    created_at: i64,
+}
+
+impl From<EpisodeFeedback> for EpisodeFeedbackWire {
+    fn from(feedback: EpisodeFeedback) -> Self {
+        Self {
+            id: feedback.id,
+            episode_id: feedback.episode_id,
+            observed_result: feedback.observed_result,
+            evaluation: feedback.evaluation,
+            source: feedback.source,
+            idempotency_key: feedback.idempotency_key,
+            created_at: feedback.created_at,
         }
     }
 }
@@ -373,17 +712,195 @@ impl RpcFault {
 }
 
 fn decode<T: DeserializeOwned>(params: Value) -> Result<T, RpcFault> {
-    serde_json::from_value(params)
-        .map_err(|error| RpcFault::new(-32602, "invalid params").with_data(error.to_string()))
+    serde_json::from_value(params).map_err(|error| {
+        RpcFault::new(-32602, "invalid params").with_data(json!({
+            "kind": "invalid_params",
+            "cause": error.to_string(),
+        }))
+    })
+}
+
+fn take_optional_idempotency_key(params: &mut Value) -> Result<Option<String>, RpcFault> {
+    let Some(object) = params.as_object_mut() else {
+        return Err(RpcFault::new(-32602, "invalid params").with_data(json!({
+            "kind": "invalid_params",
+            "cause": "params must be an object",
+        })));
+    };
+    let Some(value) = object.remove("idempotencyKey") else {
+        return Ok(None);
+    };
+    let Some(key) = value.as_str() else {
+        return Err(RpcFault::new(-32602, "invalid params").with_data(json!({
+            "kind": "invalid_params",
+            "cause": "idempotencyKey must be a string",
+        })));
+    };
+    if key.trim().is_empty() {
+        return Err(RpcFault::new(-32602, "invalid params").with_data(json!({
+            "kind": "invalid_params",
+            "cause": "idempotencyKey cannot be empty",
+        })));
+    }
+    Ok(Some(key.to_owned()))
 }
 
 fn encode<T: Serialize>(value: T) -> Result<Value, RpcFault> {
-    serde_json::to_value(value)
-        .map_err(|error| RpcFault::new(-32603, "serialization failed").with_data(error.to_string()))
+    serde_json::to_value(value).map_err(|error| {
+        RpcFault::new(-32603, "serialization failed").with_data(json!({
+            "kind": "serialization_failed",
+            "cause": error.to_string(),
+        }))
+    })
 }
 
 fn app_error(error: impl std::fmt::Display) -> RpcFault {
-    RpcFault::new(-32000, error.to_string())
+    RpcFault::new(-32000, "application error").with_data(json!({
+        "kind": "application_error",
+        "cause": error.to_string(),
+    }))
+}
+
+fn graph_error(error: GraphError) -> RpcFault {
+    match error {
+        GraphError::RevisionConflict {
+            entity,
+            expected,
+            actual,
+        } => RpcFault::new(-32002, "graph revision conflict").with_data(json!({
+            "kind": "revision_conflict",
+            "entity": entity,
+            "expectedVersion": expected,
+            "actualVersion": actual,
+        })),
+        GraphError::NotFound(entity) => {
+            RpcFault::new(-32004, "graph entity not found").with_data(json!({
+                "kind": "graph_not_found",
+                "entity": entity,
+            }))
+        }
+        GraphError::ImmutableFieldChange { entity, field } => {
+            RpcFault::new(-32602, "immutable graph field changed").with_data(json!({
+                "kind": "immutable_field_change",
+                "entity": entity,
+                "field": field,
+            }))
+        }
+        GraphError::NonMonotonicRevision {
+            entity,
+            expected_next,
+            proposed,
+        } => RpcFault::new(-32602, "invalid graph revision").with_data(json!({
+            "kind": "non_monotonic_revision",
+            "entity": entity,
+            "expectedVersion": expected_next,
+            "proposedVersion": proposed,
+        })),
+        other => RpcFault::new(-32000, "graph operation failed").with_data(json!({
+            "kind": "graph_error",
+            "cause": other.to_string(),
+        })),
+    }
+}
+
+fn engine_error(error: EngineError) -> RpcFault {
+    match error {
+        EngineError::ExecutionFailed { episode_id, source } => {
+            RpcFault::new(-32010, "execution failed").with_data(json!({
+                "kind": "execution_failed",
+                "episodeId": episode_id,
+                "cause": source.to_string(),
+            }))
+        }
+        EngineError::Graph(error) => graph_error(error),
+        other => app_error(other),
+    }
+}
+
+fn credit_error(error: EngineError) -> RpcFault {
+    match error {
+        EngineError::InvalidInput(cause)
+            if cause.contains("idempotency key") && cause.contains("already bound") =>
+        {
+            RpcFault::new(-32015, "credit analysis idempotency conflict").with_data(json!({
+                "kind": "credit_idempotency_conflict",
+                "cause": cause,
+            }))
+        }
+        EngineError::InvalidInput(cause) => {
+            RpcFault::new(-32602, "invalid params").with_data(json!({
+                "kind": "invalid_params",
+                "cause": cause,
+            }))
+        }
+        other => RpcFault::new(-32014, "credit analysis failed").with_data(json!({
+            "kind": "credit_analysis_error",
+            "cause": other.to_string(),
+        })),
+    }
+}
+
+fn adaptation_error(error: EngineError) -> RpcFault {
+    match error {
+        EngineError::Adapt(ekg_adapt::AdaptError::NotFound(identifier)) => {
+            RpcFault::new(-32024, "adaptation not found").with_data(json!({
+                "kind": "adaptation_not_found",
+                "identifier": identifier,
+            }))
+        }
+        EngineError::Adapt(ekg_adapt::AdaptError::Invalid(detail))
+        | EngineError::InvalidInput(detail) => RpcFault::new(-32602, "invalid adaptation")
+            .with_data(json!({
+                "kind": "invalid_adaptation",
+                "detail": detail,
+            })),
+        EngineError::Adapt(ekg_adapt::AdaptError::Unauthorized(detail)) => {
+            RpcFault::new(-32021, "adaptation authorization rejected").with_data(json!({
+                "kind": "adaptation_unauthorized",
+                "detail": detail,
+            }))
+        }
+        EngineError::Adapt(ekg_adapt::AdaptError::OfflineCapabilityRequired(detail)) => {
+            RpcFault::new(-32022, "offline adaptation required").with_data(json!({
+                "kind": "offline_adaptation_required",
+                "detail": detail,
+            }))
+        }
+        EngineError::Adapt(ekg_adapt::AdaptError::Graph(error)) | EngineError::Graph(error) => {
+            graph_error(error)
+        }
+        other => RpcFault::new(-32020, "adaptation failed").with_data(json!({
+            "kind": "adaptation_internal_error",
+            "cause": other.to_string(),
+        })),
+    }
+}
+
+fn contradiction_error(error: EngineError) -> RpcFault {
+    match error {
+        EngineError::Adapt(ekg_adapt::AdaptError::NotFound(identifier)) => {
+            RpcFault::new(-32034, "contradiction not found").with_data(json!({
+                "kind": "contradiction_not_found",
+                "identifier": identifier,
+            }))
+        }
+        EngineError::Adapt(ekg_adapt::AdaptError::Invalid(detail))
+        | EngineError::InvalidInput(detail) => RpcFault::new(-32602, "invalid contradiction")
+            .with_data(json!({
+                "kind": "invalid_contradiction",
+                "detail": detail,
+            })),
+        EngineError::Adapt(ekg_adapt::AdaptError::Unauthorized(detail)) => {
+            RpcFault::new(-32031, "contradiction authorization rejected").with_data(json!({
+                "kind": "contradiction_unauthorized",
+                "detail": detail,
+            }))
+        }
+        other => RpcFault::new(-32030, "contradiction operation failed").with_data(json!({
+            "kind": "contradiction_internal_error",
+            "cause": other.to_string(),
+        })),
+    }
 }
 
 fn serialize_response(response: RpcResponse) -> String {
@@ -393,12 +910,16 @@ fn serialize_response(response: RpcResponse) -> String {
 }
 
 fn parse_uuid(value: &str) -> Result<Uuid, RpcFault> {
-    Uuid::parse_str(value)
-        .map_err(|error| RpcFault::new(-32602, "invalid id").with_data(error.to_string()))
+    Uuid::parse_str(value).map_err(|error| {
+        RpcFault::new(-32602, "invalid id").with_data(json!({
+            "kind": "invalid_id",
+            "cause": error.to_string(),
+        }))
+    })
 }
 
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ConceptIdParam {
     concept_id: String,
 }
@@ -409,7 +930,34 @@ impl ConceptIdParam {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ConceptVersionParam {
+    concept_id: String,
+    version: u32,
+}
+
+impl ConceptVersionParam {
+    fn concept_id(&self) -> Result<ConceptId, RpcFault> {
+        Ok(ConceptId(parse_uuid(&self.concept_id)?))
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ReviseConceptParams {
+    concept: Concept,
+    expected_version: u32,
+}
+
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+struct VersionedConceptWire {
+    version: u32,
+    concept: Concept,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct RelationshipIdParam {
     relationship_id: String,
 }
@@ -420,9 +968,63 @@ impl RelationshipIdParam {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RelationshipVersionParam {
+    relationship_id: String,
+    version: u32,
+}
+
+impl RelationshipVersionParam {
+    fn relationship_id(&self) -> Result<RelationshipId, RpcFault> {
+        Ok(RelationshipId(parse_uuid(&self.relationship_id)?))
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ReviseRelationshipParams {
+    relationship: Relationship,
+    expected_version: u32,
+}
+
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+struct VersionedRelationshipWire {
+    version: u32,
+    relationship: Relationship,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ProcedureIdParam {
     procedure_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ProcedureVersionParam {
+    procedure_id: String,
+    version: u32,
+}
+
+impl ProcedureVersionParam {
+    fn procedure_id(&self) -> Result<ProcedureId, RpcFault> {
+        Ok(ProcedureId(parse_uuid(&self.procedure_id)?))
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ReviseProcedureParams {
+    procedure: Procedure,
+    expected_version: u32,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VersionedProcedureWire {
+    version: u32,
+    procedure: Procedure,
 }
 impl ProcedureIdParam {
     fn procedure_id(&self) -> Result<ProcedureId, RpcFault> {
@@ -434,6 +1036,334 @@ impl ProcedureIdParam {
 #[serde(rename_all = "camelCase")]
 struct EpisodeIdParam {
     episode_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct AdaptationPlanIdParam {
+    plan_id: String,
+}
+
+impl AdaptationPlanIdParam {
+    fn plan_id(&self) -> Result<AdaptationPlanId, RpcFault> {
+        Ok(AdaptationPlanId(parse_uuid(&self.plan_id)?))
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ApplyAdaptationParams {
+    plan_id: String,
+    idempotency_key: String,
+    applied_at: i64,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CreditAnalysisIdParam {
+    analysis_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CreditAnalysisKeyParam {
+    idempotency_key: String,
+}
+
+impl ApplyAdaptationParams {
+    fn into_request(self) -> Result<ApplyAdaptationRequest, RpcFault> {
+        Ok(ApplyAdaptationRequest {
+            plan_id: AdaptationPlanId(parse_uuid(&self.plan_id)?),
+            idempotency_key: self.idempotency_key,
+            applied_at: self.applied_at,
+        })
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ContradictionIdParam {
+    contradiction_id: i64,
+}
+
+impl ContradictionIdParam {
+    fn contradiction_id(&self) -> Result<ContradictionId, RpcFault> {
+        positive_contradiction_id(self.contradiction_id)
+    }
+}
+
+fn positive_contradiction_id(value: i64) -> Result<ContradictionId, RpcFault> {
+    if value <= 0 {
+        return Err(
+            RpcFault::new(-32602, "invalid contradiction id").with_data(json!({
+                "kind": "invalid_contradiction_id",
+            })),
+        );
+    }
+    Ok(ContradictionId(value))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EmptyParams {}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RecordContradictionParams {
+    left: ClaimParams,
+    right: ClaimParams,
+    created_at: i64,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ClaimParams {
+    id: String,
+    statement: String,
+    implication: ImplicationParams,
+    supporting_episodes: Vec<EpisodeId>,
+    #[serde(default)]
+    scope: Vec<ScopeAssignmentParams>,
+}
+
+impl From<ClaimParams> for Claim {
+    fn from(value: ClaimParams) -> Self {
+        Self {
+            id: value.id,
+            statement: value.statement,
+            implication: value.implication.into(),
+            supporting_episodes: value.supporting_episodes,
+            scope: value.scope.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ImplicationParams {
+    predicate: String,
+    value: EkgValue,
+}
+
+impl From<ImplicationParams> for Implication {
+    fn from(value: ImplicationParams) -> Self {
+        Self {
+            predicate: value.predicate,
+            value: value.value,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ScopeAssignmentParams {
+    feature: String,
+    value: EkgValue,
+    learned_from: EpisodeId,
+}
+
+impl From<ScopeAssignmentParams> for ScopeAssignment {
+    fn from(value: ScopeAssignmentParams) -> Self {
+        Self {
+            feature: value.feature,
+            value: value.value,
+            learned_from: value.learned_from,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RefineContradictionParams {
+    contradiction_id: i64,
+    discriminator: DemonstratedFeatureParams,
+    updated_at: i64,
+}
+
+impl RefineContradictionParams {
+    fn contradiction_id(&self) -> Result<ContradictionId, RpcFault> {
+        positive_contradiction_id(self.contradiction_id)
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct DemonstratedFeatureParams {
+    feature: String,
+    left_value: EkgValue,
+    left_episode: EpisodeId,
+    right_value: EkgValue,
+    right_episode: EpisodeId,
+}
+
+impl DemonstratedFeatureParams {
+    fn into_feature(self) -> Result<DemonstratedFeature, RpcFault> {
+        DemonstratedFeature::new(
+            self.feature,
+            self.left_value,
+            self.left_episode,
+            self.right_value,
+            self.right_episode,
+        )
+        .map_err(|error| {
+            RpcFault::new(-32602, "invalid discriminator").with_data(json!({
+                "kind": "invalid_discriminator",
+                "cause": error.to_string(),
+            }))
+        })
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ClaimIdParam {
+    claim_id: String,
+}
+
+#[derive(Serialize)]
+#[serde(
+    tag = "status",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+enum UncertaintyWire {
+    Certain,
+    HeldContradictions { contradiction_ids: Vec<i64> },
+}
+
+impl From<Uncertainty> for UncertaintyWire {
+    fn from(value: Uncertainty) -> Self {
+        match value {
+            Uncertainty::Certain => Self::Certain,
+            Uncertainty::HeldContradictions(ids) => Self::HeldContradictions {
+                contradiction_ids: ids.into_iter().map(|id| id.0).collect(),
+            },
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ContradictionWire {
+    id: i64,
+    left: ClaimWire,
+    right: ClaimWire,
+    status: ekg_adapt::ContradictionStatus,
+    refinement: Option<RefinementWire>,
+    created_at: i64,
+    updated_at: i64,
+}
+
+impl From<Contradiction> for ContradictionWire {
+    fn from(value: Contradiction) -> Self {
+        Self {
+            id: value.id.0,
+            left: value.left.into(),
+            right: value.right.into(),
+            status: value.status,
+            refinement: value.refinement.map(RefinementWire::from),
+            created_at: value.created_at,
+            updated_at: value.updated_at,
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ClaimWire {
+    id: String,
+    statement: String,
+    implication: ImplicationWire,
+    supporting_episodes: Vec<EpisodeId>,
+    scope: Vec<ScopeAssignmentWire>,
+}
+
+impl From<Claim> for ClaimWire {
+    fn from(value: Claim) -> Self {
+        Self {
+            id: value.id,
+            statement: value.statement,
+            implication: value.implication.into(),
+            supporting_episodes: value.supporting_episodes,
+            scope: value
+                .scope
+                .into_iter()
+                .map(ScopeAssignmentWire::from)
+                .collect(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct ImplicationWire {
+    predicate: String,
+    value: EkgValue,
+}
+
+impl From<Implication> for ImplicationWire {
+    fn from(value: Implication) -> Self {
+        Self {
+            predicate: value.predicate,
+            value: value.value,
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ScopeAssignmentWire {
+    feature: String,
+    value: EkgValue,
+    learned_from: EpisodeId,
+}
+
+impl From<ScopeAssignment> for ScopeAssignmentWire {
+    fn from(value: ScopeAssignment) -> Self {
+        Self {
+            feature: value.feature,
+            value: value.value,
+            learned_from: value.learned_from,
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct RefinementWire {
+    left: ClaimWire,
+    right: ClaimWire,
+    discriminator: DemonstratedFeatureWire,
+}
+
+impl From<Refinement> for RefinementWire {
+    fn from(value: Refinement) -> Self {
+        Self {
+            left: value.left.into(),
+            right: value.right.into(),
+            discriminator: value.discriminator.into(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DemonstratedFeatureWire {
+    feature: String,
+    left_value: EkgValue,
+    left_episode: EpisodeId,
+    right_value: EkgValue,
+    right_episode: EpisodeId,
+}
+
+impl From<DemonstratedFeature> for DemonstratedFeatureWire {
+    fn from(value: DemonstratedFeature) -> Self {
+        Self {
+            feature: value.feature,
+            left_value: value.left_value,
+            left_episode: value.left_episode,
+            right_value: value.right_value,
+            right_episode: value.right_episode,
+        }
+    }
 }
 impl EpisodeIdParam {
     fn episode_id(&self) -> Result<EpisodeId, RpcFault> {
@@ -517,6 +1447,20 @@ struct ExecuteParams {
     #[serde(default)]
     inputs: BTreeMap<String, EkgValue>,
     prediction: Option<EkgValue>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RecordFeedbackParams {
+    episode_id: String,
+    observed_result: EkgValue,
+    idempotency_key: String,
+}
+
+impl RecordFeedbackParams {
+    fn episode_id(&self) -> Result<EpisodeId, RpcFault> {
+        Ok(EpisodeId(parse_uuid(&self.episode_id)?))
+    }
 }
 impl ExecuteParams {
     fn procedure_id(&self) -> Result<ProcedureId, RpcFault> {

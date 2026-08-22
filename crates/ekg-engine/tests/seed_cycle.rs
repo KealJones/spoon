@@ -44,9 +44,9 @@ fn inputs(x: i64) -> BTreeMap<String, Value> {
 
 #[test]
 fn execution_records_and_evaluates_a_complete_episode() {
-    let engine = Engine::in_memory().unwrap();
+    let engine = Engine::in_memory_with_admin("test-admin").unwrap();
     let procedure = double_procedure();
-    engine.graph().insert_procedure(&procedure).unwrap();
+    engine.admin_insert_procedure(&procedure).unwrap();
 
     let outcome = engine
         .execute_procedure(procedure.id, inputs(7), Some(Value::Int(14)))
@@ -65,9 +65,9 @@ fn execution_records_and_evaluates_a_complete_episode() {
 
 #[test]
 fn replay_uses_pinned_versions_and_named_substitutions() {
-    let engine = Engine::in_memory().unwrap();
+    let engine = Engine::in_memory_with_admin("test-admin").unwrap();
     let procedure = double_procedure();
-    engine.graph().insert_procedure(&procedure).unwrap();
+    engine.admin_insert_procedure(&procedure).unwrap();
     let original = engine
         .execute_procedure(procedure.id, inputs(7), Some(Value::Int(14)))
         .unwrap();
@@ -83,9 +83,9 @@ fn replay_uses_pinned_versions_and_named_substitutions() {
 
 #[test]
 fn execution_rejects_missing_and_extra_named_inputs() {
-    let engine = Engine::in_memory().unwrap();
+    let engine = Engine::in_memory_with_admin("test-admin").unwrap();
     let procedure = double_procedure();
-    engine.graph().insert_procedure(&procedure).unwrap();
+    engine.admin_insert_procedure(&procedure).unwrap();
 
     let missing = engine.execute_procedure(procedure.id, BTreeMap::new(), None);
     assert!(
@@ -110,11 +110,11 @@ fn execution_rejects_missing_and_extra_named_inputs() {
 
 #[test]
 fn execution_episode_is_indexed_by_the_procedure_concept() {
-    let engine = Engine::in_memory().unwrap();
+    let engine = Engine::in_memory_with_admin("test-admin").unwrap();
     let concept = Concept::new("DOUBLE", MutabilityClass::Definitional);
-    engine.graph().insert_concept(&concept).unwrap();
+    engine.admin_insert_concept(&concept).unwrap();
     let procedure = double_procedure().with_concept(concept.id);
-    engine.graph().insert_procedure(&procedure).unwrap();
+    engine.admin_insert_procedure(&procedure).unwrap();
 
     let outcome = engine
         .execute_procedure(procedure.id, inputs(4), None)
@@ -127,9 +127,9 @@ fn execution_episode_is_indexed_by_the_procedure_concept() {
 
 #[test]
 fn failed_execution_records_the_episode_and_partial_trace() {
-    let engine = Engine::in_memory().unwrap();
+    let engine = Engine::in_memory_with_admin("test-admin").unwrap();
     let procedure = double_procedure();
-    engine.graph().insert_procedure(&procedure).unwrap();
+    engine.admin_insert_procedure(&procedure).unwrap();
 
     let error = engine
         .execute_procedure(procedure.id, inputs(-1), Some(Value::Int(-2)))
@@ -171,9 +171,9 @@ fn failed_execution_records_the_episode_and_partial_trace() {
 
 #[test]
 fn failed_execution_without_prediction_has_no_surprise_signal() {
-    let engine = Engine::in_memory().unwrap();
+    let engine = Engine::in_memory_with_admin("test-admin").unwrap();
     let procedure = double_procedure();
-    engine.graph().insert_procedure(&procedure).unwrap();
+    engine.admin_insert_procedure(&procedure).unwrap();
 
     let error = engine
         .execute_procedure(procedure.id, inputs(-1), None)

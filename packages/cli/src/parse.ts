@@ -24,6 +24,16 @@ export type Command =
     }
   | { kind: "episode.list"; limit: number }
   | { kind: "episode.get"; episodeId: string }
+  | { kind: "failure.analyze"; request: Record<string, JsonValue> }
+  | { kind: "failure.plan"; request: Record<string, JsonValue> }
+  | { kind: "failure.apply"; planId: string }
+  | { kind: "failure.apply-offline"; planId: string }
+  | { kind: "adaptation.show"; planId: string }
+  | { kind: "contradiction.list" }
+  | { kind: "contradiction.get"; contradictionId: number }
+  | { kind: "contradiction.record"; request: Record<string, JsonValue> }
+  | { kind: "contradiction.refine"; request: Record<string, JsonValue> }
+  | { kind: "contradiction.uncertainty"; claimId: string }
   | { kind: "cycle.run"; situation: string };
 
 const usage = `Usage:
@@ -36,6 +46,16 @@ const usage = `Usage:
   ekg procedure run <name-or-id> [key=json-value ...]
   ekg episode list [limit]
   ekg episode get <episode-id>
+  ekg failure analyze '<json>'
+  ekg failure plan '<json>'
+  ekg failure apply <plan-id>
+  ekg failure apply-offline <plan-id>
+  ekg adaptation show <plan-id>
+  ekg contradiction list
+  ekg contradiction get <id>
+  ekg contradiction record '<json>'
+  ekg contradiction refine '<json>'
+  ekg contradiction uncertainty <claim-id>
   ekg ask <situation>`;
 
 export function parseCommand(args: string[]): Command {
@@ -91,6 +111,56 @@ export function parseCommand(args: string[]): Command {
   }
   if (resource === "episode" && action === "get" && rest.length === 1) {
     return { kind: "episode.get", episodeId: rest[0]! };
+  }
+  if (
+    resource === "failure" &&
+    (action === "analyze" || action === "plan") &&
+    rest.length === 1
+  ) {
+    return {
+      kind: action === "analyze" ? "failure.analyze" : "failure.plan",
+      request: parseObject(rest[0]!),
+    };
+  }
+  if (
+    resource === "failure" &&
+    (action === "apply" || action === "apply-offline") &&
+    rest.length === 1
+  ) {
+    return {
+      kind: action === "apply" ? "failure.apply" : "failure.apply-offline",
+      planId: rest[0]!,
+    };
+  }
+  if (resource === "adaptation" && action === "show" && rest.length === 1) {
+    return { kind: "adaptation.show", planId: rest[0]! };
+  }
+  if (resource === "contradiction" && action === "list" && rest.length === 0) {
+    return { kind: "contradiction.list" };
+  }
+  if (resource === "contradiction" && action === "get" && rest.length === 1) {
+    const contradictionId = Number.parseInt(rest[0]!, 10);
+    if (Number.isSafeInteger(contradictionId) && contradictionId > 0) {
+      return { kind: "contradiction.get", contradictionId };
+    }
+  }
+  if (
+    resource === "contradiction" &&
+    (action === "record" || action === "refine") &&
+    rest.length === 1
+  ) {
+    return {
+      kind:
+        action === "record" ? "contradiction.record" : "contradiction.refine",
+      request: parseObject(rest[0]!),
+    };
+  }
+  if (
+    resource === "contradiction" &&
+    action === "uncertainty" &&
+    rest.length === 1
+  ) {
+    return { kind: "contradiction.uncertainty", claimId: rest[0]! };
   }
   if (resource === "ask" && action) {
     return { kind: "cycle.run", situation: [action, ...rest].join(" ") };

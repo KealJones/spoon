@@ -16,6 +16,280 @@ export interface EpisodeFilter {
   conceptId?: string;
 }
 
+export interface FeedbackInput {
+  episodeId: string;
+  observedResult: JsonValue;
+  idempotencyKey: string;
+}
+
+export interface EpisodeFeedback extends FeedbackInput {
+  id: string;
+  evaluation: {
+    tier: "Hard" | "Consensus" | "Deferred";
+    success: boolean;
+    details: string;
+    surprise?: number | null;
+  };
+  source: {
+    kind: string;
+    actor?: string | null;
+  };
+  createdAt: number;
+}
+
+export interface EkgClientOptions {
+  adminToken?: string;
+}
+
+export interface FailureAnalysisInput {
+  idempotencyKey?: string;
+  episodeId: string;
+  selectedFeedbackId?: string;
+  candidates: Array<{
+    suspect: { procedure: string; version: number; traceStep: number };
+    priorScore: number;
+    change: { description: string; replacement: JsonValue };
+    mode: "deterministic" | "simulated";
+  }>;
+  budget: {
+    topK: number;
+    maxReplays: number;
+    maxReplaySteps: number;
+  };
+}
+
+export type AttributionMechanism =
+  "contract_violation" | "statistical_suspicion" | "counterfactual_replay";
+
+export interface AttributionSelector {
+  suspect: {
+    procedure: string;
+    version: number;
+    traceStep: number;
+  };
+  mechanism: AttributionMechanism;
+}
+
+export interface AdaptationEvidenceRef {
+  episodeId: string;
+  selectedFeedbackId?: string | null;
+}
+
+export type AdaptationTarget =
+  | { kind: "unusual_input"; reason: string }
+  | { kind: "assumption"; key: string; replacement: JsonValue }
+  | {
+      kind: "procedure_scope";
+      procedureId: string;
+      expectedVersion: number;
+      condition: JsonValue;
+      learnedFrom: string;
+    }
+  | {
+      kind: "procedure_replacement";
+      incumbentId: string;
+      incumbentVersion: number;
+      challenger: JsonValue;
+    }
+  | {
+      kind: "concept_revision";
+      conceptId: string;
+      expectedVersion: number;
+      revisedDescription: string;
+    };
+
+export interface AdaptationPlanInput {
+  idempotencyKey: string;
+  analysis: Omit<FailureAnalysisInput, "idempotencyKey">;
+  attribution: AttributionSelector;
+  evidence: AdaptationEvidenceRef[];
+  target: AdaptationTarget;
+  createdAt: number;
+}
+
+export interface ApplyAdaptationInput {
+  planId: string;
+  idempotencyKey: string;
+  appliedAt: number;
+}
+
+export type AttributionConfidence =
+  "inconclusive" | "low" | "medium" | "high" | "certain";
+
+export interface CreditAttribution {
+  suspect: AttributionSelector["suspect"];
+  mechanism: AttributionMechanism;
+  confidence: AttributionConfidence;
+  score: number;
+  decisive: boolean;
+  evidence: JsonValue[];
+  limitations: JsonValue[];
+  provenance: {
+    episodeIds: string[];
+    details: string[];
+  };
+  attributionCost: number;
+  totalCost: number;
+  attributionCostRatio: number;
+}
+
+export interface AdaptationEvidenceGate {
+  verifiedEpisodes: number;
+  distinctSources: number;
+  strongestTier?: "Hard" | "Consensus" | "Deferred" | null;
+  challengerBeatsIncumbent: boolean;
+  corroborated: boolean;
+  offline: boolean;
+}
+
+export type AdaptationAction =
+  | { kind: "record_only"; reason: string }
+  | { kind: "fix_assumption"; key: string; replacement: JsonValue }
+  | {
+      kind: "narrow_scope";
+      procedureId: string;
+      expectedVersion: number;
+      condition: JsonValue;
+      learnedFrom: string;
+    }
+  | {
+      kind: "replace_procedure";
+      incumbentId: string;
+      incumbentVersion: number;
+      challenger: JsonValue;
+    }
+  | {
+      kind: "revise_concept_offline";
+      conceptId: string;
+      expectedVersion: number;
+      revisedDescription: string;
+      supportingEpisodes: number;
+    }
+  | { kind: "schedule_test"; reason: string };
+
+export type AdaptationKnowledgeRef =
+  | { kind: "concept"; id: string }
+  | { kind: "procedure"; id: string }
+  | { kind: "relationship"; id: string };
+
+export interface AdaptationReconciliationEntry {
+  knowledge: AdaptationKnowledgeRef;
+  depth: number;
+  expectedVersion: number;
+  previousLifecycle: string;
+  nextLifecycle: string;
+  outcome:
+    "preserved_by_alternative_support" | "mark_stale" | "mark_under_review";
+}
+
+export interface AdaptationReconciliationPlan {
+  changed: AdaptationKnowledgeRef;
+  entries: AdaptationReconciliationEntry[];
+}
+
+export interface AdaptationPlan {
+  id: string;
+  idempotencyKey: string;
+  analysisEpisodeId: string;
+  attribution: CreditAttribution;
+  evidence: AdaptationEvidenceRef[];
+  evidenceGate: AdaptationEvidenceGate;
+  target: AdaptationTarget;
+  action: AdaptationAction;
+  rationale: string;
+  mutationScope: "online_narrow" | "offline_broad" | "no_graph_change";
+  reconciliation?: AdaptationReconciliationPlan | null;
+  createdAt: number;
+}
+
+export type AdaptationOutcome =
+  | { kind: "no_graph_change" }
+  | {
+      kind: "procedure_updated";
+      procedureId: string;
+      previousVersion: number;
+      currentVersion: number;
+    }
+  | { kind: "concept_updated"; conceptId: string };
+
+export interface AdaptationReconciliationReceipt {
+  updated: AdaptationKnowledgeRef[];
+  preserved: AdaptationKnowledgeRef[];
+}
+
+export interface AdaptationReceipt {
+  planId: string;
+  idempotencyKey: string;
+  outcome: AdaptationOutcome;
+  reconciliation?: AdaptationReconciliationReceipt | null;
+  evidence: AdaptationEvidenceRef[];
+  appliedAt: number;
+}
+
+export interface AdaptationRecord {
+  plan: AdaptationPlan;
+  receipt?: AdaptationReceipt | null;
+}
+
+export interface ClaimImplication {
+  predicate: string;
+  value: JsonValue;
+}
+
+export interface ClaimScopeAssignment {
+  feature: string;
+  value: JsonValue;
+  learnedFrom: string;
+}
+
+export interface ContradictionClaim {
+  id: string;
+  statement: string;
+  implication: ClaimImplication;
+  supportingEpisodes: string[];
+  scope: ClaimScopeAssignment[];
+}
+
+export interface DemonstratedFeature {
+  feature: string;
+  leftValue: JsonValue;
+  leftEpisode: string;
+  rightValue: JsonValue;
+  rightEpisode: string;
+}
+
+export interface ContradictionRefinement {
+  left: ContradictionClaim;
+  right: ContradictionClaim;
+  discriminator: DemonstratedFeature;
+}
+
+export interface Contradiction {
+  id: number;
+  left: ContradictionClaim;
+  right: ContradictionClaim;
+  status: "Held" | "Refined";
+  refinement?: ContradictionRefinement | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface RecordContradictionInput {
+  left: ContradictionClaim;
+  right: ContradictionClaim;
+  createdAt: number;
+}
+
+export interface RefineContradictionInput {
+  contradictionId: number;
+  discriminator: DemonstratedFeature;
+  updatedAt: number;
+}
+
+export type ClaimUncertainty =
+  | { status: "certain" }
+  | { status: "held_contradictions"; contradictionIds: number[] };
+
 export interface RpcTransport {
   request<T>(method: string, params: unknown): Promise<T>;
   close?(): void;
@@ -49,7 +323,7 @@ export interface TeacherRequestWire {
 }
 
 export interface ProposalProvenanceWire {
-  provider: "claude" | "openai" | "ollama" | "human";
+  provider: "claude" | "codex" | "openai" | "ollama" | "human";
   teacher: string;
   model?: string;
   requestId: string;

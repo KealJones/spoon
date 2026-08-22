@@ -1,13 +1,15 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use ekg_core::{
-    ContractCheckResult, EkgError, Episode, EpisodeCost, EpisodeId, EscalationRung, Evaluation,
-    Procedure, ProcedureId, ReasoningTrace, TraceStep, TraceStepStatus, Value, VerifiabilityTier,
+    Concept, ConceptId, ContractCheckResult, EkgError, Episode, EpisodeCost, EpisodeId,
+    EscalationRung, Evaluation, Lifecycle, ObservedFact, Procedure, ProcedureId, ReasoningTrace,
+    Relationship, RelationshipId, TraceStep, TraceStepStatus, Value, VerifiabilityTier,
 };
-use ekg_episode::EpisodeStore;
+use ekg_episode::{EpisodeFeedback, EpisodeStore};
 use ekg_exec::{ConditionCheckStatus, Evaluator, ExecStepStatus, ExecTrace};
 use ekg_graph::{GraphError, KnowledgeStore};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 use crate::evaluate_deterministic;
@@ -20,6 +22,12 @@ pub enum EngineError {
     Core(#[from] EkgError),
     #[error(transparent)]
     Serialization(#[from] serde_json::Error),
+    #[error(transparent)]
+    Credit(#[from] ekg_credit::CreditError),
+    #[error(transparent)]
+    Adapt(#[from] ekg_adapt::AdaptError),
+    #[error(transparent)]
+    Sqlite(#[from] rusqlite::Error),
     #[error("{0}")]
     InvalidInput(String),
     #[error("episode {0} has no replayable execution trace")]
@@ -56,16 +64,42 @@ pub struct Engine {
     pub(crate) episodes: EpisodeStore,
     pub(crate) max_steps: u32,
     pub(crate) pending_cycles: HashMap<crate::CycleId, crate::cycle::PendingCycle>,
+    pub(crate) adaptations: crate::adaptation::AdaptationStore,
+    pub(crate) credit_analyses: crate::credit::CreditAnalysisStore,
+    pub(crate) contradictions: ekg_adapt::ContradictionStore,
+    pub(crate) lesson_stages: crate::lesson::LessonStageStore,
+    pub(crate) runtime: crate::runtime::RuntimeStore,
+    pub(crate) trust: crate::trust::TrustLedger,
+    pub(crate) instance_id: uuid::Uuid,
+    pub(crate) admin_enabled: bool,
 }
 
 impl Engine {
     pub fn open(path: &str) -> Result<Self, EngineError> {
-        Ok(Self {
+        let mut engine = Self {
             graph: KnowledgeStore::new(path)?,
             episodes: EpisodeStore::new(path)?,
             max_steps: 1_000_000,
             pending_cycles: HashMap::new(),
-        })
+            adaptations: crate::adaptation::AdaptationStore::open(path)?,
+            credit_analyses: crate::credit::CreditAnalysisStore::open(path)?,
+            contradictions: ekg_adapt::ContradictionStore::open(path)?,
+            lesson_stages: crate::lesson::LessonStageStore::open(path)?,
+            runtime: crate::runtime::RuntimeStore::open(path)?,
+            trust: crate::trust::TrustLedger::open(path)?,
+            instance_id: uuid::Uuid::new_v4(),
+            admin_enabled: false,
+        };
+        // An adaptation stage is durable proof that authorization (including
+        // any one-shot offline capability) was consumed before mutation began.
+        // Finish those exact staged requests before accepting new work.
+        engine.recover_pending_episode_sagas()?;
+        engine.recover_pending_feedback_sagas()?;
+        engine.recover_pending_cycles()?;
+        engine.recover_pending_lessons()?;
+        engine.recover_pending_adaptations()?;
+        engine.reconcile_observed_fact_contradictions()?;
+        Ok(engine)
     }
 
     pub fn in_memory() -> Result<Self, EngineError> {
@@ -74,7 +108,27 @@ impl Engine {
             episodes: EpisodeStore::in_memory()?,
             max_steps: 1_000_000,
             pending_cycles: HashMap::new(),
+            adaptations: crate::adaptation::AdaptationStore::in_memory()?,
+            credit_analyses: crate::credit::CreditAnalysisStore::in_memory()?,
+            contradictions: ekg_adapt::ContradictionStore::in_memory()?,
+            lesson_stages: crate::lesson::LessonStageStore::in_memory()?,
+            runtime: crate::runtime::RuntimeStore::in_memory()?,
+            trust: crate::trust::TrustLedger::in_memory()?,
+            instance_id: uuid::Uuid::new_v4(),
+            admin_enabled: false,
         })
+    }
+
+    pub fn in_memory_with_admin(secret: &str) -> Result<Self, EngineError> {
+        let mut engine = Self::in_memory()?;
+        engine.enable_admin(secret)?;
+        Ok(engine)
+    }
+
+    pub fn open_with_admin(path: &str, secret: &str) -> Result<Self, EngineError> {
+        let mut engine = Self::open(path)?;
+        engine.enable_admin(secret)?;
+        Ok(engine)
     }
 
     pub fn with_max_steps(mut self, max_steps: u32) -> Self {
@@ -82,12 +136,225 @@ impl Engine {
         self
     }
 
-    pub fn graph(&self) -> &KnowledgeStore {
-        &self.graph
+    pub fn graph(&self) -> crate::GraphView<'_> {
+        crate::GraphView { store: &self.graph }
     }
 
-    pub fn episodes(&self) -> &EpisodeStore {
-        &self.episodes
+    pub fn episodes(&self) -> crate::EpisodeView<'_> {
+        crate::EpisodeView {
+            store: &self.episodes,
+        }
+    }
+
+    pub fn enable_admin(&mut self, secret: &str) -> Result<(), EngineError> {
+        self.runtime.configure_or_verify_admin(secret)?;
+        self.admin_enabled = true;
+        Ok(())
+    }
+
+    pub(crate) fn require_admin(&self) -> Result<(), EngineError> {
+        if self.admin_enabled {
+            Ok(())
+        } else {
+            Err(EngineError::InvalidInput(
+                "engine admin authority is required for raw persistence mutation".into(),
+            ))
+        }
+    }
+
+    pub fn admin_insert_concept(&self, concept: &Concept) -> Result<(), EngineError> {
+        self.require_admin()?;
+        Ok(self.graph.insert_concept(concept)?)
+    }
+
+    pub fn admin_update_concept(&self, concept: &Concept) -> Result<(), EngineError> {
+        self.require_admin()?;
+        Ok(self.graph.update_concept(concept)?)
+    }
+
+    pub fn admin_revise_concept(
+        &self,
+        concept: &Concept,
+        expected_version: u32,
+    ) -> Result<u32, EngineError> {
+        self.require_admin()?;
+        Ok(self.graph.revise_concept(concept, expected_version)?)
+    }
+
+    pub fn admin_delete_concept(&self, id: ConceptId) -> Result<(), EngineError> {
+        self.require_admin()?;
+        Ok(self.graph.delete_concept(id)?)
+    }
+
+    pub fn admin_insert_relationship(
+        &self,
+        relationship: &Relationship,
+    ) -> Result<(), EngineError> {
+        self.require_admin()?;
+        Ok(self.graph.insert_relationship(relationship)?)
+    }
+
+    pub fn admin_update_relationship(
+        &self,
+        relationship: &Relationship,
+    ) -> Result<(), EngineError> {
+        self.require_admin()?;
+        Ok(self.graph.update_relationship(relationship)?)
+    }
+
+    pub fn admin_revise_relationship(
+        &self,
+        relationship: &Relationship,
+        expected_version: u32,
+    ) -> Result<u32, EngineError> {
+        self.require_admin()?;
+        Ok(self
+            .graph
+            .revise_relationship(relationship, expected_version)?)
+    }
+
+    pub fn admin_delete_relationship(&self, id: RelationshipId) -> Result<(), EngineError> {
+        self.require_admin()?;
+        Ok(self.graph.delete_relationship(id)?)
+    }
+
+    pub fn admin_insert_procedure(&self, procedure: &Procedure) -> Result<(), EngineError> {
+        self.require_admin()?;
+        Ok(self.graph.insert_procedure(procedure)?)
+    }
+
+    pub fn admin_update_procedure(&self, procedure: &Procedure) -> Result<(), EngineError> {
+        self.require_admin()?;
+        Ok(self.graph.update_procedure(procedure)?)
+    }
+
+    pub fn admin_revise_procedure(
+        &self,
+        procedure: &Procedure,
+        expected_version: u32,
+    ) -> Result<(), EngineError> {
+        self.require_admin()?;
+        Ok(self.graph.revise_procedure(procedure, expected_version)?)
+    }
+
+    pub fn admin_delete_procedure(&self, id: ProcedureId) -> Result<(), EngineError> {
+        self.require_admin()?;
+        Ok(self.graph.delete_procedure(id)?)
+    }
+
+    pub fn admin_insert_episode(&self, episode: &Episode) -> Result<(), EngineError> {
+        self.require_admin()?;
+        Ok(self.episodes.insert(episode)?)
+    }
+
+    pub fn admin_append_feedback(
+        &self,
+        feedback: &EpisodeFeedback,
+    ) -> Result<EpisodeFeedback, EngineError> {
+        self.require_admin()?;
+        Ok(self.episodes.append_feedback(feedback)?)
+    }
+
+    /// Persists a strong verifier observation and binds authority to the exact
+    /// feedback bytes. This is deliberately separate from raw/admin feedback:
+    /// callers cannot promote a row merely by choosing a strong tier enum.
+    pub fn record_authenticated_verifier_feedback(
+        &self,
+        feedback: &EpisodeFeedback,
+        verifier_identity: &str,
+    ) -> Result<EpisodeFeedback, EngineError> {
+        self.require_admin()?;
+        self.runtime.stage_feedback_saga(
+            &feedback.id.to_string(),
+            &serde_json::to_string(feedback)?,
+            verifier_identity,
+        )?;
+        self.finish_authenticated_feedback_saga(feedback, verifier_identity)
+    }
+
+    pub fn record_external_feedback(
+        &self,
+        feedback: &EpisodeFeedback,
+    ) -> Result<EpisodeFeedback, EngineError> {
+        if feedback.evaluation.tier != VerifiabilityTier::Deferred {
+            return Err(EngineError::InvalidInput(
+                "raw external feedback must enter the engine as Deferred evidence".into(),
+            ));
+        }
+        Ok(self.episodes.append_feedback(feedback)?)
+    }
+
+    /// Records a verifier-attested semantic observation. Unlike raw/admin
+    /// episode insertion, this creates exact episode and fact receipts; its
+    /// verifier identity and scoped-environment digest are part of the signed
+    /// immutable evidence. The caller still needs local admin authority:
+    /// imported trust never transfers automatically.
+    pub fn record_authenticated_observation(
+        &self,
+        predicate: impl Into<String>,
+        value: Value,
+        scope: BTreeMap<String, Value>,
+        evaluation: Evaluation,
+        verifier_identity: &str,
+    ) -> Result<Episode, EngineError> {
+        self.require_admin()?;
+        if verifier_identity.trim().is_empty() {
+            return Err(EngineError::InvalidInput(
+                "authenticated verifier identity must be non-empty".into(),
+            ));
+        }
+        if !matches!(
+            evaluation.tier,
+            VerifiabilityTier::Hard | VerifiabilityTier::Consensus
+        ) {
+            return Err(EngineError::InvalidInput(
+                "authenticated observations must use Hard or Consensus evidence".into(),
+            ));
+        }
+        let predicate = predicate.into();
+        let mut episode = Episode::new(format!("authenticated observation: {predicate}"));
+        episode.action = Some(format!(
+            "observation:authenticated-verifier:{}",
+            verifier_identity.trim()
+        ));
+        episode.context.environment = scope.clone();
+        episode.observed_result = Some(value.clone());
+        episode.evaluation = Some(evaluation);
+        episode
+            .observed_facts
+            .push(ObservedFact::new(predicate, value, scope));
+        normalize_observed_facts(&mut episode, Some(verifier_identity));
+        self.persist_engine_episode(&episode)?;
+        Ok(episode)
+    }
+
+    /// Returns a durable Engine receipt only when this exact persisted episode
+    /// was evaluated by the Engine at a strong verification tier.
+    pub fn trust_receipt_for_episode(
+        &self,
+        episode: &Episode,
+    ) -> Result<Option<crate::TrustReceipt>, EngineError> {
+        self.trust.receipt_for_episode(episode)
+    }
+
+    /// Looks up the exact receipt for one immutable observed fact. The fact
+    /// must be the embedded value from its source episode; reconstructed or
+    /// altered values do not match its digest.
+    pub fn trust_receipt_for_fact(
+        &self,
+        episode: &Episode,
+        fact: &ObservedFact,
+    ) -> Result<Option<crate::TrustReceipt>, EngineError> {
+        self.trust.verified_fact(episode, fact)
+    }
+
+    /// Returns the exact verifier receipt for authenticated late feedback.
+    pub fn trust_receipt_for_feedback(
+        &self,
+        feedback: &EpisodeFeedback,
+    ) -> Result<Option<crate::TrustReceipt>, EngineError> {
+        self.trust
+            .verified_feedback(feedback, feedback.evaluation.tier)
     }
 
     pub fn execute_procedure(
@@ -100,6 +367,12 @@ impl Engine {
             .graph
             .get_procedure(procedure_id)?
             .ok_or_else(|| EkgError::NotFound(format!("procedure {procedure_id}")))?;
+        if !is_current_executable(procedure.lifecycle) {
+            return Err(EngineError::InvalidInput(format!(
+                "procedure {procedure_id} is not executable in lifecycle {:?}",
+                procedure.lifecycle
+            )));
+        }
         let args = bind_inputs(&procedure, &inputs, None)?;
         let mut evaluator = self.current_evaluator()?;
         let attempt = evaluator.exec_procedure_captured(&procedure_id, args);
@@ -108,6 +381,7 @@ impl Engine {
             Ok(value) => {
                 let episode = self.record_execution(
                     &procedure,
+                    &inputs,
                     prediction,
                     Some(value.clone()),
                     &attempt.trace,
@@ -123,6 +397,7 @@ impl Engine {
             Err(source) => {
                 let episode = self.record_execution(
                     &procedure,
+                    &inputs,
                     prediction,
                     None,
                     &attempt.trace,
@@ -190,14 +465,18 @@ impl Engine {
     pub(crate) fn current_evaluator(&self) -> Result<Evaluator, EngineError> {
         let mut evaluator = Evaluator::new().with_budget(self.max_steps);
         for procedure in self.graph.list_procedures()? {
-            evaluator.register_procedure(procedure);
+            if is_current_executable(procedure.lifecycle) {
+                evaluator.register_procedure(procedure);
+            }
         }
         Ok(evaluator)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn record_execution(
         &self,
         procedure: &Procedure,
+        inputs: &BTreeMap<String, Value>,
         prediction: Option<Value>,
         observed: Option<Value>,
         trace: &ExecTrace,
@@ -208,6 +487,7 @@ impl Engine {
         if let Some(concept) = procedure.concept {
             episode.context.entities.push(concept);
         }
+        episode.context.environment = inputs.clone();
         episode.prediction = prediction.clone();
         episode.action = Some(format!("procedure:{}@{}", procedure.id, procedure.version));
         episode.observed_result = observed.clone();
@@ -221,6 +501,20 @@ impl Engine {
             (None, Some(expected), Some(actual)) => Some(evaluate_deterministic(expected, actual)),
             _ => None,
         };
+        if episode.evaluation.as_ref().is_some_and(|evaluation| {
+            evaluation.success
+                && matches!(
+                    evaluation.tier,
+                    VerifiabilityTier::Hard | VerifiabilityTier::Consensus
+                )
+        }) && let Some(value) = observed
+        {
+            episode.observed_facts.push(observed_fact_for_procedure(
+                procedure,
+                value.clone(),
+                inputs.clone(),
+            ));
+        }
         episode.reasoning_trace = reasoning_trace(trace);
         episode.execution_trace = Some(serde_json::to_value(trace)?);
         episode.cost = EpisodeCost {
@@ -228,9 +522,281 @@ impl Engine {
             steps_taken: trace.len() as u32,
             budget_spent: f64::from(steps_used),
         };
-        self.episodes.insert(&episode)?;
+        normalize_observed_facts(&mut episode, None);
+        self.persist_engine_episode(&episode)?;
         Ok(episode)
     }
+
+    pub(crate) fn persist_engine_episode(&self, episode: &Episode) -> Result<(), EngineError> {
+        let mut episode = episode.clone();
+        let verifier = authenticated_observation_verifier(&episode).map(str::to_owned);
+        normalize_observed_facts(&mut episode, verifier.as_deref());
+        validate_observed_facts(&episode)?;
+        self.runtime.stage_episode_saga(
+            &episode.id.to_string(),
+            &serde_json::to_string(&episode)?,
+            None,
+        )?;
+        self.finish_engine_episode_saga(&episode)?;
+        Ok(())
+    }
+
+    pub(crate) fn persist_engine_episode_with_pending(
+        &self,
+        episode: &Episode,
+        cycle_id: crate::CycleId,
+        pending: &crate::cycle::PendingCycle,
+    ) -> Result<(), EngineError> {
+        let mut episode = episode.clone();
+        let verifier = authenticated_observation_verifier(&episode).map(str::to_owned);
+        normalize_observed_facts(&mut episode, verifier.as_deref());
+        validate_observed_facts(&episode)?;
+        let pending_json = serde_json::to_string(pending)?;
+        self.runtime.stage_episode_saga(
+            &episode.id.to_string(),
+            &serde_json::to_string(&episode)?,
+            Some((cycle_id, self.instance_id, &pending_json)),
+        )?;
+        self.finish_engine_episode_saga(&episode)
+    }
+
+    fn recover_pending_episode_sagas(&self) -> Result<(), EngineError> {
+        for episode_json in self.runtime.pending_episode_sagas()? {
+            let episode: Episode = serde_json::from_str(&episode_json)?;
+            validate_observed_facts(&episode)?;
+            self.finish_engine_episode_saga(&episode)?;
+        }
+        Ok(())
+    }
+
+    fn recover_pending_feedback_sagas(&self) -> Result<(), EngineError> {
+        for (feedback_json, verifier_identity) in self.runtime.pending_feedback_sagas()? {
+            let feedback: EpisodeFeedback = serde_json::from_str(&feedback_json)?;
+            self.finish_authenticated_feedback_saga(&feedback, &verifier_identity)?;
+        }
+        Ok(())
+    }
+
+    fn finish_authenticated_feedback_saga(
+        &self,
+        feedback: &EpisodeFeedback,
+        verifier_identity: &str,
+    ) -> Result<EpisodeFeedback, EngineError> {
+        let stored = self.episodes.append_feedback(feedback)?;
+        self.trust
+            .mint_authenticated_feedback(&stored, verifier_identity)?;
+        self.runtime
+            .complete_feedback_saga(&stored.id.to_string())?;
+        Ok(stored)
+    }
+
+    fn finish_engine_episode_saga(&self, episode: &Episode) -> Result<(), EngineError> {
+        match self.episodes.get(episode.id) {
+            Ok(stored) if serde_json::to_vec(&stored)? == serde_json::to_vec(episode)? => {}
+            Ok(_) => {
+                return Err(EngineError::InvalidInput(format!(
+                    "episode persistence saga conflicts with existing episode {}",
+                    episode.id
+                )));
+            }
+            Err(EkgError::NotFound(_)) => self.episodes.insert(episode)?,
+            Err(error) => return Err(error.into()),
+        }
+        if let Some(verifier) = authenticated_observation_verifier(episode) {
+            self.trust.mint_authenticated_episode(episode, verifier)?;
+        } else {
+            self.trust.mint_engine_episode(episode)?;
+        }
+        self.trust.mint_episode_facts(episode)?;
+        // A saga remains until every derived authority item and contradiction
+        // has been written, so a restart completes this exact immutable work.
+        self.detect_contradictions_for_trusted_episode(episode)?;
+        self.runtime
+            .complete_episode_saga(&episode.id.to_string())?;
+        Ok(())
+    }
+
+    pub(crate) fn observed_fact_for_procedure(
+        &self,
+        procedure: &Procedure,
+        value: Value,
+        scope: BTreeMap<String, Value>,
+    ) -> ObservedFact {
+        observed_fact_for_procedure(procedure, value, scope)
+    }
+
+    fn reconcile_observed_fact_contradictions(&self) -> Result<(), EngineError> {
+        for episode in self.episodes.list_recent(u32::MAX)? {
+            self.detect_contradictions_for_episode(&episode)?;
+        }
+        Ok(())
+    }
+
+    fn detect_contradictions_for_episode(&self, episode: &Episode) -> Result<(), EngineError> {
+        if episode.observed_facts.is_empty() || self.trust.receipt_for_episode(episode)?.is_none() {
+            return Ok(());
+        }
+        self.detect_contradictions_for_trusted_episode(episode)
+    }
+
+    fn detect_contradictions_for_trusted_episode(
+        &self,
+        episode: &Episode,
+    ) -> Result<(), EngineError> {
+        for fact in &episode.observed_facts {
+            if self.trust.verified_fact(episode, fact)?.is_none() {
+                continue;
+            }
+            for prior in self.episodes.find_by_observed_predicate(&fact.predicate)? {
+                if prior.id == episode.id || self.trust.receipt_for_episode(&prior)?.is_none() {
+                    continue;
+                }
+                for prior_fact in prior
+                    .observed_facts
+                    .iter()
+                    .filter(|candidate| candidate.predicate == fact.predicate)
+                {
+                    if self.trust.verified_fact(&prior, prior_fact)?.is_none() {
+                        continue;
+                    }
+                    if prior_fact.value == fact.value {
+                        continue;
+                    }
+                    let left = claim_from_observed_fact(&prior, prior_fact);
+                    let right = claim_from_observed_fact(episode, fact);
+                    let contradiction = self.contradictions.record(
+                        left,
+                        right,
+                        &self.episodes,
+                        episode.created_at,
+                    )?;
+                    let demonstrated = prior_fact
+                        .scope
+                        .iter()
+                        .filter_map(|(feature, left_value)| {
+                            fact.scope
+                                .get(feature)
+                                .filter(|right_value| *right_value != left_value)
+                                .map(|right_value| {
+                                    (feature.clone(), left_value.clone(), right_value.clone())
+                                })
+                        })
+                        .collect::<Vec<_>>();
+                    // A unique recorded discriminator is enough to split the
+                    // two exact observations. Multiple correlated differences
+                    // remain held until further evidence identifies which
+                    // feature actually controls the claim.
+                    if contradiction.status == ekg_adapt::ContradictionStatus::Held
+                        && demonstrated.len() == 1
+                    {
+                        let (feature, left_value, right_value) = &demonstrated[0];
+                        let discriminator = ekg_adapt::DemonstratedFeature::new(
+                            feature,
+                            left_value.clone(),
+                            prior.id,
+                            right_value.clone(),
+                            episode.id,
+                        )?;
+                        self.contradictions.refine(
+                            contradiction.id,
+                            discriminator,
+                            &self.episodes,
+                            episode.created_at,
+                        )?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+pub(crate) fn observed_fact_for_procedure(
+    procedure: &Procedure,
+    value: Value,
+    scope: BTreeMap<String, Value>,
+) -> ObservedFact {
+    match procedure.concept {
+        Some(concept) => ObservedFact::for_concept(concept, value, scope),
+        None => ObservedFact::for_procedure(procedure.id, value, scope),
+    }
+}
+
+fn claim_from_observed_fact(episode: &Episode, fact: &ObservedFact) -> ekg_adapt::Claim {
+    ekg_adapt::Claim::new(
+        format!("observed:{}", fact.id),
+        format!("{} = {}", fact.predicate, fact.value),
+        ekg_adapt::Implication::new(&fact.predicate, fact.value.clone()),
+        vec![episode.id],
+    )
+}
+
+fn validate_observed_facts(episode: &Episode) -> Result<(), EngineError> {
+    let mut values = HashMap::<&str, &Value>::new();
+    for fact in &episode.observed_facts {
+        if fact.predicate.trim().is_empty()
+            || fact.predicate.chars().count() > 512
+            || fact.predicate.chars().any(char::is_control)
+        {
+            return Err(EngineError::InvalidInput(
+                "observed-fact predicates must be non-empty, bounded, and control-free".into(),
+            ));
+        }
+        if let Some(existing) = values.insert(&fact.predicate, &fact.value)
+            && existing != &fact.value
+        {
+            return Err(EngineError::InvalidInput(format!(
+                "episode {} contains conflicting values for observed predicate {:?}",
+                episode.id, fact.predicate
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn normalize_observed_facts(episode: &mut Episode, verifier: Option<&str>) {
+    let tier = episode
+        .evaluation
+        .as_ref()
+        .map(|evaluation| evaluation.tier);
+    for (ordinal, fact) in episode.observed_facts.iter_mut().enumerate() {
+        if fact.id.is_empty() {
+            fact.id = format!("{}:{ordinal}", episode.id);
+        }
+        fact.source_episode.get_or_insert(episode.id);
+        if fact.verifier.is_none() {
+            fact.verifier = verifier.map(str::to_owned);
+        }
+        fact.tier = tier;
+        fact.environment_digest = Some(scope_digest(&fact.scope));
+    }
+}
+
+fn scope_digest(scope: &BTreeMap<String, Value>) -> String {
+    let bytes = serde_json::to_vec(scope).expect("BTreeMap<Value> must serialize");
+    let mut digest = Sha256::new();
+    digest.update(b"ekg:observed-fact-environment:v1\0");
+    digest.update(bytes);
+    format!("sha256:{:x}", digest.finalize())
+}
+
+fn authenticated_observation_verifier(episode: &Episode) -> Option<&str> {
+    episode
+        .action
+        .as_deref()?
+        .strip_prefix("observation:authenticated-verifier:")
+        .filter(|identity| !identity.trim().is_empty())
+}
+
+pub(crate) fn is_current_executable(lifecycle: Lifecycle) -> bool {
+    !matches!(
+        lifecycle,
+        Lifecycle::Invalid
+            | Lifecycle::Retired
+            | Lifecycle::Stale
+            | Lifecycle::Superseded
+            | Lifecycle::UnderReview
+    )
 }
 
 pub(crate) fn bind_inputs(

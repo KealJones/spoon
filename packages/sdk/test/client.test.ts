@@ -146,6 +146,28 @@ test("client maps every episode RPC method with exact params", async () => {
     limit: 10,
   });
   await client.replayEpisode("episode-1", { x: 9 });
+  await client.recordFeedback({
+    episodeId: "episode-1",
+    observedResult: "flat pancakes",
+    idempotencyKey: "flat-feedback-1",
+  });
+  const analysis = {
+    episodeId: "episode-1",
+    selectedFeedbackId: "feedback-1",
+    candidates: [
+      {
+        suspect: { procedure: "procedure-1", version: 1, traceStep: 0 },
+        priorScore: 0.8,
+        change: {
+          description: "replace multiplier",
+          replacement: { kind: "replace_body" },
+        },
+        mode: "deterministic" as const,
+      },
+    ],
+    budget: { topK: 1, maxReplays: 1, maxReplaySteps: 100 },
+  };
+  await client.analyzeFailure(analysis);
 
   assert.deepEqual(transport.calls, [
     { method: "episode.get", params: { episodeId: "episode-1" } },
@@ -163,6 +185,39 @@ test("client maps every episode RPC method with exact params", async () => {
     {
       method: "episode.replay",
       params: { episodeId: "episode-1", substitutions: { x: 9 } },
+    },
+    {
+      method: "feedback.record",
+      params: {
+        episodeId: "episode-1",
+        observedResult: "flat pancakes",
+        idempotencyKey: "flat-feedback-1",
+      },
+    },
+    { method: "credit.analyze", params: analysis },
+  ]);
+});
+
+test("client maps durable credit reads and explicit retry keys", async () => {
+  const transport = new RecordingTransport();
+  const client = new EkgClient(transport);
+  const analysis = {
+    episodeId: "episode-1",
+    candidates: [],
+    budget: { topK: 0, maxReplays: 0, maxReplaySteps: 0 },
+    idempotencyKey: "analysis-retry-1",
+  };
+
+  await client.analyzeFailure(analysis);
+  await client.getFailureAnalysis("analysis-1");
+  await client.getFailureAnalysisByKey("analysis-retry-1");
+
+  assert.deepEqual(transport.calls, [
+    { method: "credit.analyze", params: analysis },
+    { method: "credit.get", params: { analysisId: "analysis-1" } },
+    {
+      method: "credit.getByKey",
+      params: { idempotencyKey: "analysis-retry-1" },
     },
   ]);
 });
@@ -219,6 +274,222 @@ test("client maps cycle begin, resume, and abort with exact camelCase params", a
     {
       method: "cycle.abort",
       params: { cycleId: "cycle-2", reason: "provider unavailable" },
+    },
+  ]);
+});
+
+test("client maps adaptation plan, get, apply, and receipt RPCs with exact params", async () => {
+  const transport = new RecordingTransport();
+  const client = new EkgClient(transport);
+  const planInput = {
+    idempotencyKey: "flat-pancake-plan-1",
+    analysis: {
+      episodeId: "episode-1",
+      candidates: [],
+      budget: { topK: 1, maxReplays: 0, maxReplaySteps: 0 },
+    },
+    attribution: {
+      suspect: { procedure: "procedure-1", version: 1, traceStep: 0 },
+      mechanism: "contract_violation" as const,
+    },
+    evidence: [{ episodeId: "episode-1" }],
+    target: {
+      kind: "procedure_scope" as const,
+      procedureId: "procedure-1",
+      expectedVersion: 1,
+      condition: {
+        description: "batter contains active leavening",
+        check: { Var: "has_active_leavening" },
+      },
+      learnedFrom: "episode-1",
+    },
+    createdAt: 1_800_000_000,
+  };
+
+  await client.planAdaptation(planInput);
+  await client.getAdaptation("plan-1");
+  await client.applyAdaptation({
+    planId: "plan-1",
+    idempotencyKey: "flat-pancake-apply-1",
+    appliedAt: 1_800_000_001,
+  });
+
+  assert.deepEqual(transport.calls, [
+    { method: "adaptation.plan", params: planInput },
+    { method: "adaptation.get", params: { planId: "plan-1" } },
+    {
+      method: "adaptation.apply",
+      params: {
+        planId: "plan-1",
+        idempotencyKey: "flat-pancake-apply-1",
+        appliedAt: 1_800_000_001,
+      },
+    },
+  ]);
+});
+
+test("client maps contradiction RPCs with exact params", async () => {
+  const transport = new RecordingTransport();
+  const client = new EkgClient(transport);
+
+  await client.listContradictions();
+  await client.getContradiction(7);
+  const record = {
+    left: {
+      id: "left",
+      statement: "pancakes rise",
+      implication: { predicate: "pancakes-rise", value: true },
+      supportingEpisodes: ["episode-1"],
+      scope: [],
+    },
+    right: {
+      id: "right",
+      statement: "pancakes do not rise",
+      implication: { predicate: "pancakes-rise", value: false },
+      supportingEpisodes: ["episode-2"],
+      scope: [],
+    },
+    createdAt: 10,
+  };
+  const refinement = {
+    contradictionId: 7,
+    discriminator: {
+      feature: "ovenType",
+      leftValue: "convection",
+      leftEpisode: "episode-1",
+      rightValue: "conventional",
+      rightEpisode: "episode-2",
+    },
+    updatedAt: 11,
+  };
+  await client.recordContradiction(record);
+  await client.refineContradiction(refinement);
+  await client.getClaimUncertainty("recipe-plan");
+
+  assert.deepEqual(transport.calls, [
+    { method: "contradiction.list", params: {} },
+    { method: "contradiction.get", params: { contradictionId: 7 } },
+    { method: "contradiction.record", params: record },
+    { method: "contradiction.refine", params: refinement },
+    {
+      method: "contradiction.uncertainty",
+      params: { claimId: "recipe-plan" },
+    },
+  ]);
+});
+
+test("admin-enabled client injects auth only into privileged mutation calls", async () => {
+  const transport = new RecordingTransport();
+  const client = new EkgClient(transport, { adminToken: "bootstrap-secret" });
+
+  await client.createConcept({ name: "ADMIN_ONLY" });
+  await client.listConcepts();
+  await client.applyAdaptationOffline({
+    planId: "plan-1",
+    idempotencyKey: "offline-apply-1",
+    appliedAt: 1,
+  });
+  await client.recordContradiction({
+    left: {
+      id: "left",
+      statement: "left",
+      implication: { predicate: "p", value: true },
+      supportingEpisodes: ["episode-1"],
+      scope: [],
+    },
+    right: {
+      id: "right",
+      statement: "right",
+      implication: { predicate: "p", value: false },
+      supportingEpisodes: ["episode-2"],
+      scope: [],
+    },
+    createdAt: 2,
+  });
+  await client.refineContradiction({
+    contradictionId: 1,
+    discriminator: {
+      feature: "scope",
+      leftValue: "a",
+      leftEpisode: "episode-1",
+      rightValue: "b",
+      rightEpisode: "episode-2",
+    },
+    updatedAt: 3,
+  });
+
+  assert.deepEqual(transport.calls, [
+    {
+      method: "concept.create",
+      params: { name: "ADMIN_ONLY", adminToken: "bootstrap-secret" },
+    },
+    { method: "concept.list", params: {} },
+    {
+      method: "adaptation.applyOffline",
+      params: {
+        planId: "plan-1",
+        idempotencyKey: "offline-apply-1",
+        appliedAt: 1,
+        adminToken: "bootstrap-secret",
+      },
+    },
+    {
+      method: "contradiction.record",
+      params: {
+        left: {
+          id: "left",
+          statement: "left",
+          implication: { predicate: "p", value: true },
+          supportingEpisodes: ["episode-1"],
+          scope: [],
+        },
+        right: {
+          id: "right",
+          statement: "right",
+          implication: { predicate: "p", value: false },
+          supportingEpisodes: ["episode-2"],
+          scope: [],
+        },
+        createdAt: 2,
+        adminToken: "bootstrap-secret",
+      },
+    },
+    {
+      method: "contradiction.refine",
+      params: {
+        contradictionId: 1,
+        discriminator: {
+          feature: "scope",
+          leftValue: "a",
+          leftEpisode: "episode-1",
+          rightValue: "b",
+          rightEpisode: "episode-2",
+        },
+        updatedAt: 3,
+        adminToken: "bootstrap-secret",
+      },
+    },
+  ]);
+});
+
+test("feedback sends raw observation without caller-selected trust fields", async () => {
+  const transport = new RecordingTransport();
+  const client = new EkgClient(transport);
+
+  await client.recordFeedback({
+    episodeId: "episode-1",
+    observedResult: "flat pancakes",
+    idempotencyKey: "raw-feedback-1",
+  });
+
+  assert.deepEqual(transport.calls, [
+    {
+      method: "feedback.record",
+      params: {
+        episodeId: "episode-1",
+        observedResult: "flat pancakes",
+        idempotencyKey: "raw-feedback-1",
+      },
     },
   ]);
 });

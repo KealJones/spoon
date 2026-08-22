@@ -1,3 +1,6 @@
 pub mod store;
 
-pub use store::{EpisodeQuery, EpisodeStore};
+pub use store::{
+    CreditAggregateSnapshot, CreditElementAggregate, CreditElementRef, CreditEpisodeContribution,
+    CreditPairAggregate, EpisodeFeedback, EpisodeQuery, EpisodeStore, FeedbackSource,
+};

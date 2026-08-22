@@ -12,8 +12,9 @@ pub use concept::{Concept, ConceptId, Lifecycle, MutabilityClass};
 pub use contract::{Condition, Contract, CostEstimate};
 pub use episode::{
     AssembledContext, Assumption, ContextBudget, ContextEpisode, ContextProcedure,
-    ContextRelationship, ContractCheckResult, Episode, EpisodeCost, EpisodeId, EscalationRung,
-    Evaluation, Interpretation, KnowledgeCandidate, ReasoningTrace, TraceStep, TraceStepStatus,
+    ContextRefinement, ContextRelationship, ContractCheckResult, Episode, EpisodeCost, EpisodeId,
+    EscalationRung, Evaluation, Interpretation, KnowledgeCandidate, ObservedFact, ReasoningTrace,
+    TraceStep, TraceStepStatus,
 };
 pub use error::EkgError;
 pub use evidence::{Confidence, Evidence, ScopeCondition, Source, SourceKind, VerifiabilityTier};

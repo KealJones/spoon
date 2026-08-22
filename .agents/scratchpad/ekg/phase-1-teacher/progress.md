@@ -11,7 +11,7 @@
 - [x] Wire CLI teacher flow
 - [x] Pass Phase 1 end-to-end kitchen tests
 - [x] Pass formatting, lint, build, test, and independent audit
-- [ ] Commit Phase 1
+- [x] Commit Phase 1 at `d4fbe1e`
 
 ## TDD cycles
 

@@ -46,3 +46,51 @@ test("parses a natural-language cycle request", () => {
     situation: "what is double 7?",
   });
 });
+
+test("parses the explicit failure adaptation workflow", () => {
+  const request = { episodeId: "episode-1", candidates: [] };
+  assert.deepEqual(
+    parseCommand(["failure", "analyze", JSON.stringify(request)]),
+    { kind: "failure.analyze", request },
+  );
+  assert.deepEqual(parseCommand(["failure", "plan", JSON.stringify(request)]), {
+    kind: "failure.plan",
+    request,
+  });
+  assert.deepEqual(parseCommand(["failure", "apply", "plan-1"]), {
+    kind: "failure.apply",
+    planId: "plan-1",
+  });
+  assert.deepEqual(parseCommand(["failure", "apply-offline", "plan-1"]), {
+    kind: "failure.apply-offline",
+    planId: "plan-1",
+  });
+});
+
+test("parses adaptation and contradiction inspection", () => {
+  assert.deepEqual(parseCommand(["adaptation", "show", "plan-1"]), {
+    kind: "adaptation.show",
+    planId: "plan-1",
+  });
+  assert.deepEqual(parseCommand(["contradiction", "list"]), {
+    kind: "contradiction.list",
+  });
+  assert.deepEqual(parseCommand(["contradiction", "get", "42"]), {
+    kind: "contradiction.get",
+    contradictionId: 42,
+  });
+  const record = { left: { id: "left" }, right: { id: "right" } };
+  assert.deepEqual(
+    parseCommand(["contradiction", "record", JSON.stringify(record)]),
+    { kind: "contradiction.record", request: record },
+  );
+  const refinement = { contradictionId: 42, discriminator: { feature: "x" } };
+  assert.deepEqual(
+    parseCommand(["contradiction", "refine", JSON.stringify(refinement)]),
+    { kind: "contradiction.refine", request: refinement },
+  );
+  assert.deepEqual(
+    parseCommand(["contradiction", "uncertainty", "recipe-plan"]),
+    { kind: "contradiction.uncertainty", claimId: "recipe-plan" },
+  );
+});
