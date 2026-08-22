@@ -211,6 +211,19 @@ impl Engine {
             .evaluate_ranking(query, candidate_limit, holdout_examples)?)
     }
 
+    /// Compares lexical and local-semantic candidate coverage on complete,
+    /// held-out query groups. It is retrieval evidence only and cannot alter
+    /// belief, trust, or graph lifecycle state.
+    pub fn evaluate_semantic_recall(
+        &self,
+        candidate_limit: usize,
+        holdout_queries: usize,
+    ) -> Result<ekg_intuition::SemanticRecallEvaluation, EngineError> {
+        Ok(self
+            .intuition
+            .evaluate_semantic_recall(candidate_limit, holdout_queries)?)
+    }
+
     /// Retrieves graph-neighborhood candidates through a hard-bounded typed
     /// activation spread. The returned activation is relevance, not trust.
     pub fn activation_candidates(

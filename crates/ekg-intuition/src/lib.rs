@@ -13,6 +13,10 @@ use thiserror::Error;
 
 const VECTOR_DIMENSIONS: usize = 32;
 const MAX_QUERY_TERMS: usize = 64;
+const MAX_SEMANTIC_EXPANSION_TERMS: usize = 12;
+const MAX_SEMANTIC_SEED_DOCUMENTS: usize = 256;
+const MAX_SEMANTIC_EVALUATION_EXAMPLES: usize = 4_096;
+const SEMANTIC_EXPANSION_WEIGHT: f64 = 0.65;
 const MAX_RANKING_EVALUATION_HOLDOUT: usize = 256;
 const MAX_REPRESENTATION_TRAINING_HOLDOUT: usize = 256;
 
@@ -103,6 +107,27 @@ pub struct RankingEvaluation {
     pub created_at: i64,
 }
 
+/// A cross-query, time-split evaluation of local semantic candidate
+/// generation. The newest query groups are withheld as complete groups, and
+/// successful outcomes are used only to measure candidate-pool coverage.
+/// This measures recall availability, never claim truth or ranking quality.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SemanticRecallEvaluation {
+    pub id: i64,
+    pub candidate_limit: usize,
+    pub training_queries: u64,
+    pub held_out_queries: u64,
+    pub held_out_successes: u64,
+    pub lexical_scored_successes: u64,
+    pub semantic_scored_successes: u64,
+    /// True only when the semantic candidate pool covers strictly more
+    /// successful held-out choices than lexical matching, with at least one
+    /// disjoint training query group present.
+    pub semantic_improves_recall: bool,
+    pub created_at: i64,
+}
+
 /// An offline representation-training artifact. It is derived only from
 /// immutable supervision rows and never mutates graph truth or trust state.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -158,6 +183,8 @@ pub struct IntuitionMetrics {
     pub ranking_examples: u64,
     pub ranking_evaluations: u64,
     pub ranking_search_wins: u64,
+    pub semantic_recall_evaluations: u64,
+    pub semantic_recall_wins: u64,
     pub supervision_tasks: u64,
     pub grounded_tasks: u64,
     /// The observed share of supervision tasks that have an external
@@ -206,6 +233,14 @@ impl IntuitionStore {
                  FOREIGN KEY(document_id) REFERENCES recall_documents(id) ON DELETE CASCADE
              );
              CREATE INDEX IF NOT EXISTS idx_recall_terms_term ON recall_terms(term);
+             CREATE TABLE IF NOT EXISTS recall_semantic_terms (
+                 term TEXT NOT NULL,
+                 document_id TEXT NOT NULL,
+                 PRIMARY KEY(term, document_id),
+                 FOREIGN KEY(document_id) REFERENCES recall_documents(id) ON DELETE CASCADE
+             );
+             CREATE INDEX IF NOT EXISTS idx_recall_semantic_terms_term
+                 ON recall_semantic_terms(term);
              CREATE TABLE IF NOT EXISTS recall_ranking_examples (
                  id INTEGER PRIMARY KEY AUTOINCREMENT,
                  query TEXT NOT NULL,
@@ -234,6 +269,19 @@ impl IntuitionStore {
              );
              CREATE INDEX IF NOT EXISTS idx_recall_ranking_evaluations_query
                  ON recall_ranking_evaluations(query, id DESC);
+             CREATE TABLE IF NOT EXISTS recall_semantic_evaluations (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 candidate_limit INTEGER NOT NULL,
+                 training_queries INTEGER NOT NULL,
+                 held_out_queries INTEGER NOT NULL,
+                 held_out_successes INTEGER NOT NULL,
+                 lexical_scored_successes INTEGER NOT NULL,
+                 semantic_scored_successes INTEGER NOT NULL,
+                 semantic_improves_recall INTEGER NOT NULL,
+                 created_at INTEGER NOT NULL
+             );
+             CREATE INDEX IF NOT EXISTS idx_recall_semantic_evaluations_created
+                 ON recall_semantic_evaluations(created_at DESC);
              CREATE TABLE IF NOT EXISTS supervision_tasks (
                  id INTEGER PRIMARY KEY AUTOINCREMENT,
                  kind TEXT NOT NULL,
@@ -274,6 +322,7 @@ impl IntuitionStore {
         }
         let vector = embed(&document.text);
         let terms = tokenize(&document.text);
+        let semantic_terms = semantic_tokenize(&document.text);
         let transaction = self.conn.unchecked_transaction()?;
         transaction.execute(
             "INSERT INTO recall_documents
@@ -301,6 +350,16 @@ impl IntuitionStore {
         for term in terms {
             transaction.execute(
                 "INSERT OR IGNORE INTO recall_terms(term, document_id) VALUES (?1, ?2)",
+                params![term, document.id],
+            )?;
+        }
+        transaction.execute(
+            "DELETE FROM recall_semantic_terms WHERE document_id = ?1",
+            params![document.id],
+        )?;
+        for term in semantic_terms {
+            transaction.execute(
+                "INSERT OR IGNORE INTO recall_semantic_terms(term, document_id) VALUES (?1, ?2)",
                 params![term, document.id],
             )?;
         }
@@ -344,14 +403,32 @@ impl IntuitionStore {
         candidate_limit: usize,
         track_retrieval: bool,
     ) -> Result<Vec<RecallCandidate>, IntuitionError> {
+        self.candidates_for_query_mode(query, candidate_limit, track_retrieval, true)
+    }
+
+    fn candidates_for_query_mode(
+        &self,
+        query: &str,
+        candidate_limit: usize,
+        track_retrieval: bool,
+        include_semantic_expansion: bool,
+    ) -> Result<Vec<RecallCandidate>, IntuitionError> {
         if candidate_limit == 0 || candidate_limit > 1_024 {
             return Err(IntuitionError::Invalid(
                 "candidate limit must be 1..=1024".into(),
             ));
         }
-        let terms = tokenize(query);
-        if terms.is_empty() {
+        let semantic_features = if include_semantic_expansion {
+            self.semantic_features(query)?
+        } else {
+            direct_semantic_features(query)
+        };
+        if semantic_features.is_empty() {
             return Ok(Vec::new());
+        }
+        let mut terms = BTreeSet::new();
+        for term in semantic_features.keys() {
+            terms.extend(tokenize(term));
         }
         let terms_json = terms
             .iter()
@@ -359,7 +436,7 @@ impl IntuitionStore {
             .collect::<Vec<_>>()
             .join(",");
         let sql = format!(
-            "SELECT d.id, d.kind, d.text, d.vector_json, d.created_at,
+            "SELECT d.id, d.kind, d.text, d.created_at,
                     d.retrieval_count, COUNT(DISTINCT t.term)
              FROM recall_terms t
              JOIN recall_documents d ON d.id = t.document_id
@@ -371,24 +448,20 @@ impl IntuitionStore {
         let mut statement = self.conn.prepare(&sql)?;
         let rows = statement.query_map(params![candidate_limit as i64], |row| {
             let kind: String = row.get(1)?;
-            let vector_json: String = row.get(3)?;
             Ok((
                 row.get::<_, String>(0)?,
                 parse_kind(&kind),
                 row.get::<_, String>(2)?,
-                vector_json,
+                row.get::<_, i64>(3)?,
                 row.get::<_, i64>(4)?,
                 row.get::<_, i64>(5)?,
-                row.get::<_, i64>(6)?,
             ))
         })?;
         let now = unix_time();
-        let query_vector = embed(query);
         let mut candidates = Vec::new();
         for row in rows {
-            let (id, kind, text, vector_json, created_at, retrieval_count, matched) = row?;
-            let vector: Vec<f64> = serde_json::from_str(&vector_json)?;
-            let similarity = cosine(&query_vector, &vector);
+            let (id, kind, text, created_at, retrieval_count, matched) = row?;
+            let similarity = semantic_similarity(&semantic_features, &semantic_tokenize(&text));
             let age = now.saturating_sub(created_at).max(0) as f64;
             let recency = 1.0 / (1.0 + age / 86_400.0);
             let frequency = (retrieval_count.max(0) as f64 + 1.0).ln_1p();
@@ -625,6 +698,118 @@ impl IntuitionStore {
             )
             .optional()
             .map_err(IntuitionError::from)
+    }
+
+    /// Measures lexical and semantic candidate-pool coverage across complete,
+    /// chronologically held-out query groups. The local co-occurrence
+    /// representation is derived from indexed documents, never from these
+    /// outcome rows, and the inspected success count is hard bounded.
+    pub fn evaluate_semantic_recall(
+        &self,
+        candidate_limit: usize,
+        holdout_queries: usize,
+    ) -> Result<SemanticRecallEvaluation, IntuitionError> {
+        if candidate_limit == 0 || candidate_limit > 1_024 {
+            return Err(IntuitionError::Invalid(
+                "candidate limit must be 1..=1024".into(),
+            ));
+        }
+        if holdout_queries == 0 || holdout_queries > MAX_RANKING_EVALUATION_HOLDOUT {
+            return Err(IntuitionError::Invalid(format!(
+                "semantic evaluation holdout must be 1..={MAX_RANKING_EVALUATION_HOLDOUT}"
+            )));
+        }
+        let mut statement = self.conn.prepare(
+            "SELECT query FROM recall_ranking_examples
+             GROUP BY query
+             ORDER BY MAX(id) DESC, query ASC
+             LIMIT ?1",
+        )?;
+        let mut held_out_queries = statement
+            .query_map(params![holdout_queries as i64], |row| {
+                row.get::<_, String>(0)
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        if held_out_queries.is_empty() {
+            return Err(IntuitionError::Invalid(
+                "semantic evaluation requires ranking examples".into(),
+            ));
+        }
+        held_out_queries.sort();
+        let held_out_sql = quoted_terms(&held_out_queries);
+        let training_queries = self.conn.query_row(
+            &format!(
+                "SELECT COUNT(DISTINCT query) FROM recall_ranking_examples
+                 WHERE query NOT IN ({held_out_sql})"
+            ),
+            [],
+            |row| row.get::<_, i64>(0),
+        )? as u64;
+        let mut successes = self.conn.prepare(&format!(
+            "SELECT query, candidate_id FROM recall_ranking_examples
+             WHERE query IN ({held_out_sql}) AND used = 1 AND succeeded = 1
+             ORDER BY id DESC LIMIT {MAX_SEMANTIC_EVALUATION_EXAMPLES}"
+        ))?;
+        let successes = successes
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut pools = BTreeMap::new();
+        for query in &held_out_queries {
+            let lexical = self
+                .candidates_for_query_mode(query, candidate_limit, false, false)?
+                .into_iter()
+                .map(|candidate| candidate.id)
+                .collect::<BTreeSet<_>>();
+            let semantic = self
+                .candidates_for_query_mode(query, candidate_limit, false, true)?
+                .into_iter()
+                .map(|candidate| candidate.id)
+                .collect::<BTreeSet<_>>();
+            pools.insert(query.clone(), (lexical, semantic));
+        }
+        let held_out_successes = successes.len() as u64;
+        let mut lexical_scored_successes = 0u64;
+        let mut semantic_scored_successes = 0u64;
+        for (query, candidate_id) in successes {
+            let Some((lexical, semantic)) = pools.get(&query) else {
+                continue;
+            };
+            lexical_scored_successes += u64::from(lexical.contains(&candidate_id));
+            semantic_scored_successes += u64::from(semantic.contains(&candidate_id));
+        }
+        let semantic_improves_recall =
+            training_queries > 0 && semantic_scored_successes > lexical_scored_successes;
+        let created_at = unix_time();
+        self.conn.execute(
+            "INSERT INTO recall_semantic_evaluations
+                (candidate_limit, training_queries, held_out_queries,
+                 held_out_successes, lexical_scored_successes,
+                 semantic_scored_successes, semantic_improves_recall, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                candidate_limit as i64,
+                training_queries as i64,
+                held_out_queries.len() as i64,
+                held_out_successes as i64,
+                lexical_scored_successes as i64,
+                semantic_scored_successes as i64,
+                i64::from(semantic_improves_recall),
+                created_at,
+            ],
+        )?;
+        Ok(SemanticRecallEvaluation {
+            id: self.conn.last_insert_rowid(),
+            candidate_limit,
+            training_queries,
+            held_out_queries: held_out_queries.len() as u64,
+            held_out_successes,
+            lexical_scored_successes,
+            semantic_scored_successes,
+            semantic_improves_recall,
+            created_at,
+        })
     }
 
     /// Train a bounded, immutable representation artifact from supervision
@@ -869,6 +1054,17 @@ impl IntuitionStore {
             [],
             |row| row.get::<_, i64>(0),
         )?;
+        let semantic_recall_evaluations = self.conn.query_row(
+            "SELECT COUNT(*) FROM recall_semantic_evaluations",
+            [],
+            |row| row.get::<_, i64>(0),
+        )?;
+        let semantic_recall_wins = self.conn.query_row(
+            "SELECT COUNT(*) FROM recall_semantic_evaluations
+             WHERE semantic_improves_recall = 1",
+            [],
+            |row| row.get::<_, i64>(0),
+        )?;
         let supervision_tasks =
             self.conn
                 .query_row("SELECT COUNT(*) FROM supervision_tasks", [], |row| {
@@ -892,10 +1088,50 @@ impl IntuitionStore {
             ranking_examples: ranking_examples as u64,
             ranking_evaluations: ranking_evaluations as u64,
             ranking_search_wins: ranking_search_wins as u64,
+            semantic_recall_evaluations: semantic_recall_evaluations as u64,
+            semantic_recall_wins: semantic_recall_wins as u64,
             supervision_tasks: supervision_tasks as u64,
             grounded_tasks: grounded_tasks as u64,
             grounding_ratio,
         })
+    }
+
+    fn semantic_features(&self, query: &str) -> Result<BTreeMap<String, f64>, IntuitionError> {
+        let mut features = direct_semantic_features(query);
+        if features.is_empty() {
+            return Ok(features);
+        }
+        let query_terms = features.keys().cloned().collect::<Vec<_>>();
+        let query_sql = quoted_terms(&query_terms);
+        let mut statement = self.conn.prepare(&format!(
+            "WITH seed_documents AS (
+                 SELECT DISTINCT document_id FROM recall_semantic_terms
+                 WHERE term IN ({query_sql})
+                 ORDER BY document_id ASC
+                 LIMIT {MAX_SEMANTIC_SEED_DOCUMENTS}
+             )
+             SELECT term, COUNT(DISTINCT document_id) AS occurrences
+             FROM recall_semantic_terms
+             WHERE document_id IN (SELECT document_id FROM seed_documents)
+               AND term NOT IN ({query_sql})
+             GROUP BY term
+             ORDER BY occurrences DESC, term ASC
+             LIMIT {MAX_SEMANTIC_EXPANSION_TERMS}"
+        ))?;
+        let expansions = statement
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        let maximum_occurrences = expansions
+            .first()
+            .map(|(_, occurrences)| *occurrences as f64)
+            .unwrap_or(1.0);
+        for (term, occurrences) in expansions {
+            let weight = SEMANTIC_EXPANSION_WEIGHT * occurrences as f64 / maximum_occurrences;
+            features.entry(term).or_insert(weight);
+        }
+        Ok(features)
     }
 
     fn learned_weights(&self) -> Result<(f64, f64, f64, f64), IntuitionError> {
@@ -1087,6 +1323,54 @@ fn tokenize(text: &str) -> Vec<String> {
     terms.into_iter().collect()
 }
 
+/// Exact terms are kept separately from the prefix postings used for lexical
+/// recall. Their document co-occurrence is a compact local semantic signal:
+/// a query can reach a related document without a process-global model or
+/// network call.
+fn semantic_tokenize(text: &str) -> Vec<String> {
+    text.split(|character: char| !character.is_alphanumeric())
+        .map(str::to_lowercase)
+        .filter(|term| term.chars().count() >= 2)
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .take(MAX_QUERY_TERMS)
+        .collect()
+}
+
+fn direct_semantic_features(query: &str) -> BTreeMap<String, f64> {
+    semantic_tokenize(query)
+        .into_iter()
+        .map(|term| (term, 1.0))
+        .collect()
+}
+
+fn semantic_similarity(query_features: &BTreeMap<String, f64>, document_terms: &[String]) -> f64 {
+    let query_norm = query_features
+        .values()
+        .map(|weight| weight * weight)
+        .sum::<f64>()
+        .sqrt();
+    let document_norm = (document_terms.len() as f64).sqrt();
+    if query_norm == 0.0 || document_norm == 0.0 {
+        return 0.0;
+    }
+    let dot = document_terms
+        .iter()
+        .filter_map(|term| query_features.get(term))
+        .sum::<f64>();
+    dot / (query_norm * document_norm)
+}
+
+/// Terms originate from tokenizers that retain only alphanumeric characters,
+/// so this is safe SQL literal construction for bounded local query lists.
+fn quoted_terms(terms: &[String]) -> String {
+    terms
+        .iter()
+        .map(|term| format!("'{term}'"))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
 fn embed(text: &str) -> Vec<f64> {
     let mut vector = vec![0.0; VECTOR_DIMENSIONS];
     for term in tokenize(text) {
@@ -1105,10 +1389,6 @@ fn embed(text: &str) -> Vec<f64> {
         }
     }
     vector
-}
-
-fn cosine(left: &[f64], right: &[f64]) -> f64 {
-    left.iter().zip(right).map(|(a, b)| a * b).sum()
 }
 
 fn unix_time() -> i64 {
@@ -1155,6 +1435,101 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].id, "double");
         assert!(results[0].similarity > 0.5);
+    }
+
+    #[test]
+    fn local_semantic_cooccurrence_reaches_related_terms_without_hash_collisions() {
+        let store = IntuitionStore::in_memory().unwrap();
+        store
+            .index_document(&document(
+                "bridge",
+                RecallKind::Concept,
+                "feline cat companion",
+                1,
+            ))
+            .unwrap();
+        store
+            .index_document(&document(
+                "cat-care",
+                RecallKind::Procedure,
+                "cat grooming routine",
+                1,
+            ))
+            .unwrap();
+        store
+            .index_document(&document(
+                "weather",
+                RecallKind::Concept,
+                "weather rainfall forecast",
+                1,
+            ))
+            .unwrap();
+
+        let lexical = store
+            .candidates_for_query_mode("feline", 4, false, false)
+            .unwrap();
+        assert!(lexical.iter().all(|candidate| candidate.id != "cat-care"));
+        let semantic = store.retrieve("feline", 4).unwrap();
+        assert!(semantic.iter().any(|candidate| candidate.id == "cat-care"));
+        assert!(semantic.len() <= 4);
+    }
+
+    #[test]
+    fn semantic_evaluation_holds_out_complete_query_groups() {
+        let store = IntuitionStore::in_memory().unwrap();
+        store
+            .index_document(&document(
+                "bridge",
+                RecallKind::Concept,
+                "feline cat companion",
+                1,
+            ))
+            .unwrap();
+        store
+            .index_document(&document(
+                "cat-care",
+                RecallKind::Procedure,
+                "cat grooming routine",
+                1,
+            ))
+            .unwrap();
+        store
+            .index_document(&document(
+                "weather",
+                RecallKind::Concept,
+                "weather rainfall forecast",
+                1,
+            ))
+            .unwrap();
+        store
+            .record_ranking_example(&RankingExample {
+                query: "weather".into(),
+                candidate_id: "weather".into(),
+                used: true,
+                succeeded: true,
+                rung: 1,
+            })
+            .unwrap();
+        store
+            .record_ranking_example(&RankingExample {
+                query: "feline".into(),
+                candidate_id: "cat-care".into(),
+                used: true,
+                succeeded: true,
+                rung: 1,
+            })
+            .unwrap();
+
+        let evaluation = store.evaluate_semantic_recall(4, 1).unwrap();
+        assert_eq!(evaluation.training_queries, 1);
+        assert_eq!(evaluation.held_out_queries, 1);
+        assert_eq!(evaluation.held_out_successes, 1);
+        assert_eq!(evaluation.lexical_scored_successes, 0);
+        assert_eq!(evaluation.semantic_scored_successes, 1);
+        assert!(evaluation.semantic_improves_recall);
+        let metrics = store.metrics().unwrap();
+        assert_eq!(metrics.semantic_recall_evaluations, 1);
+        assert_eq!(metrics.semantic_recall_wins, 1);
     }
 
     #[test]
