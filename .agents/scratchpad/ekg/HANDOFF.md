@@ -1,6 +1,6 @@
 # EKG implementation handoff
 
-Last updated: 2026-08-22 (Phase 3 implementation and verification)
+Last updated: 2026-08-22 (quiet CLI, capability surfaces, goals, metrics, inspector)
 
 This is the durable restart point for completing every phase in
 `IMPLEMENTATION-PLAN.md`. Update it whenever ownership, verification state, or
@@ -28,7 +28,39 @@ the next executable step changes.
   gate included 131 Rust tests and 32 TypeScript tests plus strict workspace
   format, clippy, build, typecheck, package build, depcheck, and diff checks.
 
-## Current phase: Phase 4 — Consolidation + Phase 5 capability foundation
+## Current phase: Phase 4/5/6 integration
+
+The latest committed increments are:
+
+- `a92176d` — capability RPCs/SDK, trusted regression-suite recording, and
+  `ekg ask --quiet` / `-q` answer-only output.
+- `8f78ebe` — persistent goal and curiosity-gap APIs, conservative skill
+  discovery/compression planning/retirement records, metrics snapshot, and a
+  local `@ekg/inspector` browser dashboard.
+- `60495d3` — metrics/goals/curiosity RPC coverage and camelCase metrics output.
+
+The first usable chat command is now:
+
+```text
+EKG_DB=/tmp/ekg-playground.sqlite pnpm exec tsx packages/cli/src/main.ts ask --quiet "what is double 7?"
+```
+
+The dashboard can be opened with:
+
+```text
+cargo build -p ekg-server
+EKG_DB=/tmp/ekg-playground.sqlite pnpm --filter @ekg/inspector dev
+```
+
+Then visit `http://127.0.0.1:4317`. It is local and read-only; stop it with
+Ctrl-C. The full JSON CLI output remains available by omitting `--quiet`.
+
+Capability acquisition now has typed discovery, canonical deterministic
+bundles, quarantine imports, local validation, revocable grants, primitive
+policy checks, RPC and SDK methods. Goals and curiosity gaps are durable,
+bounded, and standing goals are immutable. Phase 4 skill discovery and
+compression are intentionally report/planning-only until the promotion gate
+is the authority for mutation.
 
 ## Pause checkpoint (2026-08-22)
 
