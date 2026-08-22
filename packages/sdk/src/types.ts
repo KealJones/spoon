@@ -184,6 +184,19 @@ export interface PromotionReplay {
   transfer: boolean;
 }
 
+export interface SkillShadowWinInput {
+  skillId: string;
+  observedResult: JsonValue;
+  scope?: Record<string, JsonValue>;
+  evaluation: {
+    tier: "Hard" | "Consensus";
+    success: true;
+    details: string;
+    surprise?: number | null;
+  };
+  verifierIdentity: string;
+}
+
 export interface EpisodeCompressionPlan {
   retainFull: string[];
   summarize: string[];

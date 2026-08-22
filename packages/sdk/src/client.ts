@@ -33,6 +33,7 @@ import type {
   Goal,
   GoalKind,
   SkillCandidate,
+  SkillShadowWinInput,
   RecordContradictionInput,
   RefineContradictionInput,
   RankingEvaluation,
@@ -415,6 +416,13 @@ export class EkgClient {
     return this.transport.request<ManagedSkill>(
       "consolidation.evaluateShadow",
       this.withAdminToken({ skillId, replays }),
+    );
+  }
+
+  promoteSkillFromLiveWin(input: SkillShadowWinInput): Promise<ManagedSkill> {
+    return this.transport.request<ManagedSkill>(
+      "consolidation.promoteLive",
+      this.withAdminToken(input),
     );
   }
 

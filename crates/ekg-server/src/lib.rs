@@ -388,6 +388,20 @@ impl RpcServer {
                         .map_err(engine_error)?,
                 )
             }
+            "consolidation.promoteLive" => {
+                let input: SkillShadowWinParam = decode(params)?;
+                encode(
+                    self.engine
+                        .record_skill_shadow_live_win(
+                            &input.skill_id,
+                            input.observed_result,
+                            input.scope,
+                            input.evaluation,
+                            &input.verifier_identity,
+                        )
+                        .map_err(engine_error)?,
+                )
+            }
             "consolidation.retire" => {
                 let input: SkillRetireParam = decode(params)?;
                 encode(
@@ -739,6 +753,7 @@ fn requires_admin(method: &str) -> bool {
             | "observation.recordAuthenticated"
             | "consolidation.register"
             | "consolidation.evaluateShadow"
+            | "consolidation.promoteLive"
             | "consolidation.retire"
             | "adaptation.applyOffline"
             | "contradiction.record"
@@ -806,6 +821,17 @@ struct SkillRetireParam {
     skill_id: String,
     successor_skill: String,
     reason: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SkillShadowWinParam {
+    skill_id: String,
+    observed_result: EkgValue,
+    #[serde(default)]
+    scope: BTreeMap<String, EkgValue>,
+    evaluation: Evaluation,
+    verifier_identity: String,
 }
 
 #[derive(Debug, Deserialize)]
