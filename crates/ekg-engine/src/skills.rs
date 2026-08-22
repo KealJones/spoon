@@ -90,8 +90,15 @@ impl SkillStore {
             let name = column.split_whitespace().next().unwrap();
             let exists: bool = self.conn.query_row(
                 "SELECT COUNT(*) > 0 FROM pragma_table_info('ekg_managed_skills') WHERE name = ?1",
-                params![name], |row| row.get(0))?;
-            if !exists { self.conn.execute(&format!("ALTER TABLE ekg_managed_skills ADD COLUMN {column}"), [])?; }
+                params![name],
+                |row| row.get(0),
+            )?;
+            if !exists {
+                self.conn.execute(
+                    &format!("ALTER TABLE ekg_managed_skills ADD COLUMN {column}"),
+                    [],
+                )?;
+            }
         }
         Ok(())
     }
@@ -180,16 +187,37 @@ impl SkillStore {
         rows.map(|row| row.map_err(EngineError::from)).collect()
     }
 
-    pub(crate) fn rank_active(&self, query: &str, limit: u32) -> Result<Vec<ManagedSkill>, EngineError> {
+    pub(crate) fn rank_active(
+        &self,
+        query: &str,
+        limit: u32,
+    ) -> Result<Vec<ManagedSkill>, EngineError> {
         let mut skills = self.list_active(512)?;
-        let terms: Vec<String> = query.split_whitespace()
-            .map(str::to_ascii_lowercase).filter(|term| !term.is_empty()).collect();
+        let terms: Vec<String> = query
+            .split_whitespace()
+            .map(str::to_ascii_lowercase)
+            .filter(|term| !term.is_empty())
+            .collect();
         skills.sort_by(|left, right| {
-            fn score(skill: &ManagedSkill, terms: &[String]) -> (u32, u32, u32, u32, &str) {
-                let text = format!("{} {}", skill.candidate.name, skill.candidate.rationale).to_ascii_lowercase();
-                let matches = terms.iter().filter(|term| text.contains(term.as_str())).count() as u32;
-                (matches, skill.experience_successes, skill.shadow_live_wins,
-                    skill.experience_uses.saturating_sub(skill.experience_failures), skill.id.as_str())
+            fn score<'a>(
+                skill: &'a ManagedSkill,
+                terms: &[String],
+            ) -> (u32, u32, u32, u32, &'a str) {
+                let text = format!("{} {}", skill.candidate.name, skill.candidate.rationale)
+                    .to_ascii_lowercase();
+                let matches = terms
+                    .iter()
+                    .filter(|term| text.contains(term.as_str()))
+                    .count() as u32;
+                (
+                    matches,
+                    skill.experience_successes,
+                    skill.shadow_live_wins,
+                    skill
+                        .experience_uses
+                        .saturating_sub(skill.experience_failures),
+                    skill.id.as_str(),
+                )
             }
             score(right, &terms).cmp(&score(left, &terms))
         });
@@ -206,7 +234,12 @@ impl SkillStore {
              experience_failures = experience_failures + ?3, updated_at = ?4 WHERE id = ?1",
             params![id, i64::from(succeeded), i64::from(!succeeded), now],
         )?;
-        self.record_event(id, "experience", serde_json::json!({"succeeded": succeeded}).to_string(), now)
+        self.record_event(
+            id,
+            "experience",
+            serde_json::json!({"succeeded": succeeded}).to_string(),
+            now,
+        )
     }
 
     pub(crate) fn record_replay_verdict(
@@ -334,7 +367,7 @@ fn row_to_skill(row: &rusqlite::Row<'_>) -> rusqlite::Result<ManagedSkill> {
         )
     })?;
     let verdict: Option<String> = row.get(3)?;
-    let retirement: Option<String> = row.get(5)?;
+    let retirement: Option<String> = row.get(8)?;
     Ok(ManagedSkill {
         id: row.get(0)?,
         candidate: decode(1, row.get(1)?)?,
