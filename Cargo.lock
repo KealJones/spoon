@@ -60,9 +60,11 @@ dependencies = [
  "ekg-episode",
  "ekg-exec",
  "ekg-graph",
+ "ekg-reason",
  "serde",
  "serde_json",
  "thiserror",
+ "uuid",
 ]
 
 [[package]]
@@ -97,6 +99,18 @@ dependencies = [
  "serde_json",
  "thiserror",
  "uuid",
+]
+
+[[package]]
+name = "ekg-reason"
+version = "0.1.0"
+dependencies = [
+ "ekg-core",
+ "ekg-episode",
+ "ekg-graph",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]

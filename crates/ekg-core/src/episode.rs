@@ -1,9 +1,12 @@
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::concept::ConceptId;
+use crate::concept::{Concept, ConceptId, Lifecycle};
 use crate::evidence::VerifiabilityTier;
 use crate::procedure::ProcedureId;
+use crate::relationship::Relationship;
 use crate::value::Value;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -55,6 +58,11 @@ pub struct Episode {
     /// particular execution runtime crate.
     #[serde(default)]
     pub execution_trace: Option<serde_json::Value>,
+    /// Provider-neutral record of a teacher request, response, and provenance.
+    /// The JSON remains inspectable without coupling the core model to a
+    /// particular provider SDK.
+    #[serde(default)]
+    pub teacher_interaction: Option<serde_json::Value>,
     pub cost: EpisodeCost,
     pub created_at: i64,
 }
@@ -73,6 +81,7 @@ impl Episode {
             observed_result: None,
             evaluation: None,
             execution_trace: None,
+            teacher_interaction: None,
             cost: EpisodeCost::default(),
             created_at: now_unix(),
         }
@@ -99,8 +108,63 @@ pub struct Interpretation {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AssembledContext {
     pub goal: Option<String>,
+    #[serde(default)]
+    pub goal_reason: Option<String>,
+    #[serde(default)]
+    pub interpretations: Vec<Interpretation>,
     pub entities: Vec<ConceptId>,
+    #[serde(default)]
+    pub relevant_knowledge: Vec<ContextRelationship>,
+    #[serde(default)]
+    pub relevant_procedures: Vec<ContextProcedure>,
+    #[serde(default)]
+    pub recent_episodes: Vec<ContextEpisode>,
     pub assumptions: Vec<Assumption>,
+    #[serde(default)]
+    pub environment: BTreeMap<String, Value>,
+    #[serde(default)]
+    pub budget_remaining: Option<ContextBudget>,
+}
+
+/// A bounded graph edge retained in active and persisted context.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContextRelationship {
+    pub relationship: Relationship,
+    pub discovered_from: ConceptId,
+    pub adjacent_concept: Concept,
+    pub hops: u32,
+    pub relevance_score: f64,
+}
+
+/// Bounded metadata for a procedure relevant to the active concepts.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ContextProcedure {
+    pub id: ProcedureId,
+    pub name: String,
+    pub params: Vec<String>,
+    pub concept: Option<ConceptId>,
+    pub version: u32,
+    pub lifecycle: Lifecycle,
+    pub relevance_score: f64,
+}
+
+/// Historical action/result material retained in active context.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ContextEpisode {
+    pub episode_id: EpisodeId,
+    pub situation: String,
+    pub action: Option<String>,
+    pub observed_result: Option<Value>,
+    pub succeeded: Option<bool>,
+    pub created_at: i64,
+}
+
+/// Remaining resources visible to the current reasoning cycle.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ContextBudget {
+    pub steps: u32,
+    pub teacher_calls: u32,
+    pub cost: f64,
 }
 
 /// An assumption is marked so credit assignment can distinguish
@@ -202,4 +266,24 @@ fn now_unix() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs() as i64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AssembledContext;
+
+    #[test]
+    fn legacy_assembled_context_defaults_new_phase_one_categories() {
+        let context: AssembledContext =
+            serde_json::from_str(r#"{"goal":"legacy","entities":[],"assumptions":[]}"#).unwrap();
+
+        assert_eq!(context.goal.as_deref(), Some("legacy"));
+        assert!(context.goal_reason.is_none());
+        assert!(context.interpretations.is_empty());
+        assert!(context.relevant_knowledge.is_empty());
+        assert!(context.relevant_procedures.is_empty());
+        assert!(context.recent_episodes.is_empty());
+        assert!(context.environment.is_empty());
+        assert!(context.budget_remaining.is_none());
+    }
 }

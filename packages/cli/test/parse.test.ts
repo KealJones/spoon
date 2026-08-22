@@ -39,3 +39,10 @@ test("parses graph inspection and procedure listing", () => {
     kind: "procedure.list",
   });
 });
+
+test("parses a natural-language cycle request", () => {
+  assert.deepEqual(parseCommand(["ask", "what", "is", "double", "7?"]), {
+    kind: "cycle.run",
+    situation: "what is double 7?",
+  });
+});

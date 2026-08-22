@@ -1,0 +1,30 @@
+$ tsx --test test/*.test.ts
+/Users/kealjones/Git/Personal/ekg/packages/teacher/test/teacher.test.ts:12
+  fingerprintTeacherRequest,
+  ^
+SyntaxError: The requested module '../src/index.js' does not provide an export named 'fingerprintTeacherRequest'
+    at #asyncInstantiate (node:internal/modules/esm/module_job:326:21)
+    at async ModuleJob.run (node:internal/modules/esm/module_job:429:5)
+    at async node:internal/modules/esm/loader:639:26
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+
+Node.js v24.15.0
+✖ test/teacher.test.ts (124.848292ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 129.654583
+
+✖ failing tests:
+
+test at test/teacher.test.ts:1:1
+✖ test/teacher.test.ts (124.848292ms)
+  'test failed'
+/Users/kealjones/Git/Personal/ekg/packages/teacher:
+[ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL] @ekg/teacher@0.1.0 test: `tsx --test test/*.test.ts`
+Exit status 1
+[WARN]  Local package.json exists, but node_modules missing, did you mean to install?

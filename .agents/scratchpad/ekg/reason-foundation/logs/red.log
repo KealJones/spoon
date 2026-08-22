@@ -1,0 +1,30 @@
+   Compiling ekg-reason v0.1.0 (/Users/kealjones/Git/Personal/ekg/crates/ekg-reason)
+error[E0432]: unresolved imports `ekg_reason::InterpretationCandidate`, `ekg_reason::InterpretationError`, `ekg_reason::InterpretationSet`
+ --> crates/ekg-reason/tests/interpretation.rs:2:18
+  |
+2 | use ekg_reason::{InterpretationCandidate, InterpretationError, InterpretationSet};
+  |                  ^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^ no `InterpretationSet` in the root
+  |                  |                        |
+  |                  |                        no `InterpretationError` in the root
+  |                  no `InterpretationCandidate` in the root
+
+error[E0432]: unresolved imports `ekg_reason::ContextAssembler`, `ekg_reason::ContextConfig`, `ekg_reason::ContextError`, `ekg_reason::ContextLimits`, `ekg_reason::ContextRequest`, `ekg_reason::InterpretationCandidate`, `ekg_reason::InterpretationSet`, `ekg_reason::RemainingBudget`
+  --> crates/ekg-reason/tests/context.rs:10:5
+   |
+10 |     ContextAssembler, ContextConfig, ContextError, ContextLimits, ContextRequest,
+   |     ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^ no `ContextRequest` in the root
+   |     |                 |              |             |
+   |     |                 |              |             no `ContextLimits` in the root
+   |     |                 |              no `ContextError` in the root
+   |     |                 no `ContextConfig` in the root
+   |     no `ContextAssembler` in the root
+11 |     InterpretationCandidate, InterpretationSet, RemainingBudget,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^ no `RemainingBudget` in the root
+   |     |                        |
+   |     |                        no `InterpretationSet` in the root
+   |     no `InterpretationCandidate` in the root
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `ekg-reason` (test "interpretation") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `ekg-reason` (test "context") due to 1 previous error

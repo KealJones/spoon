@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use ekg_core::{
     ContractCheckResult, EkgError, Episode, EpisodeCost, EpisodeId, EscalationRung, Evaluation,
@@ -52,9 +52,10 @@ pub struct ReplayOutcome {
 /// creates a fresh bounded evaluator for each run so execution state cannot
 /// leak across episodes.
 pub struct Engine {
-    graph: KnowledgeStore,
-    episodes: EpisodeStore,
-    max_steps: u32,
+    pub(crate) graph: KnowledgeStore,
+    pub(crate) episodes: EpisodeStore,
+    pub(crate) max_steps: u32,
+    pub(crate) pending_cycles: HashMap<crate::CycleId, crate::cycle::PendingCycle>,
 }
 
 impl Engine {
@@ -63,6 +64,7 @@ impl Engine {
             graph: KnowledgeStore::new(path)?,
             episodes: EpisodeStore::new(path)?,
             max_steps: 1_000_000,
+            pending_cycles: HashMap::new(),
         })
     }
 
@@ -71,6 +73,7 @@ impl Engine {
             graph: KnowledgeStore::in_memory()?,
             episodes: EpisodeStore::in_memory()?,
             max_steps: 1_000_000,
+            pending_cycles: HashMap::new(),
         })
     }
 
@@ -184,7 +187,7 @@ impl Engine {
         })
     }
 
-    fn current_evaluator(&self) -> Result<Evaluator, EngineError> {
+    pub(crate) fn current_evaluator(&self) -> Result<Evaluator, EngineError> {
         let mut evaluator = Evaluator::new().with_budget(self.max_steps);
         for procedure in self.graph.list_procedures()? {
             evaluator.register_procedure(procedure);
@@ -230,7 +233,7 @@ impl Engine {
     }
 }
 
-fn bind_inputs(
+pub(crate) fn bind_inputs(
     procedure: &Procedure,
     supplied: &BTreeMap<String, Value>,
     defaults: Option<&[Value]>,
@@ -260,7 +263,7 @@ fn bind_inputs(
         .collect()
 }
 
-fn reasoning_trace(trace: &ExecTrace) -> ReasoningTrace {
+pub(crate) fn reasoning_trace(trace: &ExecTrace) -> ReasoningTrace {
     ReasoningTrace {
         steps: trace
             .steps

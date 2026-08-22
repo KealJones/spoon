@@ -166,3 +166,59 @@ test("client maps every episode RPC method with exact params", async () => {
     },
   ]);
 });
+
+test("client maps cycle begin, resume, and abort with exact camelCase params", async () => {
+  const transport = new RecordingTransport();
+  const client = new EkgClient(transport);
+  const proposal = {
+    content: { interpretations: [], answer: 42 },
+    source: "human:test",
+    status: "unverified" as const,
+    provenance: {
+      provider: "human" as const,
+      teacher: "human:test",
+      requestId: "request-1",
+      generatedAt: "2026-08-22T00:00:00.000Z",
+      situation: "what is the answer?",
+    },
+  };
+
+  await client.beginCycle({
+    situation: "what is the answer?",
+    environment: {},
+    assumptions: [],
+    budget: {
+      maxExecSteps: 1_000,
+      maxContextItems: 32,
+      maxTeacherTurns: 1,
+    },
+    teacherAllowed: true,
+  });
+  await client.resumeCycle("cycle-1", proposal);
+  await client.abortCycle("cycle-2", "provider unavailable");
+
+  assert.deepEqual(transport.calls.slice(-3), [
+    {
+      method: "cycle.begin",
+      params: {
+        situation: "what is the answer?",
+        environment: {},
+        assumptions: [],
+        budget: {
+          maxExecSteps: 1_000,
+          maxContextItems: 32,
+          maxTeacherTurns: 1,
+        },
+        teacherAllowed: true,
+      },
+    },
+    {
+      method: "cycle.resume",
+      params: { cycleId: "cycle-1", proposal },
+    },
+    {
+      method: "cycle.abort",
+      params: { cycleId: "cycle-2", reason: "provider unavailable" },
+    },
+  ]);
+});

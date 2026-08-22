@@ -1,8 +1,11 @@
 import type {
   ConceptInput,
+  CycleInput,
+  CycleProgress,
   EpisodeFilter,
   JsonValue,
   RpcTransport,
+  TeacherProposalWire,
 } from "./types.js";
 
 export class EkgClient {
@@ -124,6 +127,27 @@ export class EkgClient {
     return this.transport.request<T>("episode.replay", {
       episodeId,
       substitutions,
+    });
+  }
+
+  beginCycle(input: CycleInput): Promise<CycleProgress> {
+    return this.transport.request<CycleProgress>("cycle.begin", input);
+  }
+
+  resumeCycle(
+    cycleId: string,
+    proposal: TeacherProposalWire,
+  ): Promise<CycleProgress> {
+    return this.transport.request<CycleProgress>("cycle.resume", {
+      cycleId,
+      proposal,
+    });
+  }
+
+  abortCycle(cycleId: string, reason: string): Promise<CycleProgress> {
+    return this.transport.request<CycleProgress>("cycle.abort", {
+      cycleId,
+      reason,
     });
   }
 

@@ -1,0 +1,25 @@
+$ tsx --test test/*.test.ts
+✔ validation rejects schema-invalid output and records provenance (3.055209ms)
+✔ validation stays provisional without independent verification (0.275583ms)
+✔ validators can verify or reject a schema-valid proposal (0.201917ms)
+✔ reliability is tracked independently per source with a conservative prior (0.0795ms)
+✔ Claude adapter uses print-mode structured output and returns unverified content (0.379958ms)
+✔ OpenAI adapter sends Responses API strict structured-output request (10.543ms)
+✔ Ollama adapter uses non-streaming generate with JSON schema (0.449875ms)
+✔ human adapter accepts injected structured input and never self-verifies (0.158666ms)
+✔ provider failures and malformed outputs are explicit (0.408417ms)
+✔ validation binds the proposal envelope and provenance to the request (0.637083ms)
+✔ request fingerprints bind context and desired schema semantically (0.255167ms)
+✔ validation requires exact optional-question provenance binding (0.102709ms)
+✔ teacher-created validation pipelines share the teacher reliability state (0.177583ms)
+✔ JSON schema equality is structural and object key order independent (0.120792ms)
+✔ required schema properties must be own properties (0.044083ms)
+✔ transport and prompt rejections retain provider attribution (0.204417ms)
+ℹ tests 16
+ℹ suites 0
+ℹ pass 16
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 195.355792

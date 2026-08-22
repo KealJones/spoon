@@ -28,8 +28,13 @@ importers:
       "@ekg/sdk":
         specifier: workspace:*
         version: link:../sdk
+      "@ekg/teacher":
+        specifier: workspace:*
+        version: link:../teacher
 
   packages/sdk: {}
+
+  packages/teacher: {}
 
 packages:
   "@babel/code-frame@7.29.7":

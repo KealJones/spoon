@@ -23,7 +23,8 @@ export type Command =
       inputs: Record<string, JsonValue>;
     }
   | { kind: "episode.list"; limit: number }
-  | { kind: "episode.get"; episodeId: string };
+  | { kind: "episode.get"; episodeId: string }
+  | { kind: "cycle.run"; situation: string };
 
 const usage = `Usage:
   ekg concept add <name>
@@ -34,7 +35,8 @@ const usage = `Usage:
   ekg procedure list
   ekg procedure run <name-or-id> [key=json-value ...]
   ekg episode list [limit]
-  ekg episode get <episode-id>`;
+  ekg episode get <episode-id>
+  ekg ask <situation>`;
 
 export function parseCommand(args: string[]): Command {
   const [resource, action, ...rest] = args;
@@ -89,6 +91,9 @@ export function parseCommand(args: string[]): Command {
   }
   if (resource === "episode" && action === "get" && rest.length === 1) {
     return { kind: "episode.get", episodeId: rest[0]! };
+  }
+  if (resource === "ask" && action) {
+    return { kind: "cycle.run", situation: [action, ...rest].join(" ") };
   }
 
   throw new Error(usage);

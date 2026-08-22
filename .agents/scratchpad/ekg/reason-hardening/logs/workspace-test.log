@@ -1,0 +1,251 @@
+   Compiling ekg-exec v0.1.0 (/Users/kealjones/Git/Personal/ekg/crates/ekg-exec)
+   Compiling ekg-episode v0.1.0 (/Users/kealjones/Git/Personal/ekg/crates/ekg-episode)
+   Compiling ekg-graph v0.1.0 (/Users/kealjones/Git/Personal/ekg/crates/ekg-graph)
+   Compiling ekg-engine v0.1.0 (/Users/kealjones/Git/Personal/ekg/crates/ekg-engine)
+   Compiling ekg-server v0.1.0 (/Users/kealjones/Git/Personal/ekg/crates/ekg-server)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.48s
+     Running unittests src/lib.rs (target/debug/deps/ekg_core-19ed098d2438817e)
+
+running 2 tests
+test episode::tests::legacy_assembled_context_defaults_new_phase_one_categories ... ok
+test evidence::tests::evidence_roundtrip_preserves_provenance_and_episode_link ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/ekg_engine-e7ed9282048b352d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cycle.rs (target/debug/deps/cycle-ec92b8811ab5c120)
+
+running 12 tests
+test teacher_provenance_must_match_the_pending_request ... ok
+test unknown_with_teacher_enabled_returns_a_nonterminal_continuation ... ok
+test a_teacher_continuation_can_only_be_consumed_once ... ok
+test answer_only_teacher_output_remains_provisional ... ok
+test non_unverified_teacher_status_is_rejected ... ok
+test teacher_disabled_unknown_abstains_and_records_one_episode ... ok
+test exact_verified_history_resolves_at_recall ... ok
+test run_matches_a_linked_procedure_without_domain_special_cases ... ok
+test ambiguous_teacher_interpretations_are_preserved_without_guessing ... ok
+test failed_execution_records_one_complete_terminal_episode ... ok
+test teacher_can_resolve_inputs_for_an_existing_procedure ... ok
+test teacher_procedure_is_verified_learned_and_then_runs_locally ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/evaluation.rs (target/debug/deps/evaluation-5f2c8905fbe4134e)
+
+running 11 tests
+test deterministic_comparison_is_type_strict ... ok
+test deterministic_equality_is_a_hard_success_without_surprise ... ok
+test disagreement_fails_consensus ... ok
+test decomposition_rejects_empty_or_uncheckable_input ... ok
+test deterministic_mismatch_is_a_hard_failure_with_surprise ... ok
+test decomposition_records_explicit_checkable_proposals_for_review ... ok
+test inverse_and_round_trip_helpers_check_recovery ... ok
+test distinct_independent_methods_can_establish_consensus ... ok
+test duplicate_or_missing_methods_do_not_pretend_to_be_independent ... ok
+test surprise_is_a_bounded_change_signal ... ok
+test tier_three_distinguishes_pending_from_human_verdicts ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/seed_cycle.rs (target/debug/deps/seed_cycle-f564684504cece97)
+
+running 6 tests
+test execution_rejects_missing_and_extra_named_inputs ... ok
+test failed_execution_without_prediction_has_no_surprise_signal ... ok
+test failed_execution_records_the_episode_and_partial_trace ... ok
+test execution_records_and_evaluates_a_complete_episode ... ok
+test execution_episode_is_indexed_by_the_procedure_concept ... ok
+test replay_uses_pinned_versions_and_named_substitutions ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (target/debug/deps/ekg_episode-ac169ed88f2b67c2)
+
+running 15 tests
+test store::tests::find_by_concept ... ok
+test store::tests::count ... ok
+test store::tests::not_found ... ok
+test store::tests::list_failures ... ok
+test store::tests::query_filters_by_concept_and_limit ... ok
+test store::tests::query_filters_by_time_outcome_and_rung ... ok
+test store::tests::episode_collection_reads_propagate_malformed_json ... ok
+test store::tests::list_recent ... ok
+test store::tests::insert_and_retrieve ... ok
+test store::tests::rung_distribution_propagates_sqlite_row_errors ... ok
+test store::tests::episode_collection_reads_propagate_sqlite_row_errors ... ok
+test store::tests::insert_rolls_back_episode_when_concept_indexing_fails ... ok
+test store::tests::update_episode ... ok
+test store::tests::update_rebuilds_concept_index ... ok
+test store::tests::update_rolls_back_episode_and_concept_index_when_rebuild_fails ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (target/debug/deps/ekg_exec-d18b2aeda4af8805)
+
+running 32 tests
+test eval::tests::arithmetic_float_promotion ... ok
+test eval::tests::conditionals ... ok
+test eval::tests::arithmetic_mul ... ok
+test eval::tests::arithmetic_add ... ok
+test eval::tests::captured_body_error_records_failed_nested_and_parent_calls ... ok
+test eval::tests::arity_mismatch_errors ... ok
+test eval::tests::budget_exceeded ... ok
+test eval::tests::division_by_zero ... ok
+test eval::tests::captured_fails_when_failure_retains_the_failed_call_and_check ... ok
+test eval::tests::captured_promise_failure_retains_the_candidate_output ... ok
+test eval::tests::contract_checks_are_enforced_and_recorded_in_the_trace ... ok
+test eval::tests::captured_requirement_failure_retains_the_failed_call_and_check ... ok
+test eval::tests::explicit_step_status_distinguishes_successful_null_from_failure ... ok
+test eval::tests::failed_promise_is_reported_after_the_body ... ok
+test eval::tests::integer_overflow_is_an_execution_error_instead_of_wrapping ... ok
+test eval::tests::failed_requirement_stops_execution_before_the_body ... ok
+test eval::tests::list_filter ... ok
+test eval::tests::list_map ... ok
+test eval::tests::list_reduce ... ok
+test eval::tests::negating_the_minimum_integer_returns_overflow_without_panicking ... ok
+test eval::tests::nested_procedure_calls ... ok
+test eval::tests::procedure_call ... ok
+test eval::tests::replay_rejects_a_changed_nested_procedure_before_execution ... ok
+test eval::tests::replay_rejects_a_trace_when_any_procedure_version_changed ... ok
+test eval::tests::replay_replaces_top_level_arguments_deterministically ... ok
+test eval::tests::trace_pins_the_exact_procedure_version ... ok
+test eval::tests::trace_captures_procedure_calls ... ok
+test eval::tests::triggered_fails_when_stops_execution_before_the_body ... ok
+test eval::tests::type_error_on_mismatched_add ... ok
+test eval::tests::undefined_procedure_errors ... ok
+test eval::tests::undefined_variable_errors ... ok
+test eval::tests::variables_let_binding ... ok
+
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/ekg_graph-3a46ce00c9480cae)
+
+running 20 tests
+test store::tests::delete_procedure_preserves_immutable_history ... ok
+test store::tests::delete_concept_removes_an_unreferenced_concept ... ok
+test store::tests::inserting_a_procedure_records_version_one ... ok
+test store::tests::delete_relationship_removes_it ... ok
+test store::tests::list_concepts_returns_all ... ok
+test store::tests::concept_by_name_lookup ... ok
+test store::tests::concepts_can_be_filtered_by_mutability_class ... ok
+test store::tests::delete_concept_rejects_relationship_and_procedure_dependencies ... ok
+test store::tests::create_relationship_between_concepts ... ok
+test store::tests::create_and_retrieve_concept ... ok
+test store::tests::get_dependents_finds_sources ... ok
+test store::tests::concept_dependency_report_includes_concepts_and_attached_procedures ... ok
+test store::tests::update_concept_roundtrip ... ok
+test store::tests::procedure_crud_with_contract ... ok
+test store::tests::procedure_and_contract_versions_are_listed_in_version_order ... ok
+test store::tests::procedure_updates_preserve_earlier_procedure_and_contract_snapshots ... ok
+test store::tests::traverse_with_zero_hops_returns_nothing ... ok
+test store::tests::procedure_dependency_report_finds_nested_callers ... ok
+test store::tests::update_relationship_roundtrip ... ok
+test store::tests::traverse_multi_hop ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running unittests src/lib.rs (target/debug/deps/ekg_reason-75ecd555e3946fdb)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/context.rs (target/debug/deps/context-1307c4c57db3534d)
+
+running 8 tests
+test rejects_invalid_required_limits_unmarked_assumptions_and_budget ... ok
+test rejects_context_configuration_above_absolute_hard_bounds ... ok
+test rejects_active_concepts_that_are_not_in_the_graph ... ok
+test relevant_history_is_prioritized_over_newer_unrelated_history ... ok
+test includes_incoming_edges_but_only_for_configured_relationship_types ... ok
+test inactive_graph_material_is_excluded_from_context ... ok
+test assembles_the_full_bounded_working_context ... ok
+test applies_every_hard_limit_with_stable_selection ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/interpretation.rs (target/debug/deps/interpretation-777c79e538b834cf)
+
+running 8 tests
+test deserialization_cannot_widen_the_normalization_tolerance ... ok
+test deserialization_cannot_bypass_distribution_validation ... ok
+test accepts_a_configurable_floating_point_tolerance ... ok
+test preserves_weighted_ambiguity_and_episode_losers ... ok
+test rejects_empty_duplicate_or_missing_selected_candidates ... ok
+test rejects_non_finite_negative_and_non_normalized_weights ... ok
+test interpretation_candidate_count_has_an_absolute_ceiling ... ok
+test unresolved_ambiguity_is_valid_and_marks_no_candidate_chosen ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/ekg_server-fdd4a2a0b08308c6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/ekg_server-51daf88aae90b738)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/rpc.rs (target/debug/deps/rpc-0967827136ede950)
+
+running 5 tests
+test malformed_json_and_unknown_methods_return_json_rpc_errors ... ok
+test cycle_begin_rejects_snake_case_transport_fields ... ok
+test concepts_can_be_created_and_listed ... ok
+test cycle_begin_and_resume_use_camel_case_wire_fields ... ok
+test kitchen_cycle_executes_records_and_replays_double ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+   Doc-tests ekg_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ekg_engine
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ekg_episode
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ekg_exec
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ekg_graph
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ekg_reason
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ekg_server
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

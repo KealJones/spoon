@@ -1,0 +1,108 @@
+import {
+  EkgClient,
+  type CompletedCycleProgress,
+  type TeacherRequestWire,
+} from "@ekg/sdk";
+import {
+  ClaudeTeacher,
+  HumanTeacher,
+  OllamaTeacher,
+  OpenAITeacher,
+  type KnowledgeContext,
+  type ProposalSchema,
+  type Teacher,
+  type TeacherRequest,
+} from "@ekg/teacher";
+
+export type TeacherClient = Pick<Teacher, "propose" | "validationPipeline">;
+
+export interface CycleRunOptions {
+  maxExecSteps?: number;
+  maxContextItems?: number;
+  maxTeacherTurns?: number;
+}
+
+export async function runCycle(
+  client: EkgClient,
+  situation: string,
+  teacher?: TeacherClient,
+  options: CycleRunOptions = {},
+): Promise<CompletedCycleProgress> {
+  let progress = await client.beginCycle({
+    situation,
+    environment: {},
+    assumptions: [],
+    budget: {
+      maxExecSteps: options.maxExecSteps ?? 10_000,
+      maxContextItems: options.maxContextItems ?? 64,
+      maxTeacherTurns: options.maxTeacherTurns ?? 1,
+    },
+    teacherAllowed: teacher !== undefined,
+  });
+
+  if (progress.status === "need_teacher") {
+    if (teacher === undefined) {
+      throw new Error("The engine requested a teacher, but none is configured");
+    }
+    const request = toTeacherRequest(progress.request);
+    try {
+      const proposal = await teacher.propose(request);
+      const validated = await teacher
+        .validationPipeline()
+        .validate(proposal, request);
+      progress = await client.resumeCycle(progress.cycleId, {
+        ...proposal,
+        validation: {
+          status: validated.status,
+          ...validated.validation,
+        },
+      });
+    } catch (error) {
+      progress = await client.abortCycle(
+        progress.cycleId,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
+
+  if (progress.status !== "completed") {
+    throw new Error("The teacher turn budget was exhausted before completion");
+  }
+  return progress;
+}
+
+export function createConfiguredTeacher(
+  environment: NodeJS.ProcessEnv = process.env,
+): TeacherClient {
+  const provider = environment.EKG_TEACHER?.toLowerCase() ?? "claude";
+  const model = environment.EKG_TEACHER_MODEL;
+  switch (provider) {
+    case "claude":
+      return new ClaudeTeacher({ model });
+    case "ollama":
+      return new OllamaTeacher({ model });
+    case "human":
+      return new HumanTeacher();
+    case "openai":
+      if (!model) {
+        throw new Error("EKG_TEACHER_MODEL is required for the OpenAI teacher");
+      }
+      return new OpenAITeacher({ model });
+    default:
+      throw new Error(
+        `Unknown EKG_TEACHER '${provider}'; expected claude, openai, ollama, or human`,
+      );
+  }
+}
+
+function toTeacherRequest(request: TeacherRequestWire): TeacherRequest {
+  const result: TeacherRequest = {
+    situation: request.situation,
+    context: request.context as KnowledgeContext,
+    desiredOutput: request.desiredOutput as ProposalSchema,
+  };
+  if (request.specificQuestion !== undefined) {
+    result.specificQuestion = request.specificQuestion;
+  }
+  return result;
+}

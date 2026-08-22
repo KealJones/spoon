@@ -5,6 +5,7 @@ members = [
     "crates/ekg-graph",
     "crates/ekg-exec",
     "crates/ekg-episode",
+    "crates/ekg-reason",
     "crates/ekg-engine",
     "crates/ekg-server",
 ]
@@ -19,6 +20,7 @@ ekg-core = { path = "crates/ekg-core" }
 ekg-graph = { path = "crates/ekg-graph" }
 ekg-exec = { path = "crates/ekg-exec" }
 ekg-episode = { path = "crates/ekg-episode" }
+ekg-reason = { path = "crates/ekg-reason" }
 ekg-engine = { path = "crates/ekg-engine" }
 
 serde = { version = "1", features = ["derive"] }

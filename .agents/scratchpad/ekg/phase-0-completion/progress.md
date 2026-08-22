@@ -27,7 +27,7 @@
 - [x] Close independent audit findings for overflow, dependency tracking, indexes, and corruption handling
 - [x] Run formatting, strict lint, builds, Rust tests, TypeScript tests, typecheck, and dependency checks
 - [x] Pass independent exit-criteria re-audit with no remaining gaps
-- [ ] Commit completed Phase 0
+- [x] Commit completed Phase 0: `0e48cfa`
 
 ## TDD cycles
 

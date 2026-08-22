@@ -2,6 +2,7 @@
 
 import { EkgClient, StdioTransport } from "@ekg/sdk";
 
+import { createConfiguredTeacher, runCycle } from "./cycle.js";
 import { parseCommand, type Command } from "./parse.js";
 
 async function execute(client: EkgClient, command: Command): Promise<unknown> {
@@ -39,6 +40,8 @@ async function execute(client: EkgClient, command: Command): Promise<unknown> {
       return client.listEpisodes({ limit: command.limit });
     case "episode.get":
       return client.getEpisode(command.episodeId);
+    case "cycle.run":
+      return runCycle(client, command.situation, createConfiguredTeacher());
   }
 }
 

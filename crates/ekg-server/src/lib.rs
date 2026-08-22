@@ -2,10 +2,13 @@ use std::collections::BTreeMap;
 use std::io::{BufRead, Write};
 
 use ekg_core::{
-    Concept, ConceptId, Contract, EpisodeId, EscalationRung, Expr, MutabilityClass, Param,
-    Procedure, ProcedureId, Relationship, RelationshipId, Value as EkgValue,
+    Assumption, Concept, ConceptId, Contract, EpisodeId, EscalationRung, Expr, MutabilityClass,
+    Param, Procedure, ProcedureId, Relationship, RelationshipId, Value as EkgValue,
 };
-use ekg_engine::{Engine, EngineError};
+use ekg_engine::{
+    CycleBudget, CycleId, CycleInput, CycleOutcome, CycleProgress, Engine, EngineError,
+    TeacherProposalWire,
+};
 use ekg_episode::EpisodeQuery;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -29,7 +32,7 @@ impl RpcServer {
         })
     }
 
-    pub fn handle_line(&self, line: &str) -> String {
+    pub fn handle_line(&mut self, line: &str) -> String {
         let request: RpcRequest = match serde_json::from_str(line) {
             Ok(request) => request,
             Err(error) => {
@@ -54,7 +57,7 @@ impl RpcServer {
         serialize_response(response)
     }
 
-    fn dispatch(&self, method: &str, params: Value) -> Result<Value, RpcFault> {
+    fn dispatch(&mut self, method: &str, params: Value) -> Result<Value, RpcFault> {
         match method {
             "concept.create" => {
                 let input: CreateConcept = decode(params)?;
@@ -229,13 +232,37 @@ impl RpcServer {
                         .map_err(app_error)?,
                 )
             }
+            "cycle.begin" => {
+                let input: BeginCycleParams = decode(params)?;
+                let progress = self
+                    .engine
+                    .begin_cycle(input.into_cycle_input())
+                    .map_err(app_error)?;
+                encode_cycle_progress(progress)
+            }
+            "cycle.resume" => {
+                let input: ResumeCycleParams = decode(params)?;
+                let progress = self
+                    .engine
+                    .resume_cycle(input.cycle_id()?, input.proposal)
+                    .map_err(app_error)?;
+                encode_cycle_progress(progress)
+            }
+            "cycle.abort" => {
+                let input: AbortCycleParams = decode(params)?;
+                let progress = self
+                    .engine
+                    .abort_cycle(input.cycle_id()?, input.reason)
+                    .map_err(app_error)?;
+                encode_cycle_progress(progress)
+            }
             _ => Err(RpcFault::new(-32601, "method not found")),
         }
     }
 }
 
 pub fn run_stdio<R: BufRead, W: Write>(
-    server: &RpcServer,
+    server: &mut RpcServer,
     reader: R,
     mut writer: W,
 ) -> std::io::Result<()> {
@@ -248,6 +275,39 @@ pub fn run_stdio<R: BufRead, W: Write>(
         writer.flush()?;
     }
     Ok(())
+}
+
+fn encode_cycle_progress(progress: CycleProgress) -> Result<Value, RpcFault> {
+    match progress {
+        CycleProgress::NeedTeacher { cycle_id, request } => Ok(json!({
+            "status": "need_teacher",
+            "cycleId": cycle_id,
+            "request": request,
+        })),
+        CycleProgress::Completed(outcome) => encode(CompletedCycleWire::from(*outcome)),
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CompletedCycleWire {
+    status: &'static str,
+    cycle_id: CycleId,
+    disposition: ekg_engine::CycleDisposition,
+    answer: Option<EkgValue>,
+    episode: ekg_core::Episode,
+}
+
+impl From<CycleOutcome> for CompletedCycleWire {
+    fn from(outcome: CycleOutcome) -> Self {
+        Self {
+            status: "completed",
+            cycle_id: outcome.cycle_id,
+            disposition: outcome.disposition,
+            answer: outcome.answer,
+            episode: outcome.episode,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -487,6 +547,68 @@ struct EpisodeListParams {
     concept_id: Option<String>,
     #[serde(default = "default_limit")]
     limit: u32,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CycleBudgetParams {
+    max_exec_steps: u32,
+    max_context_items: usize,
+    max_teacher_turns: u32,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BeginCycleParams {
+    situation: String,
+    #[serde(default)]
+    environment: BTreeMap<String, EkgValue>,
+    #[serde(default)]
+    assumptions: Vec<Assumption>,
+    budget: CycleBudgetParams,
+    teacher_allowed: bool,
+}
+
+impl BeginCycleParams {
+    fn into_cycle_input(self) -> CycleInput {
+        CycleInput {
+            situation: self.situation,
+            environment: self.environment,
+            assumptions: self.assumptions,
+            budget: CycleBudget {
+                max_exec_steps: self.budget.max_exec_steps,
+                max_context_items: self.budget.max_context_items,
+                max_teacher_turns: self.budget.max_teacher_turns,
+            },
+            teacher_allowed: self.teacher_allowed,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ResumeCycleParams {
+    cycle_id: String,
+    proposal: TeacherProposalWire,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AbortCycleParams {
+    cycle_id: String,
+    reason: String,
+}
+
+impl ResumeCycleParams {
+    fn cycle_id(&self) -> Result<CycleId, RpcFault> {
+        Ok(CycleId(parse_uuid(&self.cycle_id)?))
+    }
+}
+
+impl AbortCycleParams {
+    fn cycle_id(&self) -> Result<CycleId, RpcFault> {
+        Ok(CycleId(parse_uuid(&self.cycle_id)?))
+    }
 }
 impl EpisodeListParams {
     fn into_query(self) -> Result<EpisodeQuery, RpcFault> {

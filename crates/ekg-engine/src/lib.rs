@@ -1,8 +1,13 @@
 //! Orchestration and cognition-cycle services.
 
+pub mod cycle;
 pub mod engine;
 pub mod evaluation;
 
+pub use cycle::{
+    CycleBudget, CycleDisposition, CycleId, CycleInput, CycleOutcome, CycleProgress,
+    TeacherProposalWire, TeacherRequestWire,
+};
 pub use engine::{Engine, EngineError, ExecutionOutcome, ReplayOutcome};
 
 pub use evaluation::{
