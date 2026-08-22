@@ -10,12 +10,24 @@ import type {
   ContradictionRefinement,
   CycleInput,
   CycleProgress,
+  CapabilityBundle,
+  CapabilityPermission,
+  CuriosityGap,
+  EpisodeCompressionPlan,
+  DiscoveredOperation,
   EpisodeFilter,
   EpisodeFeedback,
   EkgClientOptions,
   FeedbackInput,
   FailureAnalysisInput,
   JsonValue,
+  ImportedCapability,
+  InterfaceDescription,
+  LocalValidation,
+  MetricsSnapshot,
+  Goal,
+  GoalKind,
+  SkillCandidate,
   RecordContradictionInput,
   RefineContradictionInput,
   RpcTransport,
@@ -251,6 +263,99 @@ export class EkgClient {
     return this.transport.request<ClaimUncertainty>(
       "contradiction.uncertainty",
       { claimId },
+    );
+  }
+
+  discoverCapability(description: InterfaceDescription): Promise<CapabilityBundle> {
+    return this.transport.request<CapabilityBundle>(
+      "capability.discover",
+      description,
+    );
+  }
+
+  importCapability(bundle: CapabilityBundle): Promise<ImportedCapability> {
+    return this.transport.request<ImportedCapability>("capability.import", {
+      bundle,
+    });
+  }
+
+  exportCapability(contentId: string): Promise<{ bundle: CapabilityBundle }> {
+    return this.transport.request<{ bundle: CapabilityBundle }>(
+      "capability.export",
+      { contentId },
+    );
+  }
+
+  revalidateCapability(
+    contentId: string,
+    validation: LocalValidation,
+  ): Promise<ImportedCapability> {
+    return this.transport.request<ImportedCapability>("capability.revalidate", {
+      contentId,
+      validation,
+    });
+  }
+
+  grantCapability(
+    contentId: string,
+    permission: CapabilityPermission,
+  ): Promise<{ granted: boolean }> {
+    return this.transport.request<{ granted: boolean }>("capability.grant", {
+      contentId,
+      permission,
+      adminToken: this.options.adminToken,
+    });
+  }
+
+  revokeCapability(
+    contentId: string,
+    permission: CapabilityPermission,
+  ): Promise<{ revoked: boolean }> {
+    return this.transport.request<{ revoked: boolean }>("capability.revoke", {
+      contentId,
+      permission,
+      adminToken: this.options.adminToken,
+    });
+  }
+
+  metricsSnapshot(): Promise<MetricsSnapshot> {
+    return this.transport.request<MetricsSnapshot>("metrics.snapshot", {});
+  }
+
+  createGoal(
+    kind: GoalKind,
+    statement: string,
+    parentId?: string,
+  ): Promise<Goal> {
+    return this.transport.request<Goal>("goal.create", {
+      kind,
+      statement,
+      ...(parentId === undefined ? {} : { parentId }),
+    });
+  }
+
+  listGoals(): Promise<Goal[]> {
+    return this.transport.request<Goal[]>("goal.list", {});
+  }
+
+  recordCuriosityGap(gap: CuriosityGap): Promise<{ recorded: boolean }> {
+    return this.transport.request<{ recorded: boolean }>("curiosity.record", gap);
+  }
+
+  rankCuriosityGaps(limit = 32): Promise<CuriosityGap[]> {
+    return this.transport.request<CuriosityGap[]>("curiosity.rank", { limit });
+  }
+
+  discoverSkillCandidates(limit = 128): Promise<SkillCandidate[]> {
+    return this.transport.request<SkillCandidate[]>("consolidation.discover", {
+      limit,
+    });
+  }
+
+  episodeCompressionPlan(limit = 128): Promise<EpisodeCompressionPlan> {
+    return this.transport.request<EpisodeCompressionPlan>(
+      "consolidation.compressionPlan",
+      { limit },
     );
   }
 

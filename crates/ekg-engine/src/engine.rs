@@ -65,6 +65,14 @@ pub struct ReplayOutcome {
     pub source_episode: EpisodeId,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MetricsSnapshot {
+    pub episode_count: u64,
+    pub rung_distribution: Vec<(String, u32)>,
+    pub intuition: IntuitionMetrics,
+}
+
 /// Phase 0 orchestration boundary. It owns the graph and episode stores and
 /// creates a fresh bounded evaluator for each run so execution state cannot
 /// leak across episodes.
@@ -81,6 +89,7 @@ pub struct Engine {
     pub(crate) trust: crate::trust::TrustLedger,
     pub(crate) intuition: IntuitionStore,
     pub(crate) capabilities: CapabilityStore,
+    pub(crate) goals: crate::goals::GoalStore,
     pub(crate) instance_id: uuid::Uuid,
     pub(crate) admin_enabled: bool,
 }
@@ -101,6 +110,7 @@ impl Engine {
             intuition: IntuitionStore::open(path)?,
             capabilities: CapabilityStore::open(path)
                 .map_err(|error| EngineError::InvalidInput(format!("capability store: {error}")))?,
+            goals: crate::goals::GoalStore::open(path)?,
             instance_id: uuid::Uuid::new_v4(),
             admin_enabled: false,
         };
@@ -132,6 +142,7 @@ impl Engine {
             intuition: IntuitionStore::in_memory()?,
             capabilities: CapabilityStore::in_memory()
                 .map_err(|error| EngineError::InvalidInput(format!("capability store: {error}")))?,
+            goals: crate::goals::GoalStore::in_memory()?,
             instance_id: uuid::Uuid::new_v4(),
             admin_enabled: false,
         })
@@ -249,6 +260,49 @@ impl Engine {
             })
     }
 
+    pub fn create_goal(
+        &self,
+        kind: crate::goals::GoalKind,
+        statement: &str,
+        parent_id: Option<&str>,
+    ) -> Result<crate::goals::Goal, EngineError> {
+        Ok(self.goals.create_goal(kind, statement, parent_id)?)
+    }
+
+    pub fn list_goals(&self) -> Result<Vec<crate::goals::Goal>, EngineError> {
+        Ok(self.goals.list_goals()?)
+    }
+
+    pub fn record_curiosity_gap(
+        &self,
+        gap: &crate::goals::CuriosityGap,
+    ) -> Result<(), EngineError> {
+        Ok(self.goals.record_gap(gap)?)
+    }
+
+    pub fn rank_curiosity_gaps(
+        &self,
+        limit: u32,
+    ) -> Result<Vec<crate::goals::CuriosityGap>, EngineError> {
+        Ok(self.goals.rank_gaps(limit)?)
+    }
+
+    pub fn discover_skill_candidates(
+        &self,
+        limit: u32,
+    ) -> Result<Vec<ekg_adapt::SkillCandidate>, EngineError> {
+        let episodes = self.episodes.list_recent(limit.clamp(1, 512))?;
+        Ok(ekg_adapt::discover_skills(&episodes))
+    }
+
+    pub fn plan_episode_compression(
+        &self,
+        limit: u32,
+    ) -> Result<ekg_adapt::EpisodeCompressionPlan, EngineError> {
+        let episodes = self.episodes.list_recent(limit.clamp(1, 512))?;
+        Ok(ekg_adapt::plan_episode_compression(&episodes))
+    }
+
     pub fn record_ranking_example(&self, example: &RankingExample) -> Result<(), EngineError> {
         Ok(self.intuition.record_ranking_example(example)?)
     }
@@ -288,6 +342,14 @@ impl Engine {
 
     pub fn intuition_metrics(&self) -> Result<IntuitionMetrics, EngineError> {
         Ok(self.intuition.metrics()?)
+    }
+
+    pub fn metrics_snapshot(&self) -> Result<MetricsSnapshot, EngineError> {
+        Ok(MetricsSnapshot {
+            episode_count: self.episodes.count()?,
+            rung_distribution: self.episodes.rung_distribution()?,
+            intuition: self.intuition.metrics()?,
+        })
     }
 
     pub fn generate_epistemic_challenge(

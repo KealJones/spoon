@@ -222,6 +222,72 @@ test("client maps durable credit reads and explicit retry keys", async () => {
   ]);
 });
 
+test("client maps capability discovery, quarantine, validation, and local grants", async () => {
+  const transport = new RecordingTransport();
+  const client = new EkgClient(transport, { adminToken: "admin" });
+  const description = {
+    source: "weather-api",
+    fingerprint: "weather-v1",
+    operations: [
+      {
+        name: "forecast",
+        inputSchema: { type: "object" },
+        outputSchema: { type: "object" },
+        host: "api.example.test",
+        method: "GET",
+        responseFixture: { temperature: 72 },
+      },
+    ],
+  };
+  const bundle = await client.discoverCapability(description);
+  await client.importCapability(bundle);
+  await client.revalidateCapability("cap-1", {
+    passed: true,
+    validationEpisodes: ["episode-1"],
+    environmentDigest: "local",
+  });
+  await client.grantCapability("cap-1", {
+    kind: "network_host",
+    host: "api.example.test",
+  });
+  await client.revokeCapability("cap-1", {
+    kind: "network_host",
+    host: "api.example.test",
+  });
+
+  assert.deepEqual(transport.calls, [
+    { method: "capability.discover", params: description },
+    { method: "capability.import", params: { bundle } },
+    {
+      method: "capability.revalidate",
+      params: {
+        contentId: "cap-1",
+        validation: {
+          passed: true,
+          validationEpisodes: ["episode-1"],
+          environmentDigest: "local",
+        },
+      },
+    },
+    {
+      method: "capability.grant",
+      params: {
+        contentId: "cap-1",
+        permission: { kind: "network_host", host: "api.example.test" },
+        adminToken: "admin",
+      },
+    },
+    {
+      method: "capability.revoke",
+      params: {
+        contentId: "cap-1",
+        permission: { kind: "network_host", host: "api.example.test" },
+        adminToken: "admin",
+      },
+    },
+  ]);
+});
+
 test("client maps cycle begin, resume, and abort with exact camelCase params", async () => {
   const transport = new RecordingTransport();
   const client = new EkgClient(transport);

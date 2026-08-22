@@ -32,6 +32,12 @@ importers:
         specifier: workspace:*
         version: link:../teacher
 
+  packages/inspector:
+    dependencies:
+      "@ekg/sdk":
+        specifier: workspace:*
+        version: link:../sdk
+
   packages/sdk: {}
 
   packages/teacher: {}

@@ -150,6 +150,10 @@ impl EpisodeView<'_> {
         self.store.query(query)
     }
 
+    pub fn rung_distribution(&self) -> Result<Vec<(String, u32)>, EkgError> {
+        self.store.rung_distribution()
+    }
+
     pub fn list_verified_regression_cases(
         &self,
         procedure_id: ProcedureId,

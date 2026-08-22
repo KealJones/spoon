@@ -41,6 +41,113 @@ export interface EkgClientOptions {
   adminToken?: string;
 }
 
+export type CapabilityPermission =
+  | { kind: "network_host"; host: string }
+  | { kind: "file_read_prefix"; path_prefix: string }
+  | { kind: "file_write_prefix"; path_prefix: string }
+  | { kind: "observe_target"; target: string }
+  | { kind: "sandbox_profile"; profile: string };
+
+export interface DiscoveredOperation {
+  name: string;
+  inputSchema: JsonValue;
+  outputSchema: JsonValue;
+  host: string;
+  method: string;
+  responseFixture: JsonValue;
+}
+
+export interface InterfaceDescription {
+  source: string;
+  fingerprint: string;
+  operations: DiscoveredOperation[];
+}
+
+export interface LocalValidation {
+  passed: boolean;
+  validationEpisodes: string[];
+  environmentDigest: string;
+}
+
+export interface ImportedCapability {
+  contentId: string;
+  name: string;
+  status: "quarantined" | "provisional" | "active" | "rejected";
+  locallyValidated: boolean;
+}
+
+export interface MetricsSnapshot {
+  episodeCount: number;
+  rungDistribution: Array<[string, number]>;
+  intuition: {
+    indexedDocuments: number;
+    invertedTermRows: number;
+    retrievalQueries: number;
+    candidatesExamined: number;
+    rankingExamples: number;
+    supervisionTasks: number;
+    groundedTasks: number;
+  };
+}
+
+export type GoalKind = "task" | "standing" | "instrumental" | "learning";
+
+export interface Goal {
+  id: string;
+  kind: GoalKind;
+  statement: string;
+  parentId?: string | null;
+  immutable: boolean;
+  createdAt: number;
+}
+
+export type GapKind =
+  | "structural"
+  | "functional"
+  | "repeated_impass"
+  | "contradiction"
+  | "failed_prediction"
+  | "ungrounded";
+
+export interface CuriosityGap {
+  id: string;
+  kind: GapKind;
+  statement: string;
+  blastRadius: number;
+  goalRelevance: number;
+  learningProgress: number;
+  costToClose: number;
+  valueScore: number;
+  sourceEpisode?: string | null;
+  resolved: boolean;
+  createdAt: number;
+}
+
+export interface SkillCandidate {
+  name: string;
+  sourceEpisodeIds: string[];
+  supportCount: number;
+  rationale: string;
+  failureCritic: boolean;
+}
+
+export interface EpisodeCompressionPlan {
+  retainFull: string[];
+  summarize: string[];
+  forgottenAsKnownGap: string[];
+}
+
+export interface CapabilityBundle {
+  formatVersion: number;
+  name: string;
+  version: string;
+  contentId: string;
+  procedures: JsonValue[];
+  dependencies: JsonValue[];
+  provenance: JsonValue;
+  reconstruction: JsonValue;
+}
+
 export interface FailureAnalysisInput {
   idempotencyKey?: string;
   episodeId: string;

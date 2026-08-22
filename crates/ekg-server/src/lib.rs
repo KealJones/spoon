@@ -11,9 +11,9 @@ use ekg_core::{
     Value as EkgValue,
 };
 use ekg_engine::{
-    AdaptationPlanId, AdaptationPlanRequest, ApplyAdaptationRequest, CycleBudget, CycleId,
-    CycleInput, CycleOutcome, CycleProgress, Engine, EngineError, FailureAnalysisRequest,
-    InterfaceDescription, LocalValidation, Permission, TeacherProposalWire,
+    AdaptationPlanId, AdaptationPlanRequest, ApplyAdaptationRequest, CuriosityGap, CycleBudget,
+    CycleId, CycleInput, CycleOutcome, CycleProgress, Engine, EngineError, FailureAnalysisRequest,
+    GoalKind, InterfaceDescription, LocalValidation, Permission, TeacherProposalWire,
 };
 use ekg_episode::{EpisodeFeedback, EpisodeQuery, FeedbackSource};
 use ekg_graph::GraphError;
@@ -301,6 +301,47 @@ impl RpcServer {
                     .revoke_capability_permission(&input.content_id, &input.permission)
                     .map_err(engine_error)?;
                 Ok(json!({"revoked": true}))
+            }
+            "metrics.snapshot" => encode(self.engine.metrics_snapshot().map_err(engine_error)?),
+            "goal.create" => {
+                let input: GoalCreateParam = decode(params)?;
+                encode(
+                    self.engine
+                        .create_goal(input.kind, &input.statement, input.parent_id.as_deref())
+                        .map_err(engine_error)?,
+                )
+            }
+            "goal.list" => encode(self.engine.list_goals().map_err(engine_error)?),
+            "curiosity.record" => {
+                let input: CuriosityGap = decode(params)?;
+                self.engine
+                    .record_curiosity_gap(&input)
+                    .map_err(engine_error)?;
+                Ok(json!({"recorded": true}))
+            }
+            "curiosity.rank" => {
+                let input: CuriosityRankParam = decode(params)?;
+                encode(
+                    self.engine
+                        .rank_curiosity_gaps(input.limit.unwrap_or(32))
+                        .map_err(engine_error)?,
+                )
+            }
+            "consolidation.discover" => {
+                let input: LimitParam = decode(params)?;
+                encode(
+                    self.engine
+                        .discover_skill_candidates(input.limit.unwrap_or(128))
+                        .map_err(engine_error)?,
+                )
+            }
+            "consolidation.compressionPlan" => {
+                let input: LimitParam = decode(params)?;
+                encode(
+                    self.engine
+                        .plan_episode_compression(input.limit.unwrap_or(128))
+                        .map_err(engine_error)?,
+                )
             }
             "procedure.create" => {
                 let input: CreateProcedure = decode(params)?;
@@ -653,6 +694,25 @@ struct CapabilityPermissionParam {
     #[serde(rename = "contentId")]
     content_id: String,
     permission: Permission,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GoalCreateParam {
+    kind: GoalKind,
+    statement: String,
+    parent_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CuriosityRankParam {
+    limit: Option<u32>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LimitParam {
+    limit: Option<u32>,
 }
 
 pub fn run_stdio<R: BufRead, W: Write>(
