@@ -69,6 +69,10 @@ pub struct ReplayOutcome {
 #[serde(rename_all = "camelCase")]
 pub struct MetricsSnapshot {
     pub episode_count: u64,
+    /// Number of strong, successful answers retained as local regression baselines.
+    /// This is a baseline-coverage signal, not proof that every baseline was
+    /// re-run successfully.
+    pub verified_answer_count: u64,
     pub rung_distribution: Vec<(String, u32)>,
     pub intuition: IntuitionMetrics,
 }
@@ -723,6 +727,7 @@ impl Engine {
     pub fn metrics_snapshot(&self) -> Result<MetricsSnapshot, EngineError> {
         Ok(MetricsSnapshot {
             episode_count: self.episodes.count()?,
+            verified_answer_count: self.regression.count()?,
             rung_distribution: self.episodes.rung_distribution()?,
             intuition: self.intuition.metrics()?,
         })

@@ -142,6 +142,7 @@ fn metrics_goals_and_curiosity_endpoints_are_bounded_and_camel_case() {
     let mut server = test_server();
     let metrics = call(&mut server, 50, "metrics.snapshot", json!({}));
     assert_eq!(metrics["episodeCount"], 0);
+    assert_eq!(metrics["verifiedAnswerCount"], 0);
     assert!(metrics["intuition"]["indexedDocuments"].is_number());
     let ranking = call(
         &mut server,

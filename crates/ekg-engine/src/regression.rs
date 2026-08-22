@@ -116,4 +116,12 @@ impl RegressionStore {
         })?;
         rows.map(|row| row.map_err(EngineError::from)).collect()
     }
+
+    pub(crate) fn count(&self) -> Result<u64, EngineError> {
+        Ok(self
+            .conn
+            .query_row("SELECT COUNT(*) FROM ekg_verified_answers", [], |row| {
+                row.get::<_, i64>(0)
+            })? as u64)
+    }
 }
