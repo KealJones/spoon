@@ -11,6 +11,7 @@ import type {
   CycleInput,
   CycleProgress,
   CapabilityBundle,
+  CapabilityProcedure,
   CapabilityPermission,
   CuriosityGap,
   EpisodeCompressionPlan,
@@ -317,6 +318,16 @@ export class EkgClient {
       permission,
       adminToken: this.options.adminToken,
     });
+  }
+
+  authorizeCapabilityProcedure(
+    contentId: string,
+    procedureId: string,
+  ): Promise<CapabilityProcedure> {
+    return this.transport.request<CapabilityProcedure>(
+      "capability.authorizeProcedure",
+      { contentId, procedureId },
+    );
   }
 
   metricsSnapshot(): Promise<MetricsSnapshot> {

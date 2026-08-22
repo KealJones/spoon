@@ -1236,6 +1236,34 @@ impl CapabilityStore {
         }
         Ok(())
     }
+
+    /// Authorize the exact permissions declared by one procedure.
+    ///
+    /// A bundle may contain multiple procedures with disjoint authority;
+    /// authorizing one of them must not accidentally authorize another.
+    pub fn require_procedure_permissions(
+        &self,
+        content_id: &str,
+        procedure_id: &str,
+    ) -> Result<CapabilityProcedure, CapabilityError> {
+        let bundle_json: String = self
+            .conn
+            .query_row(
+                "SELECT bundle_json FROM capability_bundles WHERE content_id = ?1",
+                params![content_id],
+                |row| row.get(0),
+            )
+            .optional()?
+            .ok_or(CapabilityError::NotRevalidated)?;
+        let bundle: CapabilityBundle = serde_json::from_str(&bundle_json)?;
+        let procedure = bundle
+            .procedures
+            .into_iter()
+            .find(|procedure| procedure.id == procedure_id)
+            .ok_or_else(|| CapabilityError::Invalid("procedure not found".into()))?;
+        self.require_permissions(content_id, &procedure.permissions)?;
+        Ok(procedure)
+    }
 }
 
 fn unix_time() -> i64 {
@@ -1311,6 +1339,10 @@ mod tests {
         store
             .require_permissions(&imported.content_id, &bundle.procedures[0].permissions)
             .unwrap();
+        let authorized = store
+            .require_procedure_permissions(&imported.content_id, &bundle.procedures[0].id)
+            .unwrap();
+        assert_eq!(authorized.id, bundle.procedures[0].id);
         store
             .revoke(&imported.content_id, &bundle.procedures[0].permissions[0])
             .unwrap();

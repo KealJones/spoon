@@ -48,6 +48,10 @@ fn engine_keeps_imported_capabilities_quarantined_until_local_validation_and_gra
     engine
         .require_capability_permissions(&imported.content_id, &[permission])
         .unwrap();
+    let authorized = engine
+        .require_capability_procedure(&imported.content_id, &bundle.procedures[0].id)
+        .unwrap();
+    assert_eq!(authorized.id, bundle.procedures[0].id);
     assert_eq!(
         engine
             .export_capability_bundle(&imported.content_id)

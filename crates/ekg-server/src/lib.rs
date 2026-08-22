@@ -302,6 +302,14 @@ impl RpcServer {
                     .map_err(engine_error)?;
                 Ok(json!({"revoked": true}))
             }
+            "capability.authorizeProcedure" => {
+                let input: CapabilityProcedureParam = decode(params)?;
+                encode(
+                    self.engine
+                        .require_capability_procedure(&input.content_id, &input.procedure_id)
+                        .map_err(engine_error)?,
+                )
+            }
             "metrics.snapshot" => encode(self.engine.metrics_snapshot().map_err(engine_error)?),
             "primitive.observe" => {
                 let input: PrimitiveObserveParam = decode(params)?;
@@ -702,6 +710,14 @@ struct CapabilityPermissionParam {
     #[serde(rename = "contentId")]
     content_id: String,
     permission: Permission,
+}
+
+#[derive(Debug, Deserialize)]
+struct CapabilityProcedureParam {
+    #[serde(rename = "contentId")]
+    content_id: String,
+    #[serde(rename = "procedureId")]
+    procedure_id: String,
 }
 
 #[derive(Debug, Deserialize)]

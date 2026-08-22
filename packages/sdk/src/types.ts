@@ -159,6 +159,22 @@ export interface CapabilityBundle {
   reconstruction: JsonValue;
 }
 
+export interface CapabilityProcedure {
+  id: string;
+  name: string;
+  version: number;
+  primitive: string;
+  inputSchema: JsonValue;
+  outputSchema: JsonValue;
+  contract: JsonValue;
+  permissions: CapabilityPermission[];
+  effects: string[];
+  bounds: { maxBytes: number; maxSteps: number; maxMillis: number };
+  dependencies: JsonValue[];
+  tests: JsonValue[];
+  provenance: JsonValue;
+}
+
 export interface FailureAnalysisInput {
   idempotencyKey?: string;
   episodeId: string;

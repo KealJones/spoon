@@ -260,6 +260,18 @@ impl Engine {
             })
     }
 
+    pub fn require_capability_procedure(
+        &self,
+        content_id: &str,
+        procedure_id: &str,
+    ) -> Result<ekg_capability::CapabilityProcedure, EngineError> {
+        self.capabilities
+            .require_procedure_permissions(content_id, procedure_id)
+            .map_err(|error| {
+                EngineError::InvalidInput(format!("capability authorization: {error}"))
+            })
+    }
+
     pub fn create_goal(
         &self,
         kind: crate::goals::GoalKind,
