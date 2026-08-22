@@ -73,10 +73,26 @@ fn trusted_candidate_moves_through_shadow_promotion_and_reconstructible_retireme
     assert_eq!(promoted.lifecycle, SkillLifecycle::Promoted);
     assert_eq!(promoted.shadow_live_wins, 1);
 
+    let ranked = engine
+        .rank_active_managed_skills("repeated procedure", 8)
+        .unwrap();
+    assert_eq!(
+        ranked.first().map(|skill| skill.id.as_str()),
+        Some(managed.id.as_str())
+    );
+
     let reused = engine
         .execute_managed_skill(&managed.id, inputs(5), Some(Value::Int(10)))
         .unwrap();
     assert_eq!(reused.value, Value::Int(10));
+    let best = engine
+        .execute_best_managed_skill("repeated procedure", inputs(6), Some(Value::Int(12)))
+        .unwrap();
+    assert_eq!(best.value, Value::Int(12));
+    assert_eq!(
+        engine.list_managed_skills(8).unwrap()[0].experience_successes,
+        2
+    );
 
     let retired = engine
         .retire_managed_skill(&managed.id, "skill-successor", "subsumed")
