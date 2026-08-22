@@ -38,6 +38,9 @@ The latest committed increments are:
   discovery/compression planning/retirement records, metrics snapshot, and a
   local `@ekg/inspector` browser dashboard.
 - `60495d3` — metrics/goals/curiosity RPC coverage and camelCase metrics output.
+- `4ded797` — first policy-gated native observation adapter (`native:clock`),
+  with an invocation receipt; generic network/observation remains closed until
+  an explicit adapter is supplied.
 
 The first usable chat command is now:
 
@@ -57,7 +60,7 @@ Ctrl-C. The full JSON CLI output remains available by omitting `--quiet`.
 
 Capability acquisition now has typed discovery, canonical deterministic
 bundles, quarantine imports, local validation, revocable grants, primitive
-policy checks, RPC and SDK methods. Goals and curiosity gaps are durable,
+policy checks, a safe clock observation adapter, RPC and SDK methods. Goals and curiosity gaps are durable,
 bounded, and standing goals are immutable. Phase 4 skill discovery and
 compression are intentionally report/planning-only until the promotion gate
 is the authority for mutation.
