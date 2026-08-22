@@ -44,6 +44,8 @@ The latest committed increments are:
 - `99b3a0a` — `ask --explain` / trailing `--explain`, a bounded human-readable
   episode narrative showing teacher use, proposal/validation, answer,
   evaluation, learning/reuse, cost, and episode identity.
+- `c2e21d4` — enriches that narrative with context candidates, assumptions,
+  predicted-vs-observed values, and evaluation detail.
 - `1185d9c` — adversarial capability hardening: normalized file scopes,
   permission-bound receipts, secret/path rejection, dependency/hash closure,
   effect/permission consistency, hard resource limits, and evidence metadata.
