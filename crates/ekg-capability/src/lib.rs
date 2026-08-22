@@ -164,6 +164,43 @@ impl NativePrimitiveExecutor {
         Ok(PrimitiveExecution { receipt, output })
     }
 
+    /// Execute a policy-authorized network request through an explicitly
+    /// injected host adapter. The capability layer never opens an ambient
+    /// socket; the host owns transport, TLS, credential handling, and any
+    /// additional egress policy. The adapter receives only the authorized
+    /// host/method and bounded request value.
+    pub fn network_request<F>(
+        &self,
+        request: &PrimitiveRequest,
+        body: &Value,
+        adapter: F,
+    ) -> Result<PrimitiveExecution, CapabilityError>
+    where
+        F: FnOnce(&str, &str, &Value) -> Result<Value, CapabilityError>,
+    {
+        let receipt = self.policy.authorize(request)?;
+        let PrimitiveRequest::Network {
+            host,
+            method,
+            body_bytes,
+        } = request
+        else {
+            return Err(CapabilityError::Invalid(
+                "network executor requires a Network request".into(),
+            ));
+        };
+        let body_bytes_actual = canonical_json(body)?.len() as u64;
+        enforce_bytes(body_bytes_actual, *body_bytes, &self.policy.bounds)?;
+        let output = adapter(host, method, body)?;
+        let output_bytes = canonical_json(&output)?.len() as u64;
+        if output_bytes > self.policy.bounds.max_bytes {
+            return Err(CapabilityError::Invalid(
+                "network response exceeds resource byte bound".into(),
+            ));
+        }
+        Ok(PrimitiveExecution { receipt, output })
+    }
+
     pub fn read_file(
         &self,
         request: &PrimitiveRequest,
@@ -1417,6 +1454,26 @@ mod tests {
                 })
                 .is_err()
         );
+
+        let executor = NativePrimitiveExecutor::new(policy.clone());
+        let execution = executor
+            .network_request(
+                &PrimitiveRequest::Network {
+                    host: "api.example.test".into(),
+                    method: "GET".into(),
+                    body_bytes: 64,
+                },
+                &serde_json::json!({"city":"Phoenix"}),
+                |host, method, body| {
+                    assert_eq!(host, "api.example.test");
+                    assert_eq!(method, "GET");
+                    assert_eq!(body["city"], "Phoenix");
+                    Ok(serde_json::json!({"temperature": 72}))
+                },
+            )
+            .unwrap();
+        assert_eq!(execution.receipt.target, "api.example.test");
+        assert_eq!(execution.output["temperature"], 72);
     }
 
     #[test]
