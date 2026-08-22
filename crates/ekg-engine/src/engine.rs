@@ -90,6 +90,7 @@ pub struct Engine {
     pub(crate) intuition: IntuitionStore,
     pub(crate) capabilities: CapabilityStore,
     pub(crate) goals: crate::goals::GoalStore,
+    pub(crate) skills: crate::skills::SkillStore,
     pub(crate) instance_id: uuid::Uuid,
     pub(crate) admin_enabled: bool,
 }
@@ -111,6 +112,7 @@ impl Engine {
             capabilities: CapabilityStore::open(path)
                 .map_err(|error| EngineError::InvalidInput(format!("capability store: {error}")))?,
             goals: crate::goals::GoalStore::open(path)?,
+            skills: crate::skills::SkillStore::open(path)?,
             instance_id: uuid::Uuid::new_v4(),
             admin_enabled: false,
         };
@@ -143,6 +145,7 @@ impl Engine {
             capabilities: CapabilityStore::in_memory()
                 .map_err(|error| EngineError::InvalidInput(format!("capability store: {error}")))?,
             goals: crate::goals::GoalStore::in_memory()?,
+            skills: crate::skills::SkillStore::in_memory()?,
             instance_id: uuid::Uuid::new_v4(),
             admin_enabled: false,
         })
@@ -182,6 +185,20 @@ impl Engine {
         candidate_limit: usize,
     ) -> Result<Vec<RecallCandidate>, EngineError> {
         Ok(self.intuition.rank(query, candidate_limit)?)
+    }
+
+    /// Runs a bounded time-split ranking evaluation. The held-out outcomes are
+    /// never used to score the learned ordering, so the result is evidence
+    /// about search policy rather than a new trust assertion.
+    pub fn evaluate_recall_ranking(
+        &self,
+        query: &str,
+        candidate_limit: usize,
+        holdout_examples: usize,
+    ) -> Result<ekg_intuition::RankingEvaluation, EngineError> {
+        Ok(self
+            .intuition
+            .evaluate_ranking(query, candidate_limit, holdout_examples)?)
     }
 
     /// Retrieves graph-neighborhood candidates through a hard-bounded typed
@@ -344,6 +361,126 @@ impl Engine {
     ) -> Result<ekg_adapt::EpisodeCompressionPlan, EngineError> {
         let episodes = self.episodes.list_recent(limit.clamp(1, 512))?;
         Ok(ekg_adapt::plan_episode_compression(&episodes))
+    }
+
+    /// Persists a discovered skill only when each cited episode is exact,
+    /// strong Engine evidence. This prevents a caller-created report from
+    /// becoming a future optimization target without provenance.
+    pub fn register_skill_candidate(
+        &self,
+        candidate: &ekg_adapt::SkillCandidate,
+    ) -> Result<crate::ManagedSkill, EngineError> {
+        for episode_id in &candidate.source_episode_ids {
+            let episode = self.episodes.get(*episode_id)?;
+            if self.trust.receipt_for_episode(&episode)?.is_none() {
+                return Err(EngineError::InvalidInput(format!(
+                    "skill candidate source episode {episode_id} lacks an exact Engine trust receipt"
+                )));
+            }
+        }
+        self.skills.register(candidate)
+    }
+
+    pub fn list_managed_skills(&self, limit: u32) -> Result<Vec<crate::ManagedSkill>, EngineError> {
+        self.skills.list(limit)
+    }
+
+    /// Records a replay verdict and enters shadow only after the conservative
+    /// gate has preserved every replayed verified result and measured a win.
+    pub fn evaluate_skill_for_shadow(
+        &self,
+        skill_id: &str,
+        replays: impl IntoIterator<Item = ekg_adapt::PromotionReplay>,
+    ) -> Result<crate::ManagedSkill, EngineError> {
+        let replays: Vec<_> = replays.into_iter().collect();
+        for replay in &replays {
+            let episode = self.episodes.get(replay.episode_id)?;
+            if !episode.succeeded() || self.trust.receipt_for_episode(&episode)?.is_none() {
+                return Err(EngineError::InvalidInput(format!(
+                    "promotion replay episode {} is not a successful trusted verification",
+                    replay.episode_id
+                )));
+            }
+        }
+        let verdict = ekg_adapt::PromotionGate::evaluate(replays);
+        self.skills.record_replay_verdict(skill_id, &verdict)
+    }
+
+    /// A shadow candidate becomes active only after a successful strong
+    /// observation from an authenticated local verifier. The full observation
+    /// remains an immutable episode; promotion stores its reference as an
+    /// event rather than replacing or deleting any history.
+    pub fn record_skill_shadow_live_win(
+        &self,
+        skill_id: &str,
+        observed_result: Value,
+        scope: BTreeMap<String, Value>,
+        evaluation: Evaluation,
+        verifier_identity: &str,
+    ) -> Result<crate::ManagedSkill, EngineError> {
+        self.require_admin()?;
+        if verifier_identity.trim().is_empty() {
+            return Err(EngineError::InvalidInput(
+                "shadow promotion requires an authenticated verifier identity".into(),
+            ));
+        }
+        if !evaluation.success
+            || !matches!(
+                evaluation.tier,
+                VerifiabilityTier::Hard | VerifiabilityTier::Consensus
+            )
+        {
+            return Err(EngineError::InvalidInput(
+                "shadow promotion requires a successful Hard or Consensus observation".into(),
+            ));
+        }
+        let skill = self.skills.get(skill_id)?.ok_or_else(|| {
+            EngineError::InvalidInput(format!("unknown managed skill {skill_id}"))
+        })?;
+        if skill.lifecycle != crate::SkillLifecycle::Shadow {
+            return Err(EngineError::InvalidInput(
+                "only a shadow skill can be promoted by a live win".into(),
+            ));
+        }
+        let mut episode = Episode::new(format!("live shadow evaluation for skill {skill_id}"));
+        episode.action = Some(format!(
+            "observation:authenticated-verifier:{}",
+            verifier_identity.trim()
+        ));
+        episode.context.environment = scope.clone();
+        episode.observed_result = Some(observed_result.clone());
+        episode.evaluation = Some(evaluation);
+        episode.observed_facts.push(ObservedFact::new(
+            "skill.shadow_live_win",
+            observed_result,
+            scope,
+        ));
+        episode.teacher_interaction = Some(serde_json::json!({
+            "kind": "skill_shadow_evaluation",
+            "skillId": skill_id,
+            "verifier": verifier_identity.trim(),
+        }));
+        self.persist_engine_episode(&episode)?;
+        let stored = self.episodes.get(episode.id)?;
+        if !stored.succeeded() || self.trust.receipt_for_episode(&stored)?.is_none() {
+            return Err(EngineError::InvalidInput(
+                "shadow observation was not admitted as trusted evidence".into(),
+            ));
+        }
+        self.skills
+            .promote_from_live_shadow(skill_id, &episode.id.to_string())
+    }
+
+    /// Retirement changes ranking eligibility but retains the candidate,
+    /// evidence, and explicit successor linkage for reconstruction.
+    pub fn retire_managed_skill(
+        &self,
+        skill_id: &str,
+        successor_skill: &str,
+        reason: &str,
+    ) -> Result<crate::ManagedSkill, EngineError> {
+        let record = ekg_adapt::retire_skill(skill_id, successor_skill, reason);
+        self.skills.retire(skill_id, &record)
     }
 
     pub fn record_ranking_example(&self, example: &RankingExample) -> Result<(), EngineError> {

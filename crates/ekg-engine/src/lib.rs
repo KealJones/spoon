@@ -8,6 +8,7 @@ pub mod evaluation;
 mod goals;
 mod lesson;
 mod runtime;
+mod skills;
 mod trust;
 mod view;
 
@@ -37,11 +38,12 @@ pub use ekg_graph::{
     TypedRelationshipTraversal,
 };
 pub use ekg_intuition::{
-    EpistemicChallengeKind, IntuitionMetrics, RankingExample, RecallCandidate, RecallDocument,
-    RecallKind, SupervisionTask,
+    EpistemicChallengeKind, IntuitionMetrics, RankingEvaluation, RankingExample, RecallCandidate,
+    RecallDocument, RecallKind, SupervisionTask,
 };
 pub use engine::{Engine, EngineError, ExecutionOutcome, MetricsSnapshot, ReplayOutcome};
 pub use goals::{CuriosityGap, GapKind, Goal, GoalKind};
+pub use skills::{ManagedSkill, SkillLifecycle};
 pub use trust::{TrustEvidenceKind, TrustReceipt};
 pub use view::{EpisodeView, GraphView};
 
@@ -54,9 +56,10 @@ pub use adaptation::{
 };
 pub use ekg_adapt::{
     Claim, Contradiction, ContradictionId, ContradictionStatus, DemonstratedFeature,
-    EpisodeCompressionPlan, Implication, Refinement, RetirementRecord, ScopeAssignment,
-    SkillCandidate, discover_failure_critic, discover_single_success, discover_skills,
-    plan_episode_compression, retire_skill,
+    EpisodeCompressionPlan, Implication, PromotionGate, PromotionReplay, PromotionVerdict,
+    PromotionWin, Refinement, RetirementRecord, ScopeAssignment, SkillCandidate,
+    discover_failure_critic, discover_single_success, discover_skills, plan_episode_compression,
+    retire_skill,
 };
 pub use evaluation::{
     CheckableSubgoal, ConsensusObservation, DecompositionError, GoalDecomposition,
