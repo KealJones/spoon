@@ -106,5 +106,14 @@ fn learning_goal_provenance_survives_reopen() {
     assert_eq!(records[0].source_gap_id, "durable-gap");
     drop(reopened);
 
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    let error = connection
+        .execute(
+            "UPDATE ekg_goals SET statement = 'tampered' WHERE id = ?1",
+            rusqlite::params![expected.0.id],
+        )
+        .unwrap_err();
+    assert!(error.to_string().contains("immutable standing goals"));
+
     std::fs::remove_file(path).unwrap();
 }

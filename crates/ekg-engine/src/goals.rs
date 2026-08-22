@@ -122,7 +122,19 @@ impl GoalStore {
                 created_at INTEGER NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_ekg_goal_learning_standing
-                ON ekg_goal_learning_records(standing_goal_id, created_at ASC);",
+                ON ekg_goal_learning_records(standing_goal_id, created_at ASC);
+            CREATE TRIGGER IF NOT EXISTS ekg_goals_immutable_update
+            BEFORE UPDATE OF kind, statement, parent_id, immutable ON ekg_goals
+            WHEN OLD.immutable = 1
+            BEGIN
+                SELECT RAISE(ABORT, 'immutable standing goals cannot be mutated');
+            END;
+            CREATE TRIGGER IF NOT EXISTS ekg_goals_immutable_delete
+            BEFORE DELETE ON ekg_goals
+            WHEN OLD.immutable = 1
+            BEGIN
+                SELECT RAISE(ABORT, 'immutable standing goals cannot be deleted');
+            END;",
         )?;
         Ok(())
     }
