@@ -500,9 +500,14 @@ impl Engine {
         &self,
         query: &str,
     ) -> Result<Option<crate::ManagedSkill>, EngineError> {
-        Ok(self.skills.rank_active(query, 512)?.into_iter().find(|skill| {
-            skill.lifecycle == crate::SkillLifecycle::Promoted && !skill.candidate.failure_critic
-        }))
+        Ok(self
+            .skills
+            .rank_active(query, 512)?
+            .into_iter()
+            .find(|skill| {
+                skill.lifecycle == crate::SkillLifecycle::Promoted
+                    && !skill.candidate.failure_critic
+            }))
     }
 
     pub fn register_single_success_skill(
@@ -681,7 +686,8 @@ impl Engine {
             ));
         };
         let outcome = self.execute_procedure(procedure_id, inputs, prediction)?;
-        self.skills.record_experience(skill_id, outcome.episode.succeeded())?;
+        self.skills
+            .record_experience(skill_id, outcome.episode.succeeded())?;
         Ok(outcome)
     }
 
@@ -691,9 +697,11 @@ impl Engine {
         inputs: BTreeMap<String, Value>,
         prediction: Option<Value>,
     ) -> Result<ExecutionOutcome, EngineError> {
-        let skill = self.select_executable_managed_skill(query)?.ok_or_else(|| {
-            EngineError::InvalidInput("no promoted executable skill matches query".into())
-        })?;
+        let skill = self
+            .select_executable_managed_skill(query)?
+            .ok_or_else(|| {
+                EngineError::InvalidInput("no promoted executable skill matches query".into())
+            })?;
         self.execute_managed_skill(&skill.id, inputs, prediction)
     }
 

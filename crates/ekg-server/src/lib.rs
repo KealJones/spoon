@@ -478,11 +478,19 @@ impl RpcServer {
             }
             "consolidation.rankActive" => {
                 let input: SkillRankParam = decode(params)?;
-                encode(self.engine.rank_active_managed_skills(&input.query, input.limit.unwrap_or(128)).map_err(engine_error)?)
+                encode(
+                    self.engine
+                        .rank_active_managed_skills(&input.query, input.limit.unwrap_or(128))
+                        .map_err(engine_error)?,
+                )
             }
             "consolidation.executeBest" => {
                 let input: SkillExecuteBestParam = decode(params)?;
-                encode(self.engine.execute_best_managed_skill(&input.query, input.inputs, input.prediction).map_err(engine_error)?)
+                encode(
+                    self.engine
+                        .execute_best_managed_skill(&input.query, input.inputs, input.prediction)
+                        .map_err(engine_error)?,
+                )
             }
             "consolidation.registerSingle" => {
                 let input: EpisodeIdParam = decode(params)?;
@@ -937,13 +945,17 @@ struct SkillExecuteParam {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct SkillRankParam { query: String, limit: Option<u32> }
+struct SkillRankParam {
+    query: String,
+    limit: Option<u32>,
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct SkillExecuteBestParam {
     query: String,
-    #[serde(default)] inputs: BTreeMap<String, EkgValue>,
+    #[serde(default)]
+    inputs: BTreeMap<String, EkgValue>,
     prediction: Option<EkgValue>,
 }
 
