@@ -18,6 +18,7 @@ import type {
   EpisodeCompressionPlan,
   EpisodeCompressionRecord,
   EpisodeCompressionResult,
+  VerifiedAnswerRecord,
   DiscoveredOperation,
   EpisodeFilter,
   EpisodeFeedback,
@@ -410,6 +411,12 @@ export class EkgClient {
       "consolidation.compressedList",
       { limit },
     );
+  }
+
+  listVerifiedAnswers(limit = 128): Promise<VerifiedAnswerRecord[]> {
+    return this.transport.request<VerifiedAnswerRecord[]>("regression.list", {
+      limit,
+    });
   }
 
   registerSkillCandidate(candidate: SkillCandidate): Promise<ManagedSkill> {

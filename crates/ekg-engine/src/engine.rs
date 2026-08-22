@@ -87,6 +87,7 @@ pub struct Engine {
     pub(crate) lesson_stages: crate::lesson::LessonStageStore,
     pub(crate) runtime: crate::runtime::RuntimeStore,
     pub(crate) compression: crate::compression::CompressionStore,
+    pub(crate) regression: crate::regression::RegressionStore,
     pub(crate) trust: crate::trust::TrustLedger,
     pub(crate) intuition: IntuitionStore,
     pub(crate) capabilities: CapabilityStore,
@@ -109,6 +110,7 @@ impl Engine {
             lesson_stages: crate::lesson::LessonStageStore::open(path)?,
             runtime: crate::runtime::RuntimeStore::open(path)?,
             compression: crate::compression::CompressionStore::open(path)?,
+            regression: crate::regression::RegressionStore::open(path)?,
             trust: crate::trust::TrustLedger::open(path)?,
             intuition: IntuitionStore::open(path)?,
             capabilities: CapabilityStore::open(path)
@@ -143,6 +145,7 @@ impl Engine {
             lesson_stages: crate::lesson::LessonStageStore::in_memory()?,
             runtime: crate::runtime::RuntimeStore::in_memory()?,
             compression: crate::compression::CompressionStore::in_memory()?,
+            regression: crate::regression::RegressionStore::in_memory()?,
             trust: crate::trust::TrustLedger::in_memory()?,
             intuition: IntuitionStore::in_memory()?,
             capabilities: CapabilityStore::in_memory()
@@ -391,6 +394,13 @@ impl Engine {
         limit: u32,
     ) -> Result<Vec<crate::EpisodeCompressionRecord>, EngineError> {
         self.compression.list(limit)
+    }
+
+    pub fn list_verified_answers(
+        &self,
+        limit: u32,
+    ) -> Result<Vec<crate::VerifiedAnswerRecord>, EngineError> {
+        self.regression.list(limit)
     }
 
     /// Persists a discovered skill only when each cited episode is exact,
@@ -1209,6 +1219,7 @@ impl Engine {
         self.index_episode(episode)?;
         self.record_episode_learning(episode)?;
         self.record_verified_regression(episode)?;
+        self.regression.record(episode)?;
         self.record_episode_curiosity(episode)?;
         self.runtime
             .complete_episode_saga(&episode.id.to_string())?;

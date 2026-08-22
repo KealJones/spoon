@@ -8,6 +8,7 @@ pub mod engine;
 pub mod evaluation;
 mod goals;
 mod lesson;
+mod regression;
 mod runtime;
 mod skills;
 mod trust;
@@ -45,6 +46,7 @@ pub use ekg_intuition::{
 };
 pub use engine::{Engine, EngineError, ExecutionOutcome, MetricsSnapshot, ReplayOutcome};
 pub use goals::{CuriosityGap, GapKind, Goal, GoalKind};
+pub use regression::VerifiedAnswerRecord;
 pub use skills::{ManagedSkill, SkillLifecycle};
 pub use trust::{TrustEvidenceKind, TrustReceipt};
 pub use view::{EpisodeView, GraphView};

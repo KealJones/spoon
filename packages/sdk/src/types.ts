@@ -215,6 +215,16 @@ export interface EpisodeCompressionRecord {
   createdAt: number;
 }
 
+export interface VerifiedAnswerRecord {
+  episodeId: string;
+  situation: string;
+  environment: Record<string, JsonValue>;
+  observedResult: JsonValue;
+  tier: "Hard" | "Consensus";
+  rung: string;
+  createdAt: number;
+}
+
 export interface PrimitiveExecution {
   receipt: {
     primitive: string;

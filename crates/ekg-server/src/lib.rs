@@ -388,6 +388,14 @@ impl RpcServer {
                         .map_err(engine_error)?,
                 )
             }
+            "regression.list" => {
+                let input: LimitParam = decode(params)?;
+                encode(
+                    self.engine
+                        .list_verified_answers(input.limit.unwrap_or(128))
+                        .map_err(engine_error)?,
+                )
+            }
             "consolidation.register" => {
                 let input: SkillCandidate = decode(params)?;
                 encode(
