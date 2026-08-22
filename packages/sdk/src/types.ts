@@ -288,6 +288,14 @@ export interface CapabilityBundle {
   reconstruction: JsonValue;
 }
 
+export interface ReconstructedCapability {
+  contentId: string;
+  name: string;
+  dependencyOrder: JsonValue[];
+  procedures: CapabilityProcedure[];
+  reconstruction: JsonValue;
+}
+
 export interface CapabilityProcedure {
   id: string;
   name: string;

@@ -8,7 +8,9 @@ use ekg_core::{
     EscalationRung, Evaluation, Lifecycle, ObservedFact, Procedure, ProcedureId, ReasoningTrace,
     Relationship, RelationshipId, TestCase, TraceStep, TraceStepStatus, Value, VerifiabilityTier,
 };
-use ekg_episode::{EpisodeFeedback, EpisodeStore, VerifiedRegressionCase};
+use ekg_episode::{
+    EpisodeFeedback, EpisodeStore, TeacherInteractionMetrics, VerifiedRegressionCase,
+};
 use ekg_exec::{ConditionCheckStatus, Evaluator, ExecStepStatus, ExecTrace};
 use ekg_graph::{ActivationSpreadQuery, ActivationSpreadResult, GraphError, KnowledgeStore};
 use ekg_intuition::{
@@ -75,6 +77,32 @@ pub struct MetricsSnapshot {
     pub verified_answer_count: u64,
     pub rung_distribution: Vec<(String, u32)>,
     pub intuition: IntuitionMetrics,
+    /// Bounded durable evidence for Phase 6 exit criteria. Counts describe
+    /// only persisted observations, not blanket claims of transfer, weaning,
+    /// or regression freedom.
+    pub phase6: Phase6EvidenceMetrics,
+}
+
+/// Durable, conservative evidence for the Phase 6 exit criteria.
+///
+/// Managed-skill evidence is intentionally bounded to the 512 records exposed
+/// by the existing read-only skill view. The examined-record count makes that
+/// boundary visible to snapshot consumers.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Phase6EvidenceMetrics {
+    pub teacher_interaction_episodes: u64,
+    pub teacher_assisted_successes: u64,
+    pub teacher_free_successes: u64,
+    pub managed_skill_records_examined: u64,
+    pub replay_preserved_skill_verdicts: u64,
+    pub replay_regressions: u64,
+    pub transfer_eligible_skill_verdicts: u64,
+    pub currently_promoted_skills: u64,
+    /// Only promoted skills can produce these counters. A zero means no
+    /// post-promotion use was recorded; it does not establish non-survival.
+    pub post_promotion_skill_uses: u64,
+    pub post_promotion_skill_successes: u64,
 }
 
 /// Phase 0 orchestration boundary. It owns the graph and episode stores and
@@ -250,6 +278,30 @@ impl Engine {
             .map_err(|error| EngineError::InvalidInput(format!("capability import: {error}")))
     }
 
+    pub fn import_and_revalidate_capability_bundle(
+        &self,
+        bytes: &[u8],
+        validation: &LocalValidation,
+    ) -> Result<ImportedCapability, EngineError> {
+        if validation.passed {
+            self.validate_local_capability_episodes(validation)?;
+        }
+        self.capabilities
+            .import_and_revalidate(bytes, validation)
+            .map_err(|error| {
+                EngineError::InvalidInput(format!("capability import and revalidation: {error}"))
+            })
+    }
+
+    pub fn reconstruct_capability(
+        &self,
+        content_id: &str,
+    ) -> Result<ekg_capability::ReconstructedCapability, EngineError> {
+        self.capabilities.reconstruct(content_id).map_err(|error| {
+            EngineError::InvalidInput(format!("capability reconstruction: {error}"))
+        })
+    }
+
     pub fn export_capability_bundle(&self, content_id: &str) -> Result<Vec<u8>, EngineError> {
         self.capabilities
             .export(content_id)
@@ -262,35 +314,7 @@ impl Engine {
         validation: &LocalValidation,
     ) -> Result<ImportedCapability, EngineError> {
         if validation.passed {
-            if validation.validation_episodes.is_empty() {
-                return Err(EngineError::InvalidInput(
-                    "capability validation requires locally trusted episode evidence".into(),
-                ));
-            }
-            for episode_id in &validation.validation_episodes {
-                let uuid = uuid::Uuid::parse_str(episode_id).map_err(|_| {
-                    EngineError::InvalidInput(
-                        "capability validation episode ids must be local UUIDs".into(),
-                    )
-                })?;
-                let episode = self.episodes.get(EpisodeId(uuid))?;
-                if self.trust.receipt_for_episode(&episode)?.is_none() {
-                    return Err(EngineError::InvalidInput(format!(
-                        "capability validation episode {episode_id} has no exact Engine trust receipt"
-                    )));
-                }
-                if !episode.evaluation.as_ref().is_some_and(|evaluation| {
-                    evaluation.success
-                        && matches!(
-                            evaluation.tier,
-                            VerifiabilityTier::Hard | VerifiabilityTier::Consensus
-                        )
-                }) {
-                    return Err(EngineError::InvalidInput(format!(
-                        "capability validation episode {episode_id} is not a successful strong evaluation"
-                    )));
-                }
-            }
+            self.validate_local_capability_episodes(validation)?;
         }
         self.capabilities
             .revalidate(content_id, validation)
@@ -329,6 +353,42 @@ impl Engine {
             .map_err(|error| {
                 EngineError::InvalidInput(format!("capability authorization: {error}"))
             })
+    }
+
+    fn validate_local_capability_episodes(
+        &self,
+        validation: &LocalValidation,
+    ) -> Result<(), EngineError> {
+        if validation.validation_episodes.is_empty() {
+            return Err(EngineError::InvalidInput(
+                "capability validation requires locally trusted episode evidence".into(),
+            ));
+        }
+        for episode_id in &validation.validation_episodes {
+            let uuid = uuid::Uuid::parse_str(episode_id).map_err(|_| {
+                EngineError::InvalidInput(
+                    "capability validation episode ids must be local UUIDs".into(),
+                )
+            })?;
+            let episode = self.episodes.get(EpisodeId(uuid))?;
+            if self.trust.receipt_for_episode(&episode)?.is_none() {
+                return Err(EngineError::InvalidInput(format!(
+                    "capability validation episode {episode_id} has no exact Engine trust receipt"
+                )));
+            }
+            if !episode.evaluation.as_ref().is_some_and(|evaluation| {
+                evaluation.success
+                    && matches!(
+                        evaluation.tier,
+                        VerifiabilityTier::Hard | VerifiabilityTier::Consensus
+                    )
+            }) {
+                return Err(EngineError::InvalidInput(format!(
+                    "capability validation episode {episode_id} is not a successful strong evaluation"
+                )));
+            }
+        }
+        Ok(())
     }
 
     pub fn require_capability_procedure(
@@ -779,11 +839,15 @@ impl Engine {
     }
 
     pub fn metrics_snapshot(&self) -> Result<MetricsSnapshot, EngineError> {
+        let teacher = self.episodes.teacher_interaction_metrics()?;
+        let skills = self.list_managed_skills(512)?;
+        let phase6 = phase6_evidence_metrics(teacher, &skills);
         Ok(MetricsSnapshot {
             episode_count: self.episodes.count()?,
             verified_answer_count: self.regression.count()?,
             rung_distribution: self.episodes.rung_distribution()?,
             intuition: self.intuition.metrics()?,
+            phase6,
         })
     }
 
@@ -1623,6 +1687,42 @@ pub(crate) fn observed_fact_for_procedure(
         Some(concept) => ObservedFact::for_concept(concept, value, scope),
         None => ObservedFact::for_procedure(procedure.id, value, scope),
     }
+}
+
+fn phase6_evidence_metrics(
+    teacher: TeacherInteractionMetrics,
+    skills: &[crate::ManagedSkill],
+) -> Phase6EvidenceMetrics {
+    let mut metrics = Phase6EvidenceMetrics {
+        teacher_interaction_episodes: teacher.teacher_interaction_episodes,
+        teacher_assisted_successes: teacher.teacher_assisted_successes,
+        teacher_free_successes: teacher.teacher_free_successes,
+        managed_skill_records_examined: skills.len() as u64,
+        ..Phase6EvidenceMetrics::default()
+    };
+    for skill in skills {
+        metrics.currently_promoted_skills +=
+            u64::from(skill.lifecycle == crate::SkillLifecycle::Promoted);
+        // These counters can only be incremented by `execute_managed_skill`,
+        // which accepts promoted skills exclusively.
+        metrics.post_promotion_skill_uses += u64::from(skill.experience_uses);
+        metrics.post_promotion_skill_successes += u64::from(skill.experience_successes);
+        match skill.promotion_verdict.as_ref() {
+            Some(ekg_adapt::PromotionVerdict::NoMeasuredWin) => {
+                metrics.replay_preserved_skill_verdicts += 1;
+            }
+            Some(ekg_adapt::PromotionVerdict::ShadowEligible { wins }) => {
+                metrics.replay_preserved_skill_verdicts += 1;
+                metrics.transfer_eligible_skill_verdicts +=
+                    u64::from(wins.contains(&ekg_adapt::PromotionWin::Transfer));
+            }
+            Some(ekg_adapt::PromotionVerdict::Regression { .. }) => {
+                metrics.replay_regressions += 1;
+            }
+            Some(ekg_adapt::PromotionVerdict::InsufficientEvidence) | None => {}
+        }
+    }
+    metrics
 }
 
 fn claim_from_observed_fact(episode: &Episode, fact: &ObservedFact) -> ekg_adapt::Claim {

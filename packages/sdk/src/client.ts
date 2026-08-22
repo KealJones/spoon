@@ -43,6 +43,7 @@ import type {
   RefineContradictionInput,
   RankingEvaluation,
   RepresentationModel,
+  ReconstructedCapability,
   SemanticRecallEvaluation,
   RpcTransport,
   TeacherProposalWire,
@@ -300,6 +301,23 @@ export class EkgClient {
     return this.transport.request<ImportedCapability>("capability.import", {
       bundle,
     });
+  }
+
+  importAndRevalidateCapability(
+    bundle: CapabilityBundle,
+    validation: LocalValidation,
+  ): Promise<ImportedCapability> {
+    return this.transport.request<ImportedCapability>(
+      "capability.importAndRevalidate",
+      { bundle, validation },
+    );
+  }
+
+  reconstructCapability(contentId: string): Promise<ReconstructedCapability> {
+    return this.transport.request<ReconstructedCapability>(
+      "capability.reconstruct",
+      { contentId },
+    );
   }
 
   exportCapability(contentId: string): Promise<{ bundle: CapabilityBundle }> {

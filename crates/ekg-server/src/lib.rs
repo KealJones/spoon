@@ -11,10 +11,10 @@ use ekg_core::{
     Value as EkgValue,
 };
 use ekg_engine::{
-    AdaptationPlanId, AdaptationPlanRequest, ApplyAdaptationRequest, CuriosityGap, CycleBudget,
-    CycleId, CycleInput, CycleOutcome, CycleProgress, Engine, EngineError, FailureAnalysisRequest,
-    GoalKind, InterfaceDescription, LocalValidation, Permission, PromotionReplay, SkillCandidate,
-    TeacherProposalWire,
+    AdaptationPlanId, AdaptationPlanRequest, ApplyAdaptationRequest, CapabilityBundle,
+    CuriosityGap, CycleBudget, CycleId, CycleInput, CycleOutcome, CycleProgress, Engine,
+    EngineError, FailureAnalysisRequest, GoalKind, InterfaceDescription, LocalValidation,
+    Permission, PromotionReplay, SkillCandidate, TeacherProposalWire,
 };
 use ekg_episode::{EpisodeFeedback, EpisodeQuery, FeedbackSource};
 use ekg_graph::GraphError;
@@ -269,6 +269,18 @@ impl RpcServer {
                         .map_err(engine_error)?,
                 )
             }
+            "capability.importAndRevalidate" => {
+                let input: CapabilityImportRevalidateParam = decode(params)?;
+                let bytes = serde_json::to_vec(&input.bundle).map_err(|error| {
+                    RpcFault::new(-32602, "invalid capability bundle")
+                        .with_data(json!({"cause": error.to_string()}))
+                })?;
+                encode(
+                    self.engine
+                        .import_and_revalidate_capability_bundle(&bytes, &input.validation)
+                        .map_err(engine_error)?,
+                )
+            }
             "capability.export" => {
                 let input: CapabilityIdParam = decode(params)?;
                 let bytes = self
@@ -286,6 +298,14 @@ impl RpcServer {
                 encode(
                     self.engine
                         .revalidate_capability(&input.content_id, &input.validation)
+                        .map_err(engine_error)?,
+                )
+            }
+            "capability.reconstruct" => {
+                let input: CapabilityIdParam = decode(params)?;
+                encode(
+                    self.engine
+                        .reconstruct_capability(&input.content_id)
                         .map_err(engine_error)?,
                 )
             }
@@ -912,6 +932,13 @@ fn requires_admin(method: &str) -> bool {
 #[derive(Debug, Deserialize)]
 struct CapabilityBundleParam {
     bundle: Value,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CapabilityImportRevalidateParam {
+    bundle: CapabilityBundle,
+    validation: LocalValidation,
 }
 
 #[derive(Debug, Deserialize)]
