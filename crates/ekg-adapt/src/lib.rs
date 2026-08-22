@@ -3,6 +3,7 @@
 mod contradiction;
 mod error;
 mod policy;
+mod promotion;
 mod reconciliation;
 
 pub use contradiction::{
@@ -16,6 +17,7 @@ pub use policy::{
     CorrectionApplier, CorrectionDecision, CorrectionRequest, CorrectionTarget, EvidenceGate,
     MutationAuthorizer,
 };
+pub use promotion::{PromotionGate, PromotionReplay, PromotionVerdict, PromotionWin};
 pub use reconciliation::{
     AlternativeSupport, AlternativeSupportVerdict, GraphAlternativeSupport, KnowledgeRef,
     ReconciliationApplier, ReconciliationApplyResult, ReconciliationEntry, ReconciliationOutcome,

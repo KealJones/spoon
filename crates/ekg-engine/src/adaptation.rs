@@ -4,8 +4,8 @@ use ekg_adapt::{
     AdaptationPolicy, ApplyOutcome, AttributionStrength, Claim, Contradiction, ContradictionId,
     CorrectionAction, CorrectionApplier, CorrectionDecision, CorrectionRequest, CorrectionTarget,
     DemonstratedFeature, EvidenceGate, GraphAlternativeSupport, KnowledgeRef, MutationAuthorizer,
-    ReconciliationApplier, ReconciliationOutcome, ReconciliationPlan, ReconciliationPlanner,
-    Refinement, StagedReconciliation, Uncertainty,
+    PromotionGate, PromotionReplay, ReconciliationApplier, ReconciliationOutcome,
+    ReconciliationPlan, ReconciliationPlanner, Refinement, StagedReconciliation, Uncertainty,
 };
 use ekg_core::{
     ConceptId, Condition, Episode, EpisodeId, Lifecycle, MutabilityClass, Procedure, ProcedureId,
@@ -1483,8 +1483,7 @@ impl Engine {
         if !is_narrow_body_replacement(&incumbent, challenger)? || episodes.is_empty() {
             return Ok(false);
         }
-        let mut verified_failure = false;
-        let mut verified_regression = false;
+        let mut replays = Vec::new();
         for episode in episodes {
             let Some(evaluation) = episode.evaluation.as_ref() else {
                 return Ok(false);
@@ -1533,22 +1532,24 @@ impl Engine {
                     }
                 }
             }
-            if evaluator
-                .exec_procedure(&incumbent_id, args)
-                .ok()
-                .map(|result| result.value)
+            let candidate = evaluator.exec_procedure(&incumbent_id, args).ok();
+            let challenger_correct = candidate
                 .as_ref()
-                != Some(expected)
-            {
-                return Ok(false);
-            }
-            if evaluation.success {
-                verified_regression = true;
-            } else {
-                verified_failure = true;
-            }
+                .is_some_and(|result| &result.value == expected);
+            replays.push(PromotionReplay {
+                episode_id: episode.id,
+                incumbent_correct: evaluation.success,
+                challenger_correct,
+                incumbent_trace_steps: u32::try_from(trace.len()).ok(),
+                challenger_trace_steps: candidate
+                    .as_ref()
+                    .and_then(|result| u32::try_from(result.trace.len()).ok()),
+                incumbent_candidates_explored: None,
+                challenger_candidates_explored: None,
+                transfer: false,
+            });
         }
-        Ok(verified_failure && verified_regression)
+        Ok(PromotionGate::evaluate(replays).shadow_eligible())
     }
 
     fn recover_narrow_apply(

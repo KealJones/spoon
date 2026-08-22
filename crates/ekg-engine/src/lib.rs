@@ -21,6 +21,13 @@ pub use cycle::{
     CycleBudget, CycleDisposition, CycleId, CycleInput, CycleOutcome, CycleProgress,
     TeacherProposalWire, TeacherRequestWire,
 };
+pub use ekg_capability::{
+    CapabilityBundle, CapabilityError, CapabilityProcedure, CapabilityStatus, CapabilityStore,
+    CapabilityTest, Dependency, DiscoveredOperation, Effect, ImportedCapability,
+    InterfaceDescription, InvocationReceipt, LocalValidation, NativePrimitive, Permission,
+    PrimitivePolicy, PrimitiveRequest, Provenance, ResourceBounds, bundle_content_id,
+    discover_interface, export_bundle, import_bundle, run_sandbox_tests,
+};
 pub use ekg_graph::{
     ActivatedConcept, ActivationHop, ActivationSeed, ActivationSpreadQuery, ActivationSpreadResult,
     MAX_ACTIVATION_CANDIDATES, MAX_ACTIVATION_EXPANSIONS, MAX_ACTIVATION_HOPS,

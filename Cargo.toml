@@ -9,6 +9,7 @@ members = [
     "crates/ekg-credit",
     "crates/ekg-adapt",
     "crates/ekg-intuition",
+    "crates/ekg-capability",
     "crates/ekg-engine",
     "crates/ekg-server",
 ]
@@ -27,6 +28,7 @@ ekg-reason = { path = "crates/ekg-reason" }
 ekg-credit = { path = "crates/ekg-credit" }
 ekg-adapt = { path = "crates/ekg-adapt" }
 ekg-intuition = { path = "crates/ekg-intuition" }
+ekg-capability = { path = "crates/ekg-capability" }
 ekg-engine = { path = "crates/ekg-engine" }
 
 serde = { version = "1", features = ["derive"] }

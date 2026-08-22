@@ -28,7 +28,7 @@ the next executable step changes.
   gate included 131 Rust tests and 32 TypeScript tests plus strict workspace
   format, clippy, build, typecheck, package build, depcheck, and diff checks.
 
-## Current phase: Phase 3 — Intuition + self-supervision
+## Current phase: Phase 4 — Consolidation + Phase 5 capability foundation
 
 ## Pause checkpoint (2026-08-22)
 
@@ -49,6 +49,16 @@ the next executable step changes.
   spread, ranked local interpretation, trusted recall, stale-index cleanup,
   and larger-corpus evidence are now implemented; the phase still needs
   held-out baseline/rung evidence and representation-version evaluation.
+
+- Phase 4 now has a pure replay promotion gate: correctness regressions reject
+  shadow eligibility, and a measurable compression/search/coverage/transfer
+  win is required before shadowing. Existing replacement replay delegates to
+  this gate without changing trust or admin boundaries.
+- Phase 5 capability foundation is implemented in `ekg-capability`: typed
+  native primitive policy, explicit discovery/synthesis, canonical content-
+  addressed bundles, quarantine import, local sandbox revalidation, and
+  separate revocable local grants. Engine facades are available; RPC/SDK/CLI
+  surfaces and full primitive adapters remain next.
 
 ## Current restart point (authoritative)
 

@@ -1,5 +1,8 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
+use ekg_capability::{
+    CapabilityBundle, CapabilityStore, ImportedCapability, LocalValidation, Permission,
+};
 use ekg_core::{
     Concept, ConceptId, ContractCheckResult, EkgError, Episode, EpisodeCost, EpisodeId,
     EscalationRung, Evaluation, Lifecycle, ObservedFact, Procedure, ProcedureId, ReasoningTrace,
@@ -77,6 +80,7 @@ pub struct Engine {
     pub(crate) runtime: crate::runtime::RuntimeStore,
     pub(crate) trust: crate::trust::TrustLedger,
     pub(crate) intuition: IntuitionStore,
+    pub(crate) capabilities: CapabilityStore,
     pub(crate) instance_id: uuid::Uuid,
     pub(crate) admin_enabled: bool,
 }
@@ -95,6 +99,8 @@ impl Engine {
             runtime: crate::runtime::RuntimeStore::open(path)?,
             trust: crate::trust::TrustLedger::open(path)?,
             intuition: IntuitionStore::open(path)?,
+            capabilities: CapabilityStore::open(path)
+                .map_err(|error| EngineError::InvalidInput(format!("capability store: {error}")))?,
             instance_id: uuid::Uuid::new_v4(),
             admin_enabled: false,
         };
@@ -124,6 +130,8 @@ impl Engine {
             runtime: crate::runtime::RuntimeStore::in_memory()?,
             trust: crate::trust::TrustLedger::in_memory()?,
             intuition: IntuitionStore::in_memory()?,
+            capabilities: CapabilityStore::in_memory()
+                .map_err(|error| EngineError::InvalidInput(format!("capability store: {error}")))?,
             instance_id: uuid::Uuid::new_v4(),
             admin_enabled: false,
         })
@@ -172,6 +180,73 @@ impl Engine {
         query: &ActivationSpreadQuery,
     ) -> Result<ActivationSpreadResult, EngineError> {
         Ok(self.graph.activation_spread(query)?)
+    }
+
+    pub fn discover_capability(
+        &self,
+        description: &ekg_capability::InterfaceDescription,
+    ) -> Result<CapabilityBundle, EngineError> {
+        ekg_capability::discover_interface(description)
+            .map_err(|error| EngineError::InvalidInput(format!("capability discovery: {error}")))
+    }
+
+    pub fn import_capability_bundle(
+        &self,
+        bytes: &[u8],
+    ) -> Result<ImportedCapability, EngineError> {
+        self.capabilities
+            .import(bytes)
+            .map_err(|error| EngineError::InvalidInput(format!("capability import: {error}")))
+    }
+
+    pub fn export_capability_bundle(&self, content_id: &str) -> Result<Vec<u8>, EngineError> {
+        self.capabilities
+            .export(content_id)
+            .map_err(|error| EngineError::InvalidInput(format!("capability export: {error}")))
+    }
+
+    pub fn revalidate_capability(
+        &self,
+        content_id: &str,
+        validation: &LocalValidation,
+    ) -> Result<ImportedCapability, EngineError> {
+        self.capabilities
+            .revalidate(content_id, validation)
+            .map_err(|error| EngineError::InvalidInput(format!("capability validation: {error}")))
+    }
+
+    pub fn grant_capability_permission(
+        &self,
+        content_id: &str,
+        permission: &Permission,
+    ) -> Result<(), EngineError> {
+        self.require_admin()?;
+        self.capabilities
+            .grant(content_id, permission)
+            .map_err(|error| EngineError::InvalidInput(format!("capability grant: {error}")))
+    }
+
+    pub fn revoke_capability_permission(
+        &self,
+        content_id: &str,
+        permission: &Permission,
+    ) -> Result<(), EngineError> {
+        self.require_admin()?;
+        self.capabilities
+            .revoke(content_id, permission)
+            .map_err(|error| EngineError::InvalidInput(format!("capability revoke: {error}")))
+    }
+
+    pub fn require_capability_permissions(
+        &self,
+        content_id: &str,
+        permissions: &[Permission],
+    ) -> Result<(), EngineError> {
+        self.capabilities
+            .require_permissions(content_id, permissions)
+            .map_err(|error| {
+                EngineError::InvalidInput(format!("capability authorization: {error}"))
+            })
     }
 
     pub fn record_ranking_example(&self, example: &RankingExample) -> Result<(), EngineError> {

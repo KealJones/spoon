@@ -96,6 +96,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ekg-capability"
+version = "0.1.0"
+dependencies = [
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "uuid",
+]
+
+[[package]]
 name = "ekg-core"
 version = "0.1.0"
 dependencies = [
@@ -123,6 +135,7 @@ name = "ekg-engine"
 version = "0.1.0"
 dependencies = [
  "ekg-adapt",
+ "ekg-capability",
  "ekg-core",
  "ekg-credit",
  "ekg-episode",
