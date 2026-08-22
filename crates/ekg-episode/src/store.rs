@@ -200,6 +200,17 @@ pub struct VerifiedRegressionCase {
     pub test_case: TestCase,
 }
 
+/// Counts finalized episode outcomes with an explicit durable teacher request.
+/// A request is used instead of merely checking for arbitrary interaction JSON,
+/// because other engine features may retain non-teacher provenance there.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TeacherInteractionMetrics {
+    pub teacher_interaction_episodes: u64,
+    pub teacher_assisted_successes: u64,
+    pub teacher_free_successes: u64,
+}
+
 impl Default for EpisodeQuery {
     fn default() -> Self {
         Self {
@@ -1308,6 +1319,30 @@ impl EpisodeStore {
                 "SELECT COUNT(*) FROM episodes WHERE finalized = 1",
                 [],
                 |row| row.get(0),
+            )
+            .map_err(|e| EkgError::Storage(e.to_string()))
+    }
+
+    /// Aggregates only durable teacher requests and finalized outcomes. This
+    /// supports an aggregate independence signal, not per-domain or temporal
+    /// teacher-weaning claims, because neither domain labels nor cohorts are
+    /// part of the episode schema.
+    pub fn teacher_interaction_metrics(&self) -> Result<TeacherInteractionMetrics, EkgError> {
+        self.conn
+            .query_row(
+                "SELECT
+                    COALESCE(SUM(CASE WHEN json_type(data_json, '$.teacher_interaction.request') IS NOT NULL THEN 1 ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN success = 1 AND json_type(data_json, '$.teacher_interaction.request') IS NOT NULL THEN 1 ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN success = 1 AND json_type(data_json, '$.teacher_interaction.request') IS NULL THEN 1 ELSE 0 END), 0)
+                 FROM episodes WHERE finalized = 1",
+                [],
+                |row| {
+                    Ok(TeacherInteractionMetrics {
+                        teacher_interaction_episodes: row.get(0)?,
+                        teacher_assisted_successes: row.get(1)?,
+                        teacher_free_successes: row.get(2)?,
+                    })
+                },
             )
             .map_err(|e| EkgError::Storage(e.to_string()))
     }

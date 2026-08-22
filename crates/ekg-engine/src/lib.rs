@@ -44,7 +44,9 @@ pub use ekg_intuition::{
     EpistemicChallengeKind, IntuitionMetrics, RankingEvaluation, RankingExample, RecallCandidate,
     RecallDocument, RecallKind, RepresentationModel, SemanticRecallEvaluation, SupervisionTask,
 };
-pub use engine::{Engine, EngineError, ExecutionOutcome, MetricsSnapshot, ReplayOutcome};
+pub use engine::{
+    Engine, EngineError, ExecutionOutcome, MetricsSnapshot, Phase6EvidenceMetrics, ReplayOutcome,
+};
 pub use goals::{CuriosityGap, GapKind, Goal, GoalDerivationRecord, GoalKind, GoalLearningRecord};
 pub use regression::VerifiedAnswerRecord;
 pub use skills::{ManagedSkill, SkillLifecycle};
