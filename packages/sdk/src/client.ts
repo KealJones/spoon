@@ -496,6 +496,18 @@ export class EkgClient {
     });
   }
 
+  executeManagedSkill<T = unknown>(
+    skillId: string,
+    inputs: Record<string, JsonValue> = {},
+    prediction?: JsonValue,
+  ): Promise<T> {
+    return this.transport.request<T>("consolidation.execute", {
+      skillId,
+      inputs,
+      ...(prediction === undefined ? {} : { prediction }),
+    });
+  }
+
   registerSingleSuccessSkill(episodeId: string): Promise<ManagedSkill> {
     return this.transport.request<ManagedSkill>(
       "consolidation.registerSingle",

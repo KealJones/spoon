@@ -73,6 +73,11 @@ fn trusted_candidate_moves_through_shadow_promotion_and_reconstructible_retireme
     assert_eq!(promoted.lifecycle, SkillLifecycle::Promoted);
     assert_eq!(promoted.shadow_live_wins, 1);
 
+    let reused = engine
+        .execute_managed_skill(&managed.id, inputs(5), Some(Value::Int(10)))
+        .unwrap();
+    assert_eq!(reused.value, Value::Int(10));
+
     let retired = engine
         .retire_managed_skill(&managed.id, "skill-successor", "subsumed")
         .unwrap();

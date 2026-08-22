@@ -492,6 +492,14 @@ impl RpcServer {
                         .map_err(engine_error)?,
                 )
             }
+            "consolidation.execute" => {
+                let input: SkillExecuteParam = decode(params)?;
+                encode(
+                    self.engine
+                        .execute_managed_skill(&input.skill_id, input.inputs, input.prediction)
+                        .map_err(engine_error)?,
+                )
+            }
             "consolidation.evaluateShadow" => {
                 let input: SkillShadowReplayParam = decode(params)?;
                 encode(
@@ -908,6 +916,15 @@ struct CapabilityProcedureParam {
     content_id: String,
     #[serde(rename = "procedureId")]
     procedure_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SkillExecuteParam {
+    skill_id: String,
+    #[serde(default)]
+    inputs: BTreeMap<String, EkgValue>,
+    prediction: Option<EkgValue>,
 }
 
 #[derive(Debug, Deserialize)]

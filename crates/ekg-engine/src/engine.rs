@@ -579,6 +579,74 @@ impl Engine {
             .promote_from_live_shadow(skill_id, &episode.id.to_string())
     }
 
+    /// Executes a promoted skill only when its trusted source episodes identify
+    /// one stable, current procedure. Failure critics and unpromoted candidates
+    /// remain non-executable evidence.
+    pub fn execute_managed_skill(
+        &self,
+        skill_id: &str,
+        inputs: BTreeMap<String, Value>,
+        prediction: Option<Value>,
+    ) -> Result<ExecutionOutcome, EngineError> {
+        let skill = self.skills.get(skill_id)?.ok_or_else(|| {
+            EngineError::InvalidInput(format!("unknown managed skill {skill_id}"))
+        })?;
+        if skill.lifecycle != crate::SkillLifecycle::Promoted {
+            return Err(EngineError::InvalidInput(
+                "only promoted skills are executable".into(),
+            ));
+        }
+        if skill.candidate.failure_critic {
+            return Err(EngineError::InvalidInput(
+                "failure-critic skills are guards, not executable procedures".into(),
+            ));
+        }
+        let mut selected: Option<(ProcedureId, u32)> = None;
+        for source_id in &skill.candidate.source_episode_ids {
+            let episode = self.episodes.get(*source_id)?;
+            let Some(action) = episode.action.as_deref() else {
+                return Err(EngineError::InvalidInput(
+                    "promoted skill source has no executable procedure action".into(),
+                ));
+            };
+            let Some(action) = action.strip_prefix("procedure:") else {
+                return Err(EngineError::InvalidInput(
+                    "promoted skill source is not a procedure execution".into(),
+                ));
+            };
+            let Some((id, version)) = action.split_once('@') else {
+                return Err(EngineError::InvalidInput(
+                    "promoted skill source procedure action is unversioned".into(),
+                ));
+            };
+            let procedure_id = ProcedureId(uuid::Uuid::parse_str(id).map_err(|_| {
+                EngineError::InvalidInput(
+                    "promoted skill source has an invalid procedure id".into(),
+                )
+            })?);
+            let version = version.parse::<u32>().map_err(|_| {
+                EngineError::InvalidInput(
+                    "promoted skill source has an invalid procedure version".into(),
+                )
+            })?;
+            if let Some((selected_id, selected_version)) = selected {
+                if selected_id != procedure_id || selected_version != version {
+                    return Err(EngineError::InvalidInput(
+                        "promoted skill sources must identify one procedure version".into(),
+                    ));
+                }
+            } else {
+                selected = Some((procedure_id, version));
+            }
+        }
+        let Some((procedure_id, _version)) = selected else {
+            return Err(EngineError::InvalidInput(
+                "promoted skill has no source episodes".into(),
+            ));
+        };
+        self.execute_procedure(procedure_id, inputs, prediction)
+    }
+
     /// Retirement changes ranking eligibility but retains the candidate,
     /// evidence, and explicit successor linkage for reconstruction.
     pub fn retire_managed_skill(
