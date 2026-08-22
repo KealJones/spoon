@@ -30,6 +30,20 @@ the next executable step changes.
 
 ## Current phase: Phase 2 — Credit assignment and adaptation
 
+## Pause checkpoint (2026-08-22)
+
+- Phase 2 is complete and committed at `0e8e999` (`feat: complete Phase 2
+  credit and adaptation`).
+- The full gate passed immediately before the pause: workspace Rust tests and
+  strict Clippy, TypeScript tests, typecheck, build, and depcheck.
+- Phase 2 audit status is documented in `phase2-final-audit.md`; its explicit
+  limitation is that the independent subagent audit was unavailable after the
+  delegated agents exhausted their usage. Root remediation and adversarial
+  coverage are recorded with that limitation rather than overstated.
+- Work is intentionally paused before Phase 3. Resume by updating the plan,
+  reading the Phase 3 section and current repository state, and leaving the
+  Phase 5 capability design queued as already documented.
+
 ## Current restart point (authoritative)
 
 - Phase 2 remains **not exit-clean** until a renewed adversarial audit and the
