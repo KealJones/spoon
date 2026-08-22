@@ -113,6 +113,10 @@ pub struct IntuitionMetrics {
     pub ranking_examples: u64,
     pub supervision_tasks: u64,
     pub grounded_tasks: u64,
+    /// The observed share of supervision tasks that have an external
+    /// grounder. Exposing the derived value prevents consumers from silently
+    /// treating a raw grounded-task count as a health metric.
+    pub grounding_ratio: f64,
 }
 
 pub struct IntuitionStore {
@@ -475,6 +479,11 @@ impl IntuitionStore {
             [],
             |row| row.get::<_, i64>(0),
         )?;
+        let grounding_ratio = if supervision_tasks == 0 {
+            0.0
+        } else {
+            grounded_tasks as f64 / supervision_tasks as f64
+        };
         Ok(IntuitionMetrics {
             indexed_documents: indexed_documents as u64,
             inverted_term_rows: inverted_term_rows as u64,
@@ -483,6 +492,7 @@ impl IntuitionStore {
             ranking_examples: ranking_examples as u64,
             supervision_tasks: supervision_tasks as u64,
             grounded_tasks: grounded_tasks as u64,
+            grounding_ratio,
         })
     }
 
@@ -686,6 +696,27 @@ mod tests {
             .unwrap();
         assert!(task.grounded);
         assert_eq!(store.grounding_ratio().unwrap(), 1.0);
-        assert_eq!(store.metrics().unwrap().supervision_tasks, 1);
+        let metrics = store.metrics().unwrap();
+        assert_eq!(metrics.supervision_tasks, 1);
+        assert_eq!(metrics.grounding_ratio, 1.0);
+    }
+
+    #[test]
+    fn metrics_expose_a_zero_grounding_ratio_for_an_ungrounded_task() {
+        let store = IntuitionStore::in_memory().unwrap();
+        store
+            .generate_self_supervision(
+                None,
+                serde_json::json!({"situation":"unverified"}),
+                serde_json::json!({"answer":"unknown"}),
+                "predict_missing_phrase",
+                false,
+            )
+            .unwrap();
+
+        let metrics = store.metrics().unwrap();
+        assert_eq!(metrics.supervision_tasks, 1);
+        assert_eq!(metrics.grounded_tasks, 0);
+        assert_eq!(metrics.grounding_ratio, 0.0);
     }
 }

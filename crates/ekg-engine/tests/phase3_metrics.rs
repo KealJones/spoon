@@ -65,5 +65,7 @@ fn larger_corpus_keeps_recall_bounded_and_tracks_grounding() {
             true,
         )
         .unwrap();
-    assert_eq!(engine.intuition_metrics().unwrap().grounded_tasks, 1);
+    let metrics = engine.intuition_metrics().unwrap();
+    assert_eq!(metrics.grounded_tasks, 1);
+    assert_eq!(metrics.grounding_ratio, 1.0);
 }
