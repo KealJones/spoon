@@ -69,6 +69,9 @@ The latest committed increments are:
 - `318c7ce`, `240523e`, `2a99bdf` — goal-bound learning provenance, storage-level
   standing-goal immutability, derived instrumental-goal provenance, and RPC/SDK
   APIs for both derived-goal paths.
+- `153aed2` — promoted managed skills can execute only when their trusted
+  source episodes identify one stable versioned procedure; failure critics,
+  candidates, and retired skills fail closed.
 
 The first usable chat command is now:
 
@@ -104,9 +107,17 @@ the low-level capability store remains usable for isolated bundle tests.
 
 Representation training is intentionally a bounded term-weight artifact and
 does not yet replace the deterministic lexical/hash retrieval index with a
-semantic embedding model. Skill lifecycle records are durable and gated, but
-skills are not yet executable/ranked procedures. These are open implementation
-gaps, not claims of completion.
+semantic embedding model. Promoted skills can execute through one stable source
+procedure, but there is not yet a learned skill-ranking policy or generalized
+neutral skill procedure representation. These are open implementation gaps, not
+claims of completion.
+
+Latest full gates (2026-08-22): workspace Rust tests/all targets, strict
+workspace Clippy, TypeScript tests, package builds, typecheck, depcheck, and
+diff checks pass. The only intentional tracked worktree modification is the
+pre-existing whitespace-only change in `crates/ekg-engine/src/runtime.rs`;
+user-owned untracked reference/archive files and agent scratchpads remain
+unstaged.
 
 The inspector narrative is available at `GET /api/episodes/:id` and from the
 episode detail view. It explains teacher/provider/model/proposal/validation,
