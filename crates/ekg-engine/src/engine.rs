@@ -339,6 +339,27 @@ impl Engine {
         self.goals.list_goals()
     }
 
+    pub fn create_learning_goal(
+        &self,
+        statement: &str,
+        standing_goal_id: &str,
+        source_gap_id: &str,
+        derivation_reason: &str,
+    ) -> Result<crate::goals::Goal, EngineError> {
+        self.goals.create_learning_goal(
+            statement,
+            standing_goal_id,
+            source_gap_id,
+            derivation_reason,
+        )
+    }
+
+    pub fn list_learning_goal_records(
+        &self,
+    ) -> Result<Vec<crate::goals::GoalLearningRecord>, EngineError> {
+        self.goals.list_learning_goal_records()
+    }
+
     pub fn record_curiosity_gap(
         &self,
         gap: &crate::goals::CuriosityGap,

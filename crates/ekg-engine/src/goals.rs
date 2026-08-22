@@ -1,4 +1,4 @@
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -24,6 +24,16 @@ pub struct Goal {
     pub statement: String,
     pub parent_id: Option<String>,
     pub immutable: bool,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GoalLearningRecord {
+    pub learning_goal_id: String,
+    pub standing_goal_id: String,
+    pub source_gap_id: String,
+    pub derivation_reason: String,
     pub created_at: i64,
 }
 
@@ -77,7 +87,8 @@ impl GoalStore {
 
     fn schema(&self) -> Result<(), EngineError> {
         self.conn.execute_batch(
-            "CREATE TABLE IF NOT EXISTS ekg_goals (
+            "PRAGMA foreign_keys = ON;
+            CREATE TABLE IF NOT EXISTS ekg_goals (
                 id TEXT PRIMARY KEY,
                 kind TEXT NOT NULL,
                 statement TEXT NOT NULL,
@@ -99,7 +110,19 @@ impl GoalStore {
                 created_at INTEGER NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_ekg_gaps_rank
-                ON ekg_curiosity_gaps(resolved, value_score DESC, created_at ASC);",
+                ON ekg_curiosity_gaps(resolved, value_score DESC, created_at ASC);
+            CREATE TABLE IF NOT EXISTS ekg_goal_learning_records (
+                learning_goal_id TEXT PRIMARY KEY NOT NULL
+                    REFERENCES ekg_goals(id),
+                standing_goal_id TEXT NOT NULL
+                    REFERENCES ekg_goals(id),
+                source_gap_id TEXT NOT NULL
+                    REFERENCES ekg_curiosity_gaps(id),
+                derivation_reason TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_ekg_goal_learning_standing
+                ON ekg_goal_learning_records(standing_goal_id, created_at ASC);",
         )?;
         Ok(())
     }
@@ -111,9 +134,14 @@ impl GoalStore {
         parent_id: Option<&str>,
     ) -> Result<Goal, EngineError> {
         let statement = bounded_text(statement)?;
-        if matches!(kind, GoalKind::Standing) && parent_id.is_some() {
+        if matches!(kind, GoalKind::Instrumental | GoalKind::Learning) {
             return Err(EngineError::InvalidInput(
-                "standing goals cannot be instrumental children".into(),
+                "derived goals require a goal-bound derivation API".into(),
+            ));
+        }
+        if parent_id.is_some() {
+            return Err(EngineError::InvalidInput(
+                "externally supplied task and standing goals cannot have parents".into(),
             ));
         }
         let goal = Goal {
@@ -137,6 +165,113 @@ impl GoalStore {
             ],
         )?;
         Ok(goal)
+    }
+
+    pub fn create_learning_goal(
+        &self,
+        statement: &str,
+        standing_goal_id: &str,
+        source_gap_id: &str,
+        derivation_reason: &str,
+    ) -> Result<Goal, EngineError> {
+        let statement = bounded_text(statement)?;
+        let derivation_reason = bounded_text(derivation_reason)?;
+        let transaction = self.conn.unchecked_transaction()?;
+
+        let standing_kind = transaction
+            .query_row(
+                "SELECT kind FROM ekg_goals
+                 WHERE id = ?1 AND immutable = 1",
+                params![standing_goal_id],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        let Some(standing_kind) = standing_kind else {
+            return Err(EngineError::InvalidInput(
+                "learning goals require an existing immutable standing goal".into(),
+            ));
+        };
+        if serde_json::from_str::<GoalKind>(&standing_kind)? != GoalKind::Standing {
+            return Err(EngineError::InvalidInput(
+                "learning goals require an existing immutable standing goal".into(),
+            ));
+        }
+
+        let gap_resolved = transaction
+            .query_row(
+                "SELECT resolved FROM ekg_curiosity_gaps WHERE id = ?1",
+                params![source_gap_id],
+                |row| row.get::<_, bool>(0),
+            )
+            .optional()?;
+        match gap_resolved {
+            Some(false) => {}
+            Some(true) => {
+                return Err(EngineError::InvalidInput(
+                    "resolved curiosity gaps cannot authorize learning goals".into(),
+                ));
+            }
+            None => {
+                return Err(EngineError::InvalidInput(
+                    "learning goals require an existing curiosity gap".into(),
+                ));
+            }
+        }
+
+        let created_at = unix_time();
+        let goal = Goal {
+            id: Uuid::new_v4().to_string(),
+            kind: GoalKind::Learning,
+            statement,
+            parent_id: Some(standing_goal_id.to_owned()),
+            immutable: false,
+            created_at,
+        };
+        transaction.execute(
+            "INSERT INTO ekg_goals (id, kind, statement, parent_id, immutable, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                goal.id,
+                serde_json::to_string(&goal.kind)?,
+                goal.statement,
+                goal.parent_id,
+                goal.immutable,
+                goal.created_at
+            ],
+        )?;
+        transaction.execute(
+            "INSERT INTO ekg_goal_learning_records
+             (learning_goal_id, standing_goal_id, source_gap_id, derivation_reason, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                goal.id,
+                standing_goal_id,
+                source_gap_id,
+                derivation_reason,
+                created_at
+            ],
+        )?;
+        transaction.commit()?;
+        Ok(goal)
+    }
+
+    pub fn list_learning_goal_records(&self) -> Result<Vec<GoalLearningRecord>, EngineError> {
+        let mut statement = self.conn.prepare(
+            "SELECT learning_goal_id, standing_goal_id, source_gap_id,
+                    derivation_reason, created_at
+             FROM ekg_goal_learning_records
+             ORDER BY created_at ASC, learning_goal_id ASC",
+        )?;
+        let rows = statement.query_map([], |row| {
+            Ok(GoalLearningRecord {
+                learning_goal_id: row.get(0)?,
+                standing_goal_id: row.get(1)?,
+                source_gap_id: row.get(2)?,
+                derivation_reason: row.get(3)?,
+                created_at: row.get(4)?,
+            })
+        })?;
+        rows.map(|row| row.map_err(EngineError::from)).collect()
     }
 
     pub fn list_goals(&self) -> Result<Vec<Goal>, EngineError> {
@@ -167,10 +302,21 @@ impl GoalStore {
     pub fn record_gap(&self, gap: &CuriosityGap) -> Result<(), EngineError> {
         let statement = bounded_text(&gap.statement)?;
         self.conn.execute(
-            "INSERT OR REPLACE INTO ekg_curiosity_gaps
+            "INSERT INTO ekg_curiosity_gaps
              (id, kind, statement, blast_radius, goal_relevance, learning_progress,
               cost_to_close, value_score, source_episode, resolved, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+             ON CONFLICT(id) DO UPDATE SET
+                kind = excluded.kind,
+                statement = excluded.statement,
+                blast_radius = excluded.blast_radius,
+                goal_relevance = excluded.goal_relevance,
+                learning_progress = excluded.learning_progress,
+                cost_to_close = excluded.cost_to_close,
+                value_score = excluded.value_score,
+                source_episode = excluded.source_episode,
+                resolved = excluded.resolved,
+                created_at = excluded.created_at",
             params![
                 gap.id,
                 serde_json::to_string(&gap.kind)?,
