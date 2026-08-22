@@ -177,6 +177,13 @@ fn failed_execution_records_the_episode_and_partial_trace() {
         trace["steps"][0]["status"]["Failed"]["error"],
         "contract violation: requires condition violated: x is non-negative"
     );
+    let gaps = engine.rank_curiosity_gaps(8).unwrap();
+    assert_eq!(gaps.len(), 1);
+    let source_episode = episode_id.to_string();
+    assert_eq!(
+        gaps[0].source_episode.as_deref(),
+        Some(source_episode.as_str())
+    );
 }
 
 #[test]

@@ -948,6 +948,7 @@ impl Engine {
         self.index_episode(episode)?;
         self.record_episode_learning(episode)?;
         self.record_verified_regression(episode)?;
+        self.record_episode_curiosity(episode)?;
         self.runtime
             .complete_episode_saga(&episode.id.to_string())?;
         Ok(())
@@ -1005,6 +1006,29 @@ impl Engine {
                 procedure_version,
                 test_case,
             })?;
+        Ok(())
+    }
+
+    fn record_episode_curiosity(&self, episode: &Episode) -> Result<(), EngineError> {
+        if !episode.failed() {
+            return Ok(());
+        }
+        let cost = f64::from(episode.cost.steps_taken.max(1));
+        let blast_radius = if episode.action.is_some() { 2.0 } else { 1.0 };
+        let gap = crate::goals::CuriosityGap {
+            id: format!("episode:{}:failed-prediction", episode.id),
+            kind: crate::goals::GapKind::FailedPrediction,
+            statement: format!("failed prediction in {}", episode.situation),
+            blast_radius,
+            goal_relevance: 1.0,
+            learning_progress: 1.0,
+            cost_to_close: cost,
+            value_score: blast_radius / cost,
+            source_episode: Some(episode.id.to_string()),
+            resolved: false,
+            created_at: episode.created_at,
+        };
+        self.goals.record_gap(&gap)?;
         Ok(())
     }
 
