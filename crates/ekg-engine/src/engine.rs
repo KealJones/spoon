@@ -221,6 +221,37 @@ impl Engine {
         content_id: &str,
         validation: &LocalValidation,
     ) -> Result<ImportedCapability, EngineError> {
+        if validation.passed {
+            if validation.validation_episodes.is_empty() {
+                return Err(EngineError::InvalidInput(
+                    "capability validation requires locally trusted episode evidence".into(),
+                ));
+            }
+            for episode_id in &validation.validation_episodes {
+                let uuid = uuid::Uuid::parse_str(episode_id).map_err(|_| {
+                    EngineError::InvalidInput(
+                        "capability validation episode ids must be local UUIDs".into(),
+                    )
+                })?;
+                let episode = self.episodes.get(EpisodeId(uuid))?;
+                if self.trust.receipt_for_episode(&episode)?.is_none() {
+                    return Err(EngineError::InvalidInput(format!(
+                        "capability validation episode {episode_id} has no exact Engine trust receipt"
+                    )));
+                }
+                if !episode.evaluation.as_ref().is_some_and(|evaluation| {
+                    evaluation.success
+                        && matches!(
+                            evaluation.tier,
+                            VerifiabilityTier::Hard | VerifiabilityTier::Consensus
+                        )
+                }) {
+                    return Err(EngineError::InvalidInput(format!(
+                        "capability validation episode {episode_id} is not a successful strong evaluation"
+                    )));
+                }
+            }
+        }
         self.capabilities
             .revalidate(content_id, validation)
             .map_err(|error| EngineError::InvalidInput(format!("capability validation: {error}")))

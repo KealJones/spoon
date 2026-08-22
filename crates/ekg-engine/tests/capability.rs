@@ -2,6 +2,8 @@ use ekg_engine::{
     CapabilityStatus, DiscoveredOperation, Engine, InterfaceDescription, LocalValidation,
     Permission,
 };
+use ekg_core::{Evaluation, Value, VerifiabilityTier};
+use std::collections::BTreeMap;
 
 #[test]
 fn engine_keeps_imported_capabilities_quarantined_until_local_validation_and_grant() {
@@ -28,12 +30,26 @@ fn engine_keeps_imported_capabilities_quarantined_until_local_validation_and_gra
             .require_capability_permissions(&imported.content_id, &bundle.procedures[0].permissions)
             .is_err()
     );
+    let validation_episode = engine
+        .record_authenticated_observation(
+            "weather.forecast",
+            Value::Map(BTreeMap::from([(String::from("temperature"), Value::Int(72))])),
+            BTreeMap::new(),
+            Evaluation {
+                tier: VerifiabilityTier::Hard,
+                success: true,
+                details: "fixture matched".into(),
+                surprise: Some(0.0),
+            },
+            "local-capability-test",
+        )
+        .unwrap();
     let validated = engine
         .revalidate_capability(
             &imported.content_id,
             &LocalValidation {
                 passed: true,
-                validation_episodes: vec!["engine-trusted-validation".into()],
+                validation_episodes: vec![validation_episode.id.to_string()],
                 environment_digest: "local".into(),
             },
         )
