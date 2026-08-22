@@ -303,6 +303,14 @@ impl RpcServer {
                 Ok(json!({"revoked": true}))
             }
             "metrics.snapshot" => encode(self.engine.metrics_snapshot().map_err(engine_error)?),
+            "primitive.observe" => {
+                let input: PrimitiveObserveParam = decode(params)?;
+                encode(
+                    self.engine
+                        .observe_native_primitive(&input.target)
+                        .map_err(engine_error)?,
+                )
+            }
             "goal.create" => {
                 let input: GoalCreateParam = decode(params)?;
                 encode(
@@ -713,6 +721,11 @@ struct CuriosityRankParam {
 #[derive(Debug, Deserialize)]
 struct LimitParam {
     limit: Option<u32>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PrimitiveObserveParam {
+    target: String,
 }
 
 pub fn run_stdio<R: BufRead, W: Write>(

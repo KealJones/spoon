@@ -110,6 +110,7 @@ pub struct PrimitivePolicy {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct InvocationReceipt {
     pub primitive: NativePrimitive,
     pub effect: Effect,
@@ -118,7 +119,7 @@ pub struct InvocationReceipt {
     pub bounds: ResourceBounds,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PrimitiveExecution {
     pub receipt: InvocationReceipt,
     pub output: Value,

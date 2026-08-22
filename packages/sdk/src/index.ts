@@ -47,6 +47,7 @@ export type {
   InterfaceDescription,
   LocalValidation,
   MetricsSnapshot,
+  PrimitiveExecution,
   Goal,
   GoalKind,
   SkillCandidate,

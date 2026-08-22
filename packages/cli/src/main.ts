@@ -87,6 +87,8 @@ async function execute(client: EkgClient, command: Command): Promise<unknown> {
       );
     case "contradiction.uncertainty":
       return client.getClaimUncertainty(command.claimId);
+    case "primitive.observe":
+      return client.observePrimitive(command.target);
     case "cycle.run":
       return runCycle(client, command.situation, createConfiguredTeacher());
   }

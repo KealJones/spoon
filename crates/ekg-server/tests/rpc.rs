@@ -162,6 +162,14 @@ fn metrics_goals_and_curiosity_endpoints_are_bounded_and_camel_case() {
         call(&mut server, 54, "curiosity.rank", json!({"limit": 1}))[0]["id"],
         "gap-1"
     );
+    let clock = call(
+        &mut server,
+        55,
+        "primitive.observe",
+        json!({"target": "clock"}),
+    );
+    assert_eq!(clock["receipt"]["target"], "clock");
+    assert_eq!(clock["output"]["source"], "native:clock");
 }
 
 #[test]

@@ -113,3 +113,10 @@ test("parses adaptation and contradiction inspection", () => {
     { kind: "contradiction.uncertainty", claimId: "recipe-plan" },
   );
 });
+
+test("parses a native primitive observation", () => {
+  assert.deepEqual(parseCommand(["primitive", "observe", "clock"]), {
+    kind: "primitive.observe",
+    target: "clock",
+  });
+});

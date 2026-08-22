@@ -288,6 +288,15 @@ test("client maps capability discovery, quarantine, validation, and local grants
   ]);
 });
 
+test("client maps native primitive observation", async () => {
+  const transport = new RecordingTransport();
+  const client = new EkgClient(transport);
+  await client.observePrimitive("clock");
+  assert.deepEqual(transport.calls, [
+    { method: "primitive.observe", params: { target: "clock" } },
+  ]);
+});
+
 test("client maps cycle begin, resume, and abort with exact camelCase params", async () => {
   const transport = new RecordingTransport();
   const client = new EkgClient(transport);

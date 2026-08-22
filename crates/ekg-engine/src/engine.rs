@@ -352,6 +352,26 @@ impl Engine {
         })
     }
 
+    pub fn observe_native_primitive(
+        &self,
+        target: &str,
+    ) -> Result<ekg_capability::PrimitiveExecution, EngineError> {
+        if target != "clock" {
+            return Err(EngineError::InvalidInput(
+                "only the local clock observation is enabled".into(),
+            ));
+        }
+        let policy = ekg_capability::PrimitivePolicy {
+            observe_targets: std::collections::BTreeSet::from([target.to_owned()]),
+            ..ekg_capability::PrimitivePolicy::default()
+        };
+        ekg_capability::NativePrimitiveExecutor::new(policy)
+            .observe(&ekg_capability::PrimitiveRequest::Observe {
+                target: target.to_owned(),
+            })
+            .map_err(|error| EngineError::InvalidInput(format!("native observation: {error}")))
+    }
+
     pub fn generate_epistemic_challenge(
         &self,
         source_episode: Option<&str>,

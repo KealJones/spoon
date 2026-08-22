@@ -25,6 +25,7 @@ import type {
   InterfaceDescription,
   LocalValidation,
   MetricsSnapshot,
+  PrimitiveExecution,
   Goal,
   GoalKind,
   SkillCandidate,
@@ -357,6 +358,12 @@ export class EkgClient {
       "consolidation.compressionPlan",
       { limit },
     );
+  }
+
+  observePrimitive(target: string): Promise<PrimitiveExecution> {
+    return this.transport.request<PrimitiveExecution>("primitive.observe", {
+      target,
+    });
   }
 
   beginCycle(input: CycleInput): Promise<CycleProgress> {

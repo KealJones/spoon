@@ -137,6 +137,17 @@ export interface EpisodeCompressionPlan {
   forgottenAsKnownGap: string[];
 }
 
+export interface PrimitiveExecution {
+  receipt: {
+    primitive: string;
+    effect: string;
+    target: string;
+    payloadDigest: string;
+    bounds: { maxBytes: number; maxSteps: number; maxMillis: number };
+  };
+  output: JsonValue;
+}
+
 export interface CapabilityBundle {
   formatVersion: number;
   name: string;
