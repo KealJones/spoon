@@ -114,6 +114,7 @@ fn compression_materializes_summaries_without_deleting_source_episodes() {
             .unwrap();
     }
     let before = engine.episodes().list_recent(32).unwrap().len();
+    assert_eq!(engine.list_verified_answers(32).unwrap().len(), before);
     let result = engine.compress_episode_history(32).unwrap();
     assert!(!result.plan.summarize.is_empty());
     assert_eq!(
