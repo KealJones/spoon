@@ -16,7 +16,9 @@ use thiserror::Error;
 pub const BUNDLE_FORMAT_VERSION: u16 = 1;
 pub const MAX_PROCEDURES: usize = 64;
 pub const MAX_DEPENDENCIES: usize = 128;
+pub const MAX_DEPENDENCY_EDGES: usize = 512;
 pub const MAX_TESTS: usize = 256;
+pub const MAX_COMPATIBILITY_CONSTRAINTS: usize = 32;
 pub const MAX_SCHEMA_BYTES: usize = 32 * 1024;
 pub const MAX_BUNDLE_BYTES: usize = 512 * 1024;
 pub const MAX_RESOURCE_BYTES: u64 = 64 * 1024 * 1024;
@@ -552,6 +554,42 @@ pub struct Dependency {
     pub name: String,
     pub version: String,
     pub content_hash: String,
+    /// Direct prerequisite nodes, pinned by the same identity used in the
+    /// bundle closure. These references form a finite acyclic graph.
+    pub dependencies: Vec<DependencyReference>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Ord, PartialOrd)]
+#[serde(rename_all = "camelCase")]
+pub struct DependencyReference {
+    pub name: String,
+    pub version: String,
+    pub content_hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NeutralProcedureKind {
+    NativePrimitive,
+}
+
+/// Portable metadata for a procedure. This is deliberately not executable
+/// code: the receiving runtime maps this neutral IR to its own native adapter.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NeutralProcedureMetadata {
+    pub kind: NeutralProcedureKind,
+    pub ir_version: u16,
+    pub fixture_format: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReconstructionRecipe {
+    pub kind: String,
+    pub recipe_version: u16,
+    /// Portable platform/runtime constraints, never host-local settings.
+    pub compatibility: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -573,10 +611,11 @@ pub struct CapabilityProcedure {
     pub input_schema: Value,
     pub output_schema: Value,
     pub contract: Value,
+    pub neutral_metadata: NeutralProcedureMetadata,
     pub permissions: Vec<Permission>,
     pub effects: Vec<Effect>,
     pub bounds: ResourceBounds,
-    pub dependencies: Vec<Dependency>,
+    pub dependencies: Vec<DependencyReference>,
     pub tests: Vec<CapabilityTest>,
     pub provenance: Provenance,
 }
@@ -591,7 +630,20 @@ pub struct CapabilityBundle {
     pub procedures: Vec<CapabilityProcedure>,
     pub dependencies: Vec<Dependency>,
     pub provenance: Provenance,
-    pub reconstruction: Value,
+    pub reconstruction: ReconstructionRecipe,
+}
+
+/// The locally reconstructed, still-untrusted capability shape. It contains
+/// only neutral procedure data, fixtures, and a deterministic dependency order;
+/// it never contains local grants or executable foreign code.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReconstructedCapability {
+    pub content_id: String,
+    pub name: String,
+    pub dependency_order: Vec<Dependency>,
+    pub procedures: Vec<CapabilityProcedure>,
+    pub reconstruction: ReconstructionRecipe,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -662,6 +714,11 @@ pub fn discover_interface(
                     "host": operation.host,
                     "replayable": true
                 }),
+                neutral_metadata: NeutralProcedureMetadata {
+                    kind: NeutralProcedureKind::NativePrimitive,
+                    ir_version: 1,
+                    fixture_format: "json".into(),
+                },
                 permissions: vec![Permission::NetworkHost {
                     host: operation.host.clone(),
                 }],
@@ -696,7 +753,11 @@ pub fn discover_interface(
             interface_fingerprint: description.fingerprint.clone(),
             validation_episodes: Vec::new(),
         },
-        reconstruction: serde_json::json!({"kind":"native_primitive_procedure"}),
+        reconstruction: ReconstructionRecipe {
+            kind: "native_primitive_procedure".into(),
+            recipe_version: 1,
+            compatibility: vec!["ekg-capability-neutral-ir-v1".into()],
+        },
     };
     bundle.content_id = bundle_content_id(&bundle)?;
     validate_bundle(&bundle)?;
@@ -766,6 +827,28 @@ pub fn import_bundle(bytes: &[u8]) -> Result<CapabilityBundle, CapabilityError> 
     Ok(bundle)
 }
 
+/// Verify that a portable bundle can be rebuilt by this runtime without
+/// interpreting foreign code. The returned dependency order has every direct
+/// prerequisite before its dependents, so a clean store can acquire adapters
+/// and fixtures deterministically before exercising procedures.
+pub fn reconstruct_bundle(
+    bundle: &CapabilityBundle,
+) -> Result<ReconstructedCapability, CapabilityError> {
+    validate_bundle(bundle)?;
+    if bundle.content_id != bundle_content_id(bundle)? {
+        return Err(CapabilityError::InvalidBundle(
+            "content identity mismatch".into(),
+        ));
+    }
+    Ok(ReconstructedCapability {
+        content_id: bundle.content_id.clone(),
+        name: bundle.name.clone(),
+        dependency_order: dependency_reconstruction_order(&bundle.dependencies)?,
+        procedures: bundle.procedures.clone(),
+        reconstruction: bundle.reconstruction.clone(),
+    })
+}
+
 pub fn validate_bundle(bundle: &CapabilityBundle) -> Result<(), CapabilityError> {
     if bundle.format_version != BUNDLE_FORMAT_VERSION
         || bundle.name.trim().is_empty()
@@ -789,6 +872,7 @@ pub fn validate_bundle(bundle: &CapabilityBundle) -> Result<(), CapabilityError>
     reject_secrets(bundle)?;
     reject_local_authority(bundle)?;
     let mut dependency_names = BTreeSet::new();
+    let mut dependency_edges = 0usize;
     for dependency in &bundle.dependencies {
         if dependency.name.trim().is_empty()
             || dependency.version.trim().is_empty()
@@ -799,7 +883,31 @@ pub fn validate_bundle(bundle: &CapabilityBundle) -> Result<(), CapabilityError>
                 "dependency identity or closure is invalid".into(),
             ));
         }
+        dependency_edges = dependency_edges.saturating_add(dependency.dependencies.len());
+        if dependency_edges > MAX_DEPENDENCY_EDGES {
+            return Err(CapabilityError::InvalidBundle(
+                "dependency graph exceeds edge bound".into(),
+            ));
+        }
     }
+    for dependency in &bundle.dependencies {
+        let mut direct_dependencies = BTreeSet::new();
+        for reference in &dependency.dependencies {
+            let identity = dependency_identity(reference);
+            if !direct_dependencies.insert(identity)
+                || dependency.name == reference.name
+                || !bundle
+                    .dependencies
+                    .iter()
+                    .any(|candidate| dependency_matches_reference(candidate, reference))
+            {
+                return Err(CapabilityError::InvalidBundle(
+                    "dependency graph closure is invalid".into(),
+                ));
+            }
+        }
+    }
+    dependency_reconstruction_order(&bundle.dependencies)?;
     let mut ids = BTreeSet::new();
     for procedure in &bundle.procedures {
         if procedure.id.trim().is_empty()
@@ -822,6 +930,7 @@ pub fn validate_bundle(bundle: &CapabilityBundle) -> Result<(), CapabilityError>
             ));
         }
         validate_resource_bounds(&procedure.bounds)?;
+        validate_neutral_metadata(&procedure.neutral_metadata)?;
         validate_primitive_declarations(procedure)?;
         for test in &procedure.tests {
             if test.name.trim().is_empty() {
@@ -832,18 +941,115 @@ pub fn validate_bundle(bundle: &CapabilityBundle) -> Result<(), CapabilityError>
         }
         let mut procedure_dependencies = BTreeSet::new();
         for dependency in &procedure.dependencies {
-            let identity = (
-                dependency.name.as_str(),
-                dependency.version.as_str(),
-                dependency.content_hash.as_str(),
-            );
-            if !procedure_dependencies.insert(identity) || !bundle.dependencies.contains(dependency)
+            if !procedure_dependencies.insert(dependency_identity(dependency))
+                || !bundle
+                    .dependencies
+                    .iter()
+                    .any(|candidate| dependency_matches_reference(candidate, dependency))
             {
                 return Err(CapabilityError::InvalidBundle(
                     "procedure dependency is missing from bundle closure".into(),
                 ));
             }
         }
+    }
+    validate_reconstruction_recipe(&bundle.reconstruction)?;
+    Ok(())
+}
+
+fn dependency_identity(reference: &DependencyReference) -> (String, String, String) {
+    (
+        reference.name.clone(),
+        reference.version.clone(),
+        reference.content_hash.clone(),
+    )
+}
+
+fn dependency_matches_reference(dependency: &Dependency, reference: &DependencyReference) -> bool {
+    dependency.name == reference.name
+        && dependency.version == reference.version
+        && dependency.content_hash == reference.content_hash
+}
+
+fn dependency_reconstruction_order(
+    dependencies: &[Dependency],
+) -> Result<Vec<Dependency>, CapabilityError> {
+    fn visit(
+        name: &str,
+        dependencies: &[Dependency],
+        visiting: &mut BTreeSet<String>,
+        visited: &mut BTreeSet<String>,
+        ordered: &mut Vec<Dependency>,
+    ) -> Result<(), CapabilityError> {
+        if visited.contains(name) {
+            return Ok(());
+        }
+        if !visiting.insert(name.into()) {
+            return Err(CapabilityError::InvalidBundle(
+                "dependency graph contains a cycle".into(),
+            ));
+        }
+        let dependency = dependencies
+            .iter()
+            .find(|dependency| dependency.name == name)
+            .ok_or_else(|| {
+                CapabilityError::InvalidBundle("dependency graph is incomplete".into())
+            })?;
+        let mut children = dependency.dependencies.clone();
+        children.sort();
+        for child in children {
+            visit(&child.name, dependencies, visiting, visited, ordered)?;
+        }
+        visiting.remove(name);
+        visited.insert(name.into());
+        ordered.push(dependency.clone());
+        Ok(())
+    }
+
+    let mut names = dependencies
+        .iter()
+        .map(|dependency| dependency.name.clone())
+        .collect::<Vec<_>>();
+    names.sort();
+    let mut visiting = BTreeSet::new();
+    let mut visited = BTreeSet::new();
+    let mut ordered = Vec::with_capacity(dependencies.len());
+    for name in names {
+        visit(
+            &name,
+            dependencies,
+            &mut visiting,
+            &mut visited,
+            &mut ordered,
+        )?;
+    }
+    Ok(ordered)
+}
+
+fn validate_neutral_metadata(metadata: &NeutralProcedureMetadata) -> Result<(), CapabilityError> {
+    if metadata.kind != NeutralProcedureKind::NativePrimitive
+        || metadata.ir_version != 1
+        || metadata.fixture_format != "json"
+    {
+        return Err(CapabilityError::InvalidBundle(
+            "procedure neutral metadata is unsupported".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_reconstruction_recipe(recipe: &ReconstructionRecipe) -> Result<(), CapabilityError> {
+    if recipe.kind != "native_primitive_procedure"
+        || recipe.recipe_version != 1
+        || recipe.compatibility.is_empty()
+        || recipe.compatibility.len() > MAX_COMPATIBILITY_CONSTRAINTS
+        || recipe.compatibility.iter().any(|constraint| {
+            constraint.trim().is_empty() || constraint.chars().any(char::is_control)
+        })
+    {
+        return Err(CapabilityError::InvalidBundle(
+            "reconstruction recipe or compatibility constraints are invalid".into(),
+        ));
     }
     Ok(())
 }
@@ -1117,6 +1323,7 @@ impl CapabilityStore {
 
     pub fn import(&self, bytes: &[u8]) -> Result<ImportedCapability, CapabilityError> {
         let bundle = import_bundle(bytes)?;
+        reconstruct_bundle(&bundle)?;
         let json = serde_json::to_string(&bundle)?;
         self.conn.execute(
             "INSERT INTO capability_bundles(content_id, name, status, bundle_json, locally_validated, created_at)
@@ -1130,6 +1337,73 @@ impl CapabilityStore {
             status: CapabilityStatus::Quarantined,
             locally_validated: false,
         })
+    }
+
+    /// Import and locally revalidate in one durable state transition. Parsing,
+    /// content verification, dependency reconstruction, and fixture execution
+    /// finish before the row is written, so a clean store never observes an
+    /// intermediate executable state. A fixture failure is retained as a
+    /// rejected quarantined record for inspection.
+    pub fn import_and_revalidate(
+        &self,
+        bytes: &[u8],
+        validation: &LocalValidation,
+    ) -> Result<ImportedCapability, CapabilityError> {
+        let bundle = import_bundle(bytes)?;
+        let reconstructed = reconstruct_bundle(&bundle)?;
+        validate_local_validation_evidence(validation)?;
+        let locally_validated = validation.passed
+            && reconstructed
+                .procedures
+                .iter()
+                .all(|procedure| run_sandbox_tests(procedure).is_ok());
+        let status = if locally_validated {
+            CapabilityStatus::Provisional
+        } else {
+            CapabilityStatus::Rejected
+        };
+        let status_name = match status {
+            CapabilityStatus::Provisional => "provisional",
+            CapabilityStatus::Rejected => "rejected",
+            _ => unreachable!("atomic import only produces terminal local validation states"),
+        };
+        self.conn.execute(
+            "INSERT INTO capability_bundles(content_id, name, status, bundle_json, locally_validated, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(content_id) DO NOTHING",
+            params![
+                bundle.content_id,
+                bundle.name,
+                status_name,
+                serde_json::to_string(&bundle)?,
+                i64::from(locally_validated),
+                unix_time()
+            ],
+        )?;
+        Ok(ImportedCapability {
+            content_id: bundle.content_id,
+            name: bundle.name,
+            status,
+            locally_validated,
+        })
+    }
+
+    /// Reconstruct the neutral procedure graph from the stored canonical
+    /// bundle. This does not grant authority or execute a foreign procedure.
+    pub fn reconstruct(
+        &self,
+        content_id: &str,
+    ) -> Result<ReconstructedCapability, CapabilityError> {
+        let json: String = self
+            .conn
+            .query_row(
+                "SELECT bundle_json FROM capability_bundles WHERE content_id = ?1",
+                params![content_id],
+                |row| row.get(0),
+            )
+            .optional()?
+            .ok_or_else(|| CapabilityError::Invalid("capability not found".into()))?;
+        reconstruct_bundle(&serde_json::from_str(&json)?)
     }
 
     pub fn export(&self, content_id: &str) -> Result<Vec<u8>, CapabilityError> {
@@ -1198,43 +1472,33 @@ impl CapabilityStore {
                 "stored content identity mismatch".into(),
             ));
         }
-        if validation.passed {
-            if validation.environment_digest.trim().is_empty()
-                || validation.validation_episodes.is_empty()
-                || validation
-                    .validation_episodes
-                    .iter()
-                    .any(|episode| episode.trim().is_empty())
-            {
-                return Err(CapabilityError::Invalid(
-                    "local validation requires environment and episode evidence".into(),
-                ));
-            }
-            for procedure in &bundle.procedures {
-                run_sandbox_tests(procedure)?;
-            }
-            // Local validation receipts live in the registry row, not in the
-            // exported bundle, so revalidation never changes content identity.
-            let json = serde_json::to_string(&bundle)?;
-            self.conn.execute(
-                "UPDATE capability_bundles SET status = 'provisional', bundle_json = ?2, locally_validated = 1 WHERE content_id = ?1",
-                params![content_id, json],
-            )?;
+        let reconstructed = reconstruct_bundle(&bundle)?;
+        validate_local_validation_evidence(validation)?;
+        let locally_validated = validation.passed
+            && reconstructed
+                .procedures
+                .iter()
+                .all(|procedure| run_sandbox_tests(procedure).is_ok());
+        let status = if locally_validated {
+            CapabilityStatus::Provisional
         } else {
-            self.conn.execute(
-                "UPDATE capability_bundles SET status = 'rejected' WHERE content_id = ?1",
-                params![content_id],
-            )?;
-        }
+            CapabilityStatus::Rejected
+        };
+        // A single update is the revalidation commit point. Local receipts do
+        // not enter the bundle, preserving its exported content identity.
+        self.conn.execute(
+            "UPDATE capability_bundles SET status = ?2, locally_validated = ?3 WHERE content_id = ?1",
+            params![
+                content_id,
+                if locally_validated { "provisional" } else { "rejected" },
+                i64::from(locally_validated)
+            ],
+        )?;
         Ok(ImportedCapability {
             content_id: content_id.into(),
             name: bundle.name,
-            status: if validation.passed {
-                CapabilityStatus::Provisional
-            } else {
-                CapabilityStatus::Rejected
-            },
-            locally_validated: validation.passed,
+            status,
+            locally_validated,
         })
     }
 
@@ -1312,6 +1576,22 @@ impl CapabilityStore {
         self.require_permissions(content_id, &procedure.permissions)?;
         Ok(procedure)
     }
+}
+
+fn validate_local_validation_evidence(validation: &LocalValidation) -> Result<(), CapabilityError> {
+    if validation.passed
+        && (validation.environment_digest.trim().is_empty()
+            || validation.validation_episodes.is_empty()
+            || validation
+                .validation_episodes
+                .iter()
+                .any(|episode| episode.trim().is_empty()))
+    {
+        return Err(CapabilityError::Invalid(
+            "local validation requires environment and episode evidence".into(),
+        ));
+    }
+    Ok(())
 }
 
 fn unix_time() -> i64 {
@@ -1404,7 +1684,7 @@ mod tests {
     #[test]
     fn secret_bearing_bundle_is_rejected_atomically() {
         let mut bundle = discover_interface(&interface()).unwrap();
-        bundle.reconstruction = serde_json::json!({"api_key":"do-not-transfer"});
+        bundle.reconstruction.compatibility = vec!["Bearer do-not-transfer".into()];
         bundle.content_id = bundle_content_id(&bundle).unwrap();
         assert!(matches!(
             export_bundle(&bundle),
@@ -1489,13 +1769,13 @@ mod tests {
 
     #[test]
     fn bundle_rejects_secret_values_and_machine_local_material() {
-        for reconstruction in [
-            serde_json::json!({"header":"Bearer exported-credential"}),
-            serde_json::json!({"recipe":"C:\\Users\\alice\\build.cmd"}),
-            serde_json::json!({"recipe":"${HOME}/private/tool"}),
+        for compatibility in [
+            "Bearer exported-credential",
+            "C:\\Users\\alice\\build.cmd",
+            "${HOME}/private/tool",
         ] {
             let mut bundle = discover_interface(&interface()).unwrap();
-            bundle.reconstruction = reconstruction;
+            bundle.reconstruction.compatibility = vec![compatibility.into()];
             bundle.content_id = bundle_content_id(&bundle).unwrap();
             assert!(matches!(
                 export_bundle(&bundle),
@@ -1531,6 +1811,113 @@ mod tests {
                 .require_permissions(&imported.content_id, &[])
                 .is_err()
         );
+    }
+
+    fn dependency(
+        name: &str,
+        hash_byte: char,
+        dependencies: Vec<DependencyReference>,
+    ) -> Dependency {
+        Dependency {
+            name: name.into(),
+            version: "1.0.0".into(),
+            content_hash: format!("sha256:{}", hash_byte.to_string().repeat(64)),
+            dependencies,
+        }
+    }
+
+    fn reference(dependency: &Dependency) -> DependencyReference {
+        DependencyReference {
+            name: dependency.name.clone(),
+            version: dependency.version.clone(),
+            content_hash: dependency.content_hash.clone(),
+        }
+    }
+
+    #[test]
+    fn clean_store_reconstructs_neutral_procedures_fixtures_and_dependency_dag() {
+        let mut bundle = discover_interface(&interface()).unwrap();
+        let transport = dependency("transport", 'a', Vec::new());
+        let client = dependency("weather-client", 'b', vec![reference(&transport)]);
+        bundle.dependencies = vec![client.clone(), transport.clone()];
+        bundle.procedures[0].dependencies = vec![reference(&client)];
+        bundle.content_id = bundle_content_id(&bundle).unwrap();
+
+        let store = CapabilityStore::in_memory().unwrap();
+        let imported = store.import(&export_bundle(&bundle).unwrap()).unwrap();
+        let reconstructed = store.reconstruct(&imported.content_id).unwrap();
+
+        assert_eq!(
+            reconstructed
+                .dependency_order
+                .iter()
+                .map(|dependency| dependency.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["transport", "weather-client"]
+        );
+        assert_eq!(
+            reconstructed.procedures[0].neutral_metadata.kind,
+            NeutralProcedureKind::NativePrimitive
+        );
+        run_sandbox_tests(&reconstructed.procedures[0]).unwrap();
+        assert_eq!(
+            export_bundle(&bundle).unwrap(),
+            store.export(&imported.content_id).unwrap()
+        );
+    }
+
+    #[test]
+    fn dependency_cycles_and_incomplete_closure_are_rejected_before_import() {
+        let mut bundle = discover_interface(&interface()).unwrap();
+        let transport = dependency("transport", 'a', Vec::new());
+        let client = dependency("weather-client", 'b', vec![reference(&transport)]);
+        let mut cyclic_transport = transport.clone();
+        cyclic_transport.dependencies = vec![reference(&client)];
+        bundle.dependencies = vec![cyclic_transport, client];
+        bundle.content_id = bundle_content_id(&bundle).unwrap();
+        assert!(matches!(
+            export_bundle(&bundle),
+            Err(CapabilityError::InvalidBundle(_))
+        ));
+
+        let mut bundle = discover_interface(&interface()).unwrap();
+        let missing = DependencyReference {
+            name: "missing".into(),
+            version: "1.0.0".into(),
+            content_hash: format!("sha256:{}", "c".repeat(64)),
+        };
+        bundle.dependencies = vec![dependency("transport", 'a', vec![missing])];
+        bundle.content_id = bundle_content_id(&bundle).unwrap();
+        assert!(matches!(
+            import_bundle(&canonical_json(&bundle).unwrap()),
+            Err(CapabilityError::InvalidBundle(_))
+        ));
+    }
+
+    #[test]
+    fn atomic_import_and_revalidation_never_exposes_a_fixture_failure_as_validated() {
+        let mut bundle = discover_interface(&interface()).unwrap();
+        bundle.procedures[0].tests[0].fixture_output = serde_json::json!({"temperature": 0});
+        bundle.content_id = bundle_content_id(&bundle).unwrap();
+        let store = CapabilityStore::in_memory().unwrap();
+        let result = store
+            .import_and_revalidate(
+                &export_bundle(&bundle).unwrap(),
+                &LocalValidation {
+                    passed: true,
+                    validation_episodes: vec!["local-fixture-check".into()],
+                    environment_digest: "sha256:local-environment".into(),
+                },
+            )
+            .unwrap();
+
+        assert_eq!(result.status, CapabilityStatus::Rejected);
+        assert!(!result.locally_validated);
+        assert!(matches!(
+            store.require_procedure_permissions(&result.content_id, &bundle.procedures[0].id),
+            Err(CapabilityError::NotRevalidated)
+        ));
+        assert!(store.reconstruct(&result.content_id).is_ok());
     }
 
     #[test]
