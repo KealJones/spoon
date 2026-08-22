@@ -100,7 +100,9 @@ bundles, quarantine imports, local validation, revocable grants, primitive
 policy checks, a safe clock observation adapter, RPC and SDK methods. Goals and
 curiosity gaps are durable, bounded, and standing goals are immutable. Phase 4
 skill lifecycle records are durable and promotion-gated; compression and
-single-success/failure discovery remain conservative planning/report paths.
+single-success/failure discovery remain conservative evidence-derived paths,
+while compression materializes non-destructive summaries and promoted skills
+can execute through a stable trusted source procedure.
 
 Capability limitations are explicit: network transport remains adapter-injected,
 sandbox execution is currently a bounded fixture boundary rather than arbitrary
