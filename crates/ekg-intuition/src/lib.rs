@@ -4,7 +4,8 @@
 //! mutation. It can change candidate order and representation statistics, but
 //! it cannot promote a claim, mint trust, or alter graph lifecycle state.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet, hash_map::DefaultHasher};
+use std::hash::{Hash, Hasher};
 
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
@@ -13,6 +14,7 @@ use thiserror::Error;
 const VECTOR_DIMENSIONS: usize = 32;
 const MAX_QUERY_TERMS: usize = 64;
 const MAX_RANKING_EVALUATION_HOLDOUT: usize = 256;
+const MAX_REPRESENTATION_TRAINING_HOLDOUT: usize = 256;
 
 #[derive(Debug, Error)]
 pub enum IntuitionError {
@@ -98,6 +100,21 @@ pub struct RankingEvaluation {
     /// successful-candidate rank.  Missing or unscorable evidence is never a
     /// win.
     pub learned_improves_search: bool,
+    pub created_at: i64,
+}
+
+/// An offline representation-training artifact. It is derived only from
+/// immutable supervision rows and never mutates graph truth or trust state.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RepresentationModel {
+    pub id: i64,
+    pub model_version: String,
+    pub training_tasks: u64,
+    pub held_out_tasks: u64,
+    pub held_out_coverage: f64,
+    pub activated: bool,
+    pub term_weights: BTreeMap<String, f64>,
     pub created_at: i64,
 }
 
@@ -226,6 +243,18 @@ impl IntuitionStore {
                  source_episode TEXT,
                  created_at INTEGER NOT NULL
              );
+             CREATE TABLE IF NOT EXISTS representation_models (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 model_version TEXT NOT NULL,
+                 training_tasks INTEGER NOT NULL,
+                 held_out_tasks INTEGER NOT NULL,
+                 held_out_coverage REAL NOT NULL,
+                 activated INTEGER NOT NULL DEFAULT 0,
+                 term_weights_json TEXT NOT NULL,
+                 created_at INTEGER NOT NULL
+             );
+             CREATE INDEX IF NOT EXISTS idx_representation_models_created
+                 ON representation_models(created_at DESC);
              CREATE TABLE IF NOT EXISTS intuition_stats (
                  id INTEGER PRIMARY KEY CHECK (id = 1),
                  retrieval_queries INTEGER NOT NULL DEFAULT 0,
@@ -598,6 +627,143 @@ impl IntuitionStore {
             .map_err(IntuitionError::from)
     }
 
+    /// Train a bounded, immutable representation artifact from supervision
+    /// data. The simple term model is intentionally separate from retrieval
+    /// activation: callers must explicitly opt into an artifact after
+    /// inspecting its held-out coverage.
+    pub fn train_representation_model(
+        &self,
+        holdout_tasks: usize,
+    ) -> Result<RepresentationModel, IntuitionError> {
+        if holdout_tasks == 0 || holdout_tasks > MAX_REPRESENTATION_TRAINING_HOLDOUT {
+            return Err(IntuitionError::Invalid(format!(
+                "representation holdout must be 1..={MAX_REPRESENTATION_TRAINING_HOLDOUT}"
+            )));
+        }
+        let mut statement = self
+            .conn
+            .prepare("SELECT id, input_json FROM supervision_tasks ORDER BY id DESC LIMIT ?1")?;
+        let mut tasks = statement
+            .query_map(params![((holdout_tasks + 4096) as i64)], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        if tasks.is_empty() {
+            return Err(IntuitionError::Invalid(
+                "representation training requires supervision tasks".into(),
+            ));
+        }
+        tasks.sort_by_key(|(id, _)| *id);
+        let split = tasks
+            .len()
+            .saturating_sub(holdout_tasks)
+            .max(1)
+            .min(tasks.len());
+        let (training, held_out) = tasks.split_at(split);
+        let mut counts = BTreeMap::<String, u64>::new();
+        for (_, input) in training {
+            for term in tokenize(input) {
+                *counts.entry(term).or_default() += 1;
+            }
+        }
+        let total = training.len().max(1) as f64;
+        let term_weights = counts
+            .into_iter()
+            .map(|(term, count)| (term, count as f64 / total))
+            .collect::<BTreeMap<_, _>>();
+        let covered = held_out
+            .iter()
+            .filter(|(_, input)| {
+                tokenize(input)
+                    .iter()
+                    .any(|term| term_weights.contains_key(term))
+            })
+            .count();
+        let held_out_coverage = if held_out.is_empty() {
+            0.0
+        } else {
+            covered as f64 / held_out.len() as f64
+        };
+        let mut hasher = DefaultHasher::new();
+        training.hash(&mut hasher);
+        for (term, weight) in &term_weights {
+            term.hash(&mut hasher);
+            weight.to_bits().hash(&mut hasher);
+        }
+        let model_version = format!("representation-v1-{:016x}", hasher.finish());
+        let created_at = unix_time();
+        self.conn.execute(
+            "INSERT INTO representation_models
+             (model_version, training_tasks, held_out_tasks, held_out_coverage,
+              activated, term_weights_json, created_at)
+             VALUES (?1, ?2, ?3, ?4, 0, ?5, ?6)",
+            params![
+                model_version,
+                training.len() as i64,
+                held_out.len() as i64,
+                held_out_coverage,
+                serde_json::to_string(&term_weights)?,
+                created_at,
+            ],
+        )?;
+        self.latest_representation_model()?.ok_or_else(|| {
+            IntuitionError::Invalid("representation model insert was not readable".into())
+        })
+    }
+
+    pub fn activate_representation_model(
+        &self,
+        id: i64,
+    ) -> Result<RepresentationModel, IntuitionError> {
+        let exists: bool = self.conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM representation_models WHERE id = ?1)",
+            params![id],
+            |row| row.get(0),
+        )?;
+        if !exists {
+            return Err(IntuitionError::Invalid(
+                "representation model not found".into(),
+            ));
+        }
+        self.conn
+            .execute("UPDATE representation_models SET activated = 0", [])?;
+        self.conn.execute(
+            "UPDATE representation_models SET activated = 1 WHERE id = ?1",
+            params![id],
+        )?;
+        self.representation_model(id)?.ok_or_else(|| {
+            IntuitionError::Invalid("representation model activation was not readable".into())
+        })
+    }
+
+    pub fn latest_representation_model(
+        &self,
+    ) -> Result<Option<RepresentationModel>, IntuitionError> {
+        self.conn
+            .query_row(
+                "SELECT id, model_version, training_tasks, held_out_tasks,
+                        held_out_coverage, activated, term_weights_json, created_at
+                 FROM representation_models ORDER BY id DESC LIMIT 1",
+                [],
+                row_to_representation_model,
+            )
+            .optional()
+            .map_err(IntuitionError::from)
+    }
+
+    fn representation_model(&self, id: i64) -> Result<Option<RepresentationModel>, IntuitionError> {
+        self.conn
+            .query_row(
+                "SELECT id, model_version, training_tasks, held_out_tasks,
+                        held_out_coverage, activated, term_weights_json, created_at
+                 FROM representation_models WHERE id = ?1",
+                params![id],
+                row_to_representation_model,
+            )
+            .optional()
+            .map_err(IntuitionError::from)
+    }
+
     pub fn generate_self_supervision(
         &self,
         source_episode: Option<&str>,
@@ -855,6 +1021,26 @@ fn row_to_ranking_evaluation(row: &rusqlite::Row<'_>) -> rusqlite::Result<Rankin
         learned_mean_reciprocal_rank: row.get(10)?,
         learned_improves_search: row.get::<_, i64>(11)? != 0,
         created_at: row.get(12)?,
+    })
+}
+
+fn row_to_representation_model(row: &rusqlite::Row<'_>) -> rusqlite::Result<RepresentationModel> {
+    let weights: String = row.get(6)?;
+    Ok(RepresentationModel {
+        id: row.get(0)?,
+        model_version: row.get(1)?,
+        training_tasks: row.get::<_, i64>(2)? as u64,
+        held_out_tasks: row.get::<_, i64>(3)? as u64,
+        held_out_coverage: row.get(4)?,
+        activated: row.get::<_, i64>(5)? != 0,
+        term_weights: serde_json::from_str(&weights).map_err(|error| {
+            rusqlite::Error::FromSqlConversionFailure(
+                6,
+                rusqlite::types::Type::Text,
+                Box::new(error),
+            )
+        })?,
+        created_at: row.get(7)?,
     })
 }
 
@@ -1146,5 +1332,28 @@ mod tests {
         assert_eq!(metrics.supervision_tasks, 1);
         assert_eq!(metrics.grounded_tasks, 0);
         assert_eq!(metrics.grounding_ratio, 0.0);
+    }
+
+    #[test]
+    fn representation_training_is_bounded_versioned_and_separate_from_beliefs() {
+        let store = IntuitionStore::in_memory().unwrap();
+        for situation in ["double 7", "double 8", "weather now"] {
+            store
+                .generate_self_supervision(
+                    Some("trusted-episode"),
+                    serde_json::json!({"situation": situation}),
+                    serde_json::json!({"target": situation}),
+                    "predict_validated_interpretation",
+                    true,
+                )
+                .unwrap();
+        }
+        let model = store.train_representation_model(1).unwrap();
+        assert_eq!(model.training_tasks, 2);
+        assert_eq!(model.held_out_tasks, 1);
+        assert!(!model.model_version.is_empty());
+        assert!(!model.activated);
+        let activated = store.activate_representation_model(model.id).unwrap();
+        assert!(activated.activated);
     }
 }

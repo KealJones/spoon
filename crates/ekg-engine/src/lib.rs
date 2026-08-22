@@ -42,7 +42,7 @@ pub use ekg_graph::{
 };
 pub use ekg_intuition::{
     EpistemicChallengeKind, IntuitionMetrics, RankingEvaluation, RankingExample, RecallCandidate,
-    RecallDocument, RecallKind, SupervisionTask,
+    RecallDocument, RecallKind, RepresentationModel, SupervisionTask,
 };
 pub use engine::{Engine, EngineError, ExecutionOutcome, MetricsSnapshot, ReplayOutcome};
 pub use goals::{CuriosityGap, GapKind, Goal, GoalKind, GoalLearningRecord};

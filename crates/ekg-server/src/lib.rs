@@ -328,7 +328,25 @@ impl RpcServer {
                         .map_err(engine_error)?,
                 )
             }
+            "goal.createLearning" => {
+                let input: LearningGoalCreateParam = decode(params)?;
+                encode(
+                    self.engine
+                        .create_learning_goal(
+                            &input.statement,
+                            &input.standing_goal_id,
+                            &input.source_gap_id,
+                            &input.derivation_reason,
+                        )
+                        .map_err(engine_error)?,
+                )
+            }
             "goal.list" => encode(self.engine.list_goals().map_err(engine_error)?),
+            "goal.learningRecords" => encode(
+                self.engine
+                    .list_learning_goal_records()
+                    .map_err(engine_error)?,
+            ),
             "curiosity.record" => {
                 let input: CuriosityGap = decode(params)?;
                 self.engine
@@ -353,6 +371,27 @@ impl RpcServer {
                             input.candidate_limit,
                             input.holdout_examples,
                         )
+                        .map_err(engine_error)?,
+                )
+            }
+            "intuition.trainRepresentation" => {
+                let input: RepresentationTrainingParam = decode(params)?;
+                encode(
+                    self.engine
+                        .train_representation_model(input.holdout_tasks)
+                        .map_err(engine_error)?,
+                )
+            }
+            "intuition.latestRepresentation" => encode(
+                self.engine
+                    .latest_representation_model()
+                    .map_err(engine_error)?,
+            ),
+            "intuition.activateRepresentation" => {
+                let input: RepresentationModelIdParam = decode(params)?;
+                encode(
+                    self.engine
+                        .activate_representation_model(input.model_id)
                         .map_err(engine_error)?,
                 )
             }
@@ -807,6 +846,7 @@ fn requires_admin(method: &str) -> bool {
             | "capability.grant"
             | "capability.revoke"
             | "observation.recordAuthenticated"
+            | "intuition.activateRepresentation"
             | "consolidation.register"
             | "consolidation.registerSingle"
             | "consolidation.registerFailureCritic"
@@ -862,6 +902,15 @@ struct GoalCreateParam {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LearningGoalCreateParam {
+    statement: String,
+    standing_goal_id: String,
+    source_gap_id: String,
+    derivation_reason: String,
+}
+
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct CuriosityRankParam {
     limit: Option<u32>,
@@ -899,6 +948,18 @@ struct RankingEvaluationParam {
     query: String,
     candidate_limit: usize,
     holdout_examples: usize,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RepresentationTrainingParam {
+    holdout_tasks: usize,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RepresentationModelIdParam {
+    model_id: i64,
 }
 
 #[derive(Debug, Deserialize)]

@@ -35,11 +35,13 @@ import type {
   PromotionReplay,
   Goal,
   GoalKind,
+  GoalLearningRecord,
   SkillCandidate,
   SkillShadowWinInput,
   RecordContradictionInput,
   RefineContradictionInput,
   RankingEvaluation,
+  RepresentationModel,
   RpcTransport,
   TeacherProposalWire,
 } from "./types.js";
@@ -362,6 +364,27 @@ export class EkgClient {
     );
   }
 
+  trainRepresentationModel(holdoutTasks: number): Promise<RepresentationModel> {
+    return this.transport.request<RepresentationModel>(
+      "intuition.trainRepresentation",
+      { holdoutTasks },
+    );
+  }
+
+  latestRepresentationModel(): Promise<RepresentationModel | null> {
+    return this.transport.request<RepresentationModel | null>(
+      "intuition.latestRepresentation",
+      {},
+    );
+  }
+
+  activateRepresentationModel(modelId: number): Promise<RepresentationModel> {
+    return this.transport.request<RepresentationModel>(
+      "intuition.activateRepresentation",
+      this.withAdminToken({ modelId }),
+    );
+  }
+
   createGoal(
     kind: GoalKind,
     statement: string,
@@ -376,6 +399,24 @@ export class EkgClient {
 
   listGoals(): Promise<Goal[]> {
     return this.transport.request<Goal[]>("goal.list", {});
+  }
+
+  createLearningGoal(
+    statement: string,
+    standingGoalId: string,
+    sourceGapId: string,
+    derivationReason: string,
+  ): Promise<Goal> {
+    return this.transport.request<Goal>("goal.createLearning", {
+      statement,
+      standingGoalId,
+      sourceGapId,
+      derivationReason,
+    });
+  }
+
+  listLearningGoalRecords(): Promise<GoalLearningRecord[]> {
+    return this.transport.request<GoalLearningRecord[]>("goal.learningRecords", {});
   }
 
   recordCuriosityGap(gap: CuriosityGap): Promise<{ recorded: boolean }> {

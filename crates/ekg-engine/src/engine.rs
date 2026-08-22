@@ -616,6 +616,26 @@ impl Engine {
         Ok(self.intuition.metrics()?)
     }
 
+    pub fn train_representation_model(
+        &self,
+        holdout_tasks: usize,
+    ) -> Result<ekg_intuition::RepresentationModel, EngineError> {
+        Ok(self.intuition.train_representation_model(holdout_tasks)?)
+    }
+
+    pub fn activate_representation_model(
+        &self,
+        model_id: i64,
+    ) -> Result<ekg_intuition::RepresentationModel, EngineError> {
+        Ok(self.intuition.activate_representation_model(model_id)?)
+    }
+
+    pub fn latest_representation_model(
+        &self,
+    ) -> Result<Option<ekg_intuition::RepresentationModel>, EngineError> {
+        Ok(self.intuition.latest_representation_model()?)
+    }
+
     pub fn metrics_snapshot(&self) -> Result<MetricsSnapshot, EngineError> {
         Ok(MetricsSnapshot {
             episode_count: self.episodes.count()?,

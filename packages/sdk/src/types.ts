@@ -119,6 +119,17 @@ export interface RankingEvaluation {
   createdAt: number;
 }
 
+export interface RepresentationModel {
+  id: number;
+  modelVersion: string;
+  trainingTasks: number;
+  heldOutTasks: number;
+  heldOutCoverage: number;
+  activated: boolean;
+  termWeights: Record<string, number>;
+  createdAt: number;
+}
+
 export type GoalKind = "task" | "standing" | "instrumental" | "learning";
 
 export interface Goal {
@@ -127,6 +138,14 @@ export interface Goal {
   statement: string;
   parentId?: string | null;
   immutable: boolean;
+  createdAt: number;
+}
+
+export interface GoalLearningRecord {
+  learningGoalId: string;
+  standingGoalId: string;
+  sourceGapId: string;
+  derivationReason: string;
   createdAt: number;
 }
 
