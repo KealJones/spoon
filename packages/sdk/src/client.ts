@@ -27,7 +27,9 @@ import type {
   InterfaceDescription,
   LocalValidation,
   MetricsSnapshot,
+  ManagedSkill,
   PrimitiveExecution,
+  PromotionReplay,
   Goal,
   GoalKind,
   SkillCandidate,
@@ -390,6 +392,40 @@ export class EkgClient {
     return this.transport.request<EpisodeCompressionPlan>(
       "consolidation.compressionPlan",
       { limit },
+    );
+  }
+
+  registerSkillCandidate(candidate: SkillCandidate): Promise<ManagedSkill> {
+    return this.transport.request<ManagedSkill>(
+      "consolidation.register",
+      this.withAdminToken(candidate),
+    );
+  }
+
+  listManagedSkills(limit = 128): Promise<ManagedSkill[]> {
+    return this.transport.request<ManagedSkill[]>("consolidation.list", {
+      limit,
+    });
+  }
+
+  evaluateSkillForShadow(
+    skillId: string,
+    replays: PromotionReplay[],
+  ): Promise<ManagedSkill> {
+    return this.transport.request<ManagedSkill>(
+      "consolidation.evaluateShadow",
+      this.withAdminToken({ skillId, replays }),
+    );
+  }
+
+  retireManagedSkill(
+    skillId: string,
+    successorSkill: string,
+    reason: string,
+  ): Promise<ManagedSkill> {
+    return this.transport.request<ManagedSkill>(
+      "consolidation.retire",
+      this.withAdminToken({ skillId, successorSkill, reason }),
     );
   }
 

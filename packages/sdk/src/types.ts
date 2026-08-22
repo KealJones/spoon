@@ -160,6 +160,30 @@ export interface SkillCandidate {
   failureCritic: boolean;
 }
 
+export type SkillLifecycle = "candidate" | "shadow" | "promoted" | "retired";
+
+export interface ManagedSkill {
+  id: string;
+  candidate: SkillCandidate;
+  lifecycle: SkillLifecycle;
+  promotionVerdict?: JsonValue | null;
+  shadowLiveWins: number;
+  retirement?: JsonValue | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface PromotionReplay {
+  episode_id: string;
+  incumbent_correct: boolean;
+  challenger_correct: boolean;
+  incumbent_trace_steps?: number | null;
+  challenger_trace_steps?: number | null;
+  incumbent_candidates_explored?: number | null;
+  challenger_candidates_explored?: number | null;
+  transfer: boolean;
+}
+
 export interface EpisodeCompressionPlan {
   retainFull: string[];
   summarize: string[];

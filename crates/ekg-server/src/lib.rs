@@ -13,7 +13,8 @@ use ekg_core::{
 use ekg_engine::{
     AdaptationPlanId, AdaptationPlanRequest, ApplyAdaptationRequest, CuriosityGap, CycleBudget,
     CycleId, CycleInput, CycleOutcome, CycleProgress, Engine, EngineError, FailureAnalysisRequest,
-    GoalKind, InterfaceDescription, LocalValidation, Permission, TeacherProposalWire,
+    GoalKind, InterfaceDescription, LocalValidation, Permission, PromotionReplay, SkillCandidate,
+    TeacherProposalWire,
 };
 use ekg_episode::{EpisodeFeedback, EpisodeQuery, FeedbackSource};
 use ekg_graph::GraphError;
@@ -371,6 +372,34 @@ impl RpcServer {
                         .map_err(engine_error)?,
                 )
             }
+            "consolidation.register" => {
+                let input: SkillCandidate = decode(params)?;
+                encode(self.engine.register_skill_candidate(&input).map_err(engine_error)?)
+            }
+            "consolidation.list" => {
+                let input: LimitParam = decode(params)?;
+                encode(self.engine.list_managed_skills(input.limit.unwrap_or(128)).map_err(engine_error)?)
+            }
+            "consolidation.evaluateShadow" => {
+                let input: SkillShadowReplayParam = decode(params)?;
+                encode(
+                    self.engine
+                        .evaluate_skill_for_shadow(&input.skill_id, input.replays)
+                        .map_err(engine_error)?,
+                )
+            }
+            "consolidation.retire" => {
+                let input: SkillRetireParam = decode(params)?;
+                encode(
+                    self.engine
+                        .retire_managed_skill(
+                            &input.skill_id,
+                            &input.successor_skill,
+                            &input.reason,
+                        )
+                        .map_err(engine_error)?,
+                )
+            }
             "procedure.create" => {
                 let input: CreateProcedure = decode(params)?;
                 let mut procedure = Procedure::new(input.name, input.params, input.body);
@@ -708,6 +737,9 @@ fn requires_admin(method: &str) -> bool {
             | "capability.grant"
             | "capability.revoke"
             | "observation.recordAuthenticated"
+            | "consolidation.register"
+            | "consolidation.evaluateShadow"
+            | "consolidation.retire"
             | "adaptation.applyOffline"
             | "contradiction.record"
             | "contradiction.refine"
@@ -759,6 +791,21 @@ struct GoalCreateParam {
 #[serde(rename_all = "camelCase")]
 struct CuriosityRankParam {
     limit: Option<u32>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SkillShadowReplayParam {
+    skill_id: String,
+    replays: Vec<PromotionReplay>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SkillRetireParam {
+    skill_id: String,
+    successor_skill: String,
+    reason: String,
 }
 
 #[derive(Debug, Deserialize)]
