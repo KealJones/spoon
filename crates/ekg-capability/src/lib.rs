@@ -118,6 +118,48 @@ pub struct InvocationReceipt {
     pub bounds: ResourceBounds,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrimitiveExecution {
+    pub receipt: InvocationReceipt,
+    pub output: Value,
+}
+
+/// Safe native observations. Every target must be present in the local
+/// policy, and only explicitly supported targets are implemented.
+pub struct NativePrimitiveExecutor {
+    policy: PrimitivePolicy,
+}
+
+impl NativePrimitiveExecutor {
+    pub fn new(policy: PrimitivePolicy) -> Self {
+        Self { policy }
+    }
+
+    pub fn observe(
+        &self,
+        request: &PrimitiveRequest,
+    ) -> Result<PrimitiveExecution, CapabilityError> {
+        let receipt = self.policy.authorize(request)?;
+        let PrimitiveRequest::Observe { target } = request else {
+            return Err(CapabilityError::Invalid(
+                "native observation executor requires an Observe request".into(),
+            ));
+        };
+        let output = match target.as_str() {
+            "clock" => serde_json::json!({
+                "unixSeconds": unix_time(),
+                "source": "native:clock",
+            }),
+            _ => {
+                return Err(CapabilityError::Invalid(format!(
+                    "observation target {target} has no local adapter"
+                )));
+            }
+        };
+        Ok(PrimitiveExecution { receipt, output })
+    }
+}
+
 impl PrimitivePolicy {
     pub fn authorize(
         &self,
@@ -965,5 +1007,21 @@ mod tests {
                 })
                 .is_err()
         );
+    }
+
+    #[test]
+    fn clock_observation_requires_a_local_grant_and_mints_a_receipt() {
+        let policy = PrimitivePolicy {
+            observe_targets: BTreeSet::from(["clock".into()]),
+            ..PrimitivePolicy::default()
+        };
+        let execution = NativePrimitiveExecutor::new(policy)
+            .observe(&PrimitiveRequest::Observe {
+                target: "clock".into(),
+            })
+            .unwrap();
+        assert_eq!(execution.receipt.primitive, NativePrimitive::Observe);
+        assert_eq!(execution.output["source"], "native:clock");
+        assert!(execution.output["unixSeconds"].is_number());
     }
 }

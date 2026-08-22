@@ -25,9 +25,10 @@ pub use cycle::{
 pub use ekg_capability::{
     CapabilityBundle, CapabilityError, CapabilityProcedure, CapabilityStatus, CapabilityStore,
     CapabilityTest, Dependency, DiscoveredOperation, Effect, ImportedCapability,
-    InterfaceDescription, InvocationReceipt, LocalValidation, NativePrimitive, Permission,
-    PrimitivePolicy, PrimitiveRequest, Provenance, ResourceBounds, bundle_content_id,
-    discover_interface, export_bundle, import_bundle, run_sandbox_tests,
+    InterfaceDescription, InvocationReceipt, LocalValidation, NativePrimitive,
+    NativePrimitiveExecutor, Permission, PrimitiveExecution, PrimitivePolicy, PrimitiveRequest,
+    Provenance, ResourceBounds, bundle_content_id, discover_interface, export_bundle,
+    import_bundle, run_sandbox_tests,
 };
 pub use ekg_graph::{
     ActivatedConcept, ActivationHop, ActivationSeed, ActivationSpreadQuery, ActivationSpreadResult,
