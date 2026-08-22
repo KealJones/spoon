@@ -104,6 +104,7 @@ impl EpistemicChallengeKind {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct IntuitionMetrics {
     pub indexed_documents: u64,
     pub inverted_term_rows: u64,

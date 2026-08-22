@@ -119,6 +119,52 @@ fn capability_rpc_round_trip_keeps_imports_provisional_and_grants_local() {
 }
 
 #[test]
+fn metrics_goals_and_curiosity_endpoints_are_bounded_and_camel_case() {
+    let mut server = test_server();
+    let metrics = call(&mut server, 50, "metrics.snapshot", json!({}));
+    assert_eq!(metrics["episodeCount"], 0);
+    assert!(metrics["intuition"]["indexedDocuments"].is_number());
+
+    let standing = call(
+        &mut server,
+        51,
+        "goal.create",
+        json!({"kind": "standing", "statement": "remain accurate"}),
+    );
+    assert_eq!(standing["immutable"], true);
+    assert_eq!(standing["kind"], "standing");
+    assert_eq!(
+        call(&mut server, 52, "goal.list", json!({}))
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+
+    let gap = json!({
+        "id": "gap-1",
+        "kind": "failed_prediction",
+        "statement": "the prediction was surprising",
+        "blastRadius": 2.0,
+        "goalRelevance": 3.0,
+        "learningProgress": 1.0,
+        "costToClose": 1.0,
+        "valueScore": 6.0,
+        "sourceEpisode": null,
+        "resolved": false,
+        "createdAt": 1
+    });
+    assert_eq!(
+        call(&mut server, 53, "curiosity.record", gap)["recorded"],
+        true
+    );
+    assert_eq!(
+        call(&mut server, 54, "curiosity.rank", json!({"limit": 1}))[0]["id"],
+        "gap-1"
+    );
+}
+
+#[test]
 fn admin_revisions_require_exact_versions_and_expose_immutable_history() {
     let mut server = test_server();
     let concept = call(
