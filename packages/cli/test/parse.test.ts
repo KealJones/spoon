@@ -45,6 +45,7 @@ test("parses a natural-language cycle request", () => {
     kind: "cycle.run",
     situation: "what is double 7?",
     quiet: false,
+    explain: false,
   });
 });
 
@@ -53,16 +54,25 @@ test("parses quiet natural-language cycle requests", () => {
     kind: "cycle.run",
     situation: "what is double 7?",
     quiet: true,
+    explain: false,
   });
   assert.deepEqual(parseCommand(["ask", "-q", "what", "time", "is", "it?"]), {
     kind: "cycle.run",
     situation: "what time is it?",
     quiet: true,
+    explain: false,
   });
   assert.deepEqual(parseCommand(["ask", "what", "is", "double", "7?", "--quiet"]), {
     kind: "cycle.run",
     situation: "what is double 7?",
     quiet: true,
+    explain: false,
+  });
+  assert.deepEqual(parseCommand(["ask", "--explain", "what", "is", "double", "7?"]), {
+    kind: "cycle.run",
+    situation: "what is double 7?",
+    quiet: false,
+    explain: true,
   });
 });
 

@@ -35,7 +35,7 @@ export type Command =
   | { kind: "contradiction.refine"; request: Record<string, JsonValue> }
   | { kind: "contradiction.uncertainty"; claimId: string }
   | { kind: "primitive.observe"; target: string }
-  | { kind: "cycle.run"; situation: string; quiet: boolean };
+  | { kind: "cycle.run"; situation: string; quiet: boolean; explain: boolean };
 
 const usage = `Usage:
   ekg concept add <name>
@@ -58,7 +58,7 @@ const usage = `Usage:
   ekg contradiction refine '<json>'
   ekg contradiction uncertainty <claim-id>
   ekg primitive observe <target>
-  ekg ask [--quiet|-q] <situation>`;
+  ekg ask [--quiet|-q|--explain] <situation>`;
 
 export function parseCommand(args: string[]): Command {
   const [resource, action, ...rest] = args;
@@ -168,16 +168,19 @@ export function parseCommand(args: string[]): Command {
     return { kind: "primitive.observe", target: rest[0]! };
   }
   if (resource === "ask" && action) {
+    const leadingExplain = action === "--explain";
+    const trailingExplain = rest.at(-1) === "--explain";
     const leadingQuiet = action === "--quiet" || action === "-q";
     const trailingQuiet = rest.at(-1) === "--quiet" || rest.at(-1) === "-q";
     const quiet = leadingQuiet || trailingQuiet;
-    const question = leadingQuiet
+    const explain = leadingExplain || trailingExplain;
+    const question = leadingQuiet || leadingExplain
       ? rest
-      : trailingQuiet
+      : trailingQuiet || trailingExplain
         ? [action, ...rest.slice(0, -1)]
         : [action, ...rest];
     if (question.length === 0) throw new Error(usage);
-    return { kind: "cycle.run", situation: question.join(" "), quiet };
+    return { kind: "cycle.run", situation: question.join(" "), quiet, explain };
   }
 
   throw new Error(usage);

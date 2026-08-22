@@ -108,7 +108,9 @@ async function main(): Promise<void> {
 
   try {
     const result = await execute(client, command);
-    if (command.kind === "cycle.run" && command.quiet) {
+    if (command.kind === "cycle.run" && command.explain) {
+      process.stdout.write(`${formatExplanation(result)}\n`);
+    } else if (command.kind === "cycle.run" && command.quiet) {
       process.stdout.write(`${formatQuietAnswer(result)}\n`);
     } else {
       process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
@@ -128,6 +130,52 @@ function formatQuietAnswer(result: unknown): string {
   return typeof disposition === "string"
     ? `No direct answer (${disposition}).`
     : "No direct answer.";
+}
+
+function formatExplanation(result: unknown): string {
+  if (!isRecord(result)) return `Result: ${JSON.stringify(result)}`;
+  const episode = isRecord(result.episode) ? result.episode : {};
+  const lines = [
+    `Request: ${stringValue(episode.situation) ?? "unknown"}`,
+    `Outcome: ${stringValue(result.disposition) ?? "unknown"}`,
+    `Answer: ${formatValue(result.answer)}`,
+    `Episode: ${stringValue(episode.id) ?? "unknown"}`,
+  ];
+  const teacher = episode.teacher_interaction ?? episode.teacherInteraction;
+  if (isRecord(teacher)) {
+    const provenance = isRecord(teacher.provenance) ? teacher.provenance : teacher;
+    lines.push(
+      `Teacher: ${stringValue(provenance.provider) ?? "unknown"}` +
+        (stringValue(provenance.model) ? ` (${stringValue(provenance.model)})` : ""),
+    );
+    if (teacher.content !== undefined) lines.push(`Proposal: ${formatValue(teacher.content)}`);
+    if (teacher.validation !== undefined) lines.push(`Validation: ${formatValue(teacher.validation)}`);
+  } else {
+    lines.push("Teacher: not used");
+  }
+  const evaluation = episode.evaluation;
+  if (isRecord(evaluation)) {
+    lines.push(
+      `Evaluation: ${stringValue(evaluation.tier) ?? "unknown"} — ${
+        evaluation.success === true ? "success" : evaluation.success === false ? "failure" : "unresolved"
+      }`,
+    );
+    if (stringValue(evaluation.details)) lines.push(`Why: ${stringValue(evaluation.details)}`);
+  }
+  const action = stringValue(episode.action);
+  lines.push(`Learned/reused: ${action && action !== "answer-only" ? action : "no reusable procedure"}`);
+  const cost = isRecord(episode.cost) ? episode.cost : {};
+  lines.push(`Cost: rung ${stringValue(cost.rung_reached ?? cost.rungReached) ?? "unknown"}, ${stringValue(cost.steps_taken ?? cost.stepsTaken) ?? "?"} steps`);
+  return lines.join("\n");
+}
+
+function formatValue(value: unknown): string {
+  if (value === null || value === undefined) return "none";
+  return typeof value === "string" ? value : JSON.stringify(value);
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" || typeof value === "number" ? String(value) : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
