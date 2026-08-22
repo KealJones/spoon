@@ -30,6 +30,20 @@ fn derived_goals_cannot_bypass_the_goal_boundary() {
         .unwrap_err();
     assert!(matches!(error, EngineError::InvalidInput(_)));
     assert!(engine.list_goals().unwrap().is_empty());
+
+    let task = engine
+        .create_goal(GoalKind::Task, "finish the task", None)
+        .unwrap();
+    let instrumental = engine
+        .create_instrumental_goal(
+            "collect the missing input",
+            &task.id,
+            "the task cannot complete without this input",
+        )
+        .unwrap();
+    assert_eq!(instrumental.kind, GoalKind::Instrumental);
+    assert_eq!(instrumental.parent_id.as_deref(), Some(task.id.as_str()));
+    assert_eq!(engine.list_goal_derivation_records().unwrap().len(), 1);
 }
 
 #[test]

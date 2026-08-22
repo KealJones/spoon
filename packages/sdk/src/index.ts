@@ -61,6 +61,7 @@ export type {
   VerifiedAnswerRecord,
   GapKind,
   Goal,
+  GoalDerivationRecord,
   GoalKind,
   GoalLearningRecord,
   SkillCandidate,

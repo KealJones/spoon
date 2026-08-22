@@ -341,10 +341,27 @@ impl RpcServer {
                         .map_err(engine_error)?,
                 )
             }
+            "goal.createInstrumental" => {
+                let input: InstrumentalGoalCreateParam = decode(params)?;
+                encode(
+                    self.engine
+                        .create_instrumental_goal(
+                            &input.statement,
+                            &input.parent_goal_id,
+                            &input.derivation_reason,
+                        )
+                        .map_err(engine_error)?,
+                )
+            }
             "goal.list" => encode(self.engine.list_goals().map_err(engine_error)?),
             "goal.learningRecords" => encode(
                 self.engine
                     .list_learning_goal_records()
+                    .map_err(engine_error)?,
+            ),
+            "goal.derivationRecords" => encode(
+                self.engine
+                    .list_goal_derivation_records()
                     .map_err(engine_error)?,
             ),
             "curiosity.record" => {
@@ -907,6 +924,14 @@ struct LearningGoalCreateParam {
     statement: String,
     standing_goal_id: String,
     source_gap_id: String,
+    derivation_reason: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct InstrumentalGoalCreateParam {
+    statement: String,
+    parent_goal_id: String,
     derivation_reason: String,
 }
 

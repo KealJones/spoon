@@ -354,6 +354,22 @@ impl Engine {
         )
     }
 
+    pub fn create_instrumental_goal(
+        &self,
+        statement: &str,
+        parent_goal_id: &str,
+        derivation_reason: &str,
+    ) -> Result<crate::goals::Goal, EngineError> {
+        self.goals
+            .create_instrumental_goal(statement, parent_goal_id, derivation_reason)
+    }
+
+    pub fn list_goal_derivation_records(
+        &self,
+    ) -> Result<Vec<crate::goals::GoalDerivationRecord>, EngineError> {
+        self.goals.list_goal_derivation_records()
+    }
+
     pub fn list_learning_goal_records(
         &self,
     ) -> Result<Vec<crate::goals::GoalLearningRecord>, EngineError> {

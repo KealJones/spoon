@@ -45,7 +45,7 @@ pub use ekg_intuition::{
     RecallDocument, RecallKind, RepresentationModel, SupervisionTask,
 };
 pub use engine::{Engine, EngineError, ExecutionOutcome, MetricsSnapshot, ReplayOutcome};
-pub use goals::{CuriosityGap, GapKind, Goal, GoalKind, GoalLearningRecord};
+pub use goals::{CuriosityGap, GapKind, Goal, GoalDerivationRecord, GoalKind, GoalLearningRecord};
 pub use regression::VerifiedAnswerRecord;
 pub use skills::{ManagedSkill, SkillLifecycle};
 pub use trust::{TrustEvidenceKind, TrustReceipt};

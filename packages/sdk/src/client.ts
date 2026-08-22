@@ -36,6 +36,7 @@ import type {
   Goal,
   GoalKind,
   GoalLearningRecord,
+  GoalDerivationRecord,
   SkillCandidate,
   SkillShadowWinInput,
   RecordContradictionInput,
@@ -417,6 +418,22 @@ export class EkgClient {
 
   listLearningGoalRecords(): Promise<GoalLearningRecord[]> {
     return this.transport.request<GoalLearningRecord[]>("goal.learningRecords", {});
+  }
+
+  createInstrumentalGoal(
+    statement: string,
+    parentGoalId: string,
+    derivationReason: string,
+  ): Promise<Goal> {
+    return this.transport.request<Goal>("goal.createInstrumental", {
+      statement,
+      parentGoalId,
+      derivationReason,
+    });
+  }
+
+  listGoalDerivationRecords(): Promise<GoalDerivationRecord[]> {
+    return this.transport.request<GoalDerivationRecord[]>("goal.derivationRecords", {});
   }
 
   recordCuriosityGap(gap: CuriosityGap): Promise<{ recorded: boolean }> {

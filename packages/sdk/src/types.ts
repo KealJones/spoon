@@ -149,6 +149,13 @@ export interface GoalLearningRecord {
   createdAt: number;
 }
 
+export interface GoalDerivationRecord {
+  goalId: string;
+  parentGoalId: string;
+  derivationReason: string;
+  createdAt: number;
+}
+
 export type GapKind =
   | "structural"
   | "functional"

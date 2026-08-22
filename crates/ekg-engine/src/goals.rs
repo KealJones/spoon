@@ -37,6 +37,15 @@ pub struct GoalLearningRecord {
     pub created_at: i64,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GoalDerivationRecord {
+    pub goal_id: String,
+    pub parent_goal_id: String,
+    pub derivation_reason: String,
+    pub created_at: i64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GapKind {
@@ -123,6 +132,14 @@ impl GoalStore {
             );
             CREATE INDEX IF NOT EXISTS idx_ekg_goal_learning_standing
                 ON ekg_goal_learning_records(standing_goal_id, created_at ASC);
+            CREATE TABLE IF NOT EXISTS ekg_goal_derivation_records (
+                goal_id TEXT PRIMARY KEY NOT NULL REFERENCES ekg_goals(id),
+                parent_goal_id TEXT NOT NULL REFERENCES ekg_goals(id),
+                derivation_reason TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_ekg_goal_derivation_parent
+                ON ekg_goal_derivation_records(parent_goal_id, created_at ASC);
             CREATE TRIGGER IF NOT EXISTS ekg_goals_immutable_update
             BEFORE UPDATE OF kind, statement, parent_id, immutable ON ekg_goals
             WHEN OLD.immutable = 1
@@ -265,6 +282,71 @@ impl GoalStore {
         )?;
         transaction.commit()?;
         Ok(goal)
+    }
+
+    pub fn create_instrumental_goal(
+        &self,
+        statement: &str,
+        parent_goal_id: &str,
+        derivation_reason: &str,
+    ) -> Result<Goal, EngineError> {
+        let statement = bounded_text(statement)?;
+        let derivation_reason = bounded_text(derivation_reason)?;
+        let transaction = self.conn.unchecked_transaction()?;
+        let parent_exists: bool = transaction.query_row(
+            "SELECT EXISTS(SELECT 1 FROM ekg_goals WHERE id = ?1)",
+            params![parent_goal_id],
+            |row| row.get(0),
+        )?;
+        if !parent_exists {
+            return Err(EngineError::InvalidInput(
+                "instrumental goals require an existing parent goal".into(),
+            ));
+        }
+        let created_at = unix_time();
+        let goal = Goal {
+            id: Uuid::new_v4().to_string(),
+            kind: GoalKind::Instrumental,
+            statement,
+            parent_id: Some(parent_goal_id.to_owned()),
+            immutable: false,
+            created_at,
+        };
+        transaction.execute(
+            "INSERT INTO ekg_goals (id, kind, statement, parent_id, immutable, created_at)
+             VALUES (?1, ?2, ?3, ?4, 0, ?5)",
+            params![
+                goal.id,
+                serde_json::to_string(&goal.kind)?,
+                goal.statement,
+                goal.parent_id,
+                goal.created_at
+            ],
+        )?;
+        transaction.execute(
+            "INSERT INTO ekg_goal_derivation_records
+             (goal_id, parent_goal_id, derivation_reason, created_at)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![goal.id, parent_goal_id, derivation_reason, created_at],
+        )?;
+        transaction.commit()?;
+        Ok(goal)
+    }
+
+    pub fn list_goal_derivation_records(&self) -> Result<Vec<GoalDerivationRecord>, EngineError> {
+        let mut statement = self.conn.prepare(
+            "SELECT goal_id, parent_goal_id, derivation_reason, created_at
+             FROM ekg_goal_derivation_records ORDER BY created_at ASC, goal_id ASC",
+        )?;
+        let rows = statement.query_map([], |row| {
+            Ok(GoalDerivationRecord {
+                goal_id: row.get(0)?,
+                parent_goal_id: row.get(1)?,
+                derivation_reason: row.get(2)?,
+                created_at: row.get(3)?,
+            })
+        })?;
+        rows.map(|row| row.map_err(EngineError::from)).collect()
     }
 
     pub fn list_learning_goal_records(&self) -> Result<Vec<GoalLearningRecord>, EngineError> {
