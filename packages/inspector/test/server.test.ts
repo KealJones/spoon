@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   createInspectorServer,
   episodeDetail,
+  inspectorHtml,
   redactSensitive,
 } from "../src/server.js";
 
@@ -13,6 +14,16 @@ test("inspector package exposes a local dashboard entry point", async () => {
   });
   assert.equal(packageJson.default.scripts.dev, "tsx src/server.ts");
   assert.equal(packageJson.default.scripts.start, "node dist/src/server.js");
+});
+
+test("inspector labels Phase 6 slots as bounded evidence, not broad claims", () => {
+  const dashboard = inspectorHtml();
+  assert.match(dashboard, /Teacher-request episodes/);
+  assert.match(dashboard, /Persisted transfer wins/);
+  assert.match(dashboard, /Preserved replay verdicts/);
+  assert.match(dashboard, /post-promotion success/);
+  assert.match(dashboard, /not held-out task-family coverage/);
+  assert.match(dashboard, /No domains or comparable time cohorts/);
 });
 
 test("episode narrative explains teacher, validation, learning, outcome, and cost", () => {
