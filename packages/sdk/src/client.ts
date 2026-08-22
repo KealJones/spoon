@@ -425,6 +425,26 @@ export class EkgClient {
     });
   }
 
+  listActiveManagedSkills(limit = 128): Promise<ManagedSkill[]> {
+    return this.transport.request<ManagedSkill[]>("consolidation.listActive", {
+      limit,
+    });
+  }
+
+  registerSingleSuccessSkill(episodeId: string): Promise<ManagedSkill> {
+    return this.transport.request<ManagedSkill>(
+      "consolidation.registerSingle",
+      this.withAdminToken({ episodeId }),
+    );
+  }
+
+  registerFailureCriticSkill(episodeId: string): Promise<ManagedSkill> {
+    return this.transport.request<ManagedSkill>(
+      "consolidation.registerFailureCritic",
+      this.withAdminToken({ episodeId }),
+    );
+  }
+
   evaluateSkillForShadow(
     skillId: string,
     replays: PromotionReplay[],

@@ -355,7 +355,16 @@ impl Engine {
         limit: u32,
     ) -> Result<Vec<ekg_adapt::SkillCandidate>, EngineError> {
         let episodes = self.episodes.list_recent(limit.clamp(1, 512))?;
-        Ok(ekg_adapt::discover_skills(&episodes))
+        let mut candidates = ekg_adapt::discover_skills(&episodes);
+        for episode in &episodes {
+            if let Some(candidate) = ekg_adapt::discover_single_success(episode) {
+                candidates.push(candidate);
+            }
+            if let Some(candidate) = ekg_adapt::discover_failure_critic(episode) {
+                candidates.push(candidate);
+            }
+        }
+        Ok(candidates)
     }
 
     pub fn plan_episode_compression(
@@ -404,6 +413,37 @@ impl Engine {
 
     pub fn list_managed_skills(&self, limit: u32) -> Result<Vec<crate::ManagedSkill>, EngineError> {
         self.skills.list(limit)
+    }
+
+    pub fn list_active_managed_skills(
+        &self,
+        limit: u32,
+    ) -> Result<Vec<crate::ManagedSkill>, EngineError> {
+        self.skills.list_active(limit)
+    }
+
+    pub fn register_single_success_skill(
+        &self,
+        episode_id: EpisodeId,
+    ) -> Result<crate::ManagedSkill, EngineError> {
+        let episode = self.episodes.get(episode_id)?;
+        let candidate = ekg_adapt::discover_single_success(&episode).ok_or_else(|| {
+            EngineError::InvalidInput(
+                "episode is not a successful Hard or Consensus candidate".into(),
+            )
+        })?;
+        self.register_skill_candidate(&candidate)
+    }
+
+    pub fn register_failure_critic_skill(
+        &self,
+        episode_id: EpisodeId,
+    ) -> Result<crate::ManagedSkill, EngineError> {
+        let episode = self.episodes.get(episode_id)?;
+        let candidate = ekg_adapt::discover_failure_critic(&episode).ok_or_else(|| {
+            EngineError::InvalidInput("episode is not an eligible failure critic".into())
+        })?;
+        self.register_skill_candidate(&candidate)
     }
 
     /// Records a replay verdict and enters shadow only after the conservative

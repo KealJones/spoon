@@ -147,6 +147,18 @@ impl SkillStore {
         rows.map(|row| row.map_err(EngineError::from)).collect()
     }
 
+    pub(crate) fn list_active(&self, limit: u32) -> Result<Vec<ManagedSkill>, EngineError> {
+        let mut statement = self.conn.prepare(
+            "SELECT id, candidate_json, lifecycle, promotion_verdict_json,
+                    shadow_live_wins, retirement_json, created_at, updated_at
+             FROM ekg_managed_skills
+             WHERE lifecycle != 'retired'
+             ORDER BY updated_at DESC, id ASC LIMIT ?1",
+        )?;
+        let rows = statement.query_map(params![limit.clamp(1, 512)], row_to_skill)?;
+        rows.map(|row| row.map_err(EngineError::from)).collect()
+    }
+
     pub(crate) fn record_replay_verdict(
         &self,
         id: &str,

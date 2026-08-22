@@ -404,6 +404,30 @@ impl RpcServer {
                         .map_err(engine_error)?,
                 )
             }
+            "consolidation.listActive" => {
+                let input: LimitParam = decode(params)?;
+                encode(
+                    self.engine
+                        .list_active_managed_skills(input.limit.unwrap_or(128))
+                        .map_err(engine_error)?,
+                )
+            }
+            "consolidation.registerSingle" => {
+                let input: EpisodeIdParam = decode(params)?;
+                encode(
+                    self.engine
+                        .register_single_success_skill(EpisodeId(parse_uuid(&input.episode_id)?))
+                        .map_err(engine_error)?,
+                )
+            }
+            "consolidation.registerFailureCritic" => {
+                let input: EpisodeIdParam = decode(params)?;
+                encode(
+                    self.engine
+                        .register_failure_critic_skill(EpisodeId(parse_uuid(&input.episode_id)?))
+                        .map_err(engine_error)?,
+                )
+            }
             "consolidation.evaluateShadow" => {
                 let input: SkillShadowReplayParam = decode(params)?;
                 encode(
@@ -776,6 +800,8 @@ fn requires_admin(method: &str) -> bool {
             | "capability.revoke"
             | "observation.recordAuthenticated"
             | "consolidation.register"
+            | "consolidation.registerSingle"
+            | "consolidation.registerFailureCritic"
             | "consolidation.evaluateShadow"
             | "consolidation.promoteLive"
             | "consolidation.retire"
