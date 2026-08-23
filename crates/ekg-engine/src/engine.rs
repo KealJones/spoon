@@ -472,6 +472,22 @@ impl Engine {
         self.goals.rank_gaps(limit)
     }
 
+    /// Produces at most one bounded, read-only learning proposal for the
+    /// highest-valued unresolved gap.  Scheduling does not execute the
+    /// proposal or grant mutation authority.
+    pub fn schedule_next_learning_action(
+        &self,
+    ) -> Result<Option<crate::goals::ScheduledLearningAction>, EngineError> {
+        self.goals.schedule_next_learning_action()
+    }
+
+    pub fn list_scheduled_learning_actions(
+        &self,
+        limit: u32,
+    ) -> Result<Vec<crate::goals::ScheduledLearningAction>, EngineError> {
+        self.goals.list_scheduled_learning_actions(limit)
+    }
+
     pub fn discover_skill_candidates(
         &self,
         limit: u32,
@@ -1652,25 +1668,20 @@ impl Engine {
     }
 
     fn record_episode_curiosity(&self, episode: &Episode) -> Result<(), EngineError> {
-        if !episode.failed() {
-            return Ok(());
+        // Episode records are finalized before this saga runs.  Derivation is
+        // therefore read-only over immutable evidence, and the deterministic
+        // gap IDs make recovery/retry idempotent.
+        let recent = self.episodes.list_recent(256)?;
+        for gap in crate::goals::derive_episode_curiosity_gaps(episode, &recent) {
+            self.goals.record_gap(&gap)?;
         }
-        let cost = f64::from(episode.cost.steps_taken.max(1));
-        let blast_radius = if episode.action.is_some() { 2.0 } else { 1.0 };
-        let gap = crate::goals::CuriosityGap {
-            id: format!("episode:{}:failed-prediction", episode.id),
-            kind: crate::goals::GapKind::FailedPrediction,
-            statement: format!("failed prediction in {}", episode.situation),
-            blast_radius,
-            goal_relevance: 1.0,
-            learning_progress: 1.0,
-            cost_to_close: cost,
-            value_score: blast_radius / cost,
-            source_episode: Some(episode.id.to_string()),
-            resolved: false,
-            created_at: episode.created_at,
-        };
-        self.goals.record_gap(&gap)?;
+        // Contradictions are derived from trusted immutable facts above.  A
+        // held contradiction is also a curiosity gap, but this merely records
+        // the missing discriminator; it does not refine or mutate a claim.
+        for contradiction in self.contradictions.list_held()? {
+            let gap = crate::goals::held_contradiction_gap(&contradiction);
+            self.goals.record_gap(&gap)?;
+        }
         Ok(())
     }
 
