@@ -869,8 +869,11 @@ impl Engine {
         self.register_skill_candidate(&candidate)
     }
 
-    /// Records a replay verdict and enters shadow only after the conservative
-    /// gate has preserved every replayed verified result and measured a win.
+    /// Records a caller-supplied replay report and enters shadow only after the
+    /// conservative gate has preserved every replayed verified result and
+    /// measured a win. This compatibility API does not execute the challenger;
+    /// callers that need an engine-derived verdict should use
+    /// [`Self::evaluate_skill_for_shadow_with_challenger`].
     pub fn evaluate_skill_for_shadow(
         &self,
         skill_id: &str,
@@ -913,6 +916,184 @@ impl Engine {
                 )));
             }
         }
+        let verdict = ekg_adapt::PromotionGate::evaluate(replays);
+        self.skills.record_replay_verdict(skill_id, &verdict)
+    }
+
+    /// Replays a candidate skill's immutable, trusted source episodes against
+    /// an exact newer procedure revision owned by this engine. The caller
+    /// supplies only the revision identity: expected outputs, input bindings,
+    /// nested procedure versions, and challenger metrics all come from the
+    /// persisted source traces and the local graph.
+    ///
+    /// This is the strict promotion path. It cannot accept caller-provided
+    /// correctness, trace, transfer, or cost claims, and it never records a
+    /// shadow verdict unless every source episode is independently replayed.
+    pub fn evaluate_skill_for_shadow_with_challenger(
+        &self,
+        skill_id: &str,
+        challenger_id: ProcedureId,
+        challenger_version: u32,
+    ) -> Result<crate::ManagedSkill, EngineError> {
+        let skill = self.skills.get(skill_id)?.ok_or_else(|| {
+            EngineError::InvalidInput(format!("unknown managed skill {skill_id}"))
+        })?;
+        if skill.lifecycle != crate::SkillLifecycle::Candidate {
+            return Err(EngineError::InvalidInput(
+                "only a candidate skill may enter shadow evaluation".into(),
+            ));
+        }
+        if skill.candidate.failure_critic {
+            return Err(EngineError::InvalidInput(
+                "failure-critic skills cannot be evaluated as executable challengers".into(),
+            ));
+        }
+        let source_episodes = skill
+            .candidate
+            .source_episode_ids
+            .iter()
+            .map(|episode_id| self.episodes.get(*episode_id))
+            .collect::<Result<Vec<_>, _>>()?;
+        if source_episodes.is_empty() {
+            return Err(EngineError::InvalidInput(
+                "candidate skill has no source episodes".into(),
+            ));
+        }
+
+        let (incumbent_id, incumbent_version) = source_episodes
+            .iter()
+            .map(|episode| {
+                if !episode.succeeded() || self.trust.receipt_for_episode(episode)?.is_none() {
+                    return Err(EngineError::InvalidInput(format!(
+                        "promotion source episode {} is not a successful trusted verification",
+                        episode.id
+                    )));
+                }
+                parse_procedure_action(episode.action.as_deref()).ok_or_else(|| {
+                    EngineError::InvalidInput(format!(
+                        "promotion source episode {} is not a versioned procedure execution",
+                        episode.id
+                    ))
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .try_fold(None, |selected, current| {
+                if let Some(selected) = selected {
+                    if selected != current {
+                        return Err(EngineError::InvalidInput(
+                            "promotion sources must identify one procedure version".into(),
+                        ));
+                    }
+                    Ok(Some(selected))
+                } else {
+                    Ok(Some(current))
+                }
+            })?
+            .ok_or_else(|| {
+                EngineError::InvalidInput("missing promotion source procedure".into())
+            })?;
+
+        if challenger_id != incumbent_id || challenger_version <= incumbent_version {
+            return Err(EngineError::InvalidInput(
+                "challenger must be a newer revision of the source procedure".into(),
+            ));
+        }
+        let challenger = self
+            .graph
+            .get_procedure_version(challenger_id, challenger_version)?
+            .ok_or_else(|| {
+                EngineError::InvalidInput(format!(
+                    "challenger procedure {challenger_id}@{challenger_version} does not exist"
+                ))
+            })?;
+        if !is_current_executable(challenger.lifecycle) {
+            return Err(EngineError::InvalidInput(
+                "challenger procedure is not executable".into(),
+            ));
+        }
+
+        let mut replays = Vec::with_capacity(source_episodes.len());
+        for episode in source_episodes {
+            let trace_json = episode
+                .execution_trace
+                .clone()
+                .ok_or(EngineError::MissingTrace(episode.id))?;
+            let trace: ExecTrace = serde_json::from_value(trace_json)?;
+            let top = trace
+                .steps
+                .last()
+                .ok_or(EngineError::MissingTopLevelProcedure)?;
+            if top.procedure_called != Some(incumbent_id)
+                || top.procedure_version != Some(incumbent_version)
+            {
+                return Err(EngineError::InvalidInput(format!(
+                    "promotion source episode {} trace is not pinned to procedure {}@{}",
+                    episode.id, incumbent_id, incumbent_version
+                )));
+            }
+            let args = match top.input.as_ref() {
+                None => Vec::new(),
+                Some(Value::List(values)) => values.clone(),
+                Some(_) => {
+                    return Err(EngineError::InvalidInput(format!(
+                        "promotion source episode {} has non-list procedure inputs",
+                        episode.id
+                    )));
+                }
+            };
+            let expected = episode.observed_result.as_ref().ok_or_else(|| {
+                EngineError::InvalidInput(format!(
+                    "promotion source episode {} has no observed result",
+                    episode.id
+                ))
+            })?;
+
+            let mut evaluator = Evaluator::new().with_budget(self.max_steps);
+            let mut registered = HashSet::new();
+            for step in &trace.steps {
+                let (Some(id), Some(version)) = (step.procedure_called, step.procedure_version)
+                else {
+                    return Err(EngineError::InvalidInput(format!(
+                        "promotion source episode {} has an incomplete execution trace",
+                        episode.id
+                    )));
+                };
+                if registered.insert(id) {
+                    if id == incumbent_id {
+                        evaluator.register_procedure(challenger.clone());
+                    } else {
+                        let exact = self
+                            .graph
+                            .get_procedure_version(id, version)?
+                            .ok_or_else(|| {
+                                EngineError::InvalidInput(format!(
+                                    "promotion source episode {} references missing procedure {}@{}",
+                                    episode.id, id, version
+                                ))
+                            })?;
+                        evaluator.register_procedure(exact);
+                    }
+                }
+            }
+            let attempt = evaluator.exec_procedure(&incumbent_id, args).ok();
+            let challenger_correct = attempt
+                .as_ref()
+                .is_some_and(|result| &result.value == expected);
+            replays.push(ekg_adapt::PromotionReplay {
+                episode_id: episode.id,
+                incumbent_correct: true,
+                challenger_correct,
+                incumbent_trace_steps: u32::try_from(trace.len()).ok(),
+                challenger_trace_steps: attempt
+                    .as_ref()
+                    .and_then(|result| u32::try_from(result.trace.len()).ok()),
+                incumbent_candidates_explored: None,
+                challenger_candidates_explored: None,
+                transfer: false,
+            });
+        }
+
         let verdict = ekg_adapt::PromotionGate::evaluate(replays);
         self.skills.record_replay_verdict(skill_id, &verdict)
     }
@@ -2365,6 +2546,15 @@ pub(crate) fn bind_inputs(
                 .ok_or_else(|| EngineError::InvalidInput(format!("missing input '{}'", param.name)))
         })
         .collect()
+}
+
+fn parse_procedure_action(action: Option<&str>) -> Option<(ProcedureId, u32)> {
+    let action = action?.strip_prefix("procedure:")?;
+    let (id, version) = action.split_once('@')?;
+    Some((
+        ProcedureId(uuid::Uuid::parse_str(id).ok()?),
+        version.parse().ok()?,
+    ))
 }
 
 pub(crate) fn reasoning_trace(trace: &ExecTrace) -> ReasoningTrace {

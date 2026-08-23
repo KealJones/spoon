@@ -144,6 +144,45 @@ fn trusted_candidate_moves_through_shadow_promotion_and_reconstructible_retireme
 }
 
 #[test]
+fn engine_derived_challenger_replays_trusted_sources_before_shadow() {
+    let engine = Engine::in_memory_with_admin("engine-derived-challenger").unwrap();
+    let child = double();
+    engine.admin_insert_procedure(&child).unwrap();
+    let incumbent = Procedure::new(
+        "DOUBLE THROUGH CHILD",
+        vec![Param::named("x")],
+        Expr::Call {
+            procedure: child.id,
+            args: vec![Expr::Var("x".into())],
+        },
+    );
+    engine.admin_insert_procedure(&incumbent).unwrap();
+    let source = engine
+        .execute_procedure(incumbent.id, inputs(2), Some(Value::Int(4)))
+        .unwrap();
+    let candidate = engine
+        .register_single_success_skill(source.episode.id)
+        .unwrap();
+
+    let mut challenger = incumbent.clone();
+    challenger.version = 2;
+    challenger.body = Expr::BinOp {
+        op: BinOp::Mul,
+        left: Box::new(Expr::Var("x".into())),
+        right: Box::new(Expr::Literal(Value::Int(2))),
+    };
+    engine
+        .admin_revise_procedure(&challenger, incumbent.version)
+        .unwrap();
+
+    let shadowed = engine
+        .evaluate_skill_for_shadow_with_challenger(&candidate.id, incumbent.id, 2)
+        .unwrap();
+    assert_eq!(shadowed.lifecycle, SkillLifecycle::Shadow);
+    assert!(shadowed.promotion_verdict.unwrap().shadow_eligible());
+}
+
+#[test]
 fn retirement_rejects_missing_or_unpromoted_successors() {
     let engine = Engine::in_memory_with_admin("retirement-boundary").unwrap();
     assert!(
