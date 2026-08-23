@@ -13,12 +13,16 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
-pub const BUNDLE_FORMAT_VERSION: u16 = 1;
+pub const BUNDLE_FORMAT_VERSION: u16 = 2;
 pub const MAX_PROCEDURES: usize = 64;
 pub const MAX_DEPENDENCIES: usize = 128;
 pub const MAX_DEPENDENCY_EDGES: usize = 512;
 pub const MAX_TESTS: usize = 256;
 pub const MAX_COMPATIBILITY_CONSTRAINTS: usize = 32;
+pub const MAX_PROVENANCE_IDENTITIES: usize = 16;
+pub const MAX_PROVENANCE_REFERENCES: usize = 128;
+pub const MAX_RECONSTRUCTION_STEPS: usize = 64;
+pub const MAX_PORTABLE_TEXT_BYTES: usize = 512;
 pub const MAX_SCHEMA_BYTES: usize = 32 * 1024;
 pub const MAX_BUNDLE_BYTES: usize = 512 * 1024;
 pub const MAX_RESOURCE_BYTES: u64 = 64 * 1024 * 1024;
@@ -596,7 +600,7 @@ impl Default for ResourceBounds {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CapabilityTest {
     pub name: String,
     pub input: Value,
@@ -604,17 +608,55 @@ pub struct CapabilityTest {
     pub fixture_output: Value,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Ord, PartialOrd)]
+#[serde(rename_all = "snake_case")]
+pub enum ProvenanceIdentityKind {
+    Author,
+    Discoverer,
+}
+
+/// A portable identity claim. It identifies who authored or discovered an
+/// artifact, but deliberately carries no signature trust, local account,
+/// credential, or authority grant. Receivers may use it for inspection only.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProvenanceIdentity {
+    pub kind: ProvenanceIdentityKind,
+    pub scheme: String,
+    pub identifier: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Ord, PartialOrd)]
+#[serde(rename_all = "snake_case")]
+pub enum PortableEvidenceKind {
+    ValidationEpisode,
+    Evidence,
+}
+
+/// A reconstructible reference to validation evidence. The digest protects
+/// identity; the referenced evidence itself is not embedded and conveys no
+/// local trust when imported.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PortableEvidenceReference {
+    pub kind: PortableEvidenceKind,
+    pub identifier: String,
+    pub digest: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Provenance {
     pub source: String,
     pub discovered_at: i64,
     pub interface_fingerprint: String,
+    pub identities: Vec<ProvenanceIdentity>,
     pub validation_episodes: Vec<String>,
+    pub evidence_references: Vec<PortableEvidenceReference>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Dependency {
     pub name: String,
     pub version: String,
@@ -625,7 +667,7 @@ pub struct Dependency {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Ord, PartialOrd)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DependencyReference {
     pub name: String,
     pub version: String,
@@ -641,7 +683,7 @@ pub enum NeutralProcedureKind {
 /// Portable metadata for a procedure. This is deliberately not executable
 /// code: the receiving runtime maps this neutral IR to its own native adapter.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NeutralProcedureMetadata {
     pub kind: NeutralProcedureKind,
     pub ir_version: u16,
@@ -649,12 +691,23 @@ pub struct NeutralProcedureMetadata {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReconstructionRecipe {
     pub kind: String,
     pub recipe_version: u16,
     /// Portable platform/runtime constraints, never host-local settings.
     pub compatibility: Vec<String>,
+    /// Declarative, inert steps required to rebuild the neutral capability.
+    /// These are operation names, never scripts or foreign executable code.
+    pub steps: Vec<ReconstructionStep>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ReconstructionStep {
+    pub sequence: u16,
+    pub operation: String,
+    pub artifact_digest: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -667,7 +720,7 @@ pub enum CapabilityStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CapabilityProcedure {
     pub id: String,
     pub name: String,
@@ -686,7 +739,7 @@ pub struct CapabilityProcedure {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CapabilityBundle {
     pub format_version: u16,
     pub name: String,
@@ -728,6 +781,50 @@ pub struct LocalValidation {
     pub environment_digest: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CapabilityFailureStage {
+    Decode,
+    SecurityScan,
+    ManifestValidation,
+    Reconstruction,
+    LocalEvidence,
+    FixtureValidation,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CapabilityFailureReason {
+    Malformed,
+    SecretBearing,
+    LocalAuthority,
+    Overpermissioned,
+    Incomplete,
+    IdentityMismatch,
+    NonCanonical,
+    ReconstructionFailed,
+    ValidationEvidenceInvalid,
+    FixtureFailed,
+}
+
+/// Immutable audit record for a failed import or revalidation. Only digests,
+/// enum classifications, sizes, and a validated claimed content identity are
+/// retained. Raw bundle bytes, names, errors, secrets, grants, and local
+/// validation material are never persisted here.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CapabilityFailureReceipt {
+    pub receipt_digest: String,
+    pub bundle_digest: String,
+    pub stage: CapabilityFailureStage,
+    pub reason: CapabilityFailureReason,
+    pub reason_digest: String,
+    pub byte_length: u64,
+    pub claimed_content_id: Option<String>,
+    pub created_at: i64,
+    pub redacted: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveredOperation {
@@ -760,6 +857,25 @@ pub fn discover_interface(
             "interface operation count is out of bounds".into(),
         ));
     }
+    let portable_provenance = Provenance {
+        source: description.source.clone(),
+        discovered_at: unix_time(),
+        interface_fingerprint: description.fingerprint.clone(),
+        identities: vec![
+            ProvenanceIdentity {
+                kind: ProvenanceIdentityKind::Author,
+                scheme: "interface_source".into(),
+                identifier: description.source.clone(),
+            },
+            ProvenanceIdentity {
+                kind: ProvenanceIdentityKind::Discoverer,
+                scheme: "ekg_discovery".into(),
+                identifier: description.fingerprint.clone(),
+            },
+        ],
+        validation_episodes: Vec::new(),
+        evidence_references: Vec::new(),
+    };
     let procedures = description
         .operations
         .iter()
@@ -796,12 +912,7 @@ pub fn discover_interface(
                     expected_output: operation.response_fixture.clone(),
                     fixture_output: operation.response_fixture.clone(),
                 }],
-                provenance: Provenance {
-                    source: description.source.clone(),
-                    discovered_at: unix_time(),
-                    interface_fingerprint: description.fingerprint.clone(),
-                    validation_episodes: Vec::new(),
-                },
+                provenance: portable_provenance.clone(),
             })
         })
         .collect::<Result<Vec<_>, CapabilityError>>()?;
@@ -812,16 +923,33 @@ pub fn discover_interface(
         content_id: String::new(),
         procedures,
         dependencies: Vec::new(),
-        provenance: Provenance {
-            source: description.source.clone(),
-            discovered_at: unix_time(),
-            interface_fingerprint: description.fingerprint.clone(),
-            validation_episodes: Vec::new(),
-        },
+        provenance: portable_provenance,
         reconstruction: ReconstructionRecipe {
             kind: "native_primitive_procedure".into(),
             recipe_version: 1,
             compatibility: vec!["ekg-capability-neutral-ir-v1".into()],
+            steps: vec![
+                ReconstructionStep {
+                    sequence: 1,
+                    operation: "verify_canonical_manifest".into(),
+                    artifact_digest: None,
+                },
+                ReconstructionStep {
+                    sequence: 2,
+                    operation: "reconstruct_dependency_dag".into(),
+                    artifact_digest: None,
+                },
+                ReconstructionStep {
+                    sequence: 3,
+                    operation: "map_neutral_procedures".into(),
+                    artifact_digest: None,
+                },
+                ReconstructionStep {
+                    sequence: 4,
+                    operation: "run_portable_fixtures".into(),
+                    artifact_digest: None,
+                },
+            ],
         },
     };
     bundle.content_id = bundle_content_id(&bundle)?;
@@ -1096,7 +1224,13 @@ pub fn import_bundle(bytes: &[u8]) -> Result<CapabilityBundle, CapabilityError> 
             "bundle bytes are out of bounds".into(),
         ));
     }
-    let bundle: CapabilityBundle = serde_json::from_slice(bytes)?;
+    // Scan the untyped document before deserialization. Otherwise an unknown
+    // secret-bearing field could be ignored by a nested format and only show
+    // up later as a generic canonical-encoding mismatch.
+    let document: Value = serde_json::from_slice(bytes)?;
+    reject_secrets(&document)?;
+    reject_local_authority(&document)?;
+    let bundle: CapabilityBundle = serde_json::from_value(document)?;
     validate_bundle(&bundle)?;
     if bundle.content_id != bundle_content_id(&bundle)? {
         return Err(CapabilityError::InvalidBundle(
@@ -1145,14 +1279,12 @@ pub fn validate_bundle(bundle: &CapabilityBundle) -> Result<(), CapabilityError>
             "manifest or count bounds failed".into(),
         ));
     }
-    if !is_sha256_digest(&bundle.content_id)
-        || bundle.provenance.source.trim().is_empty()
-        || bundle.provenance.interface_fingerprint.trim().is_empty()
-    {
+    if !is_sha256_digest(&bundle.content_id) {
         return Err(CapabilityError::InvalidBundle(
             "bundle identity or provenance is invalid".into(),
         ));
     }
+    validate_provenance(&bundle.provenance)?;
     reject_secrets(bundle)?;
     reject_local_authority(bundle)?;
     let mut dependency_names = BTreeSet::new();
@@ -1216,6 +1348,14 @@ pub fn validate_bundle(bundle: &CapabilityBundle) -> Result<(), CapabilityError>
         validate_resource_bounds(&procedure.bounds)?;
         validate_neutral_metadata(&procedure.neutral_metadata)?;
         validate_primitive_declarations(procedure)?;
+        validate_provenance(&procedure.provenance)?;
+        if procedure.provenance.source != bundle.provenance.source
+            || procedure.provenance.interface_fingerprint != bundle.provenance.interface_fingerprint
+        {
+            return Err(CapabilityError::InvalidBundle(
+                "procedure provenance conflicts with bundle provenance".into(),
+            ));
+        }
         for test in &procedure.tests {
             if test.name.trim().is_empty() {
                 return Err(CapabilityError::InvalidBundle(
@@ -1327,15 +1467,108 @@ fn validate_reconstruction_recipe(recipe: &ReconstructionRecipe) -> Result<(), C
         || recipe.recipe_version != 1
         || recipe.compatibility.is_empty()
         || recipe.compatibility.len() > MAX_COMPATIBILITY_CONSTRAINTS
-        || recipe.compatibility.iter().any(|constraint| {
-            constraint.trim().is_empty() || constraint.chars().any(char::is_control)
-        })
+        || recipe
+            .compatibility
+            .iter()
+            .any(|constraint| !valid_portable_text(constraint))
+        || recipe.steps.is_empty()
+        || recipe.steps.len() > MAX_RECONSTRUCTION_STEPS
     {
         return Err(CapabilityError::InvalidBundle(
             "reconstruction recipe or compatibility constraints are invalid".into(),
         ));
     }
+    for (index, step) in recipe.steps.iter().enumerate() {
+        if usize::from(step.sequence) != index + 1
+            || !valid_operation_name(&step.operation)
+            || step
+                .artifact_digest
+                .as_deref()
+                .is_some_and(|digest| !is_sha256_digest(digest))
+        {
+            return Err(CapabilityError::InvalidBundle(
+                "reconstruction step is invalid or non-deterministically ordered".into(),
+            ));
+        }
+    }
     Ok(())
+}
+
+fn validate_provenance(provenance: &Provenance) -> Result<(), CapabilityError> {
+    if !valid_portable_text(&provenance.source)
+        || !valid_portable_text(&provenance.interface_fingerprint)
+        || provenance.discovered_at <= 0
+        || provenance.identities.is_empty()
+        || provenance.identities.len() > MAX_PROVENANCE_IDENTITIES
+        || provenance.validation_episodes.len() > MAX_PROVENANCE_REFERENCES
+        || provenance.evidence_references.len() > MAX_PROVENANCE_REFERENCES
+    {
+        return Err(CapabilityError::InvalidBundle(
+            "portable provenance is missing or exceeds bounds".into(),
+        ));
+    }
+    let mut identity_keys = BTreeSet::new();
+    let mut has_author = false;
+    let mut has_discoverer = false;
+    for identity in &provenance.identities {
+        if !valid_operation_name(&identity.scheme)
+            || !valid_portable_text(&identity.identifier)
+            || !identity_keys.insert((
+                identity.kind,
+                identity.scheme.clone(),
+                identity.identifier.clone(),
+            ))
+        {
+            return Err(CapabilityError::InvalidBundle(
+                "portable provenance identity is invalid or duplicated".into(),
+            ));
+        }
+        match identity.kind {
+            ProvenanceIdentityKind::Author => has_author = true,
+            ProvenanceIdentityKind::Discoverer => has_discoverer = true,
+        }
+    }
+    if !has_author || !has_discoverer {
+        return Err(CapabilityError::InvalidBundle(
+            "portable provenance requires author and discoverer identities".into(),
+        ));
+    }
+    let mut reference_keys = BTreeSet::new();
+    for episode in &provenance.validation_episodes {
+        if !valid_portable_text(episode) {
+            return Err(CapabilityError::InvalidBundle(
+                "validation episode reference is invalid".into(),
+            ));
+        }
+    }
+    for reference in &provenance.evidence_references {
+        let kind = match reference.kind {
+            PortableEvidenceKind::ValidationEpisode => "validation_episode",
+            PortableEvidenceKind::Evidence => "evidence",
+        };
+        if !valid_portable_text(&reference.identifier)
+            || !is_sha256_digest(&reference.digest)
+            || !reference_keys.insert((kind, reference.identifier.as_str()))
+        {
+            return Err(CapabilityError::InvalidBundle(
+                "portable evidence reference is invalid or duplicated".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn valid_portable_text(value: &str) -> bool {
+    !value.trim().is_empty()
+        && value.len() <= MAX_PORTABLE_TEXT_BYTES
+        && !value.chars().any(char::is_control)
+}
+
+fn valid_operation_name(value: &str) -> bool {
+    valid_portable_text(value)
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
 }
 
 fn validate_resource_bounds(bounds: &ResourceBounds) -> Result<(), CapabilityError> {
@@ -1366,44 +1599,54 @@ fn validate_primitive_declarations(procedure: &CapabilityProcedure) -> Result<()
             "primitive effect declaration is inconsistent".into(),
         ));
     }
-    let permissions_match = procedure.permissions.iter().all(|permission| {
-        matches!(
-            (&procedure.primitive, permission),
-            (
-                NativePrimitive::NetworkRequest,
-                Permission::NetworkHost { .. }
-            ) | (NativePrimitive::FileRead, Permission::FileReadPrefix { .. })
-                | (
-                    NativePrimitive::FileWrite,
-                    Permission::FileWritePrefix { .. }
-                )
-                | (NativePrimitive::Observe, Permission::ObserveTarget { .. })
-                | (
-                    NativePrimitive::SandboxExecute,
-                    Permission::SandboxProfile { .. }
-                )
-        )
-    });
-    if !permissions_match {
+    if procedure.permissions.len() != 1 {
         return Err(CapabilityError::InvalidBundle(
-            "primitive permission declaration is inconsistent".into(),
+            "primitive permission declaration is overpermissioned".into(),
         ));
     }
-    for permission in &procedure.permissions {
-        let value = match permission {
-            Permission::NetworkHost { host } => host,
-            Permission::FileReadPrefix { path_prefix }
-            | Permission::FileWritePrefix { path_prefix } => path_prefix,
-            Permission::ObserveTarget { target } => target,
-            Permission::SandboxProfile { profile } => profile,
-        };
-        if value.trim().is_empty() || value.chars().any(char::is_control) {
-            return Err(CapabilityError::InvalidBundle(
-                "permission scope is invalid".into(),
-            ));
+    let permission = &procedure.permissions[0];
+    let permission_matches_contract = match (&procedure.primitive, permission) {
+        (NativePrimitive::NetworkRequest, Permission::NetworkHost { host }) => {
+            let contract_host = contract_string(procedure, "host")?;
+            host == &contract_host
+                && valid_network_host(host)
+                && valid_portable_text(&contract_string(procedure, "method")?)
         }
+        (NativePrimitive::FileRead, Permission::FileReadPrefix { path_prefix })
+        | (NativePrimitive::FileWrite, Permission::FileWritePrefix { path_prefix }) => {
+            let path = contract_string(procedure, "path")?;
+            let path = Path::new(&path);
+            let prefix = Path::new(path_prefix);
+            validate_absolute_path(path, "procedure file path")?;
+            validate_absolute_path(prefix, "procedure file permission prefix")?;
+            prefix.parent().is_some() && path.starts_with(prefix)
+        }
+        (NativePrimitive::Observe, Permission::ObserveTarget { target }) => {
+            target == &contract_string(procedure, "target")? && valid_portable_text(target)
+        }
+        (NativePrimitive::SandboxExecute, Permission::SandboxProfile { profile }) => {
+            profile == &contract_string(procedure, "profile")? && valid_operation_name(profile)
+        }
+        _ => false,
+    };
+    if !permission_matches_contract {
+        return Err(CapabilityError::InvalidBundle(
+            "primitive permission is broader than or inconsistent with its contract".into(),
+        ));
     }
     Ok(())
+}
+
+fn valid_network_host(host: &str) -> bool {
+    valid_portable_text(host)
+        && host != "*"
+        && !host.contains("..")
+        && !host.contains('@')
+        && !host.contains('/')
+        && !host.contains('\\')
+        && host.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b':' | b'[' | b']')
+        })
 }
 
 fn is_sha256_digest(value: &str) -> bool {
@@ -1618,16 +1861,20 @@ fn reject_secrets(value: &impl Serialize) -> Result<(), CapabilityError> {
     let mut strings = Vec::new();
     collect_material(&json, &mut keys, &mut strings);
     if keys.iter().any(|key| {
+        let compact = key.replace(['_', '-'], "");
         [
             "secret",
             "token",
             "password",
             "cookie",
-            "api_key",
+            "apikey",
+            "accesskey",
+            "privatekey",
+            "credential",
             "authorization",
         ]
         .iter()
-        .any(|needle| key.contains(needle))
+        .any(|needle| compact.contains(needle))
     }) || strings.iter().any(|value| contains_secret_value(value))
     {
         return Err(CapabilityError::InvalidBundle(
@@ -1644,11 +1891,14 @@ fn reject_local_authority(value: &impl Serialize) -> Result<(), CapabilityError>
     collect_material(&json, &mut keys, &mut strings);
     if keys.iter().any(|key| {
         [
+            "trust",
             "trust_receipt",
             "grant",
             "promoted",
             "ambient_secret",
             "local_lifecycle",
+            "local_validation",
+            "signature_verified",
         ]
         .iter()
         .any(|needle| key.contains(needle))
@@ -1668,6 +1918,17 @@ fn contains_secret_value(value: &str) -> bool {
     let lower = trimmed.to_ascii_lowercase();
     let credential_header = lower.starts_with("bearer ") || lower.starts_with("basic ");
     credential_header
+        || (lower.starts_with("sk-") && trimmed.len() >= 20)
+        || lower.starts_with("ghp_")
+        || lower.starts_with("github_pat_")
+        || lower.starts_with("glpat-")
+        || lower.starts_with("xoxb-")
+        || lower.starts_with("xoxp-")
+        || (trimmed.starts_with("AKIA")
+            && trimmed.len() == 20
+            && trimmed
+                .bytes()
+                .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit()))
         || lower.contains("-----begin private key-----")
         || lower.contains("-----begin rsa private key-----")
         || lower.contains("-----begin ec private key-----")
@@ -1790,14 +2051,51 @@ impl CapabilityStore {
                 revoked INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY(content_id, permission_json),
                 FOREIGN KEY(content_id) REFERENCES capability_bundles(content_id) ON DELETE CASCADE
-             );",
+             );
+             CREATE TABLE IF NOT EXISTS capability_failure_receipts (
+                receipt_digest TEXT PRIMARY KEY,
+                bundle_digest TEXT NOT NULL,
+                stage TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                reason_digest TEXT NOT NULL,
+                byte_length INTEGER NOT NULL,
+                claimed_content_id TEXT,
+                created_at INTEGER NOT NULL,
+                redacted INTEGER NOT NULL CHECK(redacted = 1)
+             );
+             CREATE INDEX IF NOT EXISTS capability_failure_receipts_lookup
+                ON capability_failure_receipts(bundle_digest, stage, reason);
+             CREATE TRIGGER IF NOT EXISTS capability_failure_receipts_immutable_update
+             BEFORE UPDATE ON capability_failure_receipts
+             BEGIN
+                SELECT RAISE(ABORT, 'capability failure receipts are immutable');
+             END;
+             CREATE TRIGGER IF NOT EXISTS capability_failure_receipts_immutable_delete
+             BEFORE DELETE ON capability_failure_receipts
+             BEGIN
+                SELECT RAISE(ABORT, 'capability failure receipts are immutable');
+             END;",
         )?;
         Ok(())
     }
 
     pub fn import(&self, bytes: &[u8]) -> Result<ImportedCapability, CapabilityError> {
-        let bundle = import_bundle(bytes)?;
-        reconstruct_bundle(&bundle)?;
+        let bundle = match import_bundle(bytes) {
+            Ok(bundle) => bundle,
+            Err(error) => {
+                self.record_failure(bytes, None, None, &error)?;
+                return Err(error);
+            }
+        };
+        if let Err(error) = reconstruct_bundle(&bundle) {
+            self.record_failure(
+                bytes,
+                Some(CapabilityFailureStage::Reconstruction),
+                Some(CapabilityFailureReason::ReconstructionFailed),
+                &error,
+            )?;
+            return Err(error);
+        }
         let json = serde_json::to_string(&bundle)?;
         self.conn.execute(
             "INSERT INTO capability_bundles(content_id, name, status, bundle_json, locally_validated, created_at)
@@ -1818,14 +2116,61 @@ impl CapabilityStore {
         bytes: &[u8],
         validation: &LocalValidation,
     ) -> Result<ImportedCapability, CapabilityError> {
-        let bundle = import_bundle(bytes)?;
-        let reconstructed = reconstruct_bundle(&bundle)?;
-        validate_local_validation_evidence(validation)?;
-        let locally_validated = validation.passed
-            && reconstructed
+        let bundle = match import_bundle(bytes) {
+            Ok(bundle) => bundle,
+            Err(error) => {
+                self.record_failure(bytes, None, None, &error)?;
+                return Err(error);
+            }
+        };
+        let reconstructed = match reconstruct_bundle(&bundle) {
+            Ok(reconstructed) => reconstructed,
+            Err(error) => {
+                self.record_failure(
+                    bytes,
+                    Some(CapabilityFailureStage::Reconstruction),
+                    Some(CapabilityFailureReason::ReconstructionFailed),
+                    &error,
+                )?;
+                return Err(error);
+            }
+        };
+        if let Err(error) = validate_local_validation_evidence(validation) {
+            self.record_failure(
+                bytes,
+                Some(CapabilityFailureStage::LocalEvidence),
+                Some(CapabilityFailureReason::ValidationEvidenceInvalid),
+                &error,
+            )?;
+            return Err(error);
+        }
+        let fixture_failure = if validation.passed {
+            reconstructed
                 .procedures
                 .iter()
-                .all(|procedure| run_sandbox_tests(procedure).is_ok());
+                .find_map(|procedure| run_sandbox_tests(procedure).err())
+        } else {
+            None
+        };
+        let locally_validated = validation.passed && fixture_failure.is_none();
+        let pending_failure = if let Some(error) = &fixture_failure {
+            Some(build_failure_receipt(
+                bytes,
+                Some(CapabilityFailureStage::FixtureValidation),
+                Some(CapabilityFailureReason::FixtureFailed),
+                error,
+            ))
+        } else if !validation.passed {
+            let error = CapabilityError::Invalid("local validation reported failure".into());
+            Some(build_failure_receipt(
+                bytes,
+                Some(CapabilityFailureStage::LocalEvidence),
+                Some(CapabilityFailureReason::ValidationEvidenceInvalid),
+                &error,
+            ))
+        } else {
+            None
+        };
         let status = if locally_validated {
             CapabilityStatus::Provisional
         } else {
@@ -1842,7 +2187,11 @@ impl CapabilityStore {
         // the durable authority still said "quarantined". Conversely, a
         // failed fresh revalidation must immediately revoke a formerly active
         // status for the same portable content identity.
-        self.conn.execute(
+        let transaction = self.conn.unchecked_transaction()?;
+        if let Some(receipt) = &pending_failure {
+            insert_failure_receipt(&transaction, receipt)?;
+        }
+        transaction.execute(
             "INSERT INTO capability_bundles(content_id, name, status, bundle_json, locally_validated, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)
              ON CONFLICT(content_id) DO UPDATE SET
@@ -1857,6 +2206,7 @@ impl CapabilityStore {
                 unix_time()
             ],
         )?;
+        transaction.commit()?;
         self.imported_status(&bundle.content_id)
     }
 
@@ -1909,6 +2259,85 @@ impl CapabilityStore {
             )
             .optional()?
             .ok_or_else(|| CapabilityError::Invalid("capability import was not persisted".into()))
+    }
+
+    /// Query immutable, redacted failures by any combination of portable
+    /// bundle digest, failure stage, and stable reason classification.
+    pub fn failure_receipts(
+        &self,
+        bundle_digest: Option<&str>,
+        stage: Option<CapabilityFailureStage>,
+        reason: Option<CapabilityFailureReason>,
+    ) -> Result<Vec<CapabilityFailureReceipt>, CapabilityError> {
+        if bundle_digest.is_some_and(|digest| !is_sha256_digest(digest)) {
+            return Err(CapabilityError::Invalid(
+                "failure receipt query digest is invalid".into(),
+            ));
+        }
+        let stage = stage.map(CapabilityFailureStage::as_str);
+        let reason = reason.map(CapabilityFailureReason::as_str);
+        let mut statement = self.conn.prepare(
+            "SELECT receipt_digest, bundle_digest, stage, reason, reason_digest,
+                    byte_length, claimed_content_id, created_at, redacted
+             FROM capability_failure_receipts
+             WHERE (?1 IS NULL OR bundle_digest = ?1)
+               AND (?2 IS NULL OR stage = ?2)
+               AND (?3 IS NULL OR reason = ?3)
+             ORDER BY created_at, receipt_digest",
+        )?;
+        let rows = statement.query_map(params![bundle_digest, stage, reason], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, i64>(5)?,
+                row.get::<_, Option<String>>(6)?,
+                row.get::<_, i64>(7)?,
+                row.get::<_, i64>(8)?,
+            ))
+        })?;
+        rows.map(|row| {
+            let (
+                receipt_digest,
+                bundle_digest,
+                stage,
+                reason,
+                reason_digest,
+                byte_length,
+                claimed_content_id,
+                created_at,
+                redacted,
+            ) = row?;
+            Ok(CapabilityFailureReceipt {
+                receipt_digest,
+                bundle_digest,
+                stage: CapabilityFailureStage::from_str(&stage)?,
+                reason: CapabilityFailureReason::from_str(&reason)?,
+                reason_digest,
+                byte_length: u64::try_from(byte_length).map_err(|_| {
+                    CapabilityError::Invalid("stored failure byte length is invalid".into())
+                })?,
+                claimed_content_id,
+                created_at,
+                redacted: redacted == 1,
+            })
+        })
+        .collect()
+    }
+
+    fn record_failure(
+        &self,
+        bytes: &[u8],
+        stage: Option<CapabilityFailureStage>,
+        reason: Option<CapabilityFailureReason>,
+        error: &CapabilityError,
+    ) -> Result<(), CapabilityError> {
+        insert_failure_receipt(
+            &self.conn,
+            &build_failure_receipt(bytes, stage, reason, error),
+        )
     }
 
     pub fn export(&self, content_id: &str) -> Result<Vec<u8>, CapabilityError> {
@@ -1978,12 +2407,43 @@ impl CapabilityStore {
             ));
         }
         let reconstructed = reconstruct_bundle(&bundle)?;
-        validate_local_validation_evidence(validation)?;
-        let locally_validated = validation.passed
-            && reconstructed
+        let receipt_bytes = export_bundle(&bundle)?;
+        if let Err(error) = validate_local_validation_evidence(validation) {
+            self.record_failure(
+                &receipt_bytes,
+                Some(CapabilityFailureStage::LocalEvidence),
+                Some(CapabilityFailureReason::ValidationEvidenceInvalid),
+                &error,
+            )?;
+            return Err(error);
+        }
+        let fixture_failure = if validation.passed {
+            reconstructed
                 .procedures
                 .iter()
-                .all(|procedure| run_sandbox_tests(procedure).is_ok());
+                .find_map(|procedure| run_sandbox_tests(procedure).err())
+        } else {
+            None
+        };
+        let locally_validated = validation.passed && fixture_failure.is_none();
+        let pending_failure = if let Some(error) = &fixture_failure {
+            Some(build_failure_receipt(
+                &receipt_bytes,
+                Some(CapabilityFailureStage::FixtureValidation),
+                Some(CapabilityFailureReason::FixtureFailed),
+                error,
+            ))
+        } else if !validation.passed {
+            let error = CapabilityError::Invalid("local validation reported failure".into());
+            Some(build_failure_receipt(
+                &receipt_bytes,
+                Some(CapabilityFailureStage::LocalEvidence),
+                Some(CapabilityFailureReason::ValidationEvidenceInvalid),
+                &error,
+            ))
+        } else {
+            None
+        };
         let status = if locally_validated {
             CapabilityStatus::Provisional
         } else {
@@ -1991,7 +2451,11 @@ impl CapabilityStore {
         };
         // A single update is the revalidation commit point. Local receipts do
         // not enter the bundle, preserving its exported content identity.
-        self.conn.execute(
+        let transaction = self.conn.unchecked_transaction()?;
+        if let Some(receipt) = &pending_failure {
+            insert_failure_receipt(&transaction, receipt)?;
+        }
+        transaction.execute(
             "UPDATE capability_bundles SET status = ?2, locally_validated = ?3 WHERE content_id = ?1",
             params![
                 content_id,
@@ -1999,6 +2463,7 @@ impl CapabilityStore {
                 i64::from(locally_validated)
             ],
         )?;
+        transaction.commit()?;
         Ok(ImportedCapability {
             content_id: content_id.into(),
             name: bundle.name,
@@ -2099,6 +2564,72 @@ impl CapabilityStore {
     }
 }
 
+fn build_failure_receipt(
+    bytes: &[u8],
+    stage: Option<CapabilityFailureStage>,
+    reason: Option<CapabilityFailureReason>,
+    error: &CapabilityError,
+) -> CapabilityFailureReceipt {
+    let (classified_stage, classified_reason) = classify_failure(error);
+    let stage = stage.unwrap_or(classified_stage);
+    let reason = reason.unwrap_or(classified_reason);
+    let bundle_digest = digest_bytes(bytes);
+    let reason_digest = digest_bytes(error.to_string().as_bytes());
+    let claimed_content_id = serde_json::from_slice::<Value>(bytes)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("contentId")
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+        })
+        .filter(|value| is_sha256_digest(value));
+    let byte_length = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
+    let receipt_digest = digest_bytes(
+        format!(
+            "{bundle_digest}\0{}\0{}\0{reason_digest}\0{byte_length}\0{}",
+            stage.as_str(),
+            reason.as_str(),
+            claimed_content_id.as_deref().unwrap_or("")
+        )
+        .as_bytes(),
+    );
+    CapabilityFailureReceipt {
+        receipt_digest,
+        bundle_digest,
+        stage,
+        reason,
+        reason_digest,
+        byte_length,
+        claimed_content_id,
+        created_at: unix_time(),
+        redacted: true,
+    }
+}
+
+fn insert_failure_receipt(
+    connection: &Connection,
+    receipt: &CapabilityFailureReceipt,
+) -> Result<(), CapabilityError> {
+    connection.execute(
+        "INSERT OR IGNORE INTO capability_failure_receipts(
+            receipt_digest, bundle_digest, stage, reason, reason_digest,
+            byte_length, claimed_content_id, created_at, redacted
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 1)",
+        params![
+            receipt.receipt_digest,
+            receipt.bundle_digest,
+            receipt.stage.as_str(),
+            receipt.reason.as_str(),
+            receipt.reason_digest,
+            i64::try_from(receipt.byte_length).unwrap_or(i64::MAX),
+            receipt.claimed_content_id,
+            receipt.created_at
+        ],
+    )?;
+    Ok(())
+}
+
 fn validate_local_validation_evidence(validation: &LocalValidation) -> Result<(), CapabilityError> {
     if validation.passed
         && (validation.environment_digest.trim().is_empty()
@@ -2113,6 +2644,122 @@ fn validate_local_validation_evidence(validation: &LocalValidation) -> Result<()
         ));
     }
     Ok(())
+}
+
+impl CapabilityFailureStage {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Decode => "decode",
+            Self::SecurityScan => "security_scan",
+            Self::ManifestValidation => "manifest_validation",
+            Self::Reconstruction => "reconstruction",
+            Self::LocalEvidence => "local_evidence",
+            Self::FixtureValidation => "fixture_validation",
+        }
+    }
+
+    fn from_str(value: &str) -> Result<Self, CapabilityError> {
+        match value {
+            "decode" => Ok(Self::Decode),
+            "security_scan" => Ok(Self::SecurityScan),
+            "manifest_validation" => Ok(Self::ManifestValidation),
+            "reconstruction" => Ok(Self::Reconstruction),
+            "local_evidence" => Ok(Self::LocalEvidence),
+            "fixture_validation" => Ok(Self::FixtureValidation),
+            _ => Err(CapabilityError::Invalid(
+                "stored capability failure stage is invalid".into(),
+            )),
+        }
+    }
+}
+
+impl CapabilityFailureReason {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Malformed => "malformed",
+            Self::SecretBearing => "secret_bearing",
+            Self::LocalAuthority => "local_authority",
+            Self::Overpermissioned => "overpermissioned",
+            Self::Incomplete => "incomplete",
+            Self::IdentityMismatch => "identity_mismatch",
+            Self::NonCanonical => "non_canonical",
+            Self::ReconstructionFailed => "reconstruction_failed",
+            Self::ValidationEvidenceInvalid => "validation_evidence_invalid",
+            Self::FixtureFailed => "fixture_failed",
+        }
+    }
+
+    fn from_str(value: &str) -> Result<Self, CapabilityError> {
+        match value {
+            "malformed" => Ok(Self::Malformed),
+            "secret_bearing" => Ok(Self::SecretBearing),
+            "local_authority" => Ok(Self::LocalAuthority),
+            "overpermissioned" => Ok(Self::Overpermissioned),
+            "incomplete" => Ok(Self::Incomplete),
+            "identity_mismatch" => Ok(Self::IdentityMismatch),
+            "non_canonical" => Ok(Self::NonCanonical),
+            "reconstruction_failed" => Ok(Self::ReconstructionFailed),
+            "validation_evidence_invalid" => Ok(Self::ValidationEvidenceInvalid),
+            "fixture_failed" => Ok(Self::FixtureFailed),
+            _ => Err(CapabilityError::Invalid(
+                "stored capability failure reason is invalid".into(),
+            )),
+        }
+    }
+}
+
+fn classify_failure(error: &CapabilityError) -> (CapabilityFailureStage, CapabilityFailureReason) {
+    match error {
+        CapabilityError::Json(_) => (
+            CapabilityFailureStage::Decode,
+            CapabilityFailureReason::Malformed,
+        ),
+        CapabilityError::InvalidBundle(message) => {
+            let lower = message.to_ascii_lowercase();
+            if lower.contains("secret") {
+                (
+                    CapabilityFailureStage::SecurityScan,
+                    CapabilityFailureReason::SecretBearing,
+                )
+            } else if lower.contains("local authority") || lower.contains("environment-specific") {
+                (
+                    CapabilityFailureStage::SecurityScan,
+                    CapabilityFailureReason::LocalAuthority,
+                )
+            } else if lower.contains("permission") {
+                (
+                    CapabilityFailureStage::ManifestValidation,
+                    CapabilityFailureReason::Overpermissioned,
+                )
+            } else if lower.contains("content identity mismatch") {
+                (
+                    CapabilityFailureStage::ManifestValidation,
+                    CapabilityFailureReason::IdentityMismatch,
+                )
+            } else if lower.contains("not canonical") || lower.contains("encoding is not canonical")
+            {
+                (
+                    CapabilityFailureStage::ManifestValidation,
+                    CapabilityFailureReason::NonCanonical,
+                )
+            } else {
+                (
+                    CapabilityFailureStage::ManifestValidation,
+                    CapabilityFailureReason::Incomplete,
+                )
+            }
+        }
+        _ => (
+            CapabilityFailureStage::ManifestValidation,
+            CapabilityFailureReason::Incomplete,
+        ),
+    }
+}
+
+fn digest_bytes(bytes: &[u8]) -> String {
+    let mut digest = Sha256::new();
+    digest.update(bytes);
+    format!("sha256:{}", hex_bytes(&digest.finalize()))
 }
 
 fn unix_time() -> i64 {
@@ -2157,6 +2804,65 @@ mod tests {
         let imported = import_bundle(&bytes).unwrap();
         assert_eq!(imported.content_id, bundle.content_id);
         assert_eq!(export_bundle(&imported).unwrap(), bytes);
+        assert!(
+            bundle
+                .provenance
+                .identities
+                .iter()
+                .any(|identity| identity.kind == ProvenanceIdentityKind::Author)
+        );
+        assert!(
+            bundle
+                .provenance
+                .identities
+                .iter()
+                .any(|identity| identity.kind == ProvenanceIdentityKind::Discoverer)
+        );
+        assert_eq!(
+            bundle
+                .reconstruction
+                .steps
+                .iter()
+                .map(|step| step.sequence)
+                .collect::<Vec<_>>(),
+            vec![1, 2, 3, 4]
+        );
+        assert_eq!(
+            export_bundle(&bundle).unwrap(),
+            export_bundle(&bundle).unwrap()
+        );
+    }
+
+    #[test]
+    fn provenance_and_reconstruction_metadata_are_bounded_and_inert() {
+        let mut no_author = discover_interface(&interface()).unwrap();
+        no_author
+            .provenance
+            .identities
+            .retain(|identity| identity.kind != ProvenanceIdentityKind::Author);
+        no_author.content_id = bundle_content_id(&no_author).unwrap();
+        assert!(validate_bundle(&no_author).is_err());
+
+        let mut unordered = discover_interface(&interface()).unwrap();
+        unordered.reconstruction.steps[1].sequence = 1;
+        unordered.content_id = bundle_content_id(&unordered).unwrap();
+        assert!(validate_bundle(&unordered).is_err());
+
+        let mut executable = discover_interface(&interface()).unwrap();
+        executable.reconstruction.steps[0].operation = "sh -c curl".into();
+        executable.content_id = bundle_content_id(&executable).unwrap();
+        assert!(validate_bundle(&executable).is_err());
+
+        let mut evidence = discover_interface(&interface()).unwrap();
+        evidence.provenance.evidence_references = (0..=MAX_PROVENANCE_REFERENCES)
+            .map(|index| PortableEvidenceReference {
+                kind: PortableEvidenceKind::Evidence,
+                identifier: format!("evidence-{index}"),
+                digest: format!("sha256:{}", "a".repeat(64)),
+            })
+            .collect();
+        evidence.content_id = bundle_content_id(&evidence).unwrap();
+        assert!(validate_bundle(&evidence).is_err());
     }
 
     #[test]
@@ -2211,6 +2917,114 @@ mod tests {
             export_bundle(&bundle),
             Err(CapabilityError::InvalidBundle(_))
         ));
+    }
+
+    #[test]
+    fn failed_imports_are_redacted_queryable_immutable_and_never_mutate_the_graph() {
+        let valid = discover_interface(&interface()).unwrap();
+        let valid_bytes = export_bundle(&valid).unwrap();
+        let store = CapabilityStore::in_memory().unwrap();
+        let admitted = store
+            .import_and_revalidate(
+                &valid_bytes,
+                &LocalValidation {
+                    passed: true,
+                    validation_episodes: vec!["local-validation".into()],
+                    environment_digest: "sha256:local-environment".into(),
+                },
+            )
+            .unwrap();
+        store
+            .grant(&admitted.content_id, &valid.procedures[0].permissions[0])
+            .unwrap();
+
+        let malformed = b"{";
+        assert!(store.import(malformed).is_err());
+        // Identical failures deduplicate to one immutable content receipt.
+        assert!(store.import(malformed).is_err());
+
+        let mut secret_document = serde_json::to_value(&valid).unwrap();
+        secret_document.as_object_mut().unwrap().insert(
+            "note".into(),
+            Value::String("sk-proj-do-not-store-anywhere".into()),
+        );
+        let secret_bytes = canonical_json(&secret_document).unwrap();
+        assert!(store.import(&secret_bytes).is_err());
+
+        let mut overpermissioned = valid.clone();
+        overpermissioned.procedures[0]
+            .permissions
+            .push(Permission::NetworkHost {
+                host: "evil.example.test".into(),
+            });
+        overpermissioned.content_id = bundle_content_id(&overpermissioned).unwrap();
+        let overpermissioned_bytes = canonical_json(&overpermissioned).unwrap();
+        assert!(store.import(&overpermissioned_bytes).is_err());
+
+        let mut incomplete = valid.clone();
+        incomplete.procedures.clear();
+        incomplete.content_id = bundle_content_id(&incomplete).unwrap();
+        let incomplete_bytes = canonical_json(&incomplete).unwrap();
+        assert!(store.import(&incomplete_bytes).is_err());
+
+        let malformed_digest = digest_bytes(malformed);
+        let malformed_receipts = store
+            .failure_receipts(
+                Some(&malformed_digest),
+                Some(CapabilityFailureStage::Decode),
+                Some(CapabilityFailureReason::Malformed),
+            )
+            .unwrap();
+        assert_eq!(malformed_receipts.len(), 1);
+        assert!(malformed_receipts[0].redacted);
+        assert_eq!(malformed_receipts[0].byte_length, 1);
+        assert!(malformed_receipts[0].claimed_content_id.is_none());
+
+        for reason in [
+            CapabilityFailureReason::SecretBearing,
+            CapabilityFailureReason::Overpermissioned,
+            CapabilityFailureReason::Incomplete,
+        ] {
+            let receipts = store.failure_receipts(None, None, Some(reason)).unwrap();
+            assert_eq!(receipts.len(), 1, "missing {reason:?} receipt");
+            let serialized = serde_json::to_string(&receipts[0]).unwrap();
+            assert!(!serialized.contains("do-not-store"));
+            assert!(!serialized.contains("sk-proj"));
+        }
+
+        // The rejected candidates never insert or overwrite a capability row,
+        // and the admitted capability remains usable with its existing grant.
+        let bundle_count: i64 = store
+            .conn
+            .query_row("SELECT COUNT(*) FROM capability_bundles", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(bundle_count, 1);
+        assert_eq!(
+            store.imported_status(&admitted.content_id).unwrap(),
+            admitted
+        );
+        store
+            .require_procedure_permissions(&admitted.content_id, &valid.procedures[0].id)
+            .unwrap();
+
+        assert!(
+            store
+                .conn
+                .execute(
+                    "UPDATE capability_failure_receipts SET reason = 'incomplete'",
+                    [],
+                )
+                .is_err()
+        );
+        assert!(
+            store
+                .conn
+                .execute("DELETE FROM capability_failure_receipts", [])
+                .is_err()
+        );
+        assert_eq!(store.failure_receipts(None, None, None).unwrap().len(), 4);
     }
 
     #[test]
@@ -2439,6 +3253,15 @@ mod tests {
             Err(CapabilityError::NotRevalidated)
         ));
         assert!(store.reconstruct(&result.content_id).is_ok());
+        let receipts = store
+            .failure_receipts(
+                Some(&digest_bytes(&export_bundle(&bundle).unwrap())),
+                Some(CapabilityFailureStage::FixtureValidation),
+                Some(CapabilityFailureReason::FixtureFailed),
+            )
+            .unwrap();
+        assert_eq!(receipts.len(), 1);
+        assert!(receipts[0].redacted);
     }
 
     #[test]
