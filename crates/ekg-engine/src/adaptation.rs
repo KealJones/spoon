@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use ekg_adapt::{
     AdaptationPolicy, ApplyOutcome, AttributionStrength, Claim, Contradiction, ContradictionId,
@@ -18,7 +18,10 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-use crate::{Engine, EngineError, FailureAnalysisRequest};
+use crate::{
+    Engine, EngineError, FailureAnalysisRequest, RegressionSuiteCaseResult,
+    RegressionSuiteCaseStatus, RegressionSuiteVerdict,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -503,6 +506,9 @@ pub struct AdaptationReceipt {
 pub struct AdaptationRecord {
     pub plan: AdaptationPlan,
     pub receipt: Option<AdaptationReceipt>,
+    /// The immutable full-suite gate for a broad plan, including rejected
+    /// attempts. Narrow/local corrections intentionally do not require it.
+    pub regression_suite: Option<RegressionSuiteVerdict>,
 }
 
 /// Durable authorization and progress journal for a multi-store adaptation.
@@ -571,6 +577,12 @@ impl AdaptationStore {
                 source_plan_id TEXT NOT NULL,
                 updated_at INTEGER NOT NULL,
                 FOREIGN KEY (source_plan_id) REFERENCES engine_adaptation_plans(id)
+             );
+             CREATE TABLE IF NOT EXISTS engine_adaptation_regression_verdicts (
+                plan_id TEXT PRIMARY KEY,
+                verdict_json TEXT NOT NULL,
+                recorded_at INTEGER NOT NULL,
+                FOREIGN KEY (plan_id) REFERENCES engine_adaptation_plans(id)
              );",
         )?;
         Ok(())
@@ -626,6 +638,46 @@ impl AdaptationStore {
             .optional()?
             .map(|json| Ok(serde_json::from_str(&json)?))
             .transpose()
+    }
+
+    fn regression_verdict(
+        &self,
+        id: AdaptationPlanId,
+    ) -> Result<Option<RegressionSuiteVerdict>, EngineError> {
+        self.conn
+            .query_row(
+                "SELECT verdict_json FROM engine_adaptation_regression_verdicts WHERE plan_id = ?1",
+                params![id.0.to_string()],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?
+            .map(|json| Ok(serde_json::from_str(&json)?))
+            .transpose()
+    }
+
+    /// Verdicts are immutable evidence. If a restart retries the same pinned
+    /// plan, it must use the first report rather than quietly replacing it.
+    fn record_regression_verdict(
+        &self,
+        plan_id: AdaptationPlanId,
+        verdict: &RegressionSuiteVerdict,
+        recorded_at: i64,
+    ) -> Result<RegressionSuiteVerdict, EngineError> {
+        self.conn.execute(
+            "INSERT OR IGNORE INTO engine_adaptation_regression_verdicts
+                (plan_id, verdict_json, recorded_at) VALUES (?1, ?2, ?3)",
+            params![
+                plan_id.0.to_string(),
+                serde_json::to_string(verdict)?,
+                recorded_at,
+            ],
+        )?;
+        self.regression_verdict(plan_id)?.ok_or_else(|| {
+            EngineError::InvalidInput(format!(
+                "regression verdict for adaptation plan {} disappeared",
+                plan_id.0
+            ))
+        })
     }
 
     fn receipt_by_key(&self, key: &str) -> Result<Option<AdaptationReceipt>, EngineError> {
@@ -888,7 +940,18 @@ impl Engine {
         Ok(Some(AdaptationRecord {
             plan,
             receipt: self.adaptations.get_receipt(id)?,
+            regression_suite: self.adaptations.regression_verdict(id)?,
         }))
+    }
+
+    /// Returns the immutable, durable full regression-suite report for a
+    /// broad adaptation. A missing report means the plan has never crossed
+    /// the broad-mutation gate.
+    pub fn adaptation_regression_suite(
+        &self,
+        id: AdaptationPlanId,
+    ) -> Result<Option<RegressionSuiteVerdict>, EngineError> {
+        self.adaptations.regression_verdict(id)
     }
 
     /// Returns the latest durable correction for a named environmental
@@ -980,7 +1043,8 @@ impl Engine {
             return Ok(receipt);
         }
 
-        let stage_exists = self.adaptations.get_stage(request.plan_id)?.is_some();
+        let existing_stage = self.adaptations.get_stage(request.plan_id)?;
+        let stage_exists = existing_stage.is_some();
         if record.plan.mutation_scope == MutationScope::OfflineBroad {
             if stage_exists {
                 let existing = self.runtime.maintenance_for_request(&request_digest)?;
@@ -1004,6 +1068,22 @@ impl Engine {
                 }
             } else {
                 self.consume_offline_capability(capability, &request_digest)?;
+            }
+
+            // Run the deterministic full suite before writing an apply stage.
+            // A rejected candidate has made no mutation, so it must not leave
+            // a recoverable stage that would make future Engine startup retry
+            // a known-bad broad change forever.
+            if existing_stage
+                .as_ref()
+                .is_none_or(|stage| stage.outcome.is_none())
+            {
+                let verdict = self.broad_regression_suite(&record.plan, request.applied_at)?;
+                if !verdict.accepted {
+                    self.runtime
+                        .release_owned_completed_maintenance(self.instance_id, &request_digest)?;
+                    return Err(regression_suite_rejection(&verdict));
+                }
             }
         }
         let mut stage = self.adaptations.begin_stage(&request)?;
@@ -1675,6 +1755,157 @@ impl Engine {
             )),
         }
     }
+
+    /// Executes every trusted, version-pinned case relevant to a broad plan
+    /// before touching the graph. The report is persisted even for a rejected
+    /// change, which preserves the evidence trail and makes retries honest.
+    fn broad_regression_suite(
+        &self,
+        plan: &AdaptationPlan,
+        recorded_at: i64,
+    ) -> Result<RegressionSuiteVerdict, EngineError> {
+        if let Some(existing) = self.adaptations.regression_verdict(plan.id)? {
+            return Ok(existing);
+        }
+
+        let mut verdict = match &plan.action {
+            AdaptationAction::ReplaceProcedure {
+                incumbent_id,
+                incumbent_version,
+                challenger,
+            } => {
+                self.run_candidate_regression_cases(*incumbent_id, *incumbent_version, challenger)?
+            }
+            AdaptationAction::ReviseConceptOffline { concept_id, .. } => {
+                self.run_concept_regression_cases(*concept_id)?
+            }
+            _ => {
+                return Err(EngineError::InvalidInput(
+                    "only broad adaptations have a full regression suite".into(),
+                ));
+            }
+        };
+        verdict.finalize();
+        self.adaptations
+            .record_regression_verdict(plan.id, &verdict, recorded_at)
+    }
+
+    /// Replays all durable verified cases pinned to the replaced procedure
+    /// version through the candidate body. Test data comes exclusively from
+    /// the episode store; the caller cannot supply expected outcomes here.
+    fn run_candidate_regression_cases(
+        &self,
+        procedure_id: ProcedureId,
+        procedure_version: u32,
+        candidate: &Procedure,
+    ) -> Result<RegressionSuiteVerdict, EngineError> {
+        let cases = self
+            .episodes
+            .list_verified_regression_cases(procedure_id, procedure_version)?;
+        let mut verdict = RegressionSuiteVerdict::empty();
+        for case in cases {
+            let supplied = case
+                .test_case
+                .inputs
+                .iter()
+                .cloned()
+                .collect::<BTreeMap<_, _>>();
+            let args = match crate::engine::bind_inputs(candidate, &supplied, None) {
+                Ok(args) => args,
+                Err(error) => {
+                    verdict.inapplicable = verdict.inapplicable.saturating_add(1);
+                    verdict.cases.push(RegressionSuiteCaseResult {
+                        episode_id: case.episode_id,
+                        procedure_id: case.procedure_id,
+                        procedure_version: case.procedure_version,
+                        expected_output: case.test_case.expected_output,
+                        actual_output: None,
+                        status: RegressionSuiteCaseStatus::Inapplicable,
+                        details: format!("candidate cannot accept durable test input: {error}"),
+                    });
+                    continue;
+                }
+            };
+            let mut evaluator = self.current_evaluator()?;
+            evaluator.register_procedure(candidate.clone());
+            let attempt = evaluator.exec_procedure_captured(&candidate.id, args);
+            match attempt.result {
+                Ok(actual) if actual == case.test_case.expected_output => {
+                    verdict.passed = verdict.passed.saturating_add(1);
+                    verdict.cases.push(RegressionSuiteCaseResult {
+                        episode_id: case.episode_id,
+                        procedure_id: case.procedure_id,
+                        procedure_version: case.procedure_version,
+                        expected_output: case.test_case.expected_output,
+                        actual_output: Some(actual),
+                        status: RegressionSuiteCaseStatus::Passed,
+                        details: "candidate matched the immutable verified result".into(),
+                    });
+                }
+                Ok(actual) => {
+                    verdict.failed = verdict.failed.saturating_add(1);
+                    verdict.cases.push(RegressionSuiteCaseResult {
+                        episode_id: case.episode_id,
+                        procedure_id: case.procedure_id,
+                        procedure_version: case.procedure_version,
+                        expected_output: case.test_case.expected_output,
+                        actual_output: Some(actual),
+                        status: RegressionSuiteCaseStatus::Failed,
+                        details: "candidate output differed from immutable verified result".into(),
+                    });
+                }
+                Err(error) => {
+                    verdict.failed = verdict.failed.saturating_add(1);
+                    verdict.cases.push(RegressionSuiteCaseResult {
+                        episode_id: case.episode_id,
+                        procedure_id: case.procedure_id,
+                        procedure_version: case.procedure_version,
+                        expected_output: case.test_case.expected_output,
+                        actual_output: None,
+                        status: RegressionSuiteCaseStatus::Failed,
+                        details: format!("candidate execution failed: {error}"),
+                    });
+                }
+            }
+        }
+        Ok(verdict)
+    }
+
+    /// A concept revision has no executable candidate body. Its applicable
+    /// suite is the set of current executable procedures that implement the
+    /// concept, replayed at their pinned current versions. This still prevents
+    /// a behavior-wide structural change from being authorized with no locally
+    /// verified behavior at all.
+    fn run_concept_regression_cases(
+        &self,
+        concept_id: ConceptId,
+    ) -> Result<RegressionSuiteVerdict, EngineError> {
+        let mut verdict = RegressionSuiteVerdict::empty();
+        for procedure in self.graph.list_procedures()? {
+            if procedure.concept != Some(concept_id)
+                || !crate::engine::is_current_executable(procedure.lifecycle)
+            {
+                continue;
+            }
+            let cases = self
+                .episodes
+                .list_verified_regression_cases(procedure.id, procedure.version)?;
+            let candidate_verdict =
+                self.run_candidate_regression_cases(procedure.id, procedure.version, &procedure)?;
+            // A procedure with no durable cases contributes no evidence; its
+            // behavior is not silently treated as a pass.
+            if cases.is_empty() {
+                continue;
+            }
+            verdict.passed = verdict.passed.saturating_add(candidate_verdict.passed);
+            verdict.failed = verdict.failed.saturating_add(candidate_verdict.failed);
+            verdict.inapplicable = verdict
+                .inapplicable
+                .saturating_add(candidate_verdict.inapplicable);
+            verdict.cases.extend(candidate_verdict.cases);
+        }
+        Ok(verdict)
+    }
 }
 
 fn adaptation_request_digest(request: &ApplyAdaptationRequest) -> Result<String, EngineError> {
@@ -1683,6 +1914,17 @@ fn adaptation_request_digest(request: &ApplyAdaptationRequest) -> Result<String,
     digest.update(b"ekg:offline-adaptation-request:v1\0");
     digest.update(bytes);
     Ok(format!("sha256:{:x}", digest.finalize()))
+}
+
+fn regression_suite_rejection(verdict: &RegressionSuiteVerdict) -> EngineError {
+    EngineError::InvalidInput(format!(
+        "broad adaptation regression suite rejected mutation: {} applicable cases (minimum {}), {} passed, {} failed, {} inapplicable",
+        verdict.applicable,
+        verdict.required_minimum,
+        verdict.passed,
+        verdict.failed,
+        verdict.inapplicable,
+    ))
 }
 
 fn mutation_scope(action: &AdaptationAction) -> MutationScope {

@@ -1,6 +1,6 @@
 //! Append-only verified answer history used by the Phase 4 regression gate.
 
-use ekg_core::{Episode, EscalationRung, Value, VerifiabilityTier};
+use ekg_core::{Episode, EpisodeId, EscalationRung, ProcedureId, Value, VerifiabilityTier};
 use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -17,6 +17,67 @@ pub struct VerifiedAnswerRecord {
     pub tier: VerifiabilityTier,
     pub rung: EscalationRung,
     pub created_at: i64,
+}
+
+/// The smallest durable suite that may authorize a broad mutation. A broad
+/// change with no independently verified behavior to preserve is deliberately
+/// not promoted; callers must make a narrow/local correction instead.
+pub const MIN_BROAD_REGRESSION_CASES: u32 = 1;
+
+/// Outcome for one immutable, verified regression case replayed against a
+/// candidate broad change.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegressionSuiteCaseResult {
+    pub episode_id: EpisodeId,
+    pub procedure_id: ProcedureId,
+    pub procedure_version: u32,
+    pub expected_output: Value,
+    pub actual_output: Option<Value>,
+    pub status: RegressionSuiteCaseStatus,
+    pub details: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RegressionSuiteCaseStatus {
+    Passed,
+    Failed,
+    Inapplicable,
+}
+
+/// A report of replaying the durable verified regression suite. The verdict
+/// is stored against the adaptation plan even when it rejects the mutation,
+/// so a failed gate cannot be hidden by retrying the request.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegressionSuiteVerdict {
+    pub required_minimum: u32,
+    pub applicable: u32,
+    pub passed: u32,
+    pub failed: u32,
+    pub inapplicable: u32,
+    pub accepted: bool,
+    pub cases: Vec<RegressionSuiteCaseResult>,
+}
+
+impl RegressionSuiteVerdict {
+    pub(crate) fn empty() -> Self {
+        Self {
+            required_minimum: MIN_BROAD_REGRESSION_CASES,
+            applicable: 0,
+            passed: 0,
+            failed: 0,
+            inapplicable: 0,
+            accepted: false,
+            cases: Vec::new(),
+        }
+    }
+
+    pub(crate) fn finalize(&mut self) {
+        self.applicable = self.passed.saturating_add(self.failed);
+        self.accepted = self.applicable >= self.required_minimum && self.failed == 0;
+    }
 }
 
 pub(crate) struct RegressionStore {

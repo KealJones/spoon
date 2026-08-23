@@ -225,14 +225,25 @@ fn broad_concept_revision_requires_one_shot_engine_issued_offline_capability() {
     let concept = Concept::new("pancake rise", MutabilityClass::DefeasibleGeneral);
     engine.admin_insert_concept(&concept).unwrap();
     let mut procedure = double().with_concept(concept.id);
-    procedure.contract.requires.push(
-        Condition::described("injected kitchen fault")
-            .with_check(Expr::Literal(Value::Bool(false))),
-    );
+    procedure
+        .contract
+        .requires
+        .push(
+            Condition::described("injected kitchen fault").with_check(Expr::BinOp {
+                op: BinOp::Ge,
+                left: Box::new(Expr::Var("x".into())),
+                right: Box::new(Expr::Literal(Value::Int(0))),
+            }),
+        );
     engine.admin_insert_procedure(&procedure).unwrap();
+    // A broad structural change must protect at least one durable verified
+    // behavior, not only the failure reports that motivated it.
+    engine
+        .execute_procedure(procedure.id, inputs(3), Some(Value::Int(6)))
+        .unwrap();
     let evidence = (0..5)
-        .map(|value| {
-            let episode_id = contract_failure(&engine, &procedure, value);
+        .map(|index| {
+            let episode_id = contract_failure(&engine, &procedure, -1);
             let feedback = engine
                 .record_authenticated_verifier_feedback(
                     &EpisodeFeedback::new(
@@ -241,11 +252,11 @@ fn broad_concept_revision_requires_one_shot_engine_issued_offline_capability() {
                         feedback_evaluation(),
                         FeedbackSource::new(
                             "human",
-                            Some(if value % 2 == 0 { "cook-a" } else { "cook-b" }.into()),
+                            Some(if index % 2 == 0 { "cook-a" } else { "cook-b" }.into()),
                         ),
-                        format!("kitchen-feedback-{value}"),
+                        format!("kitchen-feedback-{index}"),
                     ),
-                    if value % 2 == 0 { "cook-a" } else { "cook-b" },
+                    if index % 2 == 0 { "cook-a" } else { "cook-b" },
                 )
                 .unwrap();
             AdaptationEvidenceRef {
@@ -315,6 +326,97 @@ fn broad_concept_revision_requires_one_shot_engine_issued_offline_capability() {
             .unwrap()
             .description,
         None
+    );
+}
+
+#[test]
+fn broad_mutation_without_durable_regression_coverage_is_rejected() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    let concept = Concept::new(
+        "unverified structural claim",
+        MutabilityClass::DefeasibleGeneral,
+    );
+    engine.admin_insert_concept(&concept).unwrap();
+    let mut procedure = double().with_concept(concept.id);
+    procedure.contract.requires.push(
+        Condition::described("all demonstrations fail before a baseline exists")
+            .with_check(Expr::Literal(Value::Bool(false))),
+    );
+    engine.admin_insert_procedure(&procedure).unwrap();
+
+    let evidence = (0..5)
+        .map(|index| {
+            let episode_id = contract_failure(&engine, &procedure, index);
+            let source = if index % 2 == 0 {
+                "oracle-a"
+            } else {
+                "oracle-b"
+            };
+            let feedback = engine
+                .record_authenticated_verifier_feedback(
+                    &EpisodeFeedback::new(
+                        episode_id,
+                        Value::Text("does not establish a passing baseline".into()),
+                        feedback_evaluation(),
+                        FeedbackSource::new("deterministic-oracle", Some(source.into())),
+                        format!("no-baseline-{index}"),
+                    ),
+                    source,
+                )
+                .unwrap();
+            AdaptationEvidenceRef {
+                episode_id,
+                selected_feedback_id: Some(feedback.id),
+            }
+        })
+        .collect::<Vec<_>>();
+    let analyzed = evidence[0];
+    let plan = engine
+        .plan_adaptation(AdaptationPlanRequest {
+            idempotency_key: "no-durable-regression-coverage".into(),
+            analysis: FailureAnalysisRequest {
+                selected_feedback_id: analyzed.selected_feedback_id,
+                ..analysis_request(analyzed.episode_id)
+            },
+            attribution: AttributionSelector {
+                suspect: Suspect {
+                    procedure: procedure.id,
+                    version: 1,
+                    trace_step: 0,
+                },
+                mechanism: AttributionMechanism::ContractViolation,
+            },
+            evidence,
+            target: AdaptationTarget::ConceptRevision {
+                concept_id: concept.id,
+                expected_version: 1,
+                revised_description: "must not promote without tested behavior".into(),
+            },
+            created_at: 401,
+        })
+        .unwrap();
+    assert_eq!(plan.mutation_scope, MutationScope::OfflineBroad);
+
+    let request = ApplyAdaptationRequest {
+        plan_id: plan.id,
+        idempotency_key: "no-durable-regression-coverage-apply".into(),
+        applied_at: 402,
+    };
+    let capability = engine.issue_offline_capability(&request).unwrap();
+    let error = engine
+        .apply_adaptation_offline(request, &capability)
+        .expect_err("broad mutation without a locally verified baseline must be rejected");
+    assert!(error.to_string().contains("0 applicable cases (minimum 1)"));
+    let suite = engine
+        .adaptation_regression_suite(plan.id)
+        .unwrap()
+        .unwrap();
+    assert!(!suite.accepted);
+    assert_eq!(suite.applicable, 0);
+    assert_eq!(suite.failed, 0);
+    assert_eq!(
+        engine.graph().current_concept_version(concept.id).unwrap(),
+        1
     );
 }
 
@@ -468,8 +570,18 @@ fn replay_confirmed_replacement_does_not_treat_a_failed_prediction_as_reality() 
 fn verified_replacement_plan(
     engine: &Engine,
     incumbent: &Procedure,
+    challenger: Procedure,
+    key: &str,
+) -> ekg_engine::AdaptationPlan {
+    verified_replacement_plan_with_evidence(engine, incumbent, challenger, key, true)
+}
+
+fn verified_replacement_plan_with_evidence(
+    engine: &Engine,
+    incumbent: &Procedure,
     mut challenger: Procedure,
     key: &str,
+    include_existing_regression_in_evidence: bool,
 ) -> ekg_engine::AdaptationPlan {
     challenger.version = 2;
     let failed = (0..3)
@@ -523,10 +635,12 @@ fn verified_replacement_plan(
             selected_feedback_id: Some(feedback.id),
         })
         .collect::<Vec<_>>();
-    evidence.push(AdaptationEvidenceRef {
-        episode_id: regression.id,
-        selected_feedback_id: None,
-    });
+    if include_existing_regression_in_evidence {
+        evidence.push(AdaptationEvidenceRef {
+            episode_id: regression.id,
+            selected_feedback_id: None,
+        });
+    }
     // The analyzed execution is also retained without substituting the later
     // oracle observation, so causal replay must improve on what happened then.
     evidence.push(AdaptationEvidenceRef {
@@ -624,6 +738,13 @@ fn replacement_requires_verified_reality_and_preserves_successful_regressions() 
     engine
         .apply_adaptation_offline(apply_request, &capability)
         .unwrap();
+    let suite = engine
+        .adaptation_regression_suite(plan.id)
+        .unwrap()
+        .unwrap();
+    assert!(suite.accepted);
+    assert_eq!(suite.failed, 0);
+    assert!(suite.passed >= 1);
     assert_eq!(
         engine
             .execute_procedure(incumbent.id, inputs(7), None)
@@ -637,6 +758,87 @@ fn replacement_requires_verified_reality_and_preserves_successful_regressions() 
             .unwrap()
             .value,
         Value::Int(6)
+    );
+    // The successful replacement advances the procedure version but leaves
+    // the v1 evidence that authorized it intact and queryable.
+    assert_eq!(
+        engine
+            .episodes()
+            .list_verified_regression_cases(incumbent.id, 1)
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn full_regression_suite_rejects_a_broad_change_that_selected_evidence_misses() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    let incumbent = double();
+    engine.admin_insert_procedure(&incumbent).unwrap();
+
+    // The supporting evidence used for the replacement is all about x = 7:
+    // independent feedback says the incumbent's 14 should have been 21.
+    // The candidate fixes that case but incorrectly changes every other input.
+    let mut challenger = incumbent.clone();
+    challenger.body = Expr::If {
+        cond: Box::new(Expr::BinOp {
+            op: BinOp::Eq,
+            left: Box::new(Expr::Var("x".into())),
+            right: Box::new(Expr::Literal(Value::Int(7))),
+        }),
+        then: Box::new(Expr::Literal(Value::Int(21))),
+        else_: Box::new(Expr::Literal(Value::Int(0))),
+    };
+    let plan = verified_replacement_plan_with_evidence(
+        &engine,
+        &incumbent,
+        challenger,
+        "full-suite-catches-unselected-regression",
+        false,
+    );
+    assert_eq!(plan.mutation_scope, MutationScope::OfflineBroad);
+    assert!(plan.evidence_gate.challenger_beats_incumbent);
+
+    let apply_request = ApplyAdaptationRequest {
+        plan_id: plan.id,
+        idempotency_key: "full-suite-catches-unselected-regression-apply".into(),
+        applied_at: 361,
+    };
+    let capability = engine.issue_offline_capability(&apply_request).unwrap();
+    let error = engine
+        .apply_adaptation_offline(apply_request, &capability)
+        .expect_err("the full durable suite must block the regression");
+    assert!(error.to_string().contains("regression suite rejected"));
+
+    let suite = engine
+        .adaptation_regression_suite(plan.id)
+        .unwrap()
+        .unwrap();
+    assert!(!suite.accepted);
+    assert_eq!(suite.passed, 0);
+    assert_eq!(suite.failed, 1);
+    assert_eq!(suite.cases.len(), 1);
+    assert_eq!(suite.cases[0].expected_output, Value::Int(6));
+    assert_eq!(suite.cases[0].actual_output, Some(Value::Int(0)));
+    assert!(engine.recover_pending_adaptations().unwrap().is_empty());
+
+    // The rejected broad mutation never changes the incumbent or its
+    // append-only verified history.
+    assert_eq!(
+        engine
+            .execute_procedure(incumbent.id, inputs(3), None)
+            .unwrap()
+            .value,
+        Value::Int(6)
+    );
+    assert!(
+        engine
+            .get_adaptation(plan.id)
+            .unwrap()
+            .unwrap()
+            .receipt
+            .is_none()
     );
 }
 

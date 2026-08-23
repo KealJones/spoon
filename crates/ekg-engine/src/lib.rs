@@ -49,7 +49,10 @@ pub use engine::{
     Engine, EngineError, ExecutionOutcome, MetricsSnapshot, Phase6EvidenceMetrics, ReplayOutcome,
 };
 pub use goals::{CuriosityGap, GapKind, Goal, GoalDerivationRecord, GoalKind, GoalLearningRecord};
-pub use regression::VerifiedAnswerRecord;
+pub use regression::{
+    MIN_BROAD_REGRESSION_CASES, RegressionSuiteCaseResult, RegressionSuiteCaseStatus,
+    RegressionSuiteVerdict, VerifiedAnswerRecord,
+};
 pub use skills::{ManagedSkill, SkillLifecycle};
 pub use trust::{TrustEvidenceKind, TrustReceipt};
 pub use view::{EpisodeView, GraphView};
