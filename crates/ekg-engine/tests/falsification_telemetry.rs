@@ -138,3 +138,34 @@ fn rejects_teacher_leakage_and_undeclared_exact_repeats() {
     assert_eq!(telemetry.teacher_off_violations_rejected, 1);
     assert_eq!(telemetry.duplicate_measurements_rejected, 1);
 }
+
+#[test]
+fn held_out_measurements_cannot_train_or_claim_teacher_grounding_when_off() {
+    let engine = Engine::in_memory().unwrap();
+    let run = engine
+        .create_falsification_run(FalsificationRunInput {
+            label: "held-out boundary".into(),
+            benchmark: "unit".into(),
+            notes: None,
+        })
+        .unwrap();
+
+    let mut held_out_training = observation("heldout-train", "unseen-input");
+    held_out_training.cohort = ProbeCohort::HeldOut;
+    assert!(
+        engine
+            .record_falsification_measurement(&run.id, held_out_training)
+            .is_err()
+    );
+
+    let mut teacher_grounding = observation("teacher-grounding", "another-input");
+    teacher_grounding.teacher_mode = TeacherMode::Off;
+    teacher_grounding.teacher_used = false;
+    teacher_grounding.teacher_calls = 0;
+    teacher_grounding.grounding_tier = GroundingTier::Teacher;
+    assert!(
+        engine
+            .record_falsification_measurement(&run.id, teacher_grounding)
+            .is_err()
+    );
+}

@@ -361,6 +361,19 @@ impl FalsificationTelemetryStore {
                 "teacher-off measurement cannot use or call a teacher".into(),
             ));
         }
+        if value.teacher_mode == TeacherMode::Off && value.grounding_tier == GroundingTier::Teacher
+        {
+            self.reject("teacherOffViolations")?;
+            return Err(EngineError::InvalidInput(
+                "teacher-off measurement cannot claim teacher grounding".into(),
+            ));
+        }
+        if value.cohort == ProbeCohort::HeldOut && value.created_skill_id.is_some() {
+            self.reject("heldOutTrainingViolations")?;
+            return Err(EngineError::InvalidInput(
+                "held-out measurements cannot create or train a skill".into(),
+            ));
+        }
         if value.abstained && value.correct.is_some() {
             return Err(EngineError::InvalidInput(
                 "abstentions must be represented separately from correctness".into(),
