@@ -35,6 +35,13 @@ pub enum CapabilityError {
     NotRevalidated,
     #[error("required local permission is not granted: {0}")]
     PermissionRequired(String),
+    #[error("value does not satisfy the declared {direction} schema: {reason}")]
+    Schema {
+        direction: &'static str,
+        reason: String,
+    },
+    #[error("native adapter reported an undeclared effect or invalid resource use: {0}")]
+    AdapterViolation(String),
     #[error(transparent)]
     Json(#[from] serde_json::Error),
     #[error(transparent)]
@@ -134,6 +141,64 @@ pub struct InvocationReceipt {
 pub struct PrimitiveExecution {
     pub receipt: InvocationReceipt,
     pub output: Value,
+}
+
+/// The only request shape exposed to a host capability adapter. It is made by
+/// EKG from a stored, locally revalidated procedure; an adapter never receives
+/// a bundle, ambient credentials, or foreign executable code.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthorizedPrimitiveInvocation {
+    pub content_id: String,
+    pub procedure_id: String,
+    pub primitive: NativePrimitive,
+    pub effect: Effect,
+    pub request: PrimitiveRequest,
+    pub input: Value,
+    pub bounds: ResourceBounds,
+}
+
+/// Usage reported by an injected host adapter. EKG independently accounts for
+/// serialized input/output bytes and rejects a report that exceeds the stored
+/// procedure or local policy envelope.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceUsage {
+    pub bytes: u64,
+    pub steps: u64,
+    pub millis: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdapterExecution {
+    pub effect: Effect,
+    pub output: Value,
+    pub usage: ResourceUsage,
+}
+
+/// Host-provided adapters are the sole effect boundary. Implementations may
+/// use a mock, a process sandbox, or a transport owned by the host, but must
+/// execute exactly the authorized primitive request supplied here.
+pub trait CapabilityInvocationAdapter {
+    fn execute(
+        &mut self,
+        invocation: &AuthorizedPrimitiveInvocation,
+    ) -> Result<AdapterExecution, CapabilityError>;
+}
+
+/// A caller receives the usable typed output plus only redacted provenance:
+/// inputs, credentials, and raw transport details never enter this receipt.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CapabilityInvocation {
+    pub content_id: String,
+    pub procedure_id: String,
+    pub output: Value,
+    pub output_digest: String,
+    pub receipt: InvocationReceipt,
+    pub usage: ResourceUsage,
+    pub redacted: bool,
 }
 
 /// Safe native observations. Every target must be present in the local
@@ -764,14 +829,36 @@ pub fn discover_interface(
     Ok(bundle)
 }
 
+/// Exercise portable fixtures through the exact same typed native-dispatch
+/// boundary used by an admitted capability. The default adapter is a
+/// deterministic in-memory fixture adapter: it neither opens a socket nor
+/// executes bundle-provided code.
 pub fn run_sandbox_tests(procedure: &CapabilityProcedure) -> Result<(), CapabilityError> {
+    let policy = procedure_policy(procedure)?;
+    let mut adapter = FixtureAdapter {
+        tests: &procedure.tests,
+    };
+    run_sandbox_tests_with_adapter(procedure, "fixture", &policy, &mut adapter)
+}
+
+/// Run a procedure's fixtures through a supplied sandbox/mock adapter. This
+/// exists so hosts can revalidate against a real local sandbox without giving
+/// imported bundles ambient authority.
+pub fn run_sandbox_tests_with_adapter<A: CapabilityInvocationAdapter>(
+    procedure: &CapabilityProcedure,
+    content_id: &str,
+    policy: &PrimitivePolicy,
+    adapter: &mut A,
+) -> Result<(), CapabilityError> {
     if procedure.tests.is_empty() {
         return Err(CapabilityError::Invalid(
             "capability needs at least one sandbox test".into(),
         ));
     }
     for test in &procedure.tests {
-        if test.fixture_output != test.expected_output {
+        let result =
+            invoke_authorized_procedure(content_id, procedure, &test.input, policy, adapter)?;
+        if result.output != test.expected_output {
             return Err(CapabilityError::Invalid(format!(
                 "sandbox test '{}' failed",
                 test.name
@@ -779,6 +866,203 @@ pub fn run_sandbox_tests(procedure: &CapabilityProcedure) -> Result<(), Capabili
         }
     }
     Ok(())
+}
+
+/// Invoke one exact stored procedure after the store has checked its durable
+/// local-validation status and every declared grant. This method deliberately
+/// accepts an injected adapter rather than falling back to filesystem, network
+/// or process APIs on the caller's behalf.
+fn invoke_authorized_procedure<A: CapabilityInvocationAdapter>(
+    content_id: &str,
+    procedure: &CapabilityProcedure,
+    input: &Value,
+    policy: &PrimitivePolicy,
+    adapter: &mut A,
+) -> Result<CapabilityInvocation, CapabilityError> {
+    validate_primitive_declarations(procedure)?;
+    validate_value_schema(&procedure.input_schema, input, "input", 0)?;
+    let input_bytes = canonical_json(input)?.len() as u64;
+    let bounds = intersect_bounds(&procedure.bounds, &policy.bounds)?;
+    if input_bytes > bounds.max_bytes {
+        return Err(CapabilityError::AdapterViolation(
+            "typed input exceeds procedure byte bound".into(),
+        ));
+    }
+    let request = procedure_request(procedure, input, &bounds)?;
+    let mut receipt = policy.authorize(&request)?;
+    let expected_effect = expected_effect(&procedure.primitive);
+    if receipt.primitive != procedure.primitive || receipt.effect != expected_effect {
+        return Err(CapabilityError::AdapterViolation(
+            "policy authorized a primitive or effect other than the stored declaration".into(),
+        ));
+    }
+    receipt.bounds = bounds.clone();
+    let started = std::time::Instant::now();
+    let execution = adapter.execute(&AuthorizedPrimitiveInvocation {
+        content_id: content_id.into(),
+        procedure_id: procedure.id.clone(),
+        primitive: procedure.primitive.clone(),
+        effect: expected_effect.clone(),
+        request,
+        input: input.clone(),
+        bounds: bounds.clone(),
+    })?;
+    let elapsed_millis = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+    if execution.effect != expected_effect {
+        return Err(CapabilityError::AdapterViolation(
+            "adapter effect differs from the stored procedure declaration".into(),
+        ));
+    }
+    validate_value_schema(&procedure.output_schema, &execution.output, "output", 0)?;
+    let output_bytes = canonical_json(&execution.output)?.len() as u64;
+    let accounted_bytes = input_bytes.saturating_add(output_bytes);
+    if execution.usage.bytes > bounds.max_bytes
+        || accounted_bytes > bounds.max_bytes
+        || execution.usage.steps > bounds.max_steps
+        || execution.usage.millis > bounds.max_millis
+        || elapsed_millis > bounds.max_millis
+    {
+        return Err(CapabilityError::AdapterViolation(
+            "adapter resource use exceeds the declared capability bounds".into(),
+        ));
+    }
+    Ok(CapabilityInvocation {
+        content_id: content_id.into(),
+        procedure_id: procedure.id.clone(),
+        output_digest: digest_json(&execution.output)?,
+        output: execution.output,
+        receipt,
+        usage: execution.usage,
+        redacted: true,
+    })
+}
+
+struct FixtureAdapter<'a> {
+    tests: &'a [CapabilityTest],
+}
+
+impl CapabilityInvocationAdapter for FixtureAdapter<'_> {
+    fn execute(
+        &mut self,
+        invocation: &AuthorizedPrimitiveInvocation,
+    ) -> Result<AdapterExecution, CapabilityError> {
+        let test = self
+            .tests
+            .iter()
+            .find(|test| test.input == invocation.input)
+            .ok_or_else(|| {
+                CapabilityError::Invalid("fixture adapter has no matching input".into())
+            })?;
+        let bytes = canonical_json(&invocation.input)?.len() as u64
+            + canonical_json(&test.fixture_output)?.len() as u64;
+        Ok(AdapterExecution {
+            effect: invocation.effect.clone(),
+            output: test.fixture_output.clone(),
+            usage: ResourceUsage {
+                bytes,
+                steps: 1,
+                millis: 0,
+            },
+        })
+    }
+}
+
+fn procedure_policy(procedure: &CapabilityProcedure) -> Result<PrimitivePolicy, CapabilityError> {
+    validate_primitive_declarations(procedure)?;
+    let mut policy = PrimitivePolicy {
+        bounds: procedure.bounds.clone(),
+        ..PrimitivePolicy::default()
+    };
+    for permission in &procedure.permissions {
+        match permission {
+            Permission::NetworkHost { host } => {
+                policy.network_hosts.insert(host.clone());
+            }
+            Permission::FileReadPrefix { path_prefix } => {
+                policy.file_read_prefixes.insert(path_prefix.clone());
+            }
+            Permission::FileWritePrefix { path_prefix } => {
+                policy.file_write_prefixes.insert(path_prefix.clone());
+            }
+            Permission::ObserveTarget { target } => {
+                policy.observe_targets.insert(target.clone());
+            }
+            Permission::SandboxProfile { profile } => {
+                policy.sandbox_profiles.insert(profile.clone());
+            }
+        }
+    }
+    Ok(policy)
+}
+
+fn procedure_request(
+    procedure: &CapabilityProcedure,
+    input: &Value,
+    bounds: &ResourceBounds,
+) -> Result<PrimitiveRequest, CapabilityError> {
+    match procedure.primitive {
+        NativePrimitive::NetworkRequest => Ok(PrimitiveRequest::Network {
+            host: contract_string(procedure, "host")?,
+            method: contract_string(procedure, "method")?,
+            body_bytes: canonical_json(input)?.len() as u64,
+        }),
+        NativePrimitive::FileRead => Ok(PrimitiveRequest::FileRead {
+            path: contract_string(procedure, "path")?,
+            bytes: contract_u64(procedure, "bytes").unwrap_or(bounds.max_bytes),
+        }),
+        NativePrimitive::FileWrite => Ok(PrimitiveRequest::FileWrite {
+            path: contract_string(procedure, "path")?,
+            bytes: payload_bytes(input)?.len() as u64,
+        }),
+        NativePrimitive::Observe => Ok(PrimitiveRequest::Observe {
+            target: contract_string(procedure, "target")?,
+        }),
+        NativePrimitive::SandboxExecute => Ok(PrimitiveRequest::SandboxExecute {
+            profile: contract_string(procedure, "profile")?,
+            steps: contract_u64(procedure, "steps").unwrap_or(bounds.max_steps),
+        }),
+    }
+}
+
+fn contract_string(procedure: &CapabilityProcedure, key: &str) -> Result<String, CapabilityError> {
+    procedure
+        .contract
+        .get(key)
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(str::to_owned)
+        .ok_or_else(|| CapabilityError::Invalid(format!("procedure contract requires {key}")))
+}
+
+fn contract_u64(procedure: &CapabilityProcedure, key: &str) -> Option<u64> {
+    procedure.contract.get(key).and_then(Value::as_u64)
+}
+
+fn expected_effect(primitive: &NativePrimitive) -> Effect {
+    match primitive {
+        NativePrimitive::NetworkRequest => Effect::Network,
+        NativePrimitive::FileRead => Effect::FileRead,
+        NativePrimitive::FileWrite => Effect::FileWrite,
+        NativePrimitive::Observe => Effect::Observation,
+        NativePrimitive::SandboxExecute => Effect::SandboxedExecution,
+    }
+}
+
+fn intersect_bounds(
+    procedure: &ResourceBounds,
+    policy: &ResourceBounds,
+) -> Result<ResourceBounds, CapabilityError> {
+    let bounds = ResourceBounds {
+        max_bytes: procedure.max_bytes.min(policy.max_bytes),
+        max_steps: procedure.max_steps.min(policy.max_steps),
+        max_millis: procedure.max_millis.min(policy.max_millis),
+    };
+    if bounds.max_bytes == 0 || bounds.max_steps == 0 || bounds.max_millis == 0 {
+        return Err(CapabilityError::AdapterViolation(
+            "local policy has a zero resource bound".into(),
+        ));
+    }
+    Ok(bounds)
 }
 
 pub fn bundle_content_id(bundle: &CapabilityBundle) -> Result<String, CapabilityError> {
@@ -1135,7 +1419,197 @@ fn validate_schema(schema: &Value) -> Result<(), CapabilityError> {
             "schema exceeds byte bound".into(),
         ));
     }
+    if !schema.is_object() {
+        return Err(CapabilityError::InvalidBundle(
+            "schema must be a JSON object".into(),
+        ));
+    }
     Ok(())
+}
+
+/// A deliberately small, deterministic JSON-schema subset used at the native
+/// capability boundary. We do not silently treat unknown or malformed types as
+/// valid; unsupported decoration is ignored, but every supported constraint is
+/// enforced before an adapter sees input and after it returns output.
+fn validate_value_schema(
+    schema: &Value,
+    value: &Value,
+    direction: &'static str,
+    depth: usize,
+) -> Result<(), CapabilityError> {
+    if depth > 64 {
+        return Err(CapabilityError::Schema {
+            direction,
+            reason: "value exceeds maximum schema nesting".into(),
+        });
+    }
+    let object = schema.as_object().ok_or_else(|| CapabilityError::Schema {
+        direction,
+        reason: "schema is not an object".into(),
+    })?;
+    if let Some(kind) = object.get("type") {
+        let kind = kind.as_str().ok_or_else(|| CapabilityError::Schema {
+            direction,
+            reason: "schema type must be a string".into(),
+        })?;
+        let matches = match kind {
+            "object" => value.is_object(),
+            "array" => value.is_array(),
+            "string" => value.is_string(),
+            "number" => value.is_number(),
+            "integer" => value.as_i64().is_some() || value.as_u64().is_some(),
+            "boolean" => value.is_boolean(),
+            "null" => value.is_null(),
+            _ => {
+                return Err(CapabilityError::Schema {
+                    direction,
+                    reason: format!("unsupported schema type {kind}"),
+                });
+            }
+        };
+        if !matches {
+            return Err(CapabilityError::Schema {
+                direction,
+                reason: format!("expected {kind}"),
+            });
+        }
+    }
+    if let Some(allowed) = object.get("enum") {
+        let allowed = allowed.as_array().ok_or_else(|| CapabilityError::Schema {
+            direction,
+            reason: "schema enum must be an array".into(),
+        })?;
+        if !allowed.contains(value) {
+            return Err(CapabilityError::Schema {
+                direction,
+                reason: "value is not in the declared enum".into(),
+            });
+        }
+    }
+    if let Some(text) = value.as_str() {
+        schema_length_constraint(object, "minLength", text.chars().count(), direction, true)?;
+        schema_length_constraint(object, "maxLength", text.chars().count(), direction, false)?;
+    }
+    if let Some(number) = value.as_f64() {
+        schema_number_constraint(object, "minimum", number, direction, true)?;
+        schema_number_constraint(object, "maximum", number, direction, false)?;
+    }
+    if let Some(items) = value.as_array() {
+        schema_length_constraint(object, "minItems", items.len(), direction, true)?;
+        schema_length_constraint(object, "maxItems", items.len(), direction, false)?;
+        if let Some(item_schema) = object.get("items") {
+            for item in items {
+                validate_value_schema(item_schema, item, direction, depth + 1)?;
+            }
+        }
+    }
+    if let Some(values) = value.as_object() {
+        schema_length_constraint(object, "minProperties", values.len(), direction, true)?;
+        schema_length_constraint(object, "maxProperties", values.len(), direction, false)?;
+        let properties = match object.get("properties") {
+            Some(properties) => {
+                Some(
+                    properties
+                        .as_object()
+                        .ok_or_else(|| CapabilityError::Schema {
+                            direction,
+                            reason: "schema properties must be an object".into(),
+                        })?,
+                )
+            }
+            None => None,
+        };
+        if let Some(required) = object.get("required") {
+            let required = required.as_array().ok_or_else(|| CapabilityError::Schema {
+                direction,
+                reason: "schema required must be an array".into(),
+            })?;
+            for key in required {
+                let key = key.as_str().ok_or_else(|| CapabilityError::Schema {
+                    direction,
+                    reason: "schema required entries must be strings".into(),
+                })?;
+                if !values.contains_key(key) {
+                    return Err(CapabilityError::Schema {
+                        direction,
+                        reason: format!("missing required property {key}"),
+                    });
+                }
+            }
+        }
+        if let Some(properties) = properties {
+            for (key, child) in values {
+                if let Some(child_schema) = properties.get(key) {
+                    validate_value_schema(child_schema, child, direction, depth + 1)?;
+                } else if object.get("additionalProperties").and_then(Value::as_bool) == Some(false)
+                {
+                    return Err(CapabilityError::Schema {
+                        direction,
+                        reason: format!("additional property {key} is not permitted"),
+                    });
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn schema_length_constraint(
+    schema: &serde_json::Map<String, Value>,
+    key: &str,
+    actual: usize,
+    direction: &'static str,
+    is_minimum: bool,
+) -> Result<(), CapabilityError> {
+    let Some(limit) = schema.get(key) else {
+        return Ok(());
+    };
+    let limit = limit.as_u64().ok_or_else(|| CapabilityError::Schema {
+        direction,
+        reason: format!("schema {key} must be a non-negative integer"),
+    })?;
+    let passes = if is_minimum {
+        actual >= limit as usize
+    } else {
+        actual <= limit as usize
+    };
+    if passes {
+        Ok(())
+    } else {
+        Err(CapabilityError::Schema {
+            direction,
+            reason: format!("{key} constraint failed"),
+        })
+    }
+}
+
+fn schema_number_constraint(
+    schema: &serde_json::Map<String, Value>,
+    key: &str,
+    actual: f64,
+    direction: &'static str,
+    is_minimum: bool,
+) -> Result<(), CapabilityError> {
+    let Some(limit) = schema.get(key) else {
+        return Ok(());
+    };
+    let limit = limit.as_f64().ok_or_else(|| CapabilityError::Schema {
+        direction,
+        reason: format!("schema {key} must be numeric"),
+    })?;
+    let passes = if is_minimum {
+        actual >= limit
+    } else {
+        actual <= limit
+    };
+    if passes {
+        Ok(())
+    } else {
+        Err(CapabilityError::Schema {
+            direction,
+            reason: format!("{key} constraint failed"),
+        })
+    }
 }
 
 fn reject_secrets(value: &impl Serialize) -> Result<(), CapabilityError> {
@@ -1607,6 +2081,22 @@ impl CapabilityStore {
         self.require_permissions(content_id, &procedure.permissions)?;
         Ok(procedure)
     }
+
+    /// Resolve and invoke precisely one stored procedure. Status, grants, and
+    /// the procedure's declared authority are checked afresh on every call, so
+    /// a later revocation takes effect immediately even if a caller retained a
+    /// previous procedure value or receipt.
+    pub fn invoke<A: CapabilityInvocationAdapter>(
+        &self,
+        content_id: &str,
+        procedure_id: &str,
+        input: &Value,
+        policy: &PrimitivePolicy,
+        adapter: &mut A,
+    ) -> Result<CapabilityInvocation, CapabilityError> {
+        let procedure = self.require_procedure_permissions(content_id, procedure_id)?;
+        invoke_authorized_procedure(content_id, &procedure, input, policy, adapter)
+    }
 }
 
 fn validate_local_validation_evidence(validation: &LocalValidation) -> Result<(), CapabilityError> {
@@ -2037,6 +2527,191 @@ mod tests {
         assert_eq!(execution.receipt.primitive, NativePrimitive::Observe);
         assert_eq!(execution.output["source"], "native:clock");
         assert!(execution.output["unixSeconds"].is_number());
+    }
+
+    #[derive(Clone)]
+    struct MockAdapter {
+        output: Value,
+        effect: Effect,
+        usage: ResourceUsage,
+        calls: usize,
+    }
+
+    impl CapabilityInvocationAdapter for MockAdapter {
+        fn execute(
+            &mut self,
+            invocation: &AuthorizedPrimitiveInvocation,
+        ) -> Result<AdapterExecution, CapabilityError> {
+            self.calls += 1;
+            assert_eq!(invocation.primitive, NativePrimitive::NetworkRequest);
+            assert_eq!(invocation.effect, Effect::Network);
+            assert!(matches!(
+                invocation.request,
+                PrimitiveRequest::Network { ref host, ref method, .. }
+                    if host == "api.example.test" && method == "GET"
+            ));
+            Ok(AdapterExecution {
+                output: self.output.clone(),
+                effect: self.effect.clone(),
+                usage: self.usage,
+            })
+        }
+    }
+
+    fn validated_store() -> (
+        CapabilityStore,
+        CapabilityBundle,
+        ImportedCapability,
+        PrimitivePolicy,
+    ) {
+        let bundle = discover_interface(&interface()).unwrap();
+        let store = CapabilityStore::in_memory().unwrap();
+        let imported = store
+            .import_and_revalidate(
+                &export_bundle(&bundle).unwrap(),
+                &LocalValidation {
+                    passed: true,
+                    validation_episodes: vec!["fixture-adapter-round-trip".into()],
+                    environment_digest: "sha256:local-fixture-environment".into(),
+                },
+            )
+            .unwrap();
+        store
+            .grant(&imported.content_id, &bundle.procedures[0].permissions[0])
+            .unwrap();
+        let policy = PrimitivePolicy {
+            network_hosts: BTreeSet::from(["api.example.test".into()]),
+            bounds: bundle.procedures[0].bounds.clone(),
+            ..PrimitivePolicy::default()
+        };
+        (store, bundle, imported, policy)
+    }
+
+    #[test]
+    fn invocation_is_typed_redacted_and_uses_the_mock_fixture_boundary() {
+        let (store, bundle, imported, policy) = validated_store();
+        let mut adapter = MockAdapter {
+            output: serde_json::json!({"temperature": 72}),
+            effect: Effect::Network,
+            usage: ResourceUsage {
+                bytes: 32,
+                steps: 1,
+                millis: 1,
+            },
+            calls: 0,
+        };
+        let result = store
+            .invoke(
+                &imported.content_id,
+                &bundle.procedures[0].id,
+                &serde_json::json!({}),
+                &policy,
+                &mut adapter,
+            )
+            .unwrap();
+        assert_eq!(adapter.calls, 1);
+        assert_eq!(result.output, serde_json::json!({"temperature": 72}));
+        assert!(result.redacted);
+        assert!(result.receipt.redacted);
+        assert_eq!(result.receipt.effect, Effect::Network);
+        assert!(result.output_digest.starts_with("sha256:"));
+    }
+
+    #[test]
+    fn invocation_checks_schema_effect_bounds_and_revocation_at_the_last_moment() {
+        let (store, bundle, imported, policy) = validated_store();
+        let mut valid = MockAdapter {
+            output: serde_json::json!({"temperature": 72}),
+            effect: Effect::Network,
+            usage: ResourceUsage::default(),
+            calls: 0,
+        };
+        assert!(matches!(
+            store.invoke(
+                &imported.content_id,
+                &bundle.procedures[0].id,
+                &serde_json::json!("not-an-object"),
+                &policy,
+                &mut valid,
+            ),
+            Err(CapabilityError::Schema {
+                direction: "input",
+                ..
+            })
+        ));
+        assert_eq!(valid.calls, 0);
+
+        let mut bad_output = MockAdapter {
+            output: serde_json::json!("not-an-object"),
+            effect: Effect::Network,
+            usage: ResourceUsage::default(),
+            calls: 0,
+        };
+        assert!(matches!(
+            store.invoke(
+                &imported.content_id,
+                &bundle.procedures[0].id,
+                &serde_json::json!({}),
+                &policy,
+                &mut bad_output,
+            ),
+            Err(CapabilityError::Schema {
+                direction: "output",
+                ..
+            })
+        ));
+
+        let mut undeclared_effect = MockAdapter {
+            output: serde_json::json!({"temperature": 72}),
+            effect: Effect::Observation,
+            usage: ResourceUsage::default(),
+            calls: 0,
+        };
+        assert!(matches!(
+            store.invoke(
+                &imported.content_id,
+                &bundle.procedures[0].id,
+                &serde_json::json!({}),
+                &policy,
+                &mut undeclared_effect,
+            ),
+            Err(CapabilityError::AdapterViolation(_))
+        ));
+
+        let mut over_budget = MockAdapter {
+            output: serde_json::json!({"temperature": 72}),
+            effect: Effect::Network,
+            usage: ResourceUsage {
+                bytes: bundle.procedures[0].bounds.max_bytes + 1,
+                steps: 0,
+                millis: 0,
+            },
+            calls: 0,
+        };
+        assert!(matches!(
+            store.invoke(
+                &imported.content_id,
+                &bundle.procedures[0].id,
+                &serde_json::json!({}),
+                &policy,
+                &mut over_budget,
+            ),
+            Err(CapabilityError::AdapterViolation(_))
+        ));
+
+        store
+            .revoke(&imported.content_id, &bundle.procedures[0].permissions[0])
+            .unwrap();
+        assert!(matches!(
+            store.invoke(
+                &imported.content_id,
+                &bundle.procedures[0].id,
+                &serde_json::json!({}),
+                &policy,
+                &mut valid,
+            ),
+            Err(CapabilityError::PermissionRequired(_))
+        ));
     }
 
     #[test]
