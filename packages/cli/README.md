@@ -9,7 +9,7 @@ Build the Rust server once, then use `tsx` during development:
 ```bash
 cargo build -p spoon-server
 SPOON_DB=/tmp/spoon-playground.sqlite \
-  pnpm exec tsx packages/cli/src/main.ts ask --quiet "what is double 7?"
+  pnpm spoon ask --quiet "what is double 7?"
 ```
 
 Commands start the server binary from `target/debug/spoon-server` unless
@@ -19,13 +19,13 @@ Commands start the server binary from `target/debug/spoon-server` unless
 
 ```bash
 # Full JSON episode/result
-pnpm exec tsx packages/cli/src/main.ts ask "what is double 7?"
+pnpm spoon ask "what is double 7?"
 
 # Answer only
-pnpm exec tsx packages/cli/src/main.ts ask --quiet "what is double 7?"
+pnpm spoon ask --quiet "what is double 7?"
 
 # Human-readable audit trail
-pnpm exec tsx packages/cli/src/main.ts ask --explain "what is double 7?"
+pnpm spoon ask --explain "what is double 7?"
 ```
 
 The explain view includes teacher use and provider/model, proposal and

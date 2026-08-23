@@ -18,14 +18,14 @@ Requirements: Rust/Cargo, Node.js 24+, and pnpm.
 pnpm install
 cargo build -p spoon-server
 SPOON_DB=/tmp/spoon-playground.sqlite \
-  pnpm exec tsx packages/cli/src/main.ts ask --explain "what is double 7?"
+  pnpm spoon ask --explain "what is double 7?"
 ```
 
 For a clean answer only:
 
 ```bash
 SPOON_DB=/tmp/spoon-playground.sqlite \
-  pnpm exec tsx packages/cli/src/main.ts ask --quiet "what is double 7?"
+  pnpm spoon ask --quiet "what is double 7?"
 ```
 
 The first run may use the configured teacher. A later run can reuse a trusted
