@@ -154,13 +154,34 @@ function formatExplanation(result: unknown): string {
   );
   const teacher = episode.teacher_interaction ?? episode.teacherInteraction;
   if (isRecord(teacher)) {
-    const provenance = isRecord(teacher.provenance) ? teacher.provenance : teacher;
+    const proposal = isRecord(teacher.proposal) ? teacher.proposal : undefined;
+    const proposalProvenance = proposal && isRecord(proposal.provenance)
+      ? proposal.provenance
+      : undefined;
+    const provenance = isRecord(teacher.provenance)
+      ? teacher.provenance
+      : proposalProvenance ?? teacher;
+    const content = proposal && isRecord(proposal.content)
+      ? proposal.content
+      : isRecord(teacher.content)
+        ? teacher.content
+        : undefined;
+    const proposalKind = content && stringValue(content.proposalKind ?? content.proposal_kind);
+    const validation = proposal && proposal.validation !== undefined
+      ? proposal.validation
+      : teacher.validation;
     lines.push(
       `Teacher: ${stringValue(provenance.provider) ?? "unknown"}` +
         (stringValue(provenance.model) ? ` (${stringValue(provenance.model)})` : ""),
     );
-    if (teacher.content !== undefined) lines.push(`Proposal: ${formatValue(teacher.content)}`);
-    if (teacher.validation !== undefined) lines.push(`Validation: ${formatValue(teacher.validation)}`);
+    if (stringValue(teacher.source) || stringValue(provenance.teacher)) {
+      lines.push(`Teacher source: ${stringValue(teacher.source) ?? stringValue(provenance.teacher)}`);
+    }
+    if (proposalKind) lines.push(`Teacher proposal: ${proposalKind}`);
+    if (content?.answer !== undefined && content?.answer !== null) {
+      lines.push(`Teacher answer: ${formatValue(content.answer)}`);
+    }
+    if (validation !== undefined) lines.push(`Teacher validation: ${formatValue(validation)}`);
   } else {
     lines.push("Teacher: not used");
   }
@@ -173,14 +194,25 @@ function formatExplanation(result: unknown): string {
     );
     if (stringValue(evaluation.details)) lines.push(`Why: ${stringValue(evaluation.details)}`);
   }
+  const action = stringValue(episode.action);
+  const teacherObservation = action === "teacher-observation:provisional";
   const observed = episode.observed_result ?? episode.observedResult;
   const prediction = episode.prediction;
   if (prediction !== undefined || observed !== undefined) {
     lines.push(`Predicted: ${formatValue(prediction)}`);
     lines.push(`Observed: ${formatValue(observed)}`);
+    if (teacherObservation && observed === undefined) {
+      lines.push("Verification: provisional — the prediction came from the teacher; no independent observation exists");
+    } else if (observed === undefined) {
+      lines.push("Verification: no independent observed result was recorded");
+    }
   }
-  const action = stringValue(episode.action);
-  lines.push(`Learned/reused: ${action && action !== "answer-only" ? action : "no reusable procedure"}`);
+  if (teacherObservation) {
+    lines.push("Answer source: teacher-provided external observation; no trusted local observation ran");
+    lines.push("Learning: none — no reusable lesson or procedure was proposed or admitted");
+  } else {
+    lines.push(`Learned/reused: ${action && action !== "answer-only" ? action : "no reusable procedure"}`);
+  }
   const cost = isRecord(episode.cost) ? episode.cost : {};
   lines.push(`Cost: rung ${stringValue(cost.rung_reached ?? cost.rungReached) ?? "unknown"}, ${stringValue(cost.steps_taken ?? cost.stepsTaken) ?? "?"} steps`);
   return lines.join("\n");

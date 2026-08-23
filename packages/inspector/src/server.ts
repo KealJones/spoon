@@ -47,14 +47,24 @@ export function episodeDetail(value: unknown): EpisodeDetail {
     "teacher_interaction",
     "teacherInteraction",
   );
+  const proposal = teacher ? recordAt(teacher, "proposal") : undefined;
   const provenance = teacher
-    ? (recordAt(teacher, "provenance") ?? teacher)
+    ? (recordAt(teacher, "provenance") ??
+      recordAt(proposal, "provenance") ??
+      teacher)
     : undefined;
-  const validation = teacher ? recordAt(teacher, "validation") : undefined;
+  const validation = teacher
+    ? (recordAt(proposal, "validation") ?? recordAt(teacher, "validation"))
+    : undefined;
   const evaluation = recordAt(episode, "evaluation");
   const cost = recordAt(episode, "cost") ?? {};
   const action = stringAt(episode, "action");
-  const proposedContent = teacher?.content;
+  const proposedContent = proposal?.content ?? teacher?.content;
+  const proposalKind = stringAt(
+    isRecord(proposedContent) ? proposedContent : undefined,
+    "proposalKind",
+    "proposal_kind",
+  );
   const observed = valueAt(episode, "observed_result", "observedResult");
   const teacherError = stringAt(teacher, "providerError", "provider_error");
   const rung = valueAt(cost, "rung_reached", "rungReached");
@@ -87,6 +97,7 @@ export function episodeDetail(value: unknown): EpisodeDetail {
         model: stringAt(provenance, "model"),
         source: stringAt(teacher, "source") ?? stringAt(provenance, "teacher"),
         proposal: proposedContent,
+        proposalKind,
         proposalSummary: summarizeProposal(proposedContent),
         providerError: teacherError,
         validation:
@@ -102,6 +113,14 @@ export function episodeDetail(value: unknown): EpisodeDetail {
       learning: compact({
         action: action ?? "no reusable procedure",
         summary: learningSummary(action),
+        answerSource:
+          action === "teacher-observation:provisional"
+            ? "teacher-provided external observation (unverified)"
+            : undefined,
+        reusableKnowledge:
+          action === "teacher-observation:provisional"
+            ? false
+            : undefined,
         procedures: proposedNames(proposedContent, "procedures"),
         concepts: proposedNames(proposedContent, "concepts"),
         provenanceEpisode: stringAt(
@@ -256,8 +275,14 @@ function summarizeProposal(content: unknown): string | undefined {
       ...(lesson ? proposedNames(lesson, "procedures") : []),
     ]),
   ];
-  if (kind)
-    return `${kind.replaceAll("_", " ")}${names.length ? `: ${names.join(", ")}` : ""}`;
+  if (kind) {
+    const suffix = names.length
+      ? `: ${names.join(", ")}`
+      : answer !== undefined
+        ? `: ${typeof answer === "string" ? answer : JSON.stringify(answer)}`
+        : "";
+    return `${kind.replaceAll("_", " ")}${suffix}`;
+  }
   if (answer !== undefined) return "Teacher proposed a direct answer.";
   return "Teacher returned a structured proposal.";
 }
@@ -291,6 +316,8 @@ function summarizeCheck(value: unknown): JsonRecord | unknown {
 function learningSummary(action: string | undefined): string {
   if (!action || action === "answer-only")
     return "No reusable procedure was learned.";
+  if (action === "teacher-observation:provisional")
+    return "Teacher supplied a provisional external answer; no reusable lesson or procedure was proposed or admitted.";
   if (/reuse|recall/i.test(action)) return "Reused an existing procedure.";
   if (/learn|promot|create/i.test(action))
     return "Learned or promoted reusable knowledge.";

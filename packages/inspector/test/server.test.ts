@@ -76,6 +76,7 @@ test("episode narrative explains teacher, validation, learning, outcome, and cos
         concepts: [{ name: "DOUBLE" }],
       },
     },
+    proposalKind: "reusable_lesson",
     proposalSummary: "reusable lesson: DOUBLE",
     validation: {
       status: "verified",
@@ -104,6 +105,54 @@ test("episode narrative explains teacher, validation, learning, outcome, and cos
     success: true,
     details: "exact match",
     surprise: 0,
+  });
+});
+
+test("episode narrative unwraps nested teacher observations", () => {
+  const detail = episodeDetail({
+    id: "episode-observation",
+    situation: "first line of README",
+    action: "teacher-observation:provisional",
+    prediction: "# EKG",
+    observed_result: null,
+    teacher_interaction: {
+      request: { situation: "first line of README" },
+      proposal: {
+        provenance: {
+          provider: "codex",
+          model: "gpt-5.6-sol",
+          teacher: "codex:gpt-5.6-sol",
+        },
+        content: {
+          proposalKind: "external_observation",
+          answer: "# EKG",
+        },
+        validation: { status: "provisional" },
+      },
+    },
+  });
+
+  assert.deepEqual(detail.narrative.teacher, {
+    used: true,
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    source: "codex:gpt-5.6-sol",
+    proposal: {
+      proposalKind: "external_observation",
+      answer: "# EKG",
+    },
+    proposalKind: "external_observation",
+    proposalSummary: "external observation: # EKG",
+    validation: { status: "provisional" },
+  });
+  assert.deepEqual(detail.narrative.learning, {
+    action: "teacher-observation:provisional",
+    summary:
+      "Teacher supplied a provisional external answer; no reusable lesson or procedure was proposed or admitted.",
+    answerSource: "teacher-provided external observation (unverified)",
+    reusableKnowledge: false,
+    procedures: [],
+    concepts: [],
   });
 });
 
