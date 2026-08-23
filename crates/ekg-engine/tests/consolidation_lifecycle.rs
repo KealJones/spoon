@@ -94,12 +94,57 @@ fn trusted_candidate_moves_through_shadow_promotion_and_reconstructible_retireme
         2
     );
 
+    let mut successor_candidate = candidate.clone();
+    successor_candidate.name = "DOUBLE successor".into();
+    successor_candidate.rationale = "independently verified successor".into();
+    let successor = engine
+        .register_skill_candidate(&successor_candidate)
+        .unwrap();
+    engine
+        .evaluate_skill_for_shadow(
+            &successor.id,
+            [PromotionReplay {
+                episode_id: first.episode.id,
+                incumbent_correct: true,
+                challenger_correct: true,
+                incumbent_trace_steps: Some(2),
+                challenger_trace_steps: Some(1),
+                incumbent_candidates_explored: Some(4),
+                challenger_candidates_explored: Some(2),
+                transfer: false,
+            }],
+        )
+        .unwrap();
+    engine
+        .record_skill_shadow_live_win(
+            &successor.id,
+            Value::Int(4),
+            BTreeMap::from([("x".into(), Value::Int(2))]),
+            Evaluation {
+                tier: VerifiabilityTier::Hard,
+                success: true,
+                details: "successor live check".into(),
+                surprise: None,
+            },
+            "local-test-verifier",
+        )
+        .unwrap();
     let retired = engine
-        .retire_managed_skill(&managed.id, "skill-successor", "subsumed")
+        .retire_managed_skill(&managed.id, &successor.id, "subsumed")
         .unwrap();
     assert_eq!(retired.lifecycle, SkillLifecycle::Retired);
     assert!(retired.retirement.unwrap().reconstructible);
     assert_eq!(engine.list_managed_skills(8).unwrap()[0].id, managed.id);
+}
+
+#[test]
+fn retirement_rejects_missing_or_unpromoted_successors() {
+    let engine = Engine::in_memory_with_admin("retirement-boundary").unwrap();
+    assert!(
+        engine
+            .retire_managed_skill("old", "missing", "subsumed")
+            .is_err()
+    );
 }
 
 #[test]

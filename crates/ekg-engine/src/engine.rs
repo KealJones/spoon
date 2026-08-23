@@ -1048,6 +1048,26 @@ impl Engine {
         successor_skill: &str,
         reason: &str,
     ) -> Result<crate::ManagedSkill, EngineError> {
+        if skill_id == successor_skill {
+            return Err(EngineError::InvalidInput(
+                "a skill cannot retire in favor of itself".into(),
+            ));
+        }
+        let successor = self.skills.get(successor_skill)?.ok_or_else(|| {
+            EngineError::InvalidInput(format!(
+                "retirement successor {successor_skill} is not a managed skill"
+            ))
+        })?;
+        if successor.lifecycle != crate::SkillLifecycle::Promoted {
+            return Err(EngineError::InvalidInput(
+                "retirement requires a promoted successor with live verification".into(),
+            ));
+        }
+        if successor.candidate.failure_critic {
+            return Err(EngineError::InvalidInput(
+                "a failure critic cannot be the successor of an executable skill".into(),
+            ));
+        }
         let record = ekg_adapt::retire_skill(skill_id, successor_skill, reason);
         self.skills.retire(skill_id, &record)
     }
