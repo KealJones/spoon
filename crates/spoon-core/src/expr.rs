@@ -26,6 +26,16 @@ pub enum Expr {
         procedure: ProcedureId,
         args: Vec<Expr>,
     },
+    /// Invoke one immutable revision of an already known pure procedure.
+    ///
+    /// Unlike `Call`, this carries its required revision in the durable
+    /// expression so a learned composition cannot silently change behavior
+    /// when the dependency receives a later revision.
+    CallExact {
+        procedure: ProcedureId,
+        version: u32,
+        args: Vec<Expr>,
+    },
     If {
         cond: Box<Expr>,
         then: Box<Expr>,
@@ -66,6 +76,80 @@ pub enum Expr {
         var: String,
         body: Box<Expr>,
     },
+    /// Invoke an authority-free operation from a versioned intrinsic
+    /// vocabulary. Intrinsics are deterministic runtime machinery; learned
+    /// procedures compose them but cannot redefine their semantics.
+    Intrinsic {
+        version: u16,
+        op: IntrinsicOp,
+        args: Vec<Expr>,
+    },
+}
+
+/// Version 1 of Spoon's pure, portable standard-library operations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum IntrinsicOp {
+    Length,
+    TextByteLength,
+    TextScalarLength,
+    TextGraphemeLength,
+    TextSplit,
+    TextJoin,
+    TextTrim,
+    TextLowercase,
+    TextUppercase,
+    TextContains,
+    TextStartsWith,
+    TextEndsWith,
+    TextReplace,
+    CollectionContains,
+    CountEqual,
+    MapKeys,
+    MapValues,
+    JsonParse,
+    JsonStringify,
+    PathGet,
+    PathGetOptional,
+    TextNormalizeNfc,
+    TextNormalizeNfd,
+    TextNormalizeNfkc,
+    TextNormalizeNfkd,
+    TextTrimStart,
+    TextTrimEnd,
+    TextGraphemeSubstring,
+    TextIndexOf,
+    TextCount,
+    TextRepeat,
+    TextConcatMany,
+    MapEntries,
+    MapSet,
+    MapDelete,
+    MapMerge,
+    CollectionSlice,
+    CollectionReverse,
+    CollectionSort,
+    CollectionUnique,
+    CollectionFlatten,
+    CollectionZip,
+    Range,
+    TypeName,
+    ParseInt,
+    ParseFloat,
+    ParseBool,
+    ToText,
+    NumericAbs,
+    NumericSign,
+    NumericMin,
+    NumericMax,
+    NumericClamp,
+    NumericFloor,
+    NumericCeil,
+    NumericRound,
+    NumericTruncate,
+    NumericPowInt,
+    NumericPowFloat,
+    IntegerQuotient,
+    IntegerRemainder,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -117,5 +201,33 @@ impl std::fmt::Display for UnOp {
             UnOp::Neg => write!(f, "-"),
             UnOp::Not => write!(f, "!"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn intrinsic_expression_survives_json_round_trip() {
+        let expression = Expr::Intrinsic {
+            version: 1,
+            op: IntrinsicOp::PathGet,
+            args: vec![
+                Expr::Intrinsic {
+                    version: 1,
+                    op: IntrinsicOp::JsonParse,
+                    args: vec![Expr::Literal(Value::Text(
+                        r#"{"items":[{"id":7}]}"#.to_string(),
+                    ))],
+                },
+                Expr::Literal(Value::Text("items[0].id".to_string())),
+            ],
+        };
+
+        let encoded = serde_json::to_string(&expression).unwrap();
+        let decoded: Expr = serde_json::from_str(&encoded).unwrap();
+
+        assert_eq!(decoded, expression);
     }
 }

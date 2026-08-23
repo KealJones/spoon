@@ -1,6 +1,6 @@
 # Spoon implementation handoff
 
-Last updated: 2026-08-22 (complete Spoon namespace migration)
+Last updated: 2026-08-23 (foundation remediation in flight)
 
 ## Mission
 
@@ -12,6 +12,68 @@ untracked reference/archive files and the intentional whitespace-only change in
 `crates/spoon-engine/src/runtime.rs`.
 
 ## Current repository state
+
+### Authoritative active checkpoint
+
+The earlier phase summaries below are historical context and are being audited
+under the new Implementation Reality Gate in `IMPLEMENTATION-PLAN.md`. Do not
+infer current workspace health or product usability from an older “green” claim.
+
+Active work is tracked in:
+
+- `IMPLEMENTATION-PLAN.md` — Priority Foundation Completion Track and
+  seven-rung Implementation Reality Gate;
+- `PRIMITIVE-CAPABILITY-INVENTORY.md` — living `[x]/[~]/[ ]` inventory and
+  material claim-correction log;
+- `.agents/scratchpad/spoon/robust-host-capabilities-language/{context,plan,progress}.md`;
+- global Codex skill `~/.codex/skills/implementation-reality-audit`.
+
+Verified current baseline (2026-08-23; still a dirty worktree, not a release):
+
+- versioned pure intrinsic expressions are serialized in `spoon-core`, executed
+  in `spoon-exec`, and traversed by `spoon-graph`;
+- bounded Unicode normalization and text transforms, JSON/path access, and a
+  broader collection/map/conversion intrinsic slice execute; rich `pure_expr_v2`
+  Engine tests compile/persist/reuse selected procedures without a Teacher;
+- the scoped file bridge is public via `capability.invoke`: temporary-directory
+  tests prove real reads/writes, persistent grants, next-call revocation,
+  bounds, redaction, symlink-escape denial, and honest unsupported-family
+  failure;
+- `cargo fmt --all -- --check`, `cargo test --workspace --all-targets --quiet`,
+  `cargo clippy --workspace --all-targets --all-features -- -D warnings`, and
+  `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm depcheck` pass.
+- a live Codex CLI provider smoke on a clean temporary database now teaches
+  `double(7)=14` through the provider-safe JSON envelope and reuses it with
+  Teacher disabled for held-out `double(11)=22`. This is a narrow live-provider
+  proof, not broad provider parity or language competence.
+
+Current in-flight lanes (preserve partial edits; rerun evidence before claiming):
+
+- `spoon-engine/src/cycle.rs` and cycle tests: exact-version pure-procedure
+  dependency composition for `pure_expr_v2` lessons is complete and needs only
+  normal regression reruns when adjacent work lands;
+- capability/server/SDK: public scoped filesystem effects exist, but real SDK
+  invocation coverage and cognitive-cycle selection remain missing;
+- `seeds/`: schema-valid declared curriculum designs for language, structured
+  data, and programming now exist; they are explicitly not an executable seed
+  forge and have no acquisition/Teacher-OFF evidence yet.
+- numeric pure intrinsic expansion is now the active bounded standard-library
+  lane; do not claim its operations until its tests and a fresh workspace gate
+  land.
+
+Known corrected claims:
+
+- file read/write are now locally integrated through public server JSON-RPC,
+  not merely helper logic; they are still not selected by learned procedures
+  and are not production-deployment evidence;
+- sandbox execution is a deterministic fixture and injected adapter boundary,
+  not a real operating-system process/container sandbox;
+- durable capability grants and direct Rust invocation APIs exist, but cognitive
+  cycle and public transport integration were incomplete at audit time.
+
+Do not commit the broad dirty worktree as one batch: it contains multiple prior
+user/agent changes that cannot be safely attributed. Do not claim the workspace
+green while concurrent edits are active.
 
 Latest substantive commits:
 
@@ -44,7 +106,7 @@ Latest substantive commits:
   `19d4fde`, `a38c555`, `d4ac9db`, `0195178`, `0cb123d`, `dbe8f32` — prior
   Phase 3–6 implementation slices.
 
-## Verification checkpoint
+## Historical verification checkpoint (before current remediation edits)
 
 Green after the latest integration:
 
@@ -79,14 +141,17 @@ the implementation commits.
   replay evidence from trusted source traces and an exact newer revision;
   retirement requires a promoted successor with live verification, additional
   behavior evidence, and persisted execution-shape coverage.
-- **P5:** native network/file/observe/sandbox primitives are typed and policy
-  enforced; discovery/synthesis, local validation, revocable grants, actual
-  adapter-backed invocation, clean-instance bundle round trips, bounded
+- **P5:** native network/file/observe/sandbox requests are typed and policy
+  enforced at direct helper/injected-adapter boundaries; discovery/synthesis,
+  local validation, revocable grants, direct Rust adapter-backed invocation,
+  clean-instance bundle round trips, bounded
   curiosity scheduling, held-out regression-gated representation activation,
   and broad mutation authorization are present. Bundle
   format v2 is deterministic, content-addressed, dependency-closed,
   quarantine-first, locally revalidated, and rejects secrets, local authority,
   malformed reconstruction, and over-permissioned procedures atomically.
+  This does not prove public app invocation, cognitive-cycle integration, or a
+  real OS sandbox; those are active remediation items above.
 - **P6.1:** inspector exposes bounded graph/relationship/procedure/episode/
   contradiction/dependency/replay views and a redacted human-readable episode
   narrative; CLI `ask --explain` has parity for teacher, prediction,
@@ -110,6 +175,85 @@ follow-on research tasks rather than unverified claims of completion:
    storage/API path.
 
 ## Next recovery steps
+
+### Phase 7 checkpoint (uncommitted working tree)
+
+The current working tree contains the Phase 7 implementation slice. Preserve
+these edits; they are intentionally not committed yet so the user can review
+the complete batch:
+
+- `packages/cli/src/config.ts`, `config.schema.json`, and `admin.ts` implement
+  strict hierarchical config, source/shadow diagnostics, atomic layer writes,
+  user-layer admin mutations, teacher enablement, permission modes, recall
+  defaults, database pointer changes, and redacted admin receipts.
+- `crates/spoon-core`, `spoon-episode`, `spoon-reason`, and `spoon-engine`
+  carry durable session IDs/visibility/turn indices and global/session/none
+  recall policy through public cycles.
+- `crates/spoon-server` and `packages/sdk` expose session lifecycle and
+  filtered episode APIs; `packages/cli` exposes `session`, `chat`, config
+  diagnostics, per-call recall/permission flags, and deterministic natural
+  admin requests.
+- `packages/cli/src/benchmark.ts` and `benchmarks/benchmark.schema.json`
+  validate and run developmental experiment phases through public
+  `session`/`ask` subprocesses, including Teacher-ON acquisition and
+  Teacher-OFF retention. The source of truth is `ekg-benchmark-suite/`, with
+  the executable catalog in `benchmarks/catalog.json` and starter experiments
+  in `benchmarks/fixtures/`; the old downloaded seed format is intentionally
+  not supported.
+- `runBenchmark` now accepts `benchmarks/catalog.json` as well as an individual
+  fixture, resolves suite IDs to fixture files, runs each fixture through the
+  public path, and writes an aggregate report with one telemetry run ID per
+  fixture.
+- `packages/cli/src/judge.ts` implements the post-run Judge protocol. It
+  reuses the Claude/Codex CLI and OpenAI/Ollama/human structured-output
+  adapters through protocol-specific system/prompt overrides, receives only
+  immutable redacted benchmark evidence, and has no Spoon write path. Judge
+  verdicts are required for a judged benchmark step to pass and persist their
+  provider/model/request provenance in the report.
+- `crates/spoon-capability` contains local `ask`, `workspace`, and
+  `full-access` permission policies. Full access still enforces declared
+  effects, bounds, contracts, provenance, quarantine/revalidation, and
+  mandatory denials.
+
+Validation checkpoint for this slice:
+
+- `cargo test --workspace --all-targets --quiet`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm depcheck`
+- `git diff --check`
+
+Benchmark validation after the catalog/fixture update:
+
+- `pnpm typecheck`
+- `pnpm test`, `pnpm build`, and `pnpm depcheck` after the Judge backend work
+- all 13 catalog fixture files parse through `parseBenchmarkFixture`
+- catalog references resolve to existing fixture files
+- `git diff --check`
+
+All passed after the latest edits. The remaining Phase 7 work is the broader
+P7.6 adversarial matrix and richer permission-grant/interactive-confirmation
+UX; do not claim those as complete without adding their tests.
+
+### Numeric intrinsic slice (2026-08-23)
+
+The current uncommitted work also adds a bounded version-1 numeric standard
+library slice. `spoon-core::IntrinsicOp` and the `pure_expr_v2` Teacher schema /
+compiler now expose finite-safe absolute value, sign, min/max, clamp,
+floor/ceil/round/truncate, checked integer power, finite float power, and
+strict integer quotient/remainder. Integer power uses checked exponentiation by
+squaring; negative exponents return the typed `NegativeExponent` error, integer
+overflow returns `ArithmeticOverflow`, and non-finite numeric inputs/results or
+inverted clamp bounds return typed `InvalidNumber` errors. The evaluator and
+Teacher-authored engine paths have focused tests; no logarithm, root,
+trigonometric, random, decimal, or rational claims are implied.
+
+Focused validation after this slice:
+
+- `cargo test -p spoon-core --lib`: 3 passed.
+- `cargo test -p spoon-exec --lib`: 46 passed.
+- `cargo test -p spoon-engine --test cycle`: 42 passed.
+- `cargo clippy -p spoon-exec -p spoon-engine --all-targets -- -D warnings`:
+  passed.
 
 1. Run the strict-audit items above against current code/tests.
 2. Implement only missing invariants with focused adversarial tests, preserving

@@ -16,6 +16,7 @@ import type {
   Clock,
   Fetch,
   IdFactory,
+  PromptBuilder,
   Teacher,
   TeacherProposal,
   TeacherRequest,
@@ -28,6 +29,8 @@ export interface OllamaTeacherOptions {
   reliabilityTracker?: SourceReliabilityTracker;
   now?: Clock;
   idFactory?: IdFactory;
+  systemPrompt?: string;
+  promptBuilder?: PromptBuilder;
 }
 
 interface OllamaResponse {
@@ -43,6 +46,8 @@ export class OllamaTeacher implements Teacher {
   readonly #now: Clock;
   readonly #idFactory: IdFactory;
   readonly #source: string;
+  readonly #systemPrompt: string;
+  readonly #promptBuilder: PromptBuilder;
 
   constructor(options: OllamaTeacherOptions = {}) {
     this.#model = options.model ?? "qwen3:8b";
@@ -56,6 +61,8 @@ export class OllamaTeacher implements Teacher {
     this.#now = options.now ?? defaultClock;
     this.#idFactory = options.idFactory ?? defaultIdFactory;
     this.#source = `ollama:${this.#model}`;
+    this.#systemPrompt = options.systemPrompt ?? TEACHER_SYSTEM_PROMPT;
+    this.#promptBuilder = options.promptBuilder ?? buildTeacherPrompt;
   }
 
   async propose(request: TeacherRequest): Promise<TeacherProposal> {
@@ -68,8 +75,8 @@ export class OllamaTeacher implements Teacher {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             model: this.#model,
-            prompt: buildTeacherPrompt(request),
-            system: TEACHER_SYSTEM_PROMPT,
+            prompt: this.#promptBuilder(request),
+            system: this.#systemPrompt,
             stream: false,
             format: request.desiredOutput,
           }),

@@ -21,6 +21,8 @@ import type {
   Clock,
   CommandRunner,
   IdFactory,
+  PromptBuilder,
+  ProposalSchema,
   Teacher,
   TeacherProposal,
   TeacherRequest,
@@ -33,6 +35,8 @@ export interface CodexTeacherOptions {
   reliabilityTracker?: SourceReliabilityTracker;
   now?: Clock;
   idFactory?: IdFactory;
+  systemPrompt?: string;
+  promptBuilder?: PromptBuilder;
 }
 
 export class CodexTeacher implements Teacher {
@@ -43,6 +47,8 @@ export class CodexTeacher implements Teacher {
   readonly #now: Clock;
   readonly #idFactory: IdFactory;
   readonly #source: string;
+  readonly #systemPrompt: string;
+  readonly #promptBuilder: PromptBuilder;
 
   constructor(options: CodexTeacherOptions = {}) {
     this.#command = options.command ?? "codex";
@@ -53,6 +59,8 @@ export class CodexTeacher implements Teacher {
     this.#now = options.now ?? defaultClock;
     this.#idFactory = options.idFactory ?? defaultIdFactory;
     this.#source = `codex:${this.#model ?? "default"}`;
+    this.#systemPrompt = options.systemPrompt ?? TEACHER_SYSTEM_PROMPT;
+    this.#promptBuilder = options.promptBuilder ?? buildTeacherPrompt;
   }
 
   async propose(request: TeacherRequest): Promise<TeacherProposal> {
@@ -62,7 +70,9 @@ export class CodexTeacher implements Teacher {
     const schemaPath = path.join(directory, "proposal.schema.json");
     const outputPath = path.join(directory, "proposal.json");
     try {
-      await writeFile(schemaPath, JSON.stringify(request.desiredOutput));
+      const outputSchema = lowerCodexSchema(request.desiredOutput);
+      const usesJsonEnvelope = outputSchema === CODEX_JSON_ENVELOPE_SCHEMA;
+      await writeFile(schemaPath, JSON.stringify(outputSchema));
       const args = [
         "exec",
         "--ephemeral",
@@ -79,8 +89,15 @@ export class CodexTeacher implements Teacher {
         "never",
       ];
       if (this.#model !== undefined) args.push("--model", this.#model);
+      const providerRequest =
+        outputSchema === request.desiredOutput
+          ? request
+          : { ...request, desiredOutput: outputSchema };
+      const envelopeInstruction = usesJsonEnvelope
+        ? "The required outer object has proposalJson. Put the complete canonical Spoon proposal JSON as an escaped JSON string in proposalJson; include proposalKind, interpretations, lesson, procedure, answer, and abstainReason."
+        : "";
       args.push(
-        `${TEACHER_SYSTEM_PROMPT}\n\n${buildTeacherPrompt(request)}\n\nReturn only the requested JSON object.`,
+        `${this.#systemPrompt}\n\n${this.#promptBuilder(providerRequest)}\n\n${envelopeInstruction}\n\nReturn only the requested JSON object.`,
       );
 
       const result = await atProviderBoundary(
@@ -99,8 +116,9 @@ export class CodexTeacher implements Teacher {
         "command did not write its final response",
         () => readFile(outputPath, "utf8"),
       );
+      const parsed = parseJsonContent("codex", content);
       return makeProposal({
-        content: parseJsonContent("codex", content),
+        content: usesJsonEnvelope ? unwrapCodexJsonEnvelope(parsed) : parsed,
         provider: "codex",
         source: this.#source,
         model: this.#model,
@@ -125,4 +143,52 @@ export class CodexTeacher implements Teacher {
       reliabilityTracker: this.#tracker,
     });
   }
+}
+
+/**
+ * Codex CLI currently rejects Spoon's recursive `$defs`/`$ref` lesson
+ * grammar. Keep the canonical schema for prompts and local validation, while
+ * giving only that provider a non-recursive envelope: the lesson remains an
+ * opaque JSON object at the CLI boundary and must still pass the canonical
+ * validator before Spoon uses it.
+ */
+export function lowerCodexSchema(schema: ProposalSchema): ProposalSchema {
+  return needsCodexJsonEnvelope(schema) ? CODEX_JSON_ENVELOPE_SCHEMA : schema;
+}
+
+const CODEX_JSON_ENVELOPE_SCHEMA: ProposalSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: { proposalJson: { type: "string" } },
+  required: ["proposalJson"],
+};
+
+function needsCodexJsonEnvelope(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(needsCodexJsonEnvelope);
+  if (typeof value !== "object" || value === null) return false;
+  return Object.entries(value).some(
+    ([key, child]) =>
+      key === "$defs" ||
+      key === "$ref" ||
+      (key === "type" && Array.isArray(child)) ||
+      needsCodexJsonEnvelope(child),
+  );
+}
+
+function unwrapCodexJsonEnvelope(value: unknown) {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value) ||
+    typeof (value as { proposalJson?: unknown }).proposalJson !== "string"
+  ) {
+    throw new TeacherError(
+      "codex",
+      "structured output did not contain proposalJson",
+    );
+  }
+  return parseJsonContent(
+    "codex",
+    (value as { proposalJson: string }).proposalJson,
+  );
 }

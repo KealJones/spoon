@@ -8,17 +8,34 @@ import {
   type RecordContradictionInput,
   type RefineContradictionInput,
 } from "@spoon/sdk";
+import { createInterface } from "node:readline/promises";
+import { stdin as input, stdout as output } from "node:process";
 
 import { createConfiguredTeacher, runCycle } from "./cycle.js";
+import {
+  runBenchmark,
+  renderBenchmarkReport,
+  loadBenchmarkReport,
+} from "./benchmark.js";
 import {
   adminTokenFromEnvironment,
   loadProjectEnvironment,
 } from "./environment.js";
+import {
+  applyConfigEnvironment,
+  configLayerPath,
+  redactedConfig,
+  resolveConfig,
+  setConfigValue,
+  validateConfigMutation,
+} from "./config.js";
+import { tryHandleAdminRequest } from "./admin.js";
 import { parseCommand, type Command } from "./parse.js";
 
 async function execute(
   client: SpoonClient,
   command: Command,
+  resolvedConfig: Awaited<ReturnType<typeof resolveConfig>>,
 ): Promise<unknown> {
   switch (command.kind) {
     case "concept.add":
@@ -92,14 +109,119 @@ async function execute(
       return client.getClaimUncertainty(command.claimId);
     case "primitive.observe":
       return client.observePrimitive(command.target);
+    case "session.start":
+      return client.createSession(
+        command.name,
+        command.isolated ? "isolated" : "global",
+      );
+    case "session.list":
+      return client.listSessions();
+    case "session.show":
+      return client.getSession(command.idOrName);
+    case "session.end":
+      return client.endSession(command.idOrName);
+    case "chat.run":
+      return runChat(client, command);
     case "cycle.run":
-      return runCycle(client, command.situation, createConfiguredTeacher());
+      return runCycle(
+        client,
+        command.situation,
+        command.teacher === "off" ||
+          (command.teacher !== "on" && !resolvedConfig.config.teacher.enabled)
+          ? undefined
+          : createConfiguredTeacher(),
+        {
+          sessionId: command.session,
+          recallMode: command.recall,
+          permissionMode: command.permissionMode,
+        },
+      );
   }
 }
 
 async function main(): Promise<void> {
   loadProjectEnvironment();
+  const resolvedConfig = await resolveConfig();
+  applyConfigEnvironment(resolvedConfig);
   const command = parseCommand(process.argv.slice(2));
+  if (command.kind === "config.path") {
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          cwd: resolvedConfig.cwd,
+          home: resolvedConfig.homeDir,
+          files: resolvedConfig.files,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    return;
+  }
+  if (command.kind === "config.show") {
+    const output = redactedConfig(resolvedConfig);
+    if (!command.withSources) delete output.sources;
+    process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+    return;
+  }
+  if (command.kind === "config.validate") {
+    process.stdout.write(
+      `Configuration valid (${resolvedConfig.files.length} file layer${resolvedConfig.files.length === 1 ? "" : "s"}).\n`,
+    );
+    return;
+  }
+  if (command.kind === "config.set" || command.kind === "config.unset") {
+    validateConfigMutation(
+      command.layer,
+      command.key,
+      command.kind === "config.set" ? command.value : undefined,
+      resolvedConfig,
+    );
+    const filePath = configLayerPath(command.layer, resolvedConfig);
+    await setConfigValue(
+      filePath,
+      command.key,
+      command.kind === "config.set" ? command.value : undefined,
+      command.kind === "config.unset",
+    );
+    const refreshed = await resolveConfig();
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          changed: true,
+          layer: command.layer,
+          key: command.key,
+          effective: redactedConfig(refreshed).effective,
+          applies:
+            command.key === "database.path" ? "next-launch" : "next-cycle",
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    return;
+  }
+  if (command.kind === "benchmark.run") {
+    const report = await runBenchmark(command.fixturePath, command.reportPath);
+    process.stdout.write(`${renderBenchmarkReport(report)}\n`);
+    return;
+  }
+  if (command.kind === "benchmark.report") {
+    process.stdout.write(
+      `${renderBenchmarkReport(await loadBenchmarkReport(command.reportPath))}\n`,
+    );
+    return;
+  }
+  if (command.kind === "cycle.run") {
+    const adminResult = await tryHandleAdminRequest(
+      command.situation,
+      resolvedConfig,
+    );
+    if (adminResult !== null) {
+      process.stdout.write(`${adminResult}\n`);
+      return;
+    }
+  }
   const transport = StdioTransport.spawn(
     process.env.SPOON_SERVER ?? "target/debug/spoon-server",
   );
@@ -110,7 +232,11 @@ async function main(): Promise<void> {
   );
 
   try {
-    const result = await execute(client, command);
+    if (command.kind === "chat.run") {
+      await execute(client, command, resolvedConfig);
+      return;
+    }
+    const result = await execute(client, command, resolvedConfig);
     if (command.kind === "cycle.run" && command.explain) {
       process.stdout.write(`${formatExplanation(result)}\n`);
     } else if (command.kind === "cycle.run" && command.quiet) {
@@ -120,6 +246,66 @@ async function main(): Promise<void> {
     }
   } finally {
     client.close();
+  }
+}
+
+async function runChat(
+  client: SpoonClient,
+  command: Extract<Command, { kind: "chat.run" }>,
+): Promise<void> {
+  let session =
+    command.session === undefined
+      ? null
+      : await client.getSession(command.session);
+  if (session === null) {
+    session = await client.createSession(
+      command.session,
+      command.isolated ? "isolated" : "global",
+    );
+  } else if (command.isolated && session.visibility !== "isolated") {
+    throw new Error("an existing global session cannot be changed to isolated");
+  }
+  const reader = createInterface({ input, output });
+  output.write(
+    `Spoon chat — session ${session.name ?? session.id}${session.visibility === "isolated" ? " [ISOLATED]" : ""}\n`,
+  );
+  try {
+    while (true) {
+      const question = (await reader.question("spoon> ")).trim();
+      if (question === "" || question === ":quit" || question === ":exit")
+        break;
+      try {
+        const currentConfig = await resolveConfig();
+        const adminResult = await tryHandleAdminRequest(
+          question,
+          currentConfig,
+        );
+        if (adminResult !== null) {
+          applyConfigEnvironment(currentConfig);
+          output.write(`${adminResult}\n`);
+          continue;
+        }
+        const result = await runCycle(
+          client,
+          question,
+          currentConfig.config.teacher.enabled
+            ? createConfiguredTeacher()
+            : undefined,
+          {
+            sessionId: session.id,
+            recallMode: command.recall,
+            permissionMode: command.permissionMode,
+          },
+        );
+        output.write(`${formatQuietAnswer(result)}\n`);
+      } catch (error) {
+        output.write(
+          `Error: ${error instanceof Error ? error.message : String(error)}\n`,
+        );
+      }
+    }
+  } finally {
+    reader.close();
   }
 }
 

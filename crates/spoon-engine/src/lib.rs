@@ -24,7 +24,7 @@ pub use credit::{
     VersionPinnedReplayer,
 };
 pub use cycle::{
-    CycleBudget, CycleDisposition, CycleId, CycleInput, CycleOutcome, CycleProgress,
+    CycleBudget, CycleDisposition, CycleId, CycleInput, CycleOutcome, CycleProgress, RecallMode,
     TeacherProposalWire, TeacherRequestWire,
 };
 pub use engine::{

@@ -6,10 +6,11 @@ use serde_json::{Value as JsonValue, json};
 use sha2::{Digest, Sha256};
 use spoon_core::{
     Assumption, BinOp, Concept, ConceptId, Condition, Contract, Episode, EpisodeCost, EpisodeId,
-    EscalationRung, Evaluation, Expr, KnowledgeCandidate, Lifecycle, MutabilityClass, Param,
-    Procedure, ReasoningTrace, Relationship, SpoonError, TraceStep, TraceStepStatus, UnOp, Value,
-    VerifiabilityTier,
+    EscalationRung, Evaluation, Expr, IntrinsicOp, KnowledgeCandidate, Lifecycle, MutabilityClass,
+    Param, Procedure, ProcedureId, ReasoningTrace, Relationship, SessionId, SessionVisibility,
+    SpoonError, TraceStep, TraceStepStatus, UnOp, Value, VerifiabilityTier,
 };
+use spoon_episode::EpisodeRecallMode;
 use spoon_exec::ExecTrace;
 use spoon_reason::{
     ContextAssembler, ContextConfig, ContextRequest, InterpretationCandidate, InterpretationSet,
@@ -33,6 +34,12 @@ const MAX_LESSON_CONDITIONS: usize = 16;
 const MAX_LESSON_INSTRUCTIONS: usize = 64;
 const MAX_LESSON_KEY_CHARS: usize = 128;
 const MAX_LESSON_NAME_CHARS: usize = 256;
+const MAX_LESSON_EXPR_NODES: usize = 512;
+const MAX_LESSON_EXPR_DEPTH: usize = 32;
+const MAX_LESSON_EXPR_CHILDREN: usize = 64;
+const MAX_LESSON_VALUE_ITEMS: usize = 64;
+const MAX_LESSON_VALUE_DEPTH: usize = 8;
+const MAX_LESSON_DEPENDENCIES: usize = 16;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CycleId(pub Uuid);
@@ -56,6 +63,15 @@ pub struct CycleBudget {
     pub max_teacher_turns: u32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RecallMode {
+    #[default]
+    Global,
+    Session,
+    None,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CycleInput {
     pub situation: String,
@@ -63,6 +79,12 @@ pub struct CycleInput {
     pub assumptions: Vec<Assumption>,
     pub budget: CycleBudget,
     pub teacher_allowed: bool,
+    #[serde(default)]
+    pub session_id: Option<String>,
+    #[serde(default)]
+    pub recall_mode: RecallMode,
+    #[serde(default)]
+    pub permission_mode: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -114,8 +136,20 @@ pub enum CycleProgress {
 pub(crate) struct PendingCycle {
     input: CycleInput,
     request: TeacherRequestWire,
+    #[serde(default)]
+    dependency_allowlist: Vec<TeacherDependency>,
     initial_interpretations: Vec<ResolvedInterpretation>,
     prior_failure: Option<JsonValue>,
+}
+
+/// An engine-owned reference captured with the Teacher request. This is never
+/// supplied by the Teacher: it maps a short request-local alias to the exact
+/// stored revision that was eligible when the request was issued.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct TeacherDependency {
+    alias: String,
+    procedure: ProcedureId,
+    version: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -209,7 +243,7 @@ struct ProcedureDraft {
     name: String,
     concept: ConceptReferenceDraft,
     parameters: Vec<ParameterDraft>,
-    body: ProgramDraft,
+    body: JsonValue,
     contract: ContractDraft,
 }
 
@@ -253,7 +287,175 @@ struct ContractDraft {
 #[serde(deny_unknown_fields)]
 struct ConditionDraft {
     description: String,
-    check: ProgramDraft,
+    check: JsonValue,
+}
+
+/// The versioned recursive grammar used by `pure_expr_v2`. It deliberately
+/// has no call/effect node: teachers can compose only engine-owned pure
+/// intrinsics, never name or mint executable procedures.
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", tag = "kind", deny_unknown_fields)]
+enum ExprDraft {
+    Literal {
+        value: Value,
+    },
+    Parameter {
+        name: String,
+    },
+    Result,
+    Binary {
+        op: BinaryOpDraft,
+        left: Box<ExprDraft>,
+        right: Box<ExprDraft>,
+    },
+    Unary {
+        op: UnaryOpDraft,
+        operand: Box<ExprDraft>,
+    },
+    If {
+        condition: Box<ExprDraft>,
+        then: Box<ExprDraft>,
+        #[serde(rename = "else")]
+        else_: Box<ExprDraft>,
+    },
+    Let {
+        name: String,
+        value: Box<ExprDraft>,
+        body: Box<ExprDraft>,
+    },
+    List {
+        items: Vec<ExprDraft>,
+    },
+    Index {
+        collection: Box<ExprDraft>,
+        index: Box<ExprDraft>,
+    },
+    Field {
+        object: Box<ExprDraft>,
+        field: String,
+    },
+    Map {
+        collection: Box<ExprDraft>,
+        var: String,
+        body: Box<ExprDraft>,
+    },
+    Filter {
+        collection: Box<ExprDraft>,
+        var: String,
+        predicate: Box<ExprDraft>,
+    },
+    Reduce {
+        collection: Box<ExprDraft>,
+        init: Box<ExprDraft>,
+        acc: String,
+        var: String,
+        body: Box<ExprDraft>,
+    },
+    Intrinsic {
+        version: u16,
+        op: IntrinsicOpDraft,
+        args: Vec<ExprDraft>,
+    },
+    Dependency {
+        alias: String,
+        args: Vec<ExprDraft>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum BinaryOpDraft {
+    Add,
+    #[serde(alias = "sub")]
+    Subtract,
+    #[serde(alias = "mul")]
+    Multiply,
+    #[serde(alias = "div")]
+    Divide,
+    #[serde(alias = "mod")]
+    Modulo,
+    Equal,
+    NotEqual,
+    LessThan,
+    LessOrEqual,
+    GreaterThan,
+    GreaterOrEqual,
+    And,
+    Or,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum UnaryOpDraft {
+    #[serde(alias = "neg")]
+    Negate,
+    Not,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum IntrinsicOpDraft {
+    Length,
+    TextByteLength,
+    TextScalarLength,
+    TextGraphemeLength,
+    TextSplit,
+    TextJoin,
+    TextTrim,
+    TextLowercase,
+    TextUppercase,
+    TextContains,
+    TextStartsWith,
+    TextEndsWith,
+    TextReplace,
+    CollectionContains,
+    CountEqual,
+    MapKeys,
+    MapValues,
+    JsonParse,
+    JsonStringify,
+    PathGet,
+    PathGetOptional,
+    TextNormalizeNfc,
+    TextNormalizeNfd,
+    TextNormalizeNfkc,
+    TextNormalizeNfkd,
+    TextTrimStart,
+    TextTrimEnd,
+    TextGraphemeSubstring,
+    TextIndexOf,
+    TextCount,
+    TextRepeat,
+    TextConcatMany,
+    MapEntries,
+    MapSet,
+    MapDelete,
+    MapMerge,
+    CollectionSlice,
+    CollectionReverse,
+    CollectionSort,
+    CollectionUnique,
+    CollectionFlatten,
+    CollectionZip,
+    Range,
+    TypeName,
+    ParseInt,
+    ParseFloat,
+    ParseBool,
+    ToText,
+    NumericAbs,
+    NumericSign,
+    NumericMin,
+    NumericMax,
+    NumericClamp,
+    NumericFloor,
+    NumericCeil,
+    NumericRound,
+    NumericTruncate,
+    NumericPowInt,
+    NumericPowFloat,
+    IntegerQuotient,
+    IntegerRemainder,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -288,6 +490,7 @@ enum InstructionDraft {
 #[derive(Debug, Clone)]
 struct CompiledLesson {
     idempotency_key: String,
+    allows_structured_values: bool,
     concepts: Vec<Concept>,
     relationships: Vec<Relationship>,
     procedures: Vec<Procedure>,
@@ -397,7 +600,8 @@ impl Engine {
         }
 
         if input.teacher_allowed && input.budget.max_teacher_turns > 0 {
-            let request = self.teacher_request(&input, &interpretations)?;
+            let dependency_allowlist = self.pure_teacher_dependencies()?;
+            let request = self.teacher_request(&input, &interpretations, &dependency_allowlist)?;
             let mut pending_input = input;
             pending_input.budget.max_teacher_turns =
                 pending_input.budget.max_teacher_turns.saturating_sub(1);
@@ -406,6 +610,7 @@ impl Engine {
                 PendingCycle {
                     input: pending_input,
                     request: request.clone(),
+                    dependency_allowlist,
                     initial_interpretations: interpretations,
                     prior_failure: None,
                 },
@@ -553,9 +758,34 @@ impl Engine {
                         EngineError::InvalidInput(format!("invalid reusable lesson: {error}"))
                     })
                 })
-                .and_then(|draft| self.compile_lesson(&draft));
+                .and_then(|draft| self.compile_lesson(&draft, &pending.dependency_allowlist));
             match compiled {
                 Ok(lesson) => {
+                    if let Some(answer) = content.answer.as_ref()
+                        && ((lesson.allows_structured_values
+                            && validate_lesson_value(answer, 0).is_err())
+                            || (!lesson.allows_structured_values && !lesson_scalar(answer)))
+                    {
+                        if pending.input.budget.max_teacher_turns > 0 {
+                            return self.retry_reusable_lesson(
+                                cycle_id,
+                                pending,
+                                teacher_json,
+                                "lesson answer does not satisfy the selected primitive set",
+                            );
+                        }
+                        return self.complete_simple(
+                            cycle_id,
+                            &pending.input,
+                            CycleDisposition::Abstained,
+                            None,
+                            "abstain:unsafe-lesson-answer",
+                            EscalationRung::Abstain,
+                            None,
+                            Some(teacher_json),
+                            Vec::new(),
+                        );
+                    }
                     let procedure = lesson.procedures[0].clone();
                     let inputs = lesson.invocation_inputs.clone();
                     return self.execute_cycle_procedure(
@@ -782,6 +1012,15 @@ impl Engine {
     }
 
     fn recall(&self, input: &CycleInput) -> Result<Option<Value>, EngineError> {
+        if input.recall_mode == RecallMode::None {
+            return Ok(None);
+        }
+        let session_id = input
+            .session_id
+            .as_deref()
+            .map(|value| Uuid::parse_str(value).map(SessionId))
+            .transpose()
+            .map_err(|_| EngineError::InvalidInput("session_id is not a UUID".into()))?;
         let candidates = self.recall_candidates(&input.situation, 64)?;
         for candidate in candidates {
             let Some(id) = candidate.id.strip_prefix("episode:") else {
@@ -797,6 +1036,9 @@ impl Engine {
             };
             if episode.situation != input.situation
                 || episode.context.environment != input.environment
+                || (input.recall_mode == RecallMode::Global
+                    && episode.session_visibility == SessionVisibility::Isolated)
+                || (input.recall_mode == RecallMode::Session && episode.session_id != session_id)
                 || self.trust_receipt_for_episode(&episode)?.is_none()
                 || !episode.evaluation.as_ref().is_some_and(|evaluation| {
                     evaluation.success
@@ -966,9 +1208,14 @@ impl Engine {
         rejected_interaction: JsonValue,
         reason: &str,
     ) -> Result<CycleProgress, EngineError> {
-        let mut request = self.teacher_request(&pending.input, &pending.initial_interpretations)?;
+        pending.dependency_allowlist = self.pure_teacher_dependencies()?;
+        let mut request = self.teacher_request(
+            &pending.input,
+            &pending.initial_interpretations,
+            &pending.dependency_allowlist,
+        )?;
         request.specific_question = Some(format!(
-            "The reusable lesson could not be safely compiled: {}. Return one corrected pure_rpn_v1 reusable_lesson using only the advertised grammar, or answer/abstain without a lesson.",
+            "The reusable lesson could not be safely compiled: {}. Return one corrected pure_expr_v2 reusable_lesson (preferred; pure_rpn_v1 remains accepted) using only the advertised grammar, or answer/abstain without a lesson.",
             truncate_text(reason, MAX_TEACHER_TEXT_CHARS)
         ));
         if let Some(context) = request.context.as_object_mut() {
@@ -991,8 +1238,12 @@ impl Engine {
         Ok(CycleProgress::NeedTeacher { cycle_id, request })
     }
 
-    fn compile_lesson(&self, draft: &LessonDraft) -> Result<CompiledLesson, EngineError> {
-        if draft.primitive_set != "pure_rpn_v1" {
+    fn compile_lesson(
+        &self,
+        draft: &LessonDraft,
+        dependency_allowlist: &[TeacherDependency],
+    ) -> Result<CompiledLesson, EngineError> {
+        if !matches!(draft.primitive_set.as_str(), "pure_rpn_v1" | "pure_expr_v2") {
             return Err(lesson_error("unsupported primitive set"));
         }
         if draft.concepts.is_empty() || draft.concepts.len() > MAX_LESSON_CONCEPTS {
@@ -1134,14 +1385,35 @@ impl Engine {
                 description: Some(parameter_draft.description.clone()),
             });
         }
-        let (body, used_parameters) =
-            compile_lesson_program(&procedure_draft.body, &parameter_names, false)?;
+        let dependencies = dependency_allowlist
+            .iter()
+            .map(|dependency| (dependency.alias.clone(), dependency.clone()))
+            .collect::<HashMap<_, _>>();
+        if dependencies.len() != dependency_allowlist.len()
+            || dependencies.len() > MAX_LESSON_DEPENDENCIES
+        {
+            return Err(lesson_error("invalid engine dependency allow-list"));
+        }
+        let (body, used_parameters, mut used_dependencies) = compile_lesson_body(
+            &draft.primitive_set,
+            &procedure_draft.body,
+            &parameter_names,
+            false,
+            &dependencies,
+        )?;
         if parameter_names != used_parameters {
             return Err(lesson_error(
                 "a reusable procedure body must use every declared parameter",
             ));
         }
-        let contract = compile_lesson_contract(&procedure_draft.contract, &parameter_names)?;
+        let (contract, contract_dependencies) = compile_lesson_contract(
+            &draft.primitive_set,
+            &procedure_draft.contract,
+            &parameter_names,
+            &dependencies,
+        )?;
+        used_dependencies.extend(contract_dependencies);
+        self.validate_used_teacher_dependencies(&dependencies, &used_dependencies)?;
         let attached = self.resolve_lesson_concept(
             &procedure_draft.concept,
             &concept_keys,
@@ -1177,8 +1449,13 @@ impl Engine {
         }
         let mut invocation_inputs = BTreeMap::new();
         for input in &draft.invocation.inputs {
-            if !lesson_scalar(&input.value) {
-                return Err(lesson_error("lesson inputs must be scalar values"));
+            if draft.primitive_set == "pure_rpn_v1" && !lesson_scalar(&input.value) {
+                return Err(lesson_error(
+                    "pure_rpn_v1 lesson inputs must be scalar values",
+                ));
+            }
+            if draft.primitive_set == "pure_expr_v2" {
+                validate_lesson_value(&input.value, 0)?;
             }
             if invocation_inputs
                 .insert(input.name.clone(), input.value.clone())
@@ -1198,6 +1475,7 @@ impl Engine {
         };
         Ok(CompiledLesson {
             idempotency_key,
+            allows_structured_values: draft.primitive_set == "pure_expr_v2",
             concepts,
             relationships,
             procedures: vec![procedure],
@@ -1238,10 +1516,177 @@ impl Engine {
         }
     }
 
+    fn pure_teacher_dependencies(&self) -> Result<Vec<TeacherDependency>, EngineError> {
+        let mut procedures = self
+            .graph
+            .list_procedures()?
+            .into_iter()
+            .filter(|procedure| {
+                matches!(
+                    procedure.lifecycle,
+                    Lifecycle::Active | Lifecycle::Validated
+                )
+            })
+            .collect::<Vec<_>>();
+        procedures.sort_by(|left, right| {
+            left.name
+                .to_lowercase()
+                .cmp(&right.name.to_lowercase())
+                .then_with(|| left.id.0.cmp(&right.id.0))
+        });
+
+        let mut dependencies = Vec::new();
+        for procedure in procedures {
+            let mut visiting = HashSet::new();
+            if !self.procedure_is_closed_pure(&procedure, &mut visiting)? {
+                continue;
+            }
+            let alias = format!("pure_dependency_{}", dependencies.len());
+            dependencies.push(TeacherDependency {
+                alias,
+                procedure: procedure.id,
+                version: procedure.version,
+            });
+            if dependencies.len() == MAX_LESSON_DEPENDENCIES {
+                break;
+            }
+        }
+        Ok(dependencies)
+    }
+
+    fn validate_used_teacher_dependencies(
+        &self,
+        dependencies: &HashMap<String, TeacherDependency>,
+        used: &HashSet<String>,
+    ) -> Result<(), EngineError> {
+        for alias in used {
+            let dependency = dependencies
+                .get(alias)
+                .ok_or_else(|| lesson_error("lesson referenced an unadvertised procedure alias"))?;
+            let current = self
+                .graph
+                .get_procedure(dependency.procedure)?
+                .ok_or_else(|| lesson_error("advertised procedure dependency is absent"))?;
+            if current.version != dependency.version {
+                return Err(lesson_error(
+                    "advertised procedure dependency changed revision before lesson admission",
+                ));
+            }
+            let mut visiting = HashSet::new();
+            if !matches!(current.lifecycle, Lifecycle::Active | Lifecycle::Validated)
+                || !self.procedure_is_closed_pure(&current, &mut visiting)?
+            {
+                return Err(lesson_error(
+                    "advertised procedure dependency is no longer a pure executable procedure",
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn procedure_is_closed_pure(
+        &self,
+        procedure: &Procedure,
+        visiting: &mut HashSet<(ProcedureId, u32)>,
+    ) -> Result<bool, EngineError> {
+        if !visiting.insert((procedure.id, procedure.version)) {
+            return Ok(false);
+        }
+        let checks = procedure
+            .contract
+            .requires
+            .iter()
+            .chain(&procedure.contract.promises)
+            .chain(&procedure.contract.fails_when)
+            .filter_map(|condition| condition.check.as_ref());
+        let pure = self.expression_is_closed_pure(&procedure.body, visiting)?
+            && checks
+                .map(|check| self.expression_is_closed_pure(check, visiting))
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
+                .all(|item| item);
+        visiting.remove(&(procedure.id, procedure.version));
+        Ok(pure)
+    }
+
+    fn expression_is_closed_pure(
+        &self,
+        expression: &Expr,
+        visiting: &mut HashSet<(ProcedureId, u32)>,
+    ) -> Result<bool, EngineError> {
+        match expression {
+            Expr::Literal(_) | Expr::Var(_) => Ok(true),
+            Expr::BinOp { left, right, .. } => Ok(self
+                .expression_is_closed_pure(left, visiting)?
+                && self.expression_is_closed_pure(right, visiting)?),
+            Expr::UnOp { operand, .. } => self.expression_is_closed_pure(operand, visiting),
+            // Old unconstrained calls have no exact provenance pin and are
+            // therefore never legal dependency candidates.
+            Expr::Call { .. } => Ok(false),
+            Expr::CallExact {
+                procedure,
+                version,
+                args,
+            } => {
+                if !args
+                    .iter()
+                    .map(|argument| self.expression_is_closed_pure(argument, visiting))
+                    .collect::<Result<Vec<_>, _>>()?
+                    .into_iter()
+                    .all(|item| item)
+                {
+                    return Ok(false);
+                }
+                let Some(exact) = self.graph.get_procedure_version(*procedure, *version)? else {
+                    return Ok(false);
+                };
+                self.procedure_is_closed_pure(&exact, visiting)
+            }
+            Expr::If { cond, then, else_ } => Ok(self.expression_is_closed_pure(cond, visiting)?
+                && self.expression_is_closed_pure(then, visiting)?
+                && self.expression_is_closed_pure(else_, visiting)?),
+            Expr::Let { value, body, .. } => Ok(self.expression_is_closed_pure(value, visiting)?
+                && self.expression_is_closed_pure(body, visiting)?),
+            Expr::Block(expressions) | Expr::ListExpr(expressions) => expressions
+                .iter()
+                .map(|item| self.expression_is_closed_pure(item, visiting))
+                .collect::<Result<Vec<_>, _>>()
+                .map(|items| items.into_iter().all(|item| item)),
+            Expr::Index { collection, index } => Ok(self
+                .expression_is_closed_pure(collection, visiting)?
+                && self.expression_is_closed_pure(index, visiting)?),
+            Expr::FieldAccess { object, .. } => self.expression_is_closed_pure(object, visiting),
+            Expr::Map {
+                collection, body, ..
+            } => Ok(self.expression_is_closed_pure(collection, visiting)?
+                && self.expression_is_closed_pure(body, visiting)?),
+            Expr::Filter {
+                collection,
+                predicate,
+                ..
+            } => Ok(self.expression_is_closed_pure(collection, visiting)?
+                && self.expression_is_closed_pure(predicate, visiting)?),
+            Expr::Reduce {
+                collection,
+                init,
+                body,
+                ..
+            } => Ok(self.expression_is_closed_pure(collection, visiting)?
+                && self.expression_is_closed_pure(init, visiting)?
+                && self.expression_is_closed_pure(body, visiting)?),
+            Expr::Intrinsic { args, .. } => args
+                .iter()
+                .map(|argument| self.expression_is_closed_pure(argument, visiting))
+                .collect::<Result<Vec<_>, _>>()
+                .map(|items| items.into_iter().all(|item| item)),
+        }
+    }
+
     fn teacher_request(
         &self,
         input: &CycleInput,
         interpretations: &[ResolvedInterpretation],
+        dependencies: &[TeacherDependency],
     ) -> Result<TeacherRequestWire, EngineError> {
         let item_limit = input
             .budget
@@ -1327,6 +1772,18 @@ impl Engine {
             })).collect::<Vec<_>>(),
             "concepts": concepts,
             "procedures": procedures,
+            "pureProcedureDependencies": dependencies.iter().map(|dependency| {
+                let procedure = self.graph.get_procedure_version(dependency.procedure, dependency.version)
+                    .ok().flatten();
+                json!({
+                    "alias": dependency.alias,
+                    "name": procedure.as_ref().map(|item| truncate_text(&item.name, MAX_TEACHER_TEXT_CHARS)).unwrap_or_else(|| "unavailable".into()),
+                    "parameters": procedure.as_ref().map(|item| item.params.iter().take(item_limit).map(|parameter| json!({
+                        "name": truncate_text(&parameter.name, MAX_TEACHER_TEXT_CHARS),
+                        "description": parameter.description.as_deref().map(|description| truncate_text(description, MAX_TEACHER_TEXT_CHARS)),
+                    })).collect::<Vec<_>>()).unwrap_or_default(),
+                })
+            }).collect::<Vec<_>>(),
             "environment": environment,
             "assumptions": assumptions,
             "budget": input.budget,
@@ -1345,7 +1802,7 @@ impl Engine {
             situation: input.situation.clone(),
             context,
             specific_question: Some(
-                "For deterministic generalizable tasks, return one safe reusable_lesson in pure_rpn_v1 and its example answer. For external observations without a trusted primitive, return external_observation with no lesson. Otherwise answer or explicitly abstain."
+                "For deterministic generalizable tasks, return one safe reusable_lesson in pure_expr_v2 (preferred; pure_rpn_v1 remains accepted) and its example answer. For external observations without a trusted primitive, return external_observation with no lesson. Otherwise answer or explicitly abstain."
                     .into(),
             ),
             desired_output: proposal_schema(),
@@ -1369,7 +1826,7 @@ impl Engine {
             prior_failure_material(teacher_interaction.as_ref());
         let args = bind_inputs(procedure, &inputs, None)?;
         let mut evaluator = self
-            .current_evaluator()?
+            .evaluator_for_procedure(procedure)?
             .with_budget(input.budget.max_exec_steps.min(self.max_steps));
         evaluator.register_procedure(procedure.clone());
         let attempt = evaluator.exec_procedure_captured(&procedure.id, args);
@@ -1594,12 +2051,18 @@ impl Engine {
                         .budget
                         .max_exec_steps
                         .saturating_sub(steps_used);
-                    let request = self.teacher_request(&pending_input, interpretations)?;
+                    let dependency_allowlist = self.pure_teacher_dependencies()?;
+                    let request = self.teacher_request(
+                        &pending_input,
+                        interpretations,
+                        &dependency_allowlist,
+                    )?;
                     pending_input.budget.max_teacher_turns =
                         pending_input.budget.max_teacher_turns.saturating_sub(1);
                     let pending = PendingCycle {
                         input: pending_input,
                         request: request.clone(),
+                        dependency_allowlist,
                         initial_interpretations: interpretations.to_vec(),
                         prior_failure: Some(json!({
                             "error": error.to_string(),
@@ -1708,6 +2171,29 @@ impl Engine {
         interpretations: &[ResolvedInterpretation],
     ) -> Result<Episode, EngineError> {
         let mut episode = Episode::new(&input.situation);
+        let session_id = input
+            .session_id
+            .as_deref()
+            .map(|value| Uuid::parse_str(value).map(SessionId))
+            .transpose()
+            .map_err(|_| EngineError::InvalidInput("session_id is not a UUID".into()))?;
+        if let Some(session_id) = session_id {
+            let session = self
+                .episodes
+                .get_session(&session_id.to_string())?
+                .ok_or_else(|| EngineError::InvalidInput("session does not exist".into()))?;
+            if session.state != spoon_core::SessionState::Active {
+                return Err(EngineError::InvalidInput("session has ended".into()));
+            }
+            episode.session_id = Some(session_id);
+            episode.session_visibility = session.visibility;
+            episode.turn_index = Some(self.episodes.next_turn_index(session_id)?);
+        }
+        let recall_mode = match input.recall_mode {
+            RecallMode::Global => EpisodeRecallMode::Global,
+            RecallMode::Session => EpisodeRecallMode::Session,
+            RecallMode::None => EpisodeRecallMode::None,
+        };
         if !interpretations.is_empty() {
             let chosen = chosen_concept(interpretations);
             let set = InterpretationSet::try_new(
@@ -1738,19 +2224,23 @@ impl Engine {
             )
             .map_err(|error| EngineError::InvalidInput(error.to_string()))?;
             let context = assembler
-                .assemble(&ContextRequest {
-                    goal: Some(input.situation.clone()),
-                    goal_reason: Some("resolve the current task".into()),
-                    interpretation: set,
-                    entities: Vec::new(),
-                    assumptions: input.assumptions.clone(),
-                    environment: input.environment.clone(),
-                    budget_remaining: RemainingBudget {
-                        steps: input.budget.max_exec_steps,
-                        teacher_calls: input.budget.max_teacher_turns,
-                        cost: f64::from(input.budget.max_exec_steps),
+                .assemble_for_recall(
+                    &ContextRequest {
+                        goal: Some(input.situation.clone()),
+                        goal_reason: Some("resolve the current task".into()),
+                        interpretation: set,
+                        entities: Vec::new(),
+                        assumptions: input.assumptions.clone(),
+                        environment: input.environment.clone(),
+                        budget_remaining: RemainingBudget {
+                            steps: input.budget.max_exec_steps,
+                            teacher_calls: input.budget.max_teacher_turns,
+                            cost: f64::from(input.budget.max_exec_steps),
+                        },
                     },
-                })
+                    session_id,
+                    recall_mode,
+                )
                 .map_err(|error| EngineError::InvalidInput(error.to_string()))?;
             episode.context = context.to_episode_context();
             episode.knowledge_considered = context
@@ -1775,7 +2265,7 @@ impl Engine {
             let limits = ContextConfig::default().limits;
             episode.context.recent_episodes = self
                 .episodes
-                .list_recent(limits.max_recent_episodes as u32)?
+                .list_recent_for_recall(session_id, recall_mode, limits.max_recent_episodes as u32)?
                 .into_iter()
                 .map(|recent| spoon_core::ContextEpisode {
                     episode_id: recent.id,
@@ -1859,9 +2349,11 @@ fn action_procedure_id(action: &str) -> Option<spoon_core::ProcedureId> {
 }
 
 fn compile_lesson_contract(
+    primitive_set: &str,
     draft: &ContractDraft,
     parameters: &HashSet<String>,
-) -> Result<Contract, EngineError> {
+    dependencies: &HashMap<String, TeacherDependency>,
+) -> Result<(Contract, HashSet<String>), EngineError> {
     if draft.requires.len() > MAX_LESSON_CONDITIONS
         || draft.promises.len() > MAX_LESSON_CONDITIONS
         || draft.fails_when.len() > MAX_LESSON_CONDITIONS
@@ -1870,12 +2362,38 @@ fn compile_lesson_contract(
             "contract condition collection exceeds its bound",
         ));
     }
-    Ok(Contract {
-        requires: compile_lesson_conditions(&draft.requires, parameters, false)?,
-        promises: compile_lesson_conditions(&draft.promises, parameters, true)?,
-        fails_when: compile_lesson_conditions(&draft.fails_when, parameters, false)?,
-        ..Contract::default()
-    })
+    let (requires, mut used_dependencies) = compile_lesson_conditions(
+        primitive_set,
+        &draft.requires,
+        parameters,
+        false,
+        dependencies,
+    )?;
+    let (promises, promise_dependencies) = compile_lesson_conditions(
+        primitive_set,
+        &draft.promises,
+        parameters,
+        true,
+        dependencies,
+    )?;
+    let (fails_when, failure_dependencies) = compile_lesson_conditions(
+        primitive_set,
+        &draft.fails_when,
+        parameters,
+        false,
+        dependencies,
+    )?;
+    used_dependencies.extend(promise_dependencies);
+    used_dependencies.extend(failure_dependencies);
+    Ok((
+        Contract {
+            requires,
+            promises,
+            fails_when,
+            ..Contract::default()
+        },
+        used_dependencies,
+    ))
 }
 
 fn enrich_episode_for_lesson(
@@ -1903,11 +2421,14 @@ fn enrich_episode_for_lesson(
 }
 
 fn compile_lesson_conditions(
+    primitive_set: &str,
     drafts: &[ConditionDraft],
     parameters: &HashSet<String>,
     allow_result: bool,
-) -> Result<Vec<Condition>, EngineError> {
-    drafts
+    dependencies: &HashMap<String, TeacherDependency>,
+) -> Result<(Vec<Condition>, HashSet<String>), EngineError> {
+    let mut used_dependencies = HashSet::new();
+    let conditions = drafts
         .iter()
         .map(|draft| {
             if draft.description.trim().is_empty()
@@ -1917,10 +2438,363 @@ fn compile_lesson_conditions(
                     "contract descriptions must be nonempty and bounded",
                 ));
             }
-            let (check, _) = compile_lesson_program(&draft.check, parameters, allow_result)?;
+            let (check, _, dependencies_used_by_check) = compile_lesson_body(
+                primitive_set,
+                &draft.check,
+                parameters,
+                allow_result,
+                dependencies,
+            )?;
+            used_dependencies.extend(dependencies_used_by_check);
             Ok(Condition::described(&draft.description).with_check(check))
         })
-        .collect()
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok((conditions, used_dependencies))
+}
+
+fn compile_lesson_body(
+    primitive_set: &str,
+    value: &JsonValue,
+    parameters: &HashSet<String>,
+    allow_result: bool,
+    dependencies: &HashMap<String, TeacherDependency>,
+) -> Result<(Expr, HashSet<String>, HashSet<String>), EngineError> {
+    match primitive_set {
+        "pure_rpn_v1" => {
+            let draft: ProgramDraft = serde_json::from_value(value.clone())
+                .map_err(|error| lesson_error(format!("invalid pure_rpn_v1 program: {error}")))?;
+            let (expression, parameters) =
+                compile_lesson_program(&draft, parameters, allow_result)?;
+            Ok((expression, parameters, HashSet::new()))
+        }
+        "pure_expr_v2" => {
+            let draft: ExprDraft = serde_json::from_value(value.clone()).map_err(|error| {
+                lesson_error(format!("invalid pure_expr_v2 expression: {error}"))
+            })?;
+            compile_lesson_expression(&draft, parameters, allow_result, dependencies)
+        }
+        _ => Err(lesson_error("unsupported primitive set")),
+    }
+}
+
+struct ExprCompileState<'a> {
+    parameters: &'a HashSet<String>,
+    dependencies: &'a HashMap<String, TeacherDependency>,
+    scopes: Vec<HashSet<String>>,
+    used_parameters: HashSet<String>,
+    used_dependencies: HashSet<String>,
+    binder_names: HashSet<String>,
+    nodes: usize,
+    allow_result: bool,
+}
+
+fn compile_lesson_expression(
+    draft: &ExprDraft,
+    parameters: &HashSet<String>,
+    allow_result: bool,
+    dependencies: &HashMap<String, TeacherDependency>,
+) -> Result<(Expr, HashSet<String>, HashSet<String>), EngineError> {
+    let mut state = ExprCompileState {
+        parameters,
+        dependencies,
+        scopes: Vec::new(),
+        used_parameters: HashSet::new(),
+        used_dependencies: HashSet::new(),
+        binder_names: HashSet::new(),
+        nodes: 0,
+        allow_result,
+    };
+    let expression = compile_expr_node(draft, &mut state, 0)?;
+    Ok((expression, state.used_parameters, state.used_dependencies))
+}
+
+fn compile_expr_node(
+    draft: &ExprDraft,
+    state: &mut ExprCompileState<'_>,
+    depth: usize,
+) -> Result<Expr, EngineError> {
+    if depth > MAX_LESSON_EXPR_DEPTH {
+        return Err(lesson_error(
+            "pure_expr_v2 expression exceeds maximum depth",
+        ));
+    }
+    state.nodes += 1;
+    if state.nodes > MAX_LESSON_EXPR_NODES {
+        return Err(lesson_error(
+            "pure_expr_v2 expression exceeds maximum node count",
+        ));
+    }
+    match draft {
+        ExprDraft::Literal { value } => {
+            validate_lesson_value(value, 0)?;
+            Ok(Expr::Literal(value.clone()))
+        }
+        ExprDraft::Parameter { name } => {
+            validate_lesson_token(name, "parameter or binder name", MAX_LESSON_KEY_CHARS)?;
+            if state.parameters.contains(name) {
+                state.used_parameters.insert(name.clone());
+            } else if !state.scopes.iter().rev().any(|scope| scope.contains(name)) {
+                return Err(lesson_error(
+                    "pure_expr_v2 expression referenced an undeclared parameter or binder",
+                ));
+            }
+            Ok(Expr::Var(name.clone()))
+        }
+        ExprDraft::Result => {
+            if !state.allow_result {
+                return Err(lesson_error(
+                    "result is allowed only in pure_expr_v2 promise checks",
+                ));
+            }
+            Ok(Expr::Var("result".into()))
+        }
+        ExprDraft::Binary { op, left, right } => Ok(Expr::BinOp {
+            op: compile_binary_op(*op),
+            left: Box::new(compile_expr_node(left, state, depth + 1)?),
+            right: Box::new(compile_expr_node(right, state, depth + 1)?),
+        }),
+        ExprDraft::Unary { op, operand } => Ok(Expr::UnOp {
+            op: compile_unary_op(*op),
+            operand: Box::new(compile_expr_node(operand, state, depth + 1)?),
+        }),
+        ExprDraft::If {
+            condition,
+            then,
+            else_,
+        } => Ok(Expr::If {
+            cond: Box::new(compile_expr_node(condition, state, depth + 1)?),
+            then: Box::new(compile_expr_node(then, state, depth + 1)?),
+            else_: Box::new(compile_expr_node(else_, state, depth + 1)?),
+        }),
+        ExprDraft::Let { name, value, body } => {
+            let value = compile_expr_node(value, state, depth + 1)?;
+            bind_expr_name(name, state)?;
+            state.scopes.push(HashSet::from([name.clone()]));
+            let body = compile_expr_node(body, state, depth + 1)?;
+            state.scopes.pop();
+            Ok(Expr::Let {
+                name: name.clone(),
+                value: Box::new(value),
+                body: Box::new(body),
+            })
+        }
+        ExprDraft::List { items } => {
+            validate_expr_children(items.len())?;
+            Ok(Expr::ListExpr(
+                items
+                    .iter()
+                    .map(|item| compile_expr_node(item, state, depth + 1))
+                    .collect::<Result<Vec<_>, _>>()?,
+            ))
+        }
+        ExprDraft::Index { collection, index } => Ok(Expr::Index {
+            collection: Box::new(compile_expr_node(collection, state, depth + 1)?),
+            index: Box::new(compile_expr_node(index, state, depth + 1)?),
+        }),
+        ExprDraft::Field { object, field } => {
+            validate_lesson_token(field, "field name", MAX_LESSON_KEY_CHARS)?;
+            Ok(Expr::FieldAccess {
+                object: Box::new(compile_expr_node(object, state, depth + 1)?),
+                field: field.clone(),
+            })
+        }
+        ExprDraft::Map {
+            collection,
+            var,
+            body,
+        } => {
+            let collection = compile_expr_node(collection, state, depth + 1)?;
+            bind_expr_name(var, state)?;
+            state.scopes.push(HashSet::from([var.clone()]));
+            let body = compile_expr_node(body, state, depth + 1)?;
+            state.scopes.pop();
+            Ok(Expr::Map {
+                collection: Box::new(collection),
+                var: var.clone(),
+                body: Box::new(body),
+            })
+        }
+        ExprDraft::Filter {
+            collection,
+            var,
+            predicate,
+        } => {
+            let collection = compile_expr_node(collection, state, depth + 1)?;
+            bind_expr_name(var, state)?;
+            state.scopes.push(HashSet::from([var.clone()]));
+            let predicate = compile_expr_node(predicate, state, depth + 1)?;
+            state.scopes.pop();
+            Ok(Expr::Filter {
+                collection: Box::new(collection),
+                var: var.clone(),
+                predicate: Box::new(predicate),
+            })
+        }
+        ExprDraft::Reduce {
+            collection,
+            init,
+            acc,
+            var,
+            body,
+        } => {
+            let collection = compile_expr_node(collection, state, depth + 1)?;
+            let init = compile_expr_node(init, state, depth + 1)?;
+            bind_expr_name(acc, state)?;
+            bind_expr_name(var, state)?;
+            state.scopes.push(HashSet::from([acc.clone(), var.clone()]));
+            let body = compile_expr_node(body, state, depth + 1)?;
+            state.scopes.pop();
+            Ok(Expr::Reduce {
+                collection: Box::new(collection),
+                init: Box::new(init),
+                acc: acc.clone(),
+                var: var.clone(),
+                body: Box::new(body),
+            })
+        }
+        ExprDraft::Intrinsic { version, op, args } => {
+            if *version != 1 {
+                return Err(lesson_error(
+                    "pure_expr_v2 supports only intrinsic version 1",
+                ));
+            }
+            validate_expr_children(args.len())?;
+            Ok(Expr::Intrinsic {
+                version: 1,
+                op: compile_intrinsic_op(*op),
+                args: args
+                    .iter()
+                    .map(|arg| compile_expr_node(arg, state, depth + 1))
+                    .collect::<Result<Vec<_>, _>>()?,
+            })
+        }
+        ExprDraft::Dependency { alias, args } => {
+            validate_lesson_token(alias, "dependency alias", MAX_LESSON_KEY_CHARS)?;
+            validate_expr_children(args.len())?;
+            let dependency = state.dependencies.get(alias).ok_or_else(|| {
+                lesson_error("pure_expr_v2 expression referenced an unadvertised procedure alias")
+            })?;
+            state.used_dependencies.insert(alias.clone());
+            Ok(Expr::CallExact {
+                procedure: dependency.procedure,
+                version: dependency.version,
+                args: args
+                    .iter()
+                    .map(|argument| compile_expr_node(argument, state, depth + 1))
+                    .collect::<Result<Vec<_>, _>>()?,
+            })
+        }
+    }
+}
+
+fn bind_expr_name(name: &str, state: &mut ExprCompileState<'_>) -> Result<(), EngineError> {
+    validate_lesson_token(name, "binder name", MAX_LESSON_KEY_CHARS)?;
+    if state.parameters.contains(name) || !state.binder_names.insert(name.to_owned()) {
+        return Err(lesson_error(
+            "pure_expr_v2 binder names must be unique and cannot shadow parameters",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_expr_children(length: usize) -> Result<(), EngineError> {
+    if length > MAX_LESSON_EXPR_CHILDREN {
+        return Err(lesson_error(
+            "pure_expr_v2 expression exceeds maximum child count",
+        ));
+    }
+    Ok(())
+}
+
+fn compile_binary_op(op: BinaryOpDraft) -> BinOp {
+    match op {
+        BinaryOpDraft::Add => BinOp::Add,
+        BinaryOpDraft::Subtract => BinOp::Sub,
+        BinaryOpDraft::Multiply => BinOp::Mul,
+        BinaryOpDraft::Divide => BinOp::Div,
+        BinaryOpDraft::Modulo => BinOp::Mod,
+        BinaryOpDraft::Equal => BinOp::Eq,
+        BinaryOpDraft::NotEqual => BinOp::Ne,
+        BinaryOpDraft::LessThan => BinOp::Lt,
+        BinaryOpDraft::LessOrEqual => BinOp::Le,
+        BinaryOpDraft::GreaterThan => BinOp::Gt,
+        BinaryOpDraft::GreaterOrEqual => BinOp::Ge,
+        BinaryOpDraft::And => BinOp::And,
+        BinaryOpDraft::Or => BinOp::Or,
+    }
+}
+
+fn compile_unary_op(op: UnaryOpDraft) -> UnOp {
+    match op {
+        UnaryOpDraft::Negate => UnOp::Neg,
+        UnaryOpDraft::Not => UnOp::Not,
+    }
+}
+
+fn compile_intrinsic_op(op: IntrinsicOpDraft) -> IntrinsicOp {
+    match op {
+        IntrinsicOpDraft::Length => IntrinsicOp::Length,
+        IntrinsicOpDraft::TextByteLength => IntrinsicOp::TextByteLength,
+        IntrinsicOpDraft::TextScalarLength => IntrinsicOp::TextScalarLength,
+        IntrinsicOpDraft::TextGraphemeLength => IntrinsicOp::TextGraphemeLength,
+        IntrinsicOpDraft::TextSplit => IntrinsicOp::TextSplit,
+        IntrinsicOpDraft::TextJoin => IntrinsicOp::TextJoin,
+        IntrinsicOpDraft::TextTrim => IntrinsicOp::TextTrim,
+        IntrinsicOpDraft::TextLowercase => IntrinsicOp::TextLowercase,
+        IntrinsicOpDraft::TextUppercase => IntrinsicOp::TextUppercase,
+        IntrinsicOpDraft::TextContains => IntrinsicOp::TextContains,
+        IntrinsicOpDraft::TextStartsWith => IntrinsicOp::TextStartsWith,
+        IntrinsicOpDraft::TextEndsWith => IntrinsicOp::TextEndsWith,
+        IntrinsicOpDraft::TextReplace => IntrinsicOp::TextReplace,
+        IntrinsicOpDraft::CollectionContains => IntrinsicOp::CollectionContains,
+        IntrinsicOpDraft::CountEqual => IntrinsicOp::CountEqual,
+        IntrinsicOpDraft::MapKeys => IntrinsicOp::MapKeys,
+        IntrinsicOpDraft::MapValues => IntrinsicOp::MapValues,
+        IntrinsicOpDraft::JsonParse => IntrinsicOp::JsonParse,
+        IntrinsicOpDraft::JsonStringify => IntrinsicOp::JsonStringify,
+        IntrinsicOpDraft::PathGet => IntrinsicOp::PathGet,
+        IntrinsicOpDraft::PathGetOptional => IntrinsicOp::PathGetOptional,
+        IntrinsicOpDraft::TextNormalizeNfc => IntrinsicOp::TextNormalizeNfc,
+        IntrinsicOpDraft::TextNormalizeNfd => IntrinsicOp::TextNormalizeNfd,
+        IntrinsicOpDraft::TextNormalizeNfkc => IntrinsicOp::TextNormalizeNfkc,
+        IntrinsicOpDraft::TextNormalizeNfkd => IntrinsicOp::TextNormalizeNfkd,
+        IntrinsicOpDraft::TextTrimStart => IntrinsicOp::TextTrimStart,
+        IntrinsicOpDraft::TextTrimEnd => IntrinsicOp::TextTrimEnd,
+        IntrinsicOpDraft::TextGraphemeSubstring => IntrinsicOp::TextGraphemeSubstring,
+        IntrinsicOpDraft::TextIndexOf => IntrinsicOp::TextIndexOf,
+        IntrinsicOpDraft::TextCount => IntrinsicOp::TextCount,
+        IntrinsicOpDraft::TextRepeat => IntrinsicOp::TextRepeat,
+        IntrinsicOpDraft::TextConcatMany => IntrinsicOp::TextConcatMany,
+        IntrinsicOpDraft::MapEntries => IntrinsicOp::MapEntries,
+        IntrinsicOpDraft::MapSet => IntrinsicOp::MapSet,
+        IntrinsicOpDraft::MapDelete => IntrinsicOp::MapDelete,
+        IntrinsicOpDraft::MapMerge => IntrinsicOp::MapMerge,
+        IntrinsicOpDraft::CollectionSlice => IntrinsicOp::CollectionSlice,
+        IntrinsicOpDraft::CollectionReverse => IntrinsicOp::CollectionReverse,
+        IntrinsicOpDraft::CollectionSort => IntrinsicOp::CollectionSort,
+        IntrinsicOpDraft::CollectionUnique => IntrinsicOp::CollectionUnique,
+        IntrinsicOpDraft::CollectionFlatten => IntrinsicOp::CollectionFlatten,
+        IntrinsicOpDraft::CollectionZip => IntrinsicOp::CollectionZip,
+        IntrinsicOpDraft::Range => IntrinsicOp::Range,
+        IntrinsicOpDraft::TypeName => IntrinsicOp::TypeName,
+        IntrinsicOpDraft::ParseInt => IntrinsicOp::ParseInt,
+        IntrinsicOpDraft::ParseFloat => IntrinsicOp::ParseFloat,
+        IntrinsicOpDraft::ParseBool => IntrinsicOp::ParseBool,
+        IntrinsicOpDraft::ToText => IntrinsicOp::ToText,
+        IntrinsicOpDraft::NumericAbs => IntrinsicOp::NumericAbs,
+        IntrinsicOpDraft::NumericSign => IntrinsicOp::NumericSign,
+        IntrinsicOpDraft::NumericMin => IntrinsicOp::NumericMin,
+        IntrinsicOpDraft::NumericMax => IntrinsicOp::NumericMax,
+        IntrinsicOpDraft::NumericClamp => IntrinsicOp::NumericClamp,
+        IntrinsicOpDraft::NumericFloor => IntrinsicOp::NumericFloor,
+        IntrinsicOpDraft::NumericCeil => IntrinsicOp::NumericCeil,
+        IntrinsicOpDraft::NumericRound => IntrinsicOp::NumericRound,
+        IntrinsicOpDraft::NumericTruncate => IntrinsicOp::NumericTruncate,
+        IntrinsicOpDraft::NumericPowInt => IntrinsicOp::NumericPowInt,
+        IntrinsicOpDraft::NumericPowFloat => IntrinsicOp::NumericPowFloat,
+        IntrinsicOpDraft::IntegerQuotient => IntrinsicOp::IntegerQuotient,
+        IntrinsicOpDraft::IntegerRemainder => IntrinsicOp::IntegerRemainder,
+    }
 }
 
 fn compile_lesson_program(
@@ -2031,6 +2905,41 @@ fn lesson_scalar(value: &Value) -> bool {
     )
 }
 
+fn validate_lesson_value(value: &Value, depth: usize) -> Result<(), EngineError> {
+    if depth > MAX_LESSON_VALUE_DEPTH {
+        return Err(lesson_error("pure_expr_v2 value exceeds maximum depth"));
+    }
+    match value {
+        Value::Text(text) if text.chars().count() > MAX_TEACHER_TEXT_CHARS => Err(lesson_error(
+            "pure_expr_v2 text value exceeds maximum length",
+        )),
+        Value::List(items) => {
+            if items.len() > MAX_LESSON_VALUE_ITEMS {
+                return Err(lesson_error(
+                    "pure_expr_v2 list value exceeds maximum item count",
+                ));
+            }
+            for item in items {
+                validate_lesson_value(item, depth + 1)?;
+            }
+            Ok(())
+        }
+        Value::Map(items) => {
+            if items.len() > MAX_LESSON_VALUE_ITEMS {
+                return Err(lesson_error(
+                    "pure_expr_v2 map value exceeds maximum item count",
+                ));
+            }
+            for (key, item) in items {
+                validate_lesson_token(key, "map key", MAX_LESSON_KEY_CHARS)?;
+                validate_lesson_value(item, depth + 1)?;
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
 fn bootstrap_reference_lifecycle(lifecycle: Lifecycle) -> bool {
     matches!(
         lifecycle,
@@ -2097,6 +3006,22 @@ fn validate_cycle_input(input: &CycleInput) -> Result<(), EngineError> {
     if input.situation.chars().count() > spoon_reason::MAX_CONTEXT_TEXT_CHARS {
         return Err(EngineError::InvalidInput(
             "situation exceeds hard maximum".into(),
+        ));
+    }
+    if input.recall_mode == RecallMode::Session && input.session_id.is_none() {
+        return Err(EngineError::InvalidInput(
+            "session recall requires session_id".into(),
+        ));
+    }
+    if let Some(session_id) = input.session_id.as_deref() {
+        Uuid::parse_str(session_id)
+            .map_err(|_| EngineError::InvalidInput("session_id is not a UUID".into()))?;
+    }
+    if let Some(permission_mode) = input.permission_mode.as_deref()
+        && !matches!(permission_mode, "ask" | "workspace" | "full-access")
+    {
+        return Err(EngineError::InvalidInput(
+            "permission_mode must be ask, workspace, or full-access".into(),
         ));
     }
     if input.assumptions.len() > spoon_reason::MAX_CONTEXT_COLLECTION_ITEMS
@@ -2281,6 +3206,12 @@ fn prior_failure_material(
 
 fn proposal_schema() -> JsonValue {
     let scalar = json!({ "type": ["null", "boolean", "number", "string"] });
+    // `Value` permits nested lists and maps. OpenAI's strict-object dialect
+    // cannot express an arbitrary map with `additionalProperties: false`, so
+    // the recursive value boundary is enforced by the compiler instead.
+    let structured_value =
+        json!({ "type": ["null", "boolean", "number", "string", "array", "object"] });
+    let expr_definition = expr_definition_schema(structured_value.clone());
     let named_value = json!({
         "type": "object",
         "additionalProperties": false,
@@ -2322,7 +3253,7 @@ fn proposal_schema() -> JsonValue {
         },
         "required": ["description", "check"],
     });
-    let lesson = json!({
+    let rpn_lesson = json!({
         "type": "object",
         "additionalProperties": false,
         "properties": {
@@ -2412,6 +3343,7 @@ fn proposal_schema() -> JsonValue {
     json!({
         "type": "object",
         "additionalProperties": false,
+        "$defs": { "pureExprV2": expr_definition },
         "properties": {
             "proposalKind": {
                 "type": "string",
@@ -2457,15 +3389,87 @@ fn proposal_schema() -> JsonValue {
                     }
                 }
             },
-            "lesson": { "anyOf": [lesson, { "type": "null" }] },
+            "lesson": { "anyOf": [expr_lesson_schema(), rpn_lesson, { "type": "null" }] },
             "procedure": {
                 "type": "null",
                 "description": "Compatibility field. Trusted procedure fields are engine-authored; always null."
             },
-            "answer": { "type": ["null", "boolean", "number", "string"] },
+            "answer": structured_value,
             "abstainReason": { "type": ["string", "null"] }
         },
         "required": ["proposalKind", "interpretations", "lesson", "procedure", "answer", "abstainReason"]
+    })
+}
+
+fn expr_lesson_schema() -> JsonValue {
+    let structured_value =
+        json!({ "type": ["null", "boolean", "number", "string", "array", "object"] });
+    let expression = expr_program_schema();
+    let condition = json!({
+        "type": "object", "additionalProperties": false,
+        "properties": { "description": { "type": "string" }, "check": expression },
+        "required": ["description", "check"]
+    });
+    let concept_reference = json!({
+        "anyOf": [
+            { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "new_concept" }, "key": { "type": "string" } }, "required": ["kind", "key"] },
+            { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "existing_concept" }, "id": { "type": "string" } }, "required": ["kind", "id"] }
+        ]
+    });
+    json!({
+        "type": "object", "additionalProperties": false,
+        "properties": {
+            "primitiveSet": { "type": "string", "const": "pure_expr_v2" },
+            "concepts": { "type": "array", "minItems": 1, "maxItems": MAX_LESSON_CONCEPTS, "items": { "type": "object", "additionalProperties": false, "properties": { "key": { "type": "string" }, "name": { "type": "string" }, "description": { "type": "string" } }, "required": ["key", "name", "description"] } },
+            "relationships": { "type": "array", "maxItems": MAX_LESSON_RELATIONSHIPS, "items": { "type": "object", "additionalProperties": false, "properties": { "source": concept_reference.clone(), "target": concept_reference, "kind": { "type": "string" }, "strength": { "type": "number", "minimum": 0, "maximum": 1 } }, "required": ["source", "target", "kind", "strength"] } },
+            "procedures": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "type": "object", "additionalProperties": false, "properties": { "key": { "type": "string" }, "name": { "type": "string" }, "concept": concept_reference, "parameters": { "type": "array", "minItems": 1, "maxItems": MAX_LESSON_PARAMETERS, "items": { "type": "object", "additionalProperties": false, "properties": { "name": { "type": "string" }, "description": { "type": "string" } }, "required": ["name", "description"] } }, "body": expression, "contract": { "type": "object", "additionalProperties": false, "properties": { "requires": { "type": "array", "maxItems": MAX_LESSON_CONDITIONS, "items": condition.clone() }, "promises": { "type": "array", "maxItems": MAX_LESSON_CONDITIONS, "items": condition.clone() }, "failsWhen": { "type": "array", "maxItems": MAX_LESSON_CONDITIONS, "items": condition } }, "required": ["requires", "promises", "failsWhen"] } }, "required": ["key", "name", "concept", "parameters", "body", "contract"] } },
+            "invocation": { "type": "object", "additionalProperties": false, "properties": { "procedureKey": { "type": "string" }, "inputs": { "type": "array", "maxItems": MAX_LESSON_PARAMETERS, "items": { "type": "object", "additionalProperties": false, "properties": { "name": { "type": "string" }, "value": structured_value }, "required": ["name", "value"] } } }, "required": ["procedureKey", "inputs"] }
+        },
+        "required": ["primitiveSet", "concepts", "relationships", "procedures", "invocation"]
+    })
+}
+
+fn expr_program_schema() -> JsonValue {
+    json!({ "$ref": "#/$defs/pureExprV2" })
+}
+
+fn expr_definition_schema(value: JsonValue) -> JsonValue {
+    let expression = json!({ "$ref": "#/$defs/pureExprV2" });
+    let leaf = |kind: &str| json!({ "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": kind } }, "required": ["kind"] });
+    let named = |kind: &str| json!({ "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": kind }, "name": { "type": "string" } }, "required": ["kind", "name"] });
+    let binary_ops = [
+        "add",
+        "subtract",
+        "multiply",
+        "divide",
+        "modulo",
+        "equal",
+        "not_equal",
+        "less_than",
+        "less_or_equal",
+        "greater_than",
+        "greater_or_equal",
+        "and",
+        "or",
+    ];
+    let unary_ops = ["negate", "not"];
+    json!({
+        "anyOf": [
+                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "literal" }, "value": value }, "required": ["kind", "value"] },
+                    named("parameter"), leaf("result"),
+                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "binary" }, "op": { "type": "string", "enum": binary_ops }, "left": expression.clone(), "right": expression.clone() }, "required": ["kind", "op", "left", "right"] },
+                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "unary" }, "op": { "type": "string", "enum": unary_ops }, "operand": expression.clone() }, "required": ["kind", "op", "operand"] },
+                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "if" }, "condition": expression.clone(), "then": expression.clone(), "else": expression.clone() }, "required": ["kind", "condition", "then", "else"] },
+                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "let" }, "name": { "type": "string" }, "value": expression.clone(), "body": expression.clone() }, "required": ["kind", "name", "value", "body"] },
+                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "list" }, "items": { "type": "array", "maxItems": MAX_LESSON_EXPR_CHILDREN, "items": expression.clone() } }, "required": ["kind", "items"] },
+                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "index" }, "collection": expression.clone(), "index": expression.clone() }, "required": ["kind", "collection", "index"] },
+                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "field" }, "object": expression.clone(), "field": { "type": "string" } }, "required": ["kind", "object", "field"] },
+                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "map" }, "collection": expression.clone(), "var": { "type": "string" }, "body": expression.clone() }, "required": ["kind", "collection", "var", "body"] },
+                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "filter" }, "collection": expression.clone(), "var": { "type": "string" }, "predicate": expression.clone() }, "required": ["kind", "collection", "var", "predicate"] },
+                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "reduce" }, "collection": expression.clone(), "init": expression.clone(), "acc": { "type": "string" }, "var": { "type": "string" }, "body": expression.clone() }, "required": ["kind", "collection", "init", "acc", "var", "body"] },
+                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "dependency" }, "alias": { "type": "string" }, "args": { "type": "array", "maxItems": MAX_LESSON_EXPR_CHILDREN, "items": expression.clone() } }, "required": ["kind", "alias", "args"] },
+                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "intrinsic" }, "version": { "type": "integer", "const": 1 }, "op": { "type": "string", "enum": ["length", "text_byte_length", "text_scalar_length", "text_grapheme_length", "text_split", "text_join", "text_trim", "text_lowercase", "text_uppercase", "text_contains", "text_starts_with", "text_ends_with", "text_replace", "collection_contains", "count_equal", "map_keys", "map_values", "json_parse", "json_stringify", "path_get", "path_get_optional", "text_normalize_nfc", "text_normalize_nfd", "text_normalize_nfkc", "text_normalize_nfkd", "text_trim_start", "text_trim_end", "text_grapheme_substring", "text_index_of", "text_count", "text_repeat", "text_concat_many", "map_entries", "map_set", "map_delete", "map_merge", "collection_slice", "collection_reverse", "collection_sort", "collection_unique", "collection_flatten", "collection_zip", "range", "type_name", "parse_int", "parse_float", "parse_bool", "to_text", "numeric_abs", "numeric_sign", "numeric_min", "numeric_max", "numeric_clamp", "numeric_floor", "numeric_ceil", "numeric_round", "numeric_truncate", "numeric_pow_int", "numeric_pow_float", "integer_quotient", "integer_remainder"] }, "args": { "type": "array", "maxItems": MAX_LESSON_EXPR_CHILDREN, "items": expression } }, "required": ["kind", "version", "op", "args"] }
+        ]
     })
 }
 
@@ -2533,9 +3537,10 @@ fn lesson_program_schema() -> JsonValue {
 
 fn authoring_protocol() -> JsonValue {
     json!({
-        "primitiveSet": "pure_rpn_v1",
+        "primitiveSet": "pure_expr_v2",
+        "acceptedPrimitiveSets": ["pure_expr_v2", "pure_rpn_v1"],
         "proposalKinds": ["reusable_lesson", "external_observation", "answer_only", "abstain"],
-        "instructions": [
+        "pureRpnV1Instructions": [
             "load_parameter", "load_result", "push_literal", "add", "subtract",
             "multiply", "divide", "modulo", "equal", "not_equal", "less_than",
             "less_or_equal", "greater_than", "greater_or_equal", "and", "or",
@@ -2543,15 +3548,15 @@ fn authoring_protocol() -> JsonValue {
         ],
         "teacherProvides": [
             "concept name and description", "relationship claim", "procedure parameters",
-            "pure RPN body", "executable contract checks", "example invocation and answer"
+            "pure expression body", "executable contract checks", "example invocation and answer"
         ],
         "engineProvides": [
             "ids", "mutability", "lifecycle", "version", "confidence", "timestamps", "test cases"
         ],
         "constraints": [
-            "pure deterministic scalar expressions only",
+            "pure_expr_v2 supports bounded neutral values, recursive expressions, intrinsic version 1, and only the request's advertised pure dependency aliases",
             "body must use every declared parameter",
-            "no calls, effects, sensors, clocks, network, files, randomness, or opaque code",
+            "no generic calls, dependency ids/versions, effects, sensors, clocks, network, files, randomness, or opaque code; dependency aliases are engine-resolved and exact-version pinned",
             "external observations without a trusted sensor remain provisional answers and must not include a lesson"
         ]
     })

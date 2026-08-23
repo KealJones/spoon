@@ -1,8 +1,8 @@
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, params, types::Type};
 use serde::{Deserialize, Serialize};
 use spoon_core::{
-    Episode, EpisodeId, EscalationRung, ProcedureId, SpoonError, TestCase, VerifiabilityTier,
-    concept::ConceptId,
+    Episode, EpisodeId, EscalationRung, ProcedureId, Session, SessionId, SessionState,
+    SessionVisibility, SpoonError, TestCase, VerifiabilityTier, concept::ConceptId,
 };
 use spoon_exec::ExecTrace;
 use std::collections::BTreeSet;
@@ -180,6 +180,56 @@ fn now_unix() -> i64 {
         .as_secs() as i64
 }
 
+fn session_visibility_value(value: SessionVisibility) -> &'static str {
+    match value {
+        SessionVisibility::Global => "global",
+        SessionVisibility::Isolated => "isolated",
+    }
+}
+
+fn session_state_value(value: SessionState) -> &'static str {
+    match value {
+        SessionState::Active => "active",
+        SessionState::Ended => "ended",
+    }
+}
+
+fn session_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Session> {
+    let id: String = row.get(0)?;
+    let visibility: String = row.get(2)?;
+    let state: String = row.get(3)?;
+    Ok(Session {
+        id: SessionId(parse_uuid(&id).map_err(|error| {
+            rusqlite::Error::FromSqlConversionFailure(0, Type::Text, Box::new(error))
+        })?),
+        name: row.get(1)?,
+        visibility: match visibility.as_str() {
+            "global" => SessionVisibility::Global,
+            "isolated" => SessionVisibility::Isolated,
+            other => {
+                return Err(rusqlite::Error::FromSqlConversionFailure(
+                    2,
+                    Type::Text,
+                    format!("invalid session visibility {other}").into(),
+                ));
+            }
+        },
+        state: match state.as_str() {
+            "active" => SessionState::Active,
+            "ended" => SessionState::Ended,
+            other => {
+                return Err(rusqlite::Error::FromSqlConversionFailure(
+                    3,
+                    Type::Text,
+                    format!("invalid session state {other}").into(),
+                ));
+            }
+        },
+        created_at: row.get(4)?,
+        ended_at: row.get(5)?,
+    })
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EpisodeQuery {
     pub since: Option<i64>,
@@ -188,6 +238,20 @@ pub struct EpisodeQuery {
     pub rung: Option<EscalationRung>,
     pub concept: Option<ConceptId>,
     pub limit: u32,
+    #[serde(default)]
+    pub session_id: Option<SessionId>,
+    #[serde(default)]
+    pub session_visibility: Option<SessionVisibility>,
+    #[serde(default)]
+    pub exclude_isolated: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EpisodeRecallMode {
+    Global,
+    Session,
+    None,
 }
 
 /// A verified, version-pinned regression case. These rows are explicit
@@ -220,6 +284,9 @@ impl Default for EpisodeQuery {
             rung: None,
             concept: None,
             limit: 100,
+            session_id: None,
+            session_visibility: None,
+            exclude_isolated: false,
         }
     }
 }
@@ -243,6 +310,94 @@ impl EpisodeStore {
         Ok(store)
     }
 
+    pub fn create_session(
+        &self,
+        name: Option<String>,
+        visibility: SessionVisibility,
+    ) -> Result<Session, SpoonError> {
+        let name = name
+            .map(|value| value.trim().to_owned())
+            .filter(|value| !value.is_empty());
+        let session = Session::new(name, visibility);
+        self.conn
+            .execute(
+                "INSERT INTO sessions (id, name, visibility, state, created_at, ended_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    session.id.to_string(),
+                    session.name,
+                    session_visibility_value(session.visibility),
+                    session_state_value(session.state),
+                    session.created_at,
+                    session.ended_at,
+                ],
+            )
+            .map_err(|error| SpoonError::Storage(error.to_string()))?;
+        Ok(session)
+    }
+
+    pub fn list_sessions(&self) -> Result<Vec<Session>, SpoonError> {
+        let mut statement = self
+            .conn
+            .prepare(
+                "SELECT id, name, visibility, state, created_at, ended_at
+                 FROM sessions ORDER BY created_at DESC, id DESC",
+            )
+            .map_err(storage)?;
+        statement
+            .query_map([], session_from_row)
+            .map_err(storage)?
+            .map(|row| row.map_err(storage))
+            .collect()
+    }
+
+    pub fn get_session(&self, id_or_name: &str) -> Result<Option<Session>, SpoonError> {
+        let mut statement = self
+            .conn
+            .prepare(
+                "SELECT id, name, visibility, state, created_at, ended_at
+                 FROM sessions WHERE id = ?1 OR name = ?1 LIMIT 1",
+            )
+            .map_err(storage)?;
+        statement
+            .query_row(params![id_or_name], session_from_row)
+            .optional()
+            .map_err(storage)
+    }
+
+    pub fn end_session(&self, id_or_name: &str) -> Result<Session, SpoonError> {
+        let session = self
+            .get_session(id_or_name)?
+            .ok_or_else(|| SpoonError::NotFound(format!("session {id_or_name}")))?;
+        if session.state == SessionState::Ended {
+            return Ok(session);
+        }
+        let ended_at = now_unix();
+        self.conn
+            .execute(
+                "UPDATE sessions SET state = 'ended', ended_at = ?1 WHERE id = ?2",
+                params![ended_at, session.id.to_string()],
+            )
+            .map_err(storage)?;
+        Ok(Session {
+            state: SessionState::Ended,
+            ended_at: Some(ended_at),
+            ..session
+        })
+    }
+
+    pub fn next_turn_index(&self, session_id: SessionId) -> Result<u64, SpoonError> {
+        let value: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT MAX(turn_index) FROM episodes WHERE session_id = ?1",
+                params![session_id.to_string()],
+                |row| row.get(0),
+            )
+            .map_err(storage)?;
+        Ok(value.unwrap_or(-1).saturating_add(1) as u64)
+    }
+
     fn create_schema(&self) -> Result<(), SpoonError> {
         self.conn
             .execute_batch(
@@ -252,6 +407,9 @@ impl EpisodeStore {
                     id TEXT PRIMARY KEY,
                     situation TEXT NOT NULL,
                     data_json TEXT NOT NULL,
+                    session_id TEXT,
+                    session_visibility TEXT NOT NULL DEFAULT 'global',
+                    turn_index INTEGER,
                     success INTEGER,
                     rung_reached TEXT,
                     finalized INTEGER NOT NULL DEFAULT 1,
@@ -266,6 +424,18 @@ impl EpisodeStore {
 
                 CREATE INDEX IF NOT EXISTS idx_episodes_rung
                     ON episodes(rung_reached);
+
+                CREATE TABLE IF NOT EXISTS sessions (
+                    id TEXT PRIMARY KEY,
+                    name TEXT UNIQUE,
+                    visibility TEXT NOT NULL,
+                    state TEXT NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    ended_at INTEGER
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_sessions_state_created
+                    ON sessions(state, created_at);
 
                 CREATE TABLE IF NOT EXISTS verified_regression_cases (
                     episode_id TEXT NOT NULL,
@@ -385,6 +555,31 @@ impl EpisodeStore {
                 )
                 .map_err(|e| SpoonError::Storage(e.to_string()))?;
         }
+        if !self.has_episode_column("session_id")? {
+            self.conn
+                .execute("ALTER TABLE episodes ADD COLUMN session_id TEXT", [])
+                .map_err(|e| SpoonError::Storage(e.to_string()))?;
+        }
+        if !self.has_episode_column("session_visibility")? {
+            self.conn.execute(
+                "ALTER TABLE episodes ADD COLUMN session_visibility TEXT NOT NULL DEFAULT 'global'",
+                [],
+            )
+            .map_err(|e| SpoonError::Storage(e.to_string()))?;
+        }
+        if !self.has_episode_column("turn_index")? {
+            self.conn
+                .execute("ALTER TABLE episodes ADD COLUMN turn_index INTEGER", [])
+                .map_err(|e| SpoonError::Storage(e.to_string()))?;
+        }
+        self.conn
+            .execute_batch(
+                "CREATE INDEX IF NOT EXISTS idx_episodes_session
+                     ON episodes(session_id, created_at);
+                 CREATE INDEX IF NOT EXISTS idx_episodes_visibility
+                     ON episodes(session_visibility, created_at);",
+            )
+            .map_err(|e| SpoonError::Storage(e.to_string()))?;
         self.ensure_credit_index_v2()?;
         self.backfill_feedback_credit_summary()?;
         self.backfill_credit_index()?;
@@ -1007,12 +1202,18 @@ impl EpisodeStore {
         transaction
             .execute(
                 "INSERT INTO episodes
-                    (id, situation, data_json, success, rung_reached, finalized, created_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                    (id, situation, data_json, session_id, session_visibility,
+                     turn_index, success, rung_reached, finalized, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                 params![
                     episode.id.to_string(),
                     episode.situation,
                     data_json,
+                    episode.session_id.map(|id| id.to_string()),
+                    serde_json::to_value(episode.session_visibility)
+                        .ok()
+                        .and_then(|value| value.as_str().map(str::to_owned)),
+                    episode.turn_index.map(|index| index as i64),
                     success,
                     rung,
                     finalized,
@@ -1210,6 +1411,41 @@ impl EpisodeStore {
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(episodes)
+    }
+
+    pub fn query_for_recall(
+        &self,
+        query: &EpisodeQuery,
+        session_id: Option<SessionId>,
+        mode: EpisodeRecallMode,
+    ) -> Result<Vec<Episode>, SpoonError> {
+        if mode == EpisodeRecallMode::None {
+            return Ok(Vec::new());
+        }
+        let mut query = query.clone();
+        query.session_id = match mode {
+            EpisodeRecallMode::Global => None,
+            EpisodeRecallMode::Session => session_id,
+            EpisodeRecallMode::None => None,
+        };
+        query.exclude_isolated = mode == EpisodeRecallMode::Global;
+        self.query(&query)
+    }
+
+    pub fn list_recent_for_recall(
+        &self,
+        session_id: Option<SessionId>,
+        mode: EpisodeRecallMode,
+        limit: u32,
+    ) -> Result<Vec<Episode>, SpoonError> {
+        self.query_for_recall(
+            &EpisodeQuery {
+                limit,
+                ..EpisodeQuery::default()
+            },
+            session_id,
+            mode,
+        )
     }
 
     pub fn list_failures(&self, limit: u32) -> Result<Vec<Episode>, SpoonError> {
@@ -1729,6 +1965,13 @@ impl EpisodeStore {
         });
         let concept = query.concept.map(|value| value.to_string());
         let outcome = query.outcome.map(i32::from);
+        let session_id = query.session_id.map(|value| value.to_string());
+        let session_visibility = query.session_visibility.and_then(|value| {
+            serde_json::to_value(value)
+                .ok()
+                .and_then(|json| json.as_str().map(str::to_owned))
+        });
+        let exclude_isolated = i32::from(query.exclude_isolated);
 
         let mut stmt = self
             .conn
@@ -1743,8 +1986,11 @@ impl EpisodeStore {
                        SELECT 1 FROM episode_concepts ec
                        WHERE ec.episode_id = e.id AND ec.concept_id = ?5
                    ))
+                   AND (?6 IS NULL OR e.session_id = ?6)
+                   AND (?7 IS NULL OR e.session_visibility = ?7)
+                   AND (?8 = 0 OR e.session_visibility != 'isolated')
                  ORDER BY e.created_at DESC
-                 LIMIT ?6",
+                 LIMIT ?9",
             )
             .map_err(|e| SpoonError::Storage(e.to_string()))?;
 
@@ -1756,6 +2002,9 @@ impl EpisodeStore {
                     outcome,
                     rung,
                     concept,
+                    session_id,
+                    session_visibility,
+                    exclude_isolated,
                     query.limit,
                 ],
                 |row| row.get::<_, String>(0),
@@ -1810,11 +2059,18 @@ impl EpisodeStore {
         let rows = transaction
             .execute(
                 "UPDATE episodes
-                 SET situation = ?1, data_json = ?2, success = ?3, rung_reached = ?4, finalized = 1
-                 WHERE id = ?5 AND finalized = 0",
+                 SET situation = ?1, data_json = ?2, session_id = ?3,
+                     session_visibility = ?4, turn_index = ?5, success = ?6,
+                     rung_reached = ?7, finalized = 1
+                 WHERE id = ?8 AND finalized = 0",
                 params![
                     episode.situation,
                     data_json,
+                    episode.session_id.map(|id| id.to_string()),
+                    serde_json::to_value(episode.session_visibility)
+                        .ok()
+                        .and_then(|value| value.as_str().map(str::to_owned)),
+                    episode.turn_index.map(|index| index as i64),
                     success,
                     rung,
                     episode.id.to_string()
@@ -1999,6 +2255,54 @@ mod tests {
 
         assert_eq!(retrieved.id, ep.id);
         assert_eq!(retrieved.situation, "what is 2 + 2?");
+    }
+
+    #[test]
+    fn sessions_are_durable_and_isolated_recall_is_filtered() {
+        let store = EpisodeStore::in_memory().unwrap();
+        let global = store
+            .create_session(Some("global-chat".into()), SessionVisibility::Global)
+            .unwrap();
+        let isolated = store
+            .create_session(Some("private".into()), SessionVisibility::Isolated)
+            .unwrap();
+
+        let mut global_episode = Episode::new("global memory");
+        global_episode.session_id = Some(global.id);
+        global_episode.turn_index = Some(store.next_turn_index(global.id).unwrap());
+        store.insert(&global_episode).unwrap();
+        let mut isolated_episode = Episode::new("private memory");
+        isolated_episode.session_id = Some(isolated.id);
+        isolated_episode.session_visibility = SessionVisibility::Isolated;
+        isolated_episode.turn_index = Some(store.next_turn_index(isolated.id).unwrap());
+        store.insert(&isolated_episode).unwrap();
+
+        assert_eq!(
+            store
+                .list_recent_for_recall(None, EpisodeRecallMode::Global, 10)
+                .unwrap()
+                .iter()
+                .map(|episode| episode.situation.as_str())
+                .collect::<Vec<_>>(),
+            vec!["global memory"]
+        );
+        assert_eq!(
+            store
+                .list_recent_for_recall(Some(isolated.id), EpisodeRecallMode::Session, 10)
+                .unwrap()
+                .iter()
+                .map(|episode| episode.situation.as_str())
+                .collect::<Vec<_>>(),
+            vec!["private memory"]
+        );
+        assert_eq!(
+            store.get_session("private").unwrap().unwrap().id,
+            isolated.id
+        );
+        assert_eq!(
+            store.end_session("private").unwrap().state,
+            SessionState::Ended
+        );
     }
 
     #[test]

@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   ClaudeTeacher,
   HumanTeacher,
+  normalizeClaudeSchema,
   OllamaTeacher,
   OpenAITeacher,
   ProposalValidationPipeline,
@@ -21,17 +22,18 @@ import {
 } from "../src/index.js";
 
 test("teacher protocol exposes bounded pure reusable lessons and observation guidance", () => {
-  assert.equal(REUSABLE_LESSON_PROTOCOL.primitiveSet, "pure_rpn_v1");
-  assert.ok(REUSABLE_LESSON_PROTOCOL.instructions.includes("multiply"));
+  assert.equal(REUSABLE_LESSON_PROTOCOL.primitiveSet, "pure_expr_v2");
+  assert.ok(REUSABLE_LESSON_PROTOCOL.expressionKinds.includes("binary"));
   assert.ok(
-    !(REUSABLE_LESSON_PROTOCOL.instructions as readonly string[]).includes(
+    !(REUSABLE_LESSON_PROTOCOL.expressionKinds as readonly string[]).includes(
       "call",
     ),
   );
 
   const prompt = `${TEACHER_SYSTEM_PROMPT}\n${buildTeacherPrompt(request)}`;
   assert.match(prompt, /prefer a reusable lesson/i);
-  assert.match(prompt, /pure_rpn_v1/);
+  assert.match(prompt, /pure_expr_v2/);
+  assert.match(prompt, /procedureKey/);
   assert.match(prompt, /trusted sensor primitive/i);
   assert.match(prompt, /never invent ids, timestamps, lifecycle/i);
 });
@@ -231,6 +233,25 @@ test("Claude adapter uses print-mode structured output and returns unverified co
   assert.equal(result.source, "claude:sonnet");
   assert.equal(result.provenance.requestId, "claude-request");
   assert.equal(teacher.reliability().score, 0.5);
+});
+
+test("Claude schema normalization lowers union types for strict AJV", () => {
+  assert.deepEqual(
+    normalizeClaudeSchema({
+      type: "object",
+      properties: {
+        answer: { type: ["null", "number"] },
+      },
+    }),
+    {
+      type: "object",
+      properties: {
+        answer: {
+          anyOf: [{ type: "null" }, { type: "number" }],
+        },
+      },
+    },
+  );
 });
 
 test("OpenAI adapter sends Responses API strict structured-output request", async () => {

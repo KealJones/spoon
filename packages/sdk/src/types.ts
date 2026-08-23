@@ -1,6 +1,88 @@
 export type JsonValue =
   null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
+/**
+ * Typed input/output for Spoon's bounded response-plan renderer. This is not
+ * a general text-generation API: every rendered sentence is caller-supplied
+ * claim text paired with an evidence reference, and the server reports that
+ * those references are not independently verified by this endpoint.
+ */
+export type DialogueAct =
+  | "Inform"
+  | "Ask"
+  | "Clarify"
+  | "Confirm"
+  | "Correct"
+  | "Acknowledge"
+  | "Refuse"
+  | "Abstain";
+
+export interface DialogueMove {
+  act: DialogueAct;
+  relatesToTurn: string | null;
+}
+
+export type EvidenceSourceKind =
+  "Taught" | "SelfVerified" | "Inferred" | "Observed";
+
+export interface ResponseEvidenceReference {
+  id: string;
+  sourceKind: EvidenceSourceKind;
+  linkedEpisode: string | null;
+}
+
+export interface GroundedResponseClaim {
+  id: string;
+  text: string;
+  evidence: ResponseEvidenceReference[];
+  /** Retained server-side for validation only; never returned by render output. */
+  provenance: string[];
+}
+
+export type PlannedResponseClaim =
+  | { Grounded: GroundedResponseClaim }
+  | { Unsupported: { id: string; reason: string } };
+
+export type UncertaintyLevel = "Certain" | "Qualified" | "Unknown";
+
+export interface ResponseUncertainty {
+  level: UncertaintyLevel;
+  disclosure: string | null;
+}
+
+export type ResponseTone = "Neutral" | "Direct" | "Warm" | "Formal";
+export type ResponseRenderVariant = "Plain" | "Bulleted";
+
+export interface ResponsePlan {
+  dialogueMove: DialogueMove;
+  claims: PlannedResponseClaim[];
+  uncertainty: ResponseUncertainty;
+  tone: ResponseTone;
+  variant: ResponseRenderVariant;
+}
+
+/** Content-free overrides; tone remains metadata in the current renderer. */
+export interface ResponseRenderOptions {
+  tone?: ResponseTone;
+  variant?: ResponseRenderVariant;
+}
+
+export interface RenderedResponsePlan {
+  text: string;
+  includedClaimIds: string[];
+  omittedClaimIds: string[];
+  uncertainty: ResponseUncertainty;
+  tone: ResponseTone;
+  dialogueMove: DialogueMove;
+  audit: {
+    renderer: "bounded_response_plan_v1";
+    claimsSubmitted: number;
+    evidenceStatus: "caller_supplied_unverified";
+    provenanceRedacted: true;
+    redacted: true;
+  };
+}
+
 export interface ConceptInput {
   name: string;
   description?: string;
@@ -27,6 +109,9 @@ export interface EpisodeFilter {
   outcome?: "success" | "failure" | "any";
   rung?: string;
   conceptId?: string;
+  sessionId?: string;
+  sessionVisibility?: SessionVisibility;
+  includeIsolated?: boolean;
 }
 
 export interface FeedbackInput {
@@ -503,6 +588,26 @@ export interface CapabilityProcedure {
   provenance: CapabilityProvenance;
 }
 
+/** Public result for a server-configured capability effect. Host roots,
+ * permission scopes, and raw request targets are deliberately absent. */
+export interface CapabilityInvocationResult {
+  contentId: string;
+  procedureId: string;
+  output: JsonValue;
+  outputDigest: string;
+  receipt: {
+    primitive: string;
+    effect: CapabilityEffect;
+    payloadDigest: string;
+    bounds: { maxBytes: number; maxSteps: number; maxMillis: number };
+    redacted: true;
+    replayable: boolean;
+  };
+  usage: { bytes: number; steps: number; millis: number };
+  episodeId: string;
+  redacted: true;
+}
+
 export interface FailureAnalysisInput {
   idempotencyKey?: string;
   episodeId: string;
@@ -775,6 +880,23 @@ export interface CycleInput {
   assumptions: CycleAssumption[];
   budget: CycleBudget;
   teacherAllowed: boolean;
+  sessionId?: string;
+  recallMode?: "global" | "session" | "none";
+  permissionMode?: "ask" | "workspace" | "full-access";
+}
+
+export type SessionVisibility = "global" | "isolated";
+export type SessionState = "active" | "ended";
+export type RecallMode = "global" | "session" | "none";
+export type PermissionMode = "ask" | "workspace" | "full-access";
+
+export interface Session {
+  id: string;
+  name?: string | null;
+  visibility: SessionVisibility;
+  state: SessionState;
+  createdAt: number;
+  endedAt?: number | null;
 }
 
 export interface TeacherRequestWire {
@@ -785,7 +907,7 @@ export interface TeacherRequestWire {
 }
 
 export interface ProposalProvenanceWire {
-  provider: "claude" | "codex" | "openai" | "ollama" | "human";
+  provider: "claude" | "codex" | "cli" | "openai" | "ollama" | "human";
   teacher: string;
   model?: string;
   requestId: string;

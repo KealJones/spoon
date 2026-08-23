@@ -16,6 +16,7 @@ import type {
   Clock,
   Fetch,
   IdFactory,
+  PromptBuilder,
   Teacher,
   TeacherProposal,
   TeacherRequest,
@@ -29,6 +30,8 @@ export interface OpenAITeacherOptions {
   reliabilityTracker?: SourceReliabilityTracker;
   now?: Clock;
   idFactory?: IdFactory;
+  systemPrompt?: string;
+  promptBuilder?: PromptBuilder;
 }
 
 interface OpenAIContent {
@@ -52,6 +55,8 @@ export class OpenAITeacher implements Teacher {
   readonly #now: Clock;
   readonly #idFactory: IdFactory;
   readonly #source: string;
+  readonly #systemPrompt: string;
+  readonly #promptBuilder: PromptBuilder;
 
   constructor(options: OpenAITeacherOptions) {
     this.#model = options.model;
@@ -66,6 +71,8 @@ export class OpenAITeacher implements Teacher {
     this.#now = options.now ?? defaultClock;
     this.#idFactory = options.idFactory ?? defaultIdFactory;
     this.#source = `openai:${this.#model}`;
+    this.#systemPrompt = options.systemPrompt ?? TEACHER_SYSTEM_PROMPT;
+    this.#promptBuilder = options.promptBuilder ?? buildTeacherPrompt;
   }
 
   async propose(request: TeacherRequest): Promise<TeacherProposal> {
@@ -85,8 +92,8 @@ export class OpenAITeacher implements Teacher {
           body: JSON.stringify({
             model: this.#model,
             input: [
-              { role: "system", content: TEACHER_SYSTEM_PROMPT },
-              { role: "user", content: buildTeacherPrompt(request) },
+              { role: "system", content: this.#systemPrompt },
+              { role: "user", content: this.#promptBuilder(request) },
             ],
             text: {
               format: {

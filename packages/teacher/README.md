@@ -18,6 +18,11 @@ The CLI selects a provider with `SPOON_TEACHER` and a model with
 the package never marks a teacher response as independently verified by
 itself.
 
+The adapter transport is also reusable by other strict structured-output
+protocols. In particular, the benchmark **Judge** uses the same Claude/Codex
+CLI and OpenAI/Ollama/human backends but supplies its own prompt and response
+schema; it is not a Teacher and cannot write to Spoon.
+
 ## Library use
 
 ```ts

@@ -125,3 +125,64 @@ test(
     }
   },
 );
+
+test(
+  "SDK renders a bounded response plan through the Rust stdio server",
+  { timeout: 30_000 },
+  async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "spoon-language-"));
+    const transport = StdioTransport.spawn(
+      "cargo",
+      ["run", "--quiet", "-p", "spoon-server"],
+      { env: { ...process.env, SPOON_DB: path.join(directory, "spoon.db") } },
+    );
+    const client = new SpoonClient(transport);
+
+    try {
+      const rendered = await client.renderResponsePlan(
+        {
+          dialogueMove: { act: "Inform", relatesToTurn: null },
+          claims: [
+            {
+              Grounded: {
+                id: "answer",
+                text: "There are 3 r characters in strawberry.",
+                evidence: [
+                  {
+                    id: "episode:letter-count",
+                    sourceKind: "SelfVerified",
+                    linkedEpisode: null,
+                  },
+                ],
+                provenance: ["procedure:private-letter-count"],
+              },
+            },
+            {
+              Unsupported: {
+                id: "unsupported",
+                reason: "No observed evidence was supplied.",
+              },
+            },
+          ],
+          uncertainty: { level: "Certain", disclosure: null },
+          tone: "Neutral",
+          variant: "Plain",
+        },
+        { variant: "Bulleted", tone: "Warm" },
+      );
+
+      assert.equal(rendered.text, "- There are 3 r characters in strawberry.");
+      assert.deepEqual(rendered.includedClaimIds, ["answer"]);
+      assert.deepEqual(rendered.omittedClaimIds, ["unsupported"]);
+      assert.equal(rendered.audit.evidenceStatus, "caller_supplied_unverified");
+      assert.equal(rendered.audit.provenanceRedacted, true);
+      assert.equal(
+        JSON.stringify(rendered).includes("private-letter-count"),
+        false,
+      );
+    } finally {
+      client.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);

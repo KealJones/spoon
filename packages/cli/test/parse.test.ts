@@ -83,6 +83,31 @@ test("parses quiet natural-language cycle requests", () => {
       explain: true,
     },
   );
+  assert.deepEqual(
+    parseCommand(["ask", "--teacher", "off", "what", "is", "double", "7?"]),
+    {
+      kind: "cycle.run",
+      situation: "what is double 7?",
+      quiet: false,
+      explain: false,
+      teacher: "off",
+    },
+  );
+});
+
+test("parses benchmark run and report commands", () => {
+  assert.deepEqual(
+    parseCommand(["benchmark", "run", "bench.json", "report.json"]),
+    {
+      kind: "benchmark.run",
+      fixturePath: "bench.json",
+      reportPath: "report.json",
+    },
+  );
+  assert.deepEqual(parseCommand(["benchmark", "report", "report.json"]), {
+    kind: "benchmark.report",
+    reportPath: "report.json",
+  });
 });
 
 test("parses the explicit failure adaptation workflow", () => {
@@ -137,5 +162,42 @@ test("parses a native primitive observation", () => {
   assert.deepEqual(parseCommand(["primitive", "observe", "clock"]), {
     kind: "primitive.observe",
     target: "clock",
+  });
+});
+
+test("parses config diagnostics and session-aware ask options", () => {
+  assert.deepEqual(parseCommand(["config", "path"]), { kind: "config.path" });
+  assert.deepEqual(parseCommand(["config", "show", "--sources"]), {
+    kind: "config.show",
+    withSources: true,
+  });
+  assert.deepEqual(
+    parseCommand(["config", "set", "recall.mode", "none", "--layer", "user"]),
+    { kind: "config.set", key: "recall.mode", value: "none", layer: "user" },
+  );
+  assert.deepEqual(
+    parseCommand([
+      "ask",
+      "--session",
+      "chat-1",
+      "--recall",
+      "session",
+      "--permission-mode",
+      "workspace",
+      "hello",
+    ]),
+    {
+      kind: "cycle.run",
+      situation: "hello",
+      quiet: false,
+      explain: false,
+      session: "chat-1",
+      recall: "session",
+      permissionMode: "workspace",
+    },
+  );
+  assert.deepEqual(parseCommand(["chat", "--isolated"]), {
+    kind: "chat.run",
+    isolated: true,
   });
 });

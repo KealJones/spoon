@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "FOUNDATION-002",
+  "title": "Double",
+  "suite": "foundations",
+  "family": "FOUNDATION",
+  "track": "foundations",
+  "claimTested": "Spoon can execute a deterministic operation, evaluate its result, and record the episode.",
+  "phases": [
+    {
+      "id": "acquisition",
+      "order": 1,
+      "purpose": "Establish a deterministic arithmetic operation through the public entrypoint.",
+      "teacher": {"mode": "on"},
+      "input": {"prompt": "Double 7."},
+      "expectedOutcome": {"type": "answer", "value": 14, "criteria": ["returns the numeric answer 14"]},
+      "evaluation": {"grounding": "execution", "recordTrace": true}
+    },
+    {
+      "id": "retention",
+      "order": 2,
+      "purpose": "Repeat the exact prompt with Teacher removed as a regression check.",
+      "teacher": {"mode": "off"},
+      "input": {"prompt": "Double 7."},
+      "expectedOutcome": {"type": "answer", "value": 14, "criteria": ["returns 14 without Teacher calls"]},
+      "evaluation": {"teacherOff": true, "exactRepeat": true}
+    },
+    {
+      "id": "generalization",
+      "order": 3,
+      "purpose": "Use a novel value to distinguish an operation from an exact cached answer.",
+      "teacher": {"mode": "off"},
+      "input": {"prompt": "Double 13."},
+      "expectedOutcome": {"type": "answer", "value": 26, "criteria": ["applies the reusable operation to a novel value"]},
+      "evaluation": {"teacherOff": true, "exactRepeat": false}
+    }
+  ]
+}

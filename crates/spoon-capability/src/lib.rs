@@ -5,7 +5,7 @@
 //! supplied fixtures, and invocation requires an explicit local grant.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
@@ -60,6 +60,109 @@ pub enum Permission {
     FileWritePrefix { path_prefix: String },
     ObserveTarget { target: String },
     SandboxProfile { profile: String },
+}
+
+/// How an explicitly local operator has elected to resolve routine capability
+/// grant prompts. This is deliberately separate from portable capability
+/// declarations: callers must obtain this value from local policy, never from
+/// an imported bundle or project-controlled configuration.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PermissionMode {
+    /// Require an exact, durable local grant for every declared permission.
+    #[default]
+    Ask,
+    /// Auto-resolve only declared file and sandbox permissions confined to the
+    /// local workspace root.
+    Workspace,
+    /// Auto-resolve declared native permissions, subject to mandatory denials.
+    FullAccess,
+}
+
+/// Local-only policy used to resolve routine capability grant prompts.
+///
+/// `workspace_root` is required for [`PermissionMode::Workspace`]. Mandatory
+/// denials always win, including in full-access mode. This value does not
+/// broaden a procedure's declaration or a primitive's resource bounds.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PermissionPolicy {
+    pub mode: PermissionMode,
+    pub workspace_root: Option<String>,
+    #[serde(default)]
+    pub mandatory_denials: BTreeSet<Permission>,
+}
+
+impl PermissionPolicy {
+    /// Returns whether this local policy can replace a routine durable grant
+    /// for one *declared* permission. Invalid workspace configuration and
+    /// mandatory denials are rejected rather than downgraded silently.
+    pub fn resolves_without_grant(&self, permission: &Permission) -> Result<bool, CapabilityError> {
+        if self.is_mandatorily_denied(permission)? {
+            return Err(CapabilityError::PermissionRequired(format!(
+                "mandatory denial for {permission:?}"
+            )));
+        }
+        match self.mode {
+            PermissionMode::Ask => Ok(false),
+            PermissionMode::FullAccess => Ok(true),
+            PermissionMode::Workspace => match permission {
+                Permission::FileReadPrefix { path_prefix }
+                | Permission::FileWritePrefix { path_prefix } => {
+                    let root = self.workspace_root()?;
+                    let prefix = Path::new(path_prefix);
+                    validate_absolute_path(prefix, "declared file permission prefix")?;
+                    Ok(prefix.starts_with(root))
+                }
+                Permission::SandboxProfile { .. } => Ok(true),
+                Permission::NetworkHost { .. } | Permission::ObserveTarget { .. } => Ok(false),
+            },
+        }
+    }
+
+    fn workspace_root(&self) -> Result<&Path, CapabilityError> {
+        let root = self.workspace_root.as_deref().ok_or_else(|| {
+            CapabilityError::Invalid("workspace permission mode requires a workspace root".into())
+        })?;
+        let root = Path::new(root);
+        validate_absolute_path(root, "workspace root")?;
+        if root.parent().is_none() {
+            return Err(CapabilityError::Invalid(
+                "filesystem root cannot be used as a workspace root".into(),
+            ));
+        }
+        Ok(root)
+    }
+
+    fn is_mandatorily_denied(&self, permission: &Permission) -> Result<bool, CapabilityError> {
+        for denial in &self.mandatory_denials {
+            match (denial, permission) {
+                (
+                    Permission::FileReadPrefix {
+                        path_prefix: denied,
+                    },
+                    Permission::FileReadPrefix { path_prefix },
+                )
+                | (
+                    Permission::FileWritePrefix {
+                        path_prefix: denied,
+                    },
+                    Permission::FileWritePrefix { path_prefix },
+                ) => {
+                    let denied = Path::new(denied);
+                    let requested = Path::new(path_prefix);
+                    validate_absolute_path(denied, "mandatory denial file prefix")?;
+                    validate_absolute_path(requested, "declared file permission prefix")?;
+                    if requested.starts_with(denied) {
+                        return Ok(true);
+                    }
+                }
+                _ if denial == permission => return Ok(true),
+                _ => {}
+            }
+        }
+        Ok(false)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Ord, PartialOrd)]
@@ -189,6 +292,166 @@ pub trait CapabilityInvocationAdapter {
         &mut self,
         invocation: &AuthorizedPrimitiveInvocation,
     ) -> Result<AdapterExecution, CapabilityError>;
+}
+
+/// A concrete host adapter for file effects confined to one canonical local
+/// directory. Constructing it is an explicit host action; capability bundles
+/// and invocation requests cannot select or widen its root or resource bounds.
+///
+/// The adapter intentionally supports only file read and file write. Network,
+/// observation, and sandbox primitives fail rather than falling back to
+/// ambient host behavior.
+#[derive(Debug, Clone)]
+pub struct ScopedFileAdapter {
+    root: PathBuf,
+    binding: String,
+    authorization_policy: PrimitivePolicy,
+    filesystem_policy: PrimitivePolicy,
+}
+
+impl ScopedFileAdapter {
+    pub fn new(
+        binding: impl Into<String>,
+        root: impl AsRef<Path>,
+        bounds: ResourceBounds,
+    ) -> Result<Self, CapabilityError> {
+        validate_resource_bounds(&bounds)?;
+        let binding = binding.into();
+        if !valid_operation_name(&binding) {
+            return Err(CapabilityError::Invalid(
+                "file adapter binding must be a portable operation name".into(),
+            ));
+        }
+        let root = std::fs::canonicalize(root.as_ref()).map_err(|error| {
+            CapabilityError::Invalid(format!("file adapter root is unavailable: {error}"))
+        })?;
+        let metadata = std::fs::metadata(&root).map_err(|error| {
+            CapabilityError::Invalid(format!("file adapter root metadata failed: {error}"))
+        })?;
+        if !metadata.is_dir() || root.parent().is_none() {
+            return Err(CapabilityError::Invalid(
+                "file adapter root must be a scoped directory".into(),
+            ));
+        }
+        let root_text = root.to_str().ok_or_else(|| {
+            CapabilityError::Invalid("file adapter root must be valid UTF-8".into())
+        })?;
+        let mut authorization_policy = PrimitivePolicy {
+            bounds: bounds.clone(),
+            ..PrimitivePolicy::default()
+        };
+        authorization_policy
+            .file_read_prefixes
+            .insert(binding.clone());
+        authorization_policy
+            .file_write_prefixes
+            .insert(binding.clone());
+        let mut filesystem_policy = PrimitivePolicy {
+            bounds,
+            ..PrimitivePolicy::default()
+        };
+        filesystem_policy
+            .file_read_prefixes
+            .insert(root_text.to_owned());
+        filesystem_policy
+            .file_write_prefixes
+            .insert(root_text.to_owned());
+        Ok(Self {
+            root,
+            binding,
+            authorization_policy,
+            filesystem_policy,
+        })
+    }
+
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
+    /// The immutable server-local policy envelope to pass to capability
+    /// authorization. Callers should clone this per invocation rather than
+    /// accepting a policy from an RPC request.
+    pub fn policy(&self) -> &PrimitivePolicy {
+        &self.authorization_policy
+    }
+
+    fn resolve_request(
+        &self,
+        request: &PrimitiveRequest,
+    ) -> Result<PrimitiveRequest, CapabilityError> {
+        let (path, read_bytes, write_bytes) = match request {
+            PrimitiveRequest::FileRead { path, bytes } => (path, Some(*bytes), None),
+            PrimitiveRequest::FileWrite { path, bytes } => (path, None, Some(*bytes)),
+            _ => {
+                return Err(CapabilityError::AdapterViolation(
+                    "scoped file adapter received a non-file request".into(),
+                ));
+            }
+        };
+        let logical = Path::new(path);
+        validate_file_capability_path(logical, "logical file request")?;
+        if logical.is_absolute() || !logical.starts_with(&self.binding) {
+            return Err(CapabilityError::PermissionRequired(
+                "logical file request is outside the configured binding".into(),
+            ));
+        }
+        let relative = logical.strip_prefix(&self.binding).map_err(|_| {
+            CapabilityError::PermissionRequired(
+                "logical file request is outside the configured binding".into(),
+            )
+        })?;
+        if relative.as_os_str().is_empty() {
+            return Err(CapabilityError::Invalid(
+                "logical file request must name a file within its binding".into(),
+            ));
+        }
+        let resolved = self.root.join(relative);
+        let resolved = resolved.to_str().ok_or_else(|| {
+            CapabilityError::Invalid("resolved file request must be valid UTF-8".into())
+        })?;
+        Ok(match (read_bytes, write_bytes) {
+            (Some(bytes), None) => PrimitiveRequest::FileRead {
+                path: resolved.into(),
+                bytes,
+            },
+            (None, Some(bytes)) => PrimitiveRequest::FileWrite {
+                path: resolved.into(),
+                bytes,
+            },
+            _ => unreachable!(),
+        })
+    }
+}
+
+impl CapabilityInvocationAdapter for ScopedFileAdapter {
+    fn execute(
+        &mut self,
+        invocation: &AuthorizedPrimitiveInvocation,
+    ) -> Result<AdapterExecution, CapabilityError> {
+        let request = self.resolve_request(&invocation.request)?;
+        let executor = NativePrimitiveExecutor::new(self.filesystem_policy.clone());
+        let execution = match invocation.primitive {
+            NativePrimitive::FileRead => executor.read_file(&request)?,
+            NativePrimitive::FileWrite => executor.write_file(&request, &invocation.input)?,
+            _ => {
+                return Err(CapabilityError::AdapterViolation(
+                    "scoped file adapter does not support the requested primitive".into(),
+                ));
+            }
+        };
+        let bytes = canonical_json(&invocation.input)?
+            .len()
+            .saturating_add(canonical_json(&execution.output)?.len());
+        Ok(AdapterExecution {
+            effect: execution.receipt.effect,
+            output: execution.output,
+            usage: ResourceUsage {
+                bytes: u64::try_from(bytes).unwrap_or(u64::MAX),
+                steps: 1,
+                millis: 0,
+            },
+        })
+    }
 }
 
 /// A caller receives the usable typed output plus only redacted provenance:
@@ -543,6 +806,102 @@ impl PrimitivePolicy {
             replayable,
         })
     }
+
+    /// Authorize a request using a locally selected permission mode. The
+    /// caller must supply the procedure's exact declared permission; this
+    /// prevents full-access mode from turning an undeclared primitive effect
+    /// into authority. `authorize` remains ask-mode for compatibility.
+    pub fn authorize_with_permission_policy(
+        &self,
+        request: &PrimitiveRequest,
+        declared_permission: &Permission,
+        permission_policy: &PermissionPolicy,
+    ) -> Result<InvocationReceipt, CapabilityError> {
+        if !request_is_within_permission(request, declared_permission)? {
+            return Err(CapabilityError::PermissionRequired(
+                "request is outside its declared capability permission".into(),
+            ));
+        }
+        let requested_permission = request_permission(request)?;
+        if permission_policy.is_mandatorily_denied(&requested_permission)? {
+            return Err(CapabilityError::PermissionRequired(format!(
+                "mandatory denial for {requested_permission:?}"
+            )));
+        }
+        if !permission_policy.resolves_without_grant(declared_permission)? {
+            return self.authorize(request);
+        }
+
+        // Preserve all primitive validation and bounds enforcement by adding
+        // only the already-declared scope to a short-lived policy.
+        let mut resolved = self.clone();
+        match declared_permission {
+            Permission::NetworkHost { host } => {
+                resolved.network_hosts.insert(host.clone());
+            }
+            Permission::FileReadPrefix { path_prefix } => {
+                resolved.file_read_prefixes.insert(path_prefix.clone());
+            }
+            Permission::FileWritePrefix { path_prefix } => {
+                resolved.file_write_prefixes.insert(path_prefix.clone());
+            }
+            Permission::ObserveTarget { target } => {
+                resolved.observe_targets.insert(target.clone());
+            }
+            Permission::SandboxProfile { profile } => {
+                resolved.sandbox_profiles.insert(profile.clone());
+            }
+        }
+        resolved.authorize(request)
+    }
+}
+
+fn request_permission(request: &PrimitiveRequest) -> Result<Permission, CapabilityError> {
+    match request {
+        PrimitiveRequest::Network { host, .. } => {
+            Ok(Permission::NetworkHost { host: host.clone() })
+        }
+        PrimitiveRequest::FileRead { path, .. } => {
+            validate_file_capability_path(Path::new(path), "requested file path")?;
+            Ok(Permission::FileReadPrefix {
+                path_prefix: path.clone(),
+            })
+        }
+        PrimitiveRequest::FileWrite { path, .. } => {
+            validate_file_capability_path(Path::new(path), "requested file path")?;
+            Ok(Permission::FileWritePrefix {
+                path_prefix: path.clone(),
+            })
+        }
+        PrimitiveRequest::Observe { target } => Ok(Permission::ObserveTarget {
+            target: target.clone(),
+        }),
+        PrimitiveRequest::SandboxExecute { profile, .. } => Ok(Permission::SandboxProfile {
+            profile: profile.clone(),
+        }),
+    }
+}
+
+fn request_is_within_permission(
+    request: &PrimitiveRequest,
+    permission: &Permission,
+) -> Result<bool, CapabilityError> {
+    let requested = request_permission(request)?;
+    match (permission, &requested) {
+        (
+            Permission::FileReadPrefix { path_prefix },
+            Permission::FileReadPrefix { path_prefix: path },
+        )
+        | (
+            Permission::FileWritePrefix { path_prefix },
+            Permission::FileWritePrefix { path_prefix: path },
+        ) => {
+            let prefix = Path::new(&path_prefix);
+            validate_file_capability_path(prefix, "declared file permission prefix")?;
+            Ok(Path::new(&path).starts_with(prefix))
+        }
+        _ => Ok(permission == &requested),
+    }
 }
 
 fn matching_path_prefix(
@@ -550,12 +909,15 @@ fn matching_path_prefix(
     prefixes: &BTreeSet<String>,
 ) -> Result<Option<String>, CapabilityError> {
     let candidate = Path::new(path);
-    validate_absolute_path(candidate, "requested file path")?;
+    validate_file_capability_path(candidate, "requested file path")?;
     let mut matches = Vec::new();
     for prefix in prefixes {
         let prefix_path = Path::new(prefix);
-        validate_absolute_path(prefix_path, "file permission prefix")?;
-        if prefix_path.parent().is_none() {
+        validate_file_capability_path(prefix_path, "file permission prefix")?;
+        if candidate.is_absolute() != prefix_path.is_absolute() {
+            continue;
+        }
+        if prefix_path.is_absolute() && prefix_path.parent().is_none() {
             return Err(CapabilityError::Invalid(
                 "filesystem root cannot be used as a scoped file prefix".into(),
             ));
@@ -577,6 +939,27 @@ fn validate_absolute_path(path: &Path, label: &str) -> Result<(), CapabilityErro
     {
         return Err(CapabilityError::Invalid(format!(
             "{label} must be an absolute normalized path"
+        )));
+    }
+    Ok(())
+}
+
+/// Capability manifests may name a portable logical file binding such as
+/// `workspace/reports/result.json`; concrete host adapters map the first path
+/// component to a local canonical root. Absolute paths remain valid only for
+/// server-local policies and direct native executor use.
+fn validate_file_capability_path(path: &Path, label: &str) -> Result<(), CapabilityError> {
+    if path.is_absolute() {
+        return validate_absolute_path(path, label);
+    }
+    if path.as_os_str().is_empty()
+        || path.to_string_lossy().contains('\0')
+        || path
+            .components()
+            .any(|component| !matches!(component, Component::Normal(_)))
+    {
+        return Err(CapabilityError::Invalid(format!(
+            "{label} must be an absolute normalized path or portable logical binding"
         )));
     }
     Ok(())
@@ -1007,6 +1390,19 @@ fn invoke_authorized_procedure<A: CapabilityInvocationAdapter>(
     policy: &PrimitivePolicy,
     adapter: &mut A,
 ) -> Result<CapabilityInvocation, CapabilityError> {
+    invoke_authorized_procedure_with_permission_policy(
+        content_id, procedure, input, policy, None, adapter,
+    )
+}
+
+fn invoke_authorized_procedure_with_permission_policy<A: CapabilityInvocationAdapter>(
+    content_id: &str,
+    procedure: &CapabilityProcedure,
+    input: &Value,
+    policy: &PrimitivePolicy,
+    permission_policy: Option<&PermissionPolicy>,
+    adapter: &mut A,
+) -> Result<CapabilityInvocation, CapabilityError> {
     validate_primitive_declarations(procedure)?;
     validate_value_schema(&procedure.input_schema, input, "input", 0)?;
     let input_bytes = canonical_json(input)?.len() as u64;
@@ -1017,7 +1413,14 @@ fn invoke_authorized_procedure<A: CapabilityInvocationAdapter>(
         ));
     }
     let request = procedure_request(procedure, input, &bounds)?;
-    let mut receipt = policy.authorize(&request)?;
+    let mut receipt = match permission_policy {
+        Some(permission_policy) => policy.authorize_with_permission_policy(
+            &request,
+            &procedure.permissions[0],
+            permission_policy,
+        )?,
+        None => policy.authorize(&request)?,
+    };
     let expected_effect = expected_effect(&procedure.primitive);
     if receipt.primitive != procedure.primitive || receipt.effect != expected_effect {
         return Err(CapabilityError::AdapterViolation(
@@ -1617,9 +2020,11 @@ fn validate_primitive_declarations(procedure: &CapabilityProcedure) -> Result<()
             let path = contract_string(procedure, "path")?;
             let path = Path::new(&path);
             let prefix = Path::new(path_prefix);
-            validate_absolute_path(path, "procedure file path")?;
-            validate_absolute_path(prefix, "procedure file permission prefix")?;
-            prefix.parent().is_some() && path.starts_with(prefix)
+            validate_file_capability_path(path, "procedure file path")?;
+            validate_file_capability_path(prefix, "procedure file permission prefix")?;
+            path.is_absolute() == prefix.is_absolute()
+                && (!prefix.is_absolute() || prefix.parent().is_some())
+                && path.starts_with(prefix)
         }
         (NativePrimitive::Observe, Permission::ObserveTarget { target }) => {
             target == &contract_string(procedure, "target")? && valid_portable_text(target)
@@ -2477,6 +2882,19 @@ impl CapabilityStore {
         content_id: &str,
         permissions: &[Permission],
     ) -> Result<(), CapabilityError> {
+        self.require_permissions_with_policy(content_id, permissions, &PermissionPolicy::default())
+    }
+
+    /// Check local validation and declared authority using the supplied local
+    /// permission policy. Workspace and full-access modes replace only routine
+    /// durable-grant checks; status, declaration checks, and mandatory denials
+    /// are still evaluated for every invocation.
+    pub fn require_permissions_with_policy(
+        &self,
+        content_id: &str,
+        permissions: &[Permission],
+        permission_policy: &PermissionPolicy,
+    ) -> Result<(), CapabilityError> {
         if permissions.is_empty() {
             return Err(CapabilityError::PermissionRequired(
                 "at least one declared permission".into(),
@@ -2505,6 +2923,9 @@ impl CapabilityStore {
                     "undeclared {permission:?}"
                 )));
             }
+            if permission_policy.resolves_without_grant(permission)? {
+                continue;
+            }
             let granted: bool = self.conn.query_row(
                 "SELECT EXISTS(SELECT 1 FROM capability_grants WHERE content_id = ?1 AND permission_json = ?2 AND revoked = 0)",
                 params![content_id, serde_json::to_string(permission)?],
@@ -2528,6 +2949,20 @@ impl CapabilityStore {
         content_id: &str,
         procedure_id: &str,
     ) -> Result<CapabilityProcedure, CapabilityError> {
+        self.require_procedure_permissions_with_policy(
+            content_id,
+            procedure_id,
+            &PermissionPolicy::default(),
+        )
+    }
+
+    /// Resolve one procedure with a locally selected prompt-resolution mode.
+    pub fn require_procedure_permissions_with_policy(
+        &self,
+        content_id: &str,
+        procedure_id: &str,
+        permission_policy: &PermissionPolicy,
+    ) -> Result<CapabilityProcedure, CapabilityError> {
         let bundle_json: String = self
             .conn
             .query_row(
@@ -2543,7 +2978,11 @@ impl CapabilityStore {
             .into_iter()
             .find(|procedure| procedure.id == procedure_id)
             .ok_or_else(|| CapabilityError::Invalid("procedure not found".into()))?;
-        self.require_permissions(content_id, &procedure.permissions)?;
+        self.require_permissions_with_policy(
+            content_id,
+            &procedure.permissions,
+            permission_policy,
+        )?;
         Ok(procedure)
     }
 
@@ -2561,6 +3000,33 @@ impl CapabilityStore {
     ) -> Result<CapabilityInvocation, CapabilityError> {
         let procedure = self.require_procedure_permissions(content_id, procedure_id)?;
         invoke_authorized_procedure(content_id, &procedure, input, policy, adapter)
+    }
+
+    /// Invoke one stored procedure using an explicit local prompt-resolution
+    /// policy. This does not bypass procedure declarations, revalidation,
+    /// resource bounds, adapter checks, or mandatory denials.
+    pub fn invoke_with_permission_policy<A: CapabilityInvocationAdapter>(
+        &self,
+        content_id: &str,
+        procedure_id: &str,
+        input: &Value,
+        policy: &PrimitivePolicy,
+        permission_policy: &PermissionPolicy,
+        adapter: &mut A,
+    ) -> Result<CapabilityInvocation, CapabilityError> {
+        let procedure = self.require_procedure_permissions_with_policy(
+            content_id,
+            procedure_id,
+            permission_policy,
+        )?;
+        invoke_authorized_procedure_with_permission_policy(
+            content_id,
+            &procedure,
+            input,
+            policy,
+            Some(permission_policy),
+            adapter,
+        )
     }
 }
 
@@ -3352,6 +3818,116 @@ mod tests {
         assert!(execution.output["unixSeconds"].is_number());
     }
 
+    #[test]
+    fn permission_modes_only_bypass_routine_grants_for_declared_scopes() {
+        let policy = PrimitivePolicy {
+            bounds: ResourceBounds {
+                max_bytes: 8,
+                ..ResourceBounds::default()
+            },
+            ..PrimitivePolicy::default()
+        };
+        let network = PrimitiveRequest::Network {
+            host: "api.example.test".into(),
+            method: "GET".into(),
+            body_bytes: 1,
+        };
+        let declared_network = Permission::NetworkHost {
+            host: "api.example.test".into(),
+        };
+        let full_access = PermissionPolicy {
+            mode: PermissionMode::FullAccess,
+            ..PermissionPolicy::default()
+        };
+        assert!(
+            policy
+                .authorize_with_permission_policy(&network, &declared_network, &full_access)
+                .is_ok()
+        );
+        assert!(
+            policy
+                .authorize_with_permission_policy(
+                    &network,
+                    &Permission::ObserveTarget {
+                        target: "clock".into(),
+                    },
+                    &full_access,
+                )
+                .is_err()
+        );
+        assert!(
+            policy
+                .authorize_with_permission_policy(
+                    &PrimitiveRequest::Network {
+                        host: "api.example.test".into(),
+                        method: "GET".into(),
+                        body_bytes: 9,
+                    },
+                    &declared_network,
+                    &full_access,
+                )
+                .is_err()
+        );
+        let denied = PermissionPolicy {
+            mode: PermissionMode::FullAccess,
+            mandatory_denials: BTreeSet::from([declared_network.clone()]),
+            ..PermissionPolicy::default()
+        };
+        assert!(
+            policy
+                .authorize_with_permission_policy(&network, &declared_network, &denied)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn workspace_mode_is_confined_to_declared_paths_and_sandbox() {
+        let policy = PrimitivePolicy::default();
+        let workspace = PermissionPolicy {
+            mode: PermissionMode::Workspace,
+            workspace_root: Some("/tmp/spoon-workspace".into()),
+            ..PermissionPolicy::default()
+        };
+        let inside = PrimitiveRequest::FileRead {
+            path: "/tmp/spoon-workspace/src/lib.rs".into(),
+            bytes: 1,
+        };
+        let inside_permission = Permission::FileReadPrefix {
+            path_prefix: "/tmp/spoon-workspace".into(),
+        };
+        assert!(
+            policy
+                .authorize_with_permission_policy(&inside, &inside_permission, &workspace)
+                .is_ok()
+        );
+        let outside_permission = Permission::FileReadPrefix {
+            path_prefix: "/tmp/other-workspace".into(),
+        };
+        let outside = PrimitiveRequest::FileRead {
+            path: "/tmp/other-workspace/src/lib.rs".into(),
+            bytes: 1,
+        };
+        assert!(
+            policy
+                .authorize_with_permission_policy(&outside, &outside_permission, &workspace)
+                .is_err()
+        );
+        assert!(
+            !workspace
+                .resolves_without_grant(&Permission::NetworkHost {
+                    host: "api.example.test".into(),
+                })
+                .unwrap()
+        );
+        assert!(
+            workspace
+                .resolves_without_grant(&Permission::SandboxProfile {
+                    profile: "pure".into(),
+                })
+                .unwrap()
+        );
+    }
+
     #[derive(Clone)]
     struct MockAdapter {
         output: Value,
@@ -3559,6 +4135,39 @@ mod tests {
                 &bundle.procedures[0].id,
                 &serde_json::json!({}),
                 &policy,
+                &mut valid,
+            ),
+            Err(CapabilityError::PermissionRequired(_))
+        ));
+
+        let full_access = PermissionPolicy {
+            mode: PermissionMode::FullAccess,
+            ..PermissionPolicy::default()
+        };
+        let resumed = store
+            .invoke_with_permission_policy(
+                &imported.content_id,
+                &bundle.procedures[0].id,
+                &serde_json::json!({}),
+                &policy,
+                &full_access,
+                &mut valid,
+            )
+            .unwrap();
+        assert_eq!(resumed.receipt.effect, Effect::Network);
+
+        let denied = PermissionPolicy {
+            mode: PermissionMode::FullAccess,
+            mandatory_denials: BTreeSet::from([bundle.procedures[0].permissions[0].clone()]),
+            ..PermissionPolicy::default()
+        };
+        assert!(matches!(
+            store.invoke_with_permission_policy(
+                &imported.content_id,
+                &bundle.procedures[0].id,
+                &serde_json::json!({}),
+                &policy,
+                &denied,
                 &mut valid,
             ),
             Err(CapabilityError::PermissionRequired(_))

@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spoon.local/schemas/benchmark-experiment.schema.json",
+  "title": "Spoon benchmark experiment",
+  "description": "A controlled experiment for durable acquisition, retention, and generalization.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "title", "suite", "family", "claimTested", "phases"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "minLength": 1 },
+    "title": { "type": "string", "minLength": 1 },
+    "suite": { "type": "string", "minLength": 1 },
+    "family": { "type": "string", "minLength": 1 },
+    "claimTested": { "type": "string", "minLength": 1 },
+    "track": { "type": "string", "minLength": 1 },
+    "setup": { "type": "object" },
+    "novelty": { "type": "object" },
+    "development": { "type": "object" },
+    "scoring": { "type": "object" },
+    "goldConditions": { "type": "array", "items": { "type": "string" } },
+    "notes": { "type": "array", "items": { "type": "string" } },
+    "phases": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/phase" }
+    }
+  },
+  "$defs": {
+    "jsonValue": {
+      "anyOf": [
+        { "type": "null" }, { "type": "boolean" }, { "type": "number" },
+        { "type": "string" },
+        { "type": "array", "items": { "$ref": "#/$defs/jsonValue" } },
+        { "type": "object", "additionalProperties": { "$ref": "#/$defs/jsonValue" } }
+      ]
+    },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "enum": ["answer", "clarify", "abstain", "action", "state_change", "memory_recall", "reconciliation", "attribution", "transfer", "conversation", "conversation_quality"]
+        },
+        "criteria": { "type": "array", "items": { "type": "string" } },
+        "value": { "$ref": "#/$defs/jsonValue" }
+      }
+    },
+    "phase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "order", "purpose", "teacher", "input", "expectedOutcome"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "order": { "type": "integer", "minimum": 1 },
+        "purpose": { "type": "string", "minLength": 1 },
+        "teacher": { "type": "object", "required": ["mode"], "properties": { "mode": { "enum": ["on", "off"] } }, "additionalProperties": false },
+        "input": { "type": "object", "required": ["prompt"], "properties": { "prompt": { "type": "string", "minLength": 1 } }, "additionalProperties": true },
+        "expectedOutcome": { "$ref": "#/$defs/outcome" },
+        "evaluation": { "type": "object" }
+      }
+    }
+  }
+}

@@ -1,9 +1,15 @@
 export {
   ClaudeTeacher,
+  normalizeClaudeSchema,
   runCommand,
   type ClaudeTeacherOptions,
 } from "./claude.js";
-export { CodexTeacher, type CodexTeacherOptions } from "./codex.js";
+export {
+  CodexTeacher,
+  lowerCodexSchema,
+  type CodexTeacherOptions,
+} from "./codex.js";
+export { CliTeacher, parseCliJson, type CliTeacherOptions } from "./command.js";
 export { TeacherError } from "./errors.js";
 export { HumanTeacher, type HumanTeacherOptions } from "./human.js";
 export { OllamaTeacher, type OllamaTeacherOptions } from "./ollama.js";
@@ -35,6 +41,8 @@ export type {
   KnowledgeContext,
   ProposalProvenance,
   ProposalSchema,
+  PromptBuilder,
+  ProviderPromptOptions,
   ProposalValidation,
   ProposalValidator,
   ProposalValidatorResult,

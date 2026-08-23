@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "CONV-CORR-001",
+  "title": "Conversation Correction Handling",
+  "suite": "conversation",
+  "family": "CONV",
+  "track": "conversation",
+  "claimTested": "Spoon can use a later correction for current belief while preserving the earlier statement as history.",
+  "phases": [
+    {
+      "id": "acquisition",
+      "order": 1,
+      "purpose": "Establish the initial conversational fact.",
+      "teacher": {"mode": "on"},
+      "input": {"prompt": "Dash is six."},
+      "expectedOutcome": {"type": "conversation", "criteria": ["acknowledges the conversational fact"]}
+    },
+    {
+      "id": "retention",
+      "order": 2,
+      "purpose": "Apply a later correction with Teacher removed.",
+      "teacher": {"mode": "off"},
+      "input": {"prompt": "Wait, no, Dash is five. Don't forget the correction."},
+      "expectedOutcome": {"type": "conversation", "criteria": ["updates current belief to five", "preserves the earlier statement as history"]}
+    },
+    {
+      "id": "recall",
+      "order": 3,
+      "purpose": "Ask for the current corrected fact after the correction.",
+      "teacher": {"mode": "off"},
+      "input": {"prompt": "So how old is Dash?"},
+      "expectedOutcome": {"type": "conversation", "criteria": ["answers five using the corrected current belief"]}
+    }
+  ]
+}

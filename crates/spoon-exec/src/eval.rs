@@ -1,7 +1,11 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
-use spoon_core::{BinOp, Condition, Expr, Procedure, ProcedureId, SpoonError, UnOp, Value};
+use spoon_core::{
+    BinOp, Condition, Expr, IntrinsicOp, Procedure, ProcedureId, SpoonError, UnOp, Value,
+};
+use unicode_normalization::UnicodeNormalization;
+use unicode_segmentation::UnicodeSegmentation;
 
 use crate::trace::{ConditionCheck, ConditionCheckStatus, ContractChecks, ExecStep, ExecTrace};
 
@@ -158,6 +162,28 @@ impl Evaluator {
                 self.call_procedure(procedure, arg_values)
             }
 
+            Expr::CallExact {
+                procedure,
+                version,
+                args,
+            } => {
+                let registered = self
+                    .procedures
+                    .get(procedure)
+                    .ok_or_else(|| SpoonError::UndefinedProcedure(procedure.to_string()))?;
+                if registered.version != *version {
+                    return Err(SpoonError::Other(format!(
+                        "exact call requires procedure {procedure} version {version}, but registered version is {}",
+                        registered.version
+                    )));
+                }
+                let mut arg_values = Vec::with_capacity(args.len());
+                for arg in args {
+                    arg_values.push(self.eval(arg, env)?);
+                }
+                self.call_procedure(procedure, arg_values)
+            }
+
             Expr::If { cond, then, else_ } => {
                 let c = self.eval(cond, env)?;
                 if c.truthy() {
@@ -277,7 +303,38 @@ impl Evaluator {
                 env.pop_scope();
                 Ok(accumulator)
             }
+
+            Expr::Intrinsic { version, op, args } => self.eval_intrinsic(*version, *op, args, env),
         }
+    }
+
+    fn eval_intrinsic(
+        &mut self,
+        version: u16,
+        op: IntrinsicOp,
+        args: &[Expr],
+        env: &mut Env,
+    ) -> Result<Value, SpoonError> {
+        if version != 1 {
+            return Err(SpoonError::UnsupportedIntrinsicVersion(version));
+        }
+
+        let expected = intrinsic_arity(op);
+        if args.len() != expected {
+            return Err(SpoonError::ArityMismatch {
+                name: intrinsic_name(op).to_string(),
+                expected,
+                got: args.len(),
+            });
+        }
+
+        let mut values = Vec::with_capacity(args.len());
+        for argument in args {
+            values.push(self.eval(argument, env)?);
+        }
+        let value = self.apply_intrinsic(op, values)?;
+        self.ensure_intrinsic_output(intrinsic_name(op), &value)?;
+        Ok(value)
     }
 
     /// Execute a registered procedure by id with the given arguments,
@@ -474,6 +531,16 @@ impl Evaluator {
         Ok(())
     }
 
+    /// Charge intrinsic work in bounded chunks, so one expression cannot hide
+    /// linear or structural work behind its single outer AST evaluation step.
+    fn charge_intrinsic_work(&mut self, amount: usize) -> Result<(), SpoonError> {
+        let units = amount.div_ceil(INTRINSIC_WORK_CHUNK).max(1);
+        for _ in 0..units {
+            self.check_budget()?;
+        }
+        Ok(())
+    }
+
     fn eval_as_list(&mut self, expr: &Expr, env: &mut Env) -> Result<Vec<Value>, SpoonError> {
         let v = self.eval(expr, env)?;
         match v {
@@ -576,6 +643,1278 @@ impl Evaluator {
             (UnOp::Neg, other) => Err(SpoonError::type_error("numeric", other)),
             (UnOp::Not, other) => Err(SpoonError::type_error("bool", other)),
         }
+    }
+}
+
+const MAX_JSON_BYTES: usize = 1_048_576;
+const MAX_JSON_DEPTH: usize = 128;
+const MAX_PATH_BYTES: usize = 16_384;
+const MAX_PATH_SEGMENTS: usize = 256;
+const MAX_INTRINSIC_TEXT_BYTES: usize = 1_048_576;
+const MAX_INTRINSIC_ITEMS: usize = 100_000;
+const INTRINSIC_WORK_CHUNK: usize = 64;
+
+fn intrinsic_name(op: IntrinsicOp) -> &'static str {
+    match op {
+        IntrinsicOp::Length => "length",
+        IntrinsicOp::TextByteLength => "text_byte_length",
+        IntrinsicOp::TextScalarLength => "text_scalar_length",
+        IntrinsicOp::TextGraphemeLength => "text_grapheme_length",
+        IntrinsicOp::TextSplit => "text_split",
+        IntrinsicOp::TextJoin => "text_join",
+        IntrinsicOp::TextTrim => "text_trim",
+        IntrinsicOp::TextLowercase => "text_lowercase",
+        IntrinsicOp::TextUppercase => "text_uppercase",
+        IntrinsicOp::TextContains => "text_contains",
+        IntrinsicOp::TextStartsWith => "text_starts_with",
+        IntrinsicOp::TextEndsWith => "text_ends_with",
+        IntrinsicOp::TextReplace => "text_replace",
+        IntrinsicOp::CollectionContains => "collection_contains",
+        IntrinsicOp::CountEqual => "count_equal",
+        IntrinsicOp::MapKeys => "map_keys",
+        IntrinsicOp::MapValues => "map_values",
+        IntrinsicOp::JsonParse => "json_parse",
+        IntrinsicOp::JsonStringify => "json_stringify",
+        IntrinsicOp::PathGet => "path_get",
+        IntrinsicOp::PathGetOptional => "path_get_optional",
+        IntrinsicOp::TextNormalizeNfc => "text_normalize_nfc",
+        IntrinsicOp::TextNormalizeNfd => "text_normalize_nfd",
+        IntrinsicOp::TextNormalizeNfkc => "text_normalize_nfkc",
+        IntrinsicOp::TextNormalizeNfkd => "text_normalize_nfkd",
+        IntrinsicOp::TextTrimStart => "text_trim_start",
+        IntrinsicOp::TextTrimEnd => "text_trim_end",
+        IntrinsicOp::TextGraphemeSubstring => "text_grapheme_substring",
+        IntrinsicOp::TextIndexOf => "text_index_of",
+        IntrinsicOp::TextCount => "text_count",
+        IntrinsicOp::TextRepeat => "text_repeat",
+        IntrinsicOp::TextConcatMany => "text_concat_many",
+        IntrinsicOp::MapEntries => "map_entries",
+        IntrinsicOp::MapSet => "map_set",
+        IntrinsicOp::MapDelete => "map_delete",
+        IntrinsicOp::MapMerge => "map_merge",
+        IntrinsicOp::CollectionSlice => "collection_slice",
+        IntrinsicOp::CollectionReverse => "collection_reverse",
+        IntrinsicOp::CollectionSort => "collection_sort",
+        IntrinsicOp::CollectionUnique => "collection_unique",
+        IntrinsicOp::CollectionFlatten => "collection_flatten",
+        IntrinsicOp::CollectionZip => "collection_zip",
+        IntrinsicOp::Range => "range",
+        IntrinsicOp::TypeName => "type_name",
+        IntrinsicOp::ParseInt => "parse_int",
+        IntrinsicOp::ParseFloat => "parse_float",
+        IntrinsicOp::ParseBool => "parse_bool",
+        IntrinsicOp::ToText => "to_text",
+        IntrinsicOp::NumericAbs => "numeric_abs",
+        IntrinsicOp::NumericSign => "numeric_sign",
+        IntrinsicOp::NumericMin => "numeric_min",
+        IntrinsicOp::NumericMax => "numeric_max",
+        IntrinsicOp::NumericClamp => "numeric_clamp",
+        IntrinsicOp::NumericFloor => "numeric_floor",
+        IntrinsicOp::NumericCeil => "numeric_ceil",
+        IntrinsicOp::NumericRound => "numeric_round",
+        IntrinsicOp::NumericTruncate => "numeric_truncate",
+        IntrinsicOp::NumericPowInt => "numeric_pow_int",
+        IntrinsicOp::NumericPowFloat => "numeric_pow_float",
+        IntrinsicOp::IntegerQuotient => "integer_quotient",
+        IntrinsicOp::IntegerRemainder => "integer_remainder",
+    }
+}
+
+fn intrinsic_arity(op: IntrinsicOp) -> usize {
+    match op {
+        IntrinsicOp::TextSplit
+        | IntrinsicOp::TextJoin
+        | IntrinsicOp::TextContains
+        | IntrinsicOp::TextStartsWith
+        | IntrinsicOp::TextEndsWith
+        | IntrinsicOp::CollectionContains
+        | IntrinsicOp::CountEqual
+        | IntrinsicOp::PathGet
+        | IntrinsicOp::PathGetOptional
+        | IntrinsicOp::TextIndexOf
+        | IntrinsicOp::TextCount
+        | IntrinsicOp::TextRepeat
+        | IntrinsicOp::MapDelete
+        | IntrinsicOp::MapMerge
+        | IntrinsicOp::CollectionZip => 2,
+        IntrinsicOp::TextReplace
+        | IntrinsicOp::TextGraphemeSubstring
+        | IntrinsicOp::MapSet
+        | IntrinsicOp::CollectionSlice
+        | IntrinsicOp::Range
+        | IntrinsicOp::NumericClamp => 3,
+        IntrinsicOp::Length
+        | IntrinsicOp::TextByteLength
+        | IntrinsicOp::TextScalarLength
+        | IntrinsicOp::TextGraphemeLength
+        | IntrinsicOp::TextTrim
+        | IntrinsicOp::TextLowercase
+        | IntrinsicOp::TextUppercase
+        | IntrinsicOp::MapKeys
+        | IntrinsicOp::MapValues
+        | IntrinsicOp::JsonParse
+        | IntrinsicOp::JsonStringify
+        | IntrinsicOp::TextNormalizeNfc
+        | IntrinsicOp::TextNormalizeNfd
+        | IntrinsicOp::TextNormalizeNfkc
+        | IntrinsicOp::TextNormalizeNfkd
+        | IntrinsicOp::TextTrimStart
+        | IntrinsicOp::TextTrimEnd
+        | IntrinsicOp::TextConcatMany
+        | IntrinsicOp::MapEntries
+        | IntrinsicOp::CollectionReverse
+        | IntrinsicOp::CollectionSort
+        | IntrinsicOp::CollectionUnique
+        | IntrinsicOp::CollectionFlatten
+        | IntrinsicOp::TypeName
+        | IntrinsicOp::ParseInt
+        | IntrinsicOp::ParseFloat
+        | IntrinsicOp::ParseBool
+        | IntrinsicOp::ToText
+        | IntrinsicOp::NumericAbs
+        | IntrinsicOp::NumericSign
+        | IntrinsicOp::NumericFloor
+        | IntrinsicOp::NumericCeil
+        | IntrinsicOp::NumericRound
+        | IntrinsicOp::NumericTruncate => 1,
+        IntrinsicOp::NumericMin
+        | IntrinsicOp::NumericMax
+        | IntrinsicOp::NumericPowInt
+        | IntrinsicOp::NumericPowFloat
+        | IntrinsicOp::IntegerQuotient
+        | IntrinsicOp::IntegerRemainder => 2,
+    }
+}
+
+impl Evaluator {
+    fn apply_intrinsic(&mut self, op: IntrinsicOp, args: Vec<Value>) -> Result<Value, SpoonError> {
+        match op {
+            IntrinsicOp::Length => match only_arg(args) {
+                Value::Text(text) => {
+                    self.charge_text(&text)?;
+                    Ok(Value::Int(text.graphemes(true).count() as i64))
+                }
+                Value::List(items) => {
+                    self.charge_items(items.len())?;
+                    Ok(Value::Int(items.len() as i64))
+                }
+                Value::Map(entries) => {
+                    self.charge_items(entries.len())?;
+                    Ok(Value::Int(entries.len() as i64))
+                }
+                other => Err(SpoonError::type_error("text, list, or map", &other)),
+            },
+            IntrinsicOp::TextByteLength => {
+                let text = text_arg(only_arg(args))?;
+                self.charge_text(&text)?;
+                Ok(Value::Int(text.len() as i64))
+            }
+            IntrinsicOp::TextScalarLength => {
+                let text = text_arg(only_arg(args))?;
+                self.charge_text(&text)?;
+                Ok(Value::Int(text.chars().count() as i64))
+            }
+            IntrinsicOp::TextGraphemeLength => {
+                let text = text_arg(only_arg(args))?;
+                self.charge_text(&text)?;
+                Ok(Value::Int(text.graphemes(true).count() as i64))
+            }
+            IntrinsicOp::TextSplit => {
+                let [text, delimiter] = two_args(args);
+                let text = text_arg(text)?;
+                let delimiter = text_arg(delimiter)?;
+                self.charge_text(&text)?;
+                self.charge_text(&delimiter)?;
+                let items: Vec<Value> = if delimiter.is_empty() {
+                    text.graphemes(true)
+                        .map(|s| Value::Text(s.to_owned()))
+                        .collect()
+                } else {
+                    text.split(&delimiter)
+                        .map(|s| Value::Text(s.to_owned()))
+                        .collect()
+                };
+                self.ensure_items("text_split output items", items.len())?;
+                Ok(Value::List(items))
+            }
+            IntrinsicOp::TextJoin | IntrinsicOp::TextConcatMany => {
+                let (items, delimiter) = if op == IntrinsicOp::TextJoin {
+                    let [items, delimiter] = two_args(args);
+                    (list_arg(items)?, text_arg(delimiter)?)
+                } else {
+                    (list_arg(only_arg(args))?, String::new())
+                };
+                self.charge_items(items.len())?;
+                self.charge_text(&delimiter)?;
+                let mut output = String::new();
+                for (index, item) in items.into_iter().enumerate() {
+                    let text = text_arg(item)?;
+                    self.charge_text(&text)?;
+                    if index > 0 {
+                        append_text(&mut output, &delimiter, intrinsic_name(op))?;
+                    }
+                    append_text(&mut output, &text, intrinsic_name(op))?;
+                }
+                Ok(Value::Text(output))
+            }
+            IntrinsicOp::TextTrim | IntrinsicOp::TextTrimStart | IntrinsicOp::TextTrimEnd => {
+                let text = text_arg(only_arg(args))?;
+                self.charge_text(&text)?;
+                let output = match op {
+                    IntrinsicOp::TextTrim => text.trim(),
+                    IntrinsicOp::TextTrimStart => text.trim_start(),
+                    _ => text.trim_end(),
+                };
+                self.ensure_text("text trim output bytes", output.len())?;
+                Ok(Value::Text(output.to_owned()))
+            }
+            IntrinsicOp::TextLowercase
+            | IntrinsicOp::TextUppercase
+            | IntrinsicOp::TextNormalizeNfc
+            | IntrinsicOp::TextNormalizeNfd
+            | IntrinsicOp::TextNormalizeNfkc
+            | IntrinsicOp::TextNormalizeNfkd => {
+                let text = text_arg(only_arg(args))?;
+                self.charge_text(&text)?;
+                let output = match op {
+                    IntrinsicOp::TextLowercase => text.to_lowercase(),
+                    IntrinsicOp::TextUppercase => text.to_uppercase(),
+                    IntrinsicOp::TextNormalizeNfc => text.nfc().collect(),
+                    IntrinsicOp::TextNormalizeNfd => text.nfd().collect(),
+                    IntrinsicOp::TextNormalizeNfkc => text.nfkc().collect(),
+                    IntrinsicOp::TextNormalizeNfkd => text.nfkd().collect(),
+                    _ => unreachable!(),
+                };
+                self.ensure_text("text transform output bytes", output.len())?;
+                self.charge_text(&output)?;
+                Ok(Value::Text(output))
+            }
+            IntrinsicOp::TextContains
+            | IntrinsicOp::TextStartsWith
+            | IntrinsicOp::TextEndsWith
+            | IntrinsicOp::TextIndexOf
+            | IntrinsicOp::TextCount => {
+                let [text, needle] = two_args(args);
+                let text = text_arg(text)?;
+                let needle = text_arg(needle)?;
+                self.charge_text(&text)?;
+                self.charge_text(&needle)?;
+                match op {
+                    IntrinsicOp::TextContains => Ok(Value::Bool(text.contains(&needle))),
+                    IntrinsicOp::TextStartsWith => Ok(Value::Bool(text.starts_with(&needle))),
+                    IntrinsicOp::TextEndsWith => Ok(Value::Bool(text.ends_with(&needle))),
+                    IntrinsicOp::TextIndexOf => Ok(Value::Int(
+                        text.find(&needle)
+                            .map(|byte| text[..byte].graphemes(true).count() as i64)
+                            .unwrap_or(-1),
+                    )),
+                    IntrinsicOp::TextCount => Ok(Value::Int(if needle.is_empty() {
+                        text.graphemes(true).count() as i64 + 1
+                    } else {
+                        text.matches(&needle).count() as i64
+                    })),
+                    _ => unreachable!(),
+                }
+            }
+            IntrinsicOp::TextReplace => {
+                let [text, from, to] = three_args(args);
+                let text = text_arg(text)?;
+                let from = text_arg(from)?;
+                let to = text_arg(to)?;
+                self.charge_text(&text)?;
+                self.charge_text(&from)?;
+                self.charge_text(&to)?;
+                let output = text.replace(&from, &to);
+                self.ensure_text("text_replace output bytes", output.len())?;
+                self.charge_text(&output)?;
+                Ok(Value::Text(output))
+            }
+            IntrinsicOp::TextGraphemeSubstring => {
+                let [text, start, length] = three_args(args);
+                let text = text_arg(text)?;
+                self.charge_text(&text)?;
+                let pieces: Vec<&str> = text.graphemes(true).collect();
+                let start = normalized_start(int_arg(start)?, pieces.len())?;
+                let length = nonnegative_usize(int_arg(length)?, "text_grapheme_substring length")?;
+                let end = start.saturating_add(length).min(pieces.len());
+                let output = pieces[start..end].concat();
+                self.ensure_text("text_grapheme_substring output bytes", output.len())?;
+                Ok(Value::Text(output))
+            }
+            IntrinsicOp::TextRepeat => {
+                let [text, count] = two_args(args);
+                let text = text_arg(text)?;
+                self.charge_text(&text)?;
+                let count = nonnegative_usize(int_arg(count)?, "text_repeat count")?;
+                self.ensure_items("text_repeat count", count)?;
+                let bytes = text.len().checked_mul(count).ok_or_else(|| {
+                    SpoonError::ArithmeticOverflow {
+                        operation: "text_repeat output size".into(),
+                    }
+                })?;
+                self.ensure_text("text_repeat output bytes", bytes)?;
+                self.charge_intrinsic_work(bytes)?;
+                Ok(Value::Text(text.repeat(count)))
+            }
+            IntrinsicOp::CollectionContains => {
+                let [collection, sought] = two_args(args);
+                match collection {
+                    Value::List(items) => {
+                        self.charge_items(items.len())?;
+                        Ok(Value::Bool(items.contains(&sought)))
+                    }
+                    Value::Map(entries) => {
+                        self.charge_items(entries.len())?;
+                        let key = text_arg(sought)?;
+                        Ok(Value::Bool(entries.contains_key(&key)))
+                    }
+                    other => Err(SpoonError::type_error("list or map", &other)),
+                }
+            }
+            IntrinsicOp::CountEqual => {
+                let [collection, sought] = two_args(args);
+                let items = list_arg(collection)?;
+                self.charge_items(items.len())?;
+                Ok(Value::Int(
+                    items.iter().filter(|item| **item == sought).count() as i64,
+                ))
+            }
+            IntrinsicOp::MapKeys | IntrinsicOp::MapValues | IntrinsicOp::MapEntries => {
+                let entries = map_arg(only_arg(args))?;
+                self.charge_items(entries.len())?;
+                self.ensure_items("map output items", entries.len())?;
+                let values = match op {
+                    IntrinsicOp::MapKeys => entries.into_keys().map(Value::Text).collect(),
+                    IntrinsicOp::MapValues => entries.into_values().collect(),
+                    IntrinsicOp::MapEntries => entries
+                        .into_iter()
+                        .map(|(k, v)| Value::List(vec![Value::Text(k), v]))
+                        .collect(),
+                    _ => unreachable!(),
+                };
+                Ok(Value::List(values))
+            }
+            IntrinsicOp::MapSet => {
+                let [map, key, value] = three_args(args);
+                let mut map = map_arg(map)?;
+                let key = text_arg(key)?;
+                self.charge_items(map.len())?;
+                self.charge_text(&key)?;
+                if !map.contains_key(&key) {
+                    self.ensure_items("map_set output items", map.len() + 1)?;
+                }
+                map.insert(key, value);
+                Ok(Value::Map(map))
+            }
+            IntrinsicOp::MapDelete => {
+                let [map, key] = two_args(args);
+                let mut map = map_arg(map)?;
+                let key = text_arg(key)?;
+                self.charge_items(map.len())?;
+                self.charge_text(&key)?;
+                map.remove(&key);
+                Ok(Value::Map(map))
+            }
+            IntrinsicOp::MapMerge => {
+                let [left, right] = two_args(args);
+                let mut left = map_arg(left)?;
+                let right = map_arg(right)?;
+                self.charge_items(left.len())?;
+                self.charge_items(right.len())?;
+                self.ensure_items(
+                    "map_merge output items",
+                    left.len().saturating_add(right.len()),
+                )?;
+                left.extend(right);
+                self.ensure_items("map_merge output items", left.len())?;
+                Ok(Value::Map(left))
+            }
+            IntrinsicOp::CollectionSlice => {
+                let [items, start, length] = three_args(args);
+                let items = list_arg(items)?;
+                self.charge_items(items.len())?;
+                let start = normalized_start(int_arg(start)?, items.len())?;
+                let length = nonnegative_usize(int_arg(length)?, "collection_slice length")?;
+                let end = start.saturating_add(length).min(items.len());
+                self.ensure_items("collection_slice output items", end - start)?;
+                Ok(Value::List(items[start..end].to_vec()))
+            }
+            IntrinsicOp::CollectionReverse => {
+                let mut items = list_arg(only_arg(args))?;
+                self.charge_items(items.len())?;
+                items.reverse();
+                Ok(Value::List(items))
+            }
+            IntrinsicOp::CollectionSort => {
+                let mut items = list_arg(only_arg(args))?;
+                self.charge_items(items.len())?;
+                self.ensure_items("collection_sort items", items.len())?;
+                // `sort_by` is stable: values that compare equal retain their
+                // source order, while the total cross-type order is explicit.
+                items.sort_by(value_sort_cmp);
+                Ok(Value::List(items))
+            }
+            IntrinsicOp::CollectionUnique => {
+                let items = list_arg(only_arg(args))?;
+                self.charge_items(items.len())?;
+                let mut output = Vec::new();
+                for item in items {
+                    if !output.contains(&item) {
+                        self.ensure_items("collection_unique output items", output.len() + 1)?;
+                        output.push(item);
+                    }
+                }
+                Ok(Value::List(output))
+            }
+            IntrinsicOp::CollectionFlatten => {
+                let items = list_arg(only_arg(args))?;
+                self.charge_items(items.len())?;
+                let mut output = Vec::new();
+                for item in items {
+                    let nested = list_arg(item)?;
+                    self.charge_items(nested.len())?;
+                    self.ensure_items(
+                        "collection_flatten output items",
+                        output.len().saturating_add(nested.len()),
+                    )?;
+                    output.extend(nested);
+                }
+                Ok(Value::List(output))
+            }
+            IntrinsicOp::CollectionZip => {
+                let [left, right] = two_args(args);
+                let left = list_arg(left)?;
+                let right = list_arg(right)?;
+                self.charge_items(left.len())?;
+                self.charge_items(right.len())?;
+                let length = left.len().min(right.len());
+                self.ensure_items("collection_zip output items", length)?;
+                Ok(Value::List(
+                    left.into_iter()
+                        .zip(right)
+                        .map(|(a, b)| Value::List(vec![a, b]))
+                        .collect(),
+                ))
+            }
+            IntrinsicOp::Range => {
+                let [start, end, step] = three_args(args);
+                self.range(int_arg(start)?, int_arg(end)?, int_arg(step)?)
+            }
+            IntrinsicOp::TypeName => {
+                let value = only_arg(args);
+                Ok(Value::Text(value.type_name().to_owned()))
+            }
+            IntrinsicOp::ParseInt => {
+                let text = text_arg(only_arg(args))?;
+                self.charge_text(&text)?;
+                Ok(text
+                    .trim()
+                    .parse::<i64>()
+                    .map(Value::Int)
+                    .unwrap_or(Value::Null))
+            }
+            IntrinsicOp::ParseFloat => {
+                let text = text_arg(only_arg(args))?;
+                self.charge_text(&text)?;
+                Ok(text
+                    .trim()
+                    .parse::<f64>()
+                    .ok()
+                    .filter(|n| n.is_finite())
+                    .map(Value::Float)
+                    .unwrap_or(Value::Null))
+            }
+            IntrinsicOp::ParseBool => {
+                let text = text_arg(only_arg(args))?;
+                self.charge_text(&text)?;
+                Ok(match text.trim() {
+                    "true" => Value::Bool(true),
+                    "false" => Value::Bool(false),
+                    _ => Value::Null,
+                })
+            }
+            IntrinsicOp::ToText => {
+                let value = only_arg(args);
+                let text = match value {
+                    Value::Text(text) => text,
+                    Value::Null => "null".into(),
+                    Value::Bool(value) => value.to_string(),
+                    Value::Int(value) => value.to_string(),
+                    Value::Float(value) if value.is_finite() => value.to_string(),
+                    Value::Float(_) => {
+                        return Err(SpoonError::InvalidJson(
+                            "cannot convert a non-finite float to text".into(),
+                        ));
+                    }
+                    value @ (Value::List(_) | Value::Map(_)) => self
+                        .stringify_json(value)?
+                        .as_text()
+                        .expect("stringify_json returns text")
+                        .to_owned(),
+                };
+                self.ensure_text("to_text output bytes", text.len())?;
+                Ok(Value::Text(text))
+            }
+            IntrinsicOp::NumericAbs => numeric_abs(only_arg(args)),
+            IntrinsicOp::NumericSign => numeric_sign(only_arg(args)),
+            IntrinsicOp::NumericMin | IntrinsicOp::NumericMax => {
+                let [left, right] = two_args(args);
+                numeric_min_max(op, left, right)
+            }
+            IntrinsicOp::NumericClamp => {
+                let [value, lower, upper] = three_args(args);
+                numeric_clamp(value, lower, upper)
+            }
+            IntrinsicOp::NumericFloor
+            | IntrinsicOp::NumericCeil
+            | IntrinsicOp::NumericRound
+            | IntrinsicOp::NumericTruncate => numeric_rounding(op, only_arg(args)),
+            IntrinsicOp::NumericPowInt => {
+                let [base, exponent] = two_args(args);
+                self.numeric_pow_int(base, exponent)
+            }
+            IntrinsicOp::NumericPowFloat => {
+                let [base, exponent] = two_args(args);
+                numeric_pow_float(base, exponent)
+            }
+            IntrinsicOp::IntegerQuotient | IntrinsicOp::IntegerRemainder => {
+                let [left, right] = two_args(args);
+                integer_quotient_remainder(op, left, right)
+            }
+            IntrinsicOp::JsonParse => self.parse_json(text_arg(only_arg(args))?),
+            IntrinsicOp::JsonStringify => self.stringify_json(only_arg(args)),
+            IntrinsicOp::PathGet | IntrinsicOp::PathGetOptional => {
+                let optional = op == IntrinsicOp::PathGetOptional;
+                let [value, path] = two_args(args);
+                self.get_path(value, text_arg(path)?, optional)
+            }
+        }
+    }
+
+    fn charge_text(&mut self, text: &str) -> Result<(), SpoonError> {
+        self.ensure_text("text input bytes", text.len())?;
+        self.charge_intrinsic_work(text.len())
+    }
+    fn charge_items(&mut self, items: usize) -> Result<(), SpoonError> {
+        self.ensure_items("collection input items", items)?;
+        self.charge_intrinsic_work(items)
+    }
+    fn ensure_text(&self, operation: &str, bytes: usize) -> Result<(), SpoonError> {
+        if bytes > MAX_INTRINSIC_TEXT_BYTES {
+            Err(SpoonError::IntrinsicLimitExceeded {
+                operation: operation.into(),
+                limit: MAX_INTRINSIC_TEXT_BYTES,
+            })
+        } else {
+            Ok(())
+        }
+    }
+    fn ensure_items(&self, operation: &str, items: usize) -> Result<(), SpoonError> {
+        if items > MAX_INTRINSIC_ITEMS {
+            Err(SpoonError::IntrinsicLimitExceeded {
+                operation: operation.into(),
+                limit: MAX_INTRINSIC_ITEMS,
+            })
+        } else {
+            Ok(())
+        }
+    }
+
+    fn ensure_intrinsic_output(
+        &mut self,
+        operation: &str,
+        value: &Value,
+    ) -> Result<(), SpoonError> {
+        let bytes = self.intrinsic_value_bytes(value, 0)?;
+        self.ensure_text(&format!("{operation} output bytes"), bytes)
+    }
+
+    fn intrinsic_value_bytes(&mut self, value: &Value, depth: usize) -> Result<usize, SpoonError> {
+        if depth > MAX_JSON_DEPTH {
+            return Err(SpoonError::IntrinsicLimitExceeded {
+                operation: "intrinsic output depth".into(),
+                limit: MAX_JSON_DEPTH,
+            });
+        }
+        self.charge_intrinsic_work(1)?;
+        match value {
+            Value::Null => Ok(4),
+            Value::Bool(value) => Ok(if *value { 4 } else { 5 }),
+            Value::Int(value) => Ok(value.to_string().len()),
+            Value::Float(value) => Ok(value.to_string().len()),
+            Value::Text(value) => Ok(value.len()),
+            Value::List(items) => {
+                self.ensure_items("intrinsic output list items", items.len())?;
+                items.iter().try_fold(2usize, |bytes, item| {
+                    bytes
+                        .checked_add(self.intrinsic_value_bytes(item, depth + 1)?)
+                        .ok_or_else(|| SpoonError::ArithmeticOverflow {
+                            operation: "intrinsic output size".into(),
+                        })
+                })
+            }
+            Value::Map(entries) => {
+                self.ensure_items("intrinsic output map items", entries.len())?;
+                entries.iter().try_fold(2usize, |bytes, (key, value)| {
+                    let value_bytes = self.intrinsic_value_bytes(value, depth + 1)?;
+                    bytes
+                        .checked_add(key.len())
+                        .and_then(|sum| sum.checked_add(value_bytes))
+                        .ok_or_else(|| SpoonError::ArithmeticOverflow {
+                            operation: "intrinsic output size".into(),
+                        })
+                })
+            }
+        }
+    }
+    fn range(&mut self, start: i64, end: i64, step: i64) -> Result<Value, SpoonError> {
+        if step == 0 {
+            return Err(SpoonError::Other("range step cannot be zero".into()));
+        }
+        if (step > 0 && start >= end) || (step < 0 && start <= end) {
+            return Ok(Value::List(vec![]));
+        }
+        let distance = if step > 0 {
+            end.checked_sub(start)
+        } else {
+            start.checked_sub(end)
+        }
+        .ok_or_else(|| SpoonError::ArithmeticOverflow {
+            operation: "range distance".into(),
+        })? as u64;
+        let stride = step.unsigned_abs();
+        let count = distance.div_ceil(stride) as usize;
+        self.ensure_items("range output items", count)?;
+        self.charge_items(count)?;
+        let mut values = Vec::with_capacity(count);
+        let mut current = start;
+        for _ in 0..count {
+            values.push(Value::Int(current));
+            current = current
+                .checked_add(step)
+                .ok_or_else(|| SpoonError::ArithmeticOverflow {
+                    operation: "range increment".into(),
+                })?;
+        }
+        Ok(Value::List(values))
+    }
+
+    fn numeric_pow_int(&mut self, base: Value, exponent: Value) -> Result<Value, SpoonError> {
+        let base = match base {
+            Value::Int(value) => value,
+            other => return Err(SpoonError::type_error("int", &other)),
+        };
+        let exponent = match exponent {
+            Value::Int(value) => value,
+            other => return Err(SpoonError::type_error("int", &other)),
+        };
+        if exponent < 0 {
+            return Err(SpoonError::NegativeExponent {
+                operation: "numeric_pow_int".into(),
+            });
+        }
+
+        // Exponentiation by squaring is bounded by the width of i64 (at most
+        // 63 loop iterations), and every multiplication is checked.
+        let mut exponent = exponent as u64;
+        let mut factor = base;
+        let mut result = 1i64;
+        while exponent != 0 {
+            self.check_budget()?;
+            if exponent & 1 == 1 {
+                result =
+                    result
+                        .checked_mul(factor)
+                        .ok_or_else(|| SpoonError::ArithmeticOverflow {
+                            operation: "numeric_pow_int multiplication".into(),
+                        })?;
+            }
+            exponent >>= 1;
+            if exponent != 0 {
+                factor =
+                    factor
+                        .checked_mul(factor)
+                        .ok_or_else(|| SpoonError::ArithmeticOverflow {
+                            operation: "numeric_pow_int squaring".into(),
+                        })?;
+            }
+        }
+        Ok(Value::Int(result))
+    }
+}
+
+fn only_arg(mut args: Vec<Value>) -> Value {
+    args.pop()
+        .expect("arity validated before intrinsic evaluation")
+}
+
+fn two_args(args: Vec<Value>) -> [Value; 2] {
+    args.try_into()
+        .expect("arity validated before intrinsic evaluation")
+}
+
+fn three_args(args: Vec<Value>) -> [Value; 3] {
+    args.try_into()
+        .expect("arity validated before intrinsic evaluation")
+}
+
+fn text_arg(value: Value) -> Result<String, SpoonError> {
+    match value {
+        Value::Text(text) => Ok(text),
+        other => Err(SpoonError::type_error("text", &other)),
+    }
+}
+
+fn int_arg(value: Value) -> Result<i64, SpoonError> {
+    match value {
+        Value::Int(value) => Ok(value),
+        other => Err(SpoonError::type_error("int", &other)),
+    }
+}
+
+fn nonnegative_usize(value: i64, operation: &str) -> Result<usize, SpoonError> {
+    usize::try_from(value)
+        .map_err(|_| SpoonError::Other(format!("{operation} must be non-negative")))
+}
+
+fn normalized_start(start: i64, length: usize) -> Result<usize, SpoonError> {
+    let length_i64 = i64::try_from(length).map_err(|_| SpoonError::ArithmeticOverflow {
+        operation: "collection length conversion".into(),
+    })?;
+    let start = if start < 0 {
+        start
+            .checked_add(length_i64)
+            .ok_or_else(|| SpoonError::ArithmeticOverflow {
+                operation: "negative index".into(),
+            })?
+    } else {
+        start
+    };
+    Ok(usize::try_from(start).unwrap_or(usize::MAX).min(length))
+}
+
+fn append_text(output: &mut String, text: &str, operation: &str) -> Result<(), SpoonError> {
+    let total =
+        output
+            .len()
+            .checked_add(text.len())
+            .ok_or_else(|| SpoonError::ArithmeticOverflow {
+                operation: format!("{operation} output size"),
+            })?;
+    if total > MAX_INTRINSIC_TEXT_BYTES {
+        return Err(SpoonError::IntrinsicLimitExceeded {
+            operation: format!("{operation} output bytes"),
+            limit: MAX_INTRINSIC_TEXT_BYTES,
+        });
+    }
+    output.push_str(text);
+    Ok(())
+}
+
+fn invalid_number(operation: &str, reason: impl Into<String>) -> SpoonError {
+    SpoonError::InvalidNumber {
+        operation: operation.into(),
+        reason: reason.into(),
+    }
+}
+
+fn finite_numeric_float(value: &Value, operation: &str) -> Result<f64, SpoonError> {
+    let number = match value {
+        Value::Int(value) => *value as f64,
+        Value::Float(value) => *value,
+        other => return Err(SpoonError::type_error("numeric", other)),
+    };
+    if number.is_finite() {
+        Ok(number)
+    } else {
+        Err(invalid_number(operation, "value must be finite"))
+    }
+}
+
+fn numeric_abs(value: Value) -> Result<Value, SpoonError> {
+    match value {
+        Value::Int(value) => {
+            value
+                .checked_abs()
+                .map(Value::Int)
+                .ok_or_else(|| SpoonError::ArithmeticOverflow {
+                    operation: "numeric_abs".into(),
+                })
+        }
+        Value::Float(value) => {
+            if !value.is_finite() {
+                Err(invalid_number("numeric_abs", "value must be finite"))
+            } else {
+                Ok(Value::Float(value.abs()))
+            }
+        }
+        other => Err(SpoonError::type_error("numeric", &other)),
+    }
+}
+
+fn numeric_sign(value: Value) -> Result<Value, SpoonError> {
+    match value {
+        Value::Int(value) => Ok(Value::Int(value.signum())),
+        Value::Float(value) if value.is_finite() => Ok(Value::Int(if value > 0.0 {
+            1
+        } else if value < 0.0 {
+            -1
+        } else {
+            0
+        })),
+        Value::Float(_) => Err(invalid_number("numeric_sign", "value must be finite")),
+        other => Err(SpoonError::type_error("numeric", &other)),
+    }
+}
+
+fn numeric_ordering(left: &Value, right: &Value, operation: &str) -> Result<Ordering, SpoonError> {
+    match (left, right) {
+        (Value::Int(left), Value::Int(right)) => Ok(left.cmp(right)),
+        _ => finite_numeric_float(left, operation)?
+            .partial_cmp(&finite_numeric_float(right, operation)?)
+            .ok_or_else(|| {
+                invalid_number(operation, "comparison is undefined for non-finite values")
+            }),
+    }
+}
+
+fn numeric_min_max(op: IntrinsicOp, left: Value, right: Value) -> Result<Value, SpoonError> {
+    let operation = intrinsic_name(op);
+    let ordering = numeric_ordering(&left, &right, operation)?;
+    let any_float = matches!(left, Value::Float(_)) || matches!(right, Value::Float(_));
+    let selected = match op {
+        IntrinsicOp::NumericMin if ordering != Ordering::Greater => left,
+        IntrinsicOp::NumericMin => right,
+        IntrinsicOp::NumericMax if ordering != Ordering::Less => left,
+        IntrinsicOp::NumericMax => right,
+        _ => unreachable!("numeric_min_max only handles min and max"),
+    };
+    if any_float {
+        Ok(Value::Float(finite_numeric_float(&selected, operation)?))
+    } else {
+        Ok(selected)
+    }
+}
+
+fn numeric_clamp(value: Value, lower: Value, upper: Value) -> Result<Value, SpoonError> {
+    let operation = "numeric_clamp";
+    let any_float = matches!(value, Value::Float(_))
+        || matches!(lower, Value::Float(_))
+        || matches!(upper, Value::Float(_));
+    if numeric_ordering(&lower, &upper, operation)? == Ordering::Greater {
+        return Err(invalid_number(
+            operation,
+            "lower bound must not exceed upper bound",
+        ));
+    }
+    let selected = if numeric_ordering(&value, &lower, operation)? == Ordering::Less {
+        lower
+    } else if numeric_ordering(&value, &upper, operation)? == Ordering::Greater {
+        upper
+    } else {
+        value
+    };
+    if any_float {
+        Ok(Value::Float(finite_numeric_float(&selected, operation)?))
+    } else {
+        Ok(selected)
+    }
+}
+
+fn numeric_rounding(op: IntrinsicOp, value: Value) -> Result<Value, SpoonError> {
+    match value {
+        Value::Int(value) => Ok(Value::Int(value)),
+        Value::Float(value) if value.is_finite() => {
+            let rounded = match op {
+                IntrinsicOp::NumericFloor => value.floor(),
+                IntrinsicOp::NumericCeil => value.ceil(),
+                // Ties round away from zero, matching Rust's f64::round.
+                IntrinsicOp::NumericRound => value.round(),
+                IntrinsicOp::NumericTruncate => value.trunc(),
+                _ => unreachable!("numeric_rounding only handles rounding operations"),
+            };
+            if rounded.is_finite() {
+                Ok(Value::Float(rounded))
+            } else {
+                Err(invalid_number(intrinsic_name(op), "result must be finite"))
+            }
+        }
+        Value::Float(_) => Err(invalid_number(intrinsic_name(op), "value must be finite")),
+        other => Err(SpoonError::type_error("numeric", &other)),
+    }
+}
+
+fn numeric_pow_float(base: Value, exponent: Value) -> Result<Value, SpoonError> {
+    let operation = "numeric_pow_float";
+    let base = finite_numeric_float(&base, operation)?;
+    let exponent = finite_numeric_float(&exponent, operation)?;
+    let result = base.powf(exponent);
+    if result.is_finite() {
+        Ok(Value::Float(result))
+    } else {
+        Err(invalid_number(operation, "result must be finite"))
+    }
+}
+
+fn integer_quotient_remainder(
+    op: IntrinsicOp,
+    left: Value,
+    right: Value,
+) -> Result<Value, SpoonError> {
+    let left = match left {
+        Value::Int(value) => value,
+        other => return Err(SpoonError::type_error("int", &other)),
+    };
+    let right = match right {
+        Value::Int(value) => value,
+        other => return Err(SpoonError::type_error("int", &other)),
+    };
+    if right == 0 {
+        return Err(SpoonError::DivisionByZero);
+    }
+    let result = match op {
+        IntrinsicOp::IntegerQuotient => left.checked_div(right),
+        IntrinsicOp::IntegerRemainder => left.checked_rem(right),
+        _ => unreachable!("integer_quotient_remainder only handles integer division operations"),
+    };
+    result
+        .map(Value::Int)
+        .ok_or_else(|| SpoonError::ArithmeticOverflow {
+            operation: intrinsic_name(op).into(),
+        })
+}
+
+fn value_sort_key(value: &Value) -> String {
+    match value {
+        Value::Null => "0:".into(),
+        Value::Bool(value) => format!("1:{value}"),
+        Value::Int(value) => format!("2:{value:020}"),
+        Value::Float(value) => format!("3:{value:024.16}"),
+        Value::Text(value) => format!("4:{value}"),
+        Value::List(value) => format!("5:{value:?}"),
+        Value::Map(value) => format!("6:{value:?}"),
+    }
+}
+
+fn value_sort_cmp(left: &Value, right: &Value) -> Ordering {
+    let rank = |value: &Value| match value {
+        Value::Null => 0,
+        Value::Bool(_) => 1,
+        Value::Int(_) => 2,
+        Value::Float(_) => 3,
+        Value::Text(_) => 4,
+        Value::List(_) => 5,
+        Value::Map(_) => 6,
+    };
+    rank(left)
+        .cmp(&rank(right))
+        .then_with(|| match (left, right) {
+            (Value::Null, Value::Null) => Ordering::Equal,
+            (Value::Bool(left), Value::Bool(right)) => left.cmp(right),
+            (Value::Int(left), Value::Int(right)) => left.cmp(right),
+            (Value::Float(left), Value::Float(right)) => left.total_cmp(right),
+            (Value::Text(left), Value::Text(right)) => left.cmp(right),
+            _ => value_sort_key(left).cmp(&value_sort_key(right)),
+        })
+}
+
+fn list_arg(value: Value) -> Result<Vec<Value>, SpoonError> {
+    match value {
+        Value::List(items) => Ok(items),
+        other => Err(SpoonError::type_error("list", &other)),
+    }
+}
+
+fn map_arg(value: Value) -> Result<std::collections::BTreeMap<String, Value>, SpoonError> {
+    match value {
+        Value::Map(entries) => Ok(entries),
+        other => Err(SpoonError::type_error("map", &other)),
+    }
+}
+
+impl Evaluator {
+    fn parse_json(&mut self, text: String) -> Result<Value, SpoonError> {
+        if text.len() > MAX_JSON_BYTES {
+            return Err(SpoonError::IntrinsicLimitExceeded {
+                operation: "json_parse input bytes".into(),
+                limit: MAX_JSON_BYTES,
+            });
+        }
+        let json: serde_json::Value = serde_json::from_str(&text)
+            .map_err(|error| SpoonError::InvalidJson(error.to_string()))?;
+        self.json_to_value(json, 0)
+    }
+
+    fn json_to_value(
+        &mut self,
+        json: serde_json::Value,
+        depth: usize,
+    ) -> Result<Value, SpoonError> {
+        self.charge_intrinsic_work(1)?;
+        if depth > MAX_JSON_DEPTH {
+            return Err(SpoonError::IntrinsicLimitExceeded {
+                operation: "json_parse depth".into(),
+                limit: MAX_JSON_DEPTH,
+            });
+        }
+        match json {
+            serde_json::Value::Null => Ok(Value::Null),
+            serde_json::Value::Bool(value) => Ok(Value::Bool(value)),
+            serde_json::Value::String(value) => Ok(Value::Text(value)),
+            serde_json::Value::Number(value) => {
+                if let Some(value) = value.as_i64() {
+                    Ok(Value::Int(value))
+                } else if value.as_u64().is_some() {
+                    Err(SpoonError::InvalidJson(
+                        "integer is outside Spoon's signed 64-bit range".into(),
+                    ))
+                } else if let Some(value) = value.as_f64() {
+                    Ok(Value::Float(value))
+                } else {
+                    Err(SpoonError::InvalidJson("invalid JSON number".into()))
+                }
+            }
+            serde_json::Value::Array(items) => {
+                self.ensure_items("json_parse array items", items.len())?;
+                items
+                    .into_iter()
+                    .map(|item| self.json_to_value(item, depth + 1))
+                    .collect::<Result<Vec<_>, _>>()
+                    .map(Value::List)
+            }
+            serde_json::Value::Object(entries) => {
+                self.ensure_items("json_parse object items", entries.len())?;
+                entries
+                    .into_iter()
+                    .map(|(key, value)| Ok((key, self.json_to_value(value, depth + 1)?)))
+                    .collect::<Result<_, SpoonError>>()
+                    .map(Value::Map)
+            }
+        }
+    }
+
+    fn stringify_json(&mut self, value: Value) -> Result<Value, SpoonError> {
+        let json = self.value_to_json(value, 0)?;
+        let text = serde_json::to_string(&json)
+            .map_err(|error| SpoonError::InvalidJson(format!("cannot stringify value: {error}")))?;
+        if text.len() > MAX_JSON_BYTES {
+            return Err(SpoonError::IntrinsicLimitExceeded {
+                operation: "json_stringify output bytes".into(),
+                limit: MAX_JSON_BYTES,
+            });
+        }
+        Ok(Value::Text(text))
+    }
+
+    fn value_to_json(
+        &mut self,
+        value: Value,
+        depth: usize,
+    ) -> Result<serde_json::Value, SpoonError> {
+        self.charge_intrinsic_work(1)?;
+        if depth > MAX_JSON_DEPTH {
+            return Err(SpoonError::IntrinsicLimitExceeded {
+                operation: "json_stringify depth".into(),
+                limit: MAX_JSON_DEPTH,
+            });
+        }
+        match value {
+            Value::Null => Ok(serde_json::Value::Null),
+            Value::Bool(value) => Ok(serde_json::Value::Bool(value)),
+            Value::Int(value) => Ok(serde_json::Value::Number(value.into())),
+            Value::Float(value) => serde_json::Number::from_f64(value)
+                .map(serde_json::Value::Number)
+                .ok_or_else(|| {
+                    SpoonError::InvalidJson("cannot stringify a non-finite float".into())
+                }),
+            Value::Text(value) => Ok(serde_json::Value::String(value)),
+            Value::List(items) => {
+                self.ensure_items("json_stringify array items", items.len())?;
+                items
+                    .into_iter()
+                    .map(|item| self.value_to_json(item, depth + 1))
+                    .collect::<Result<Vec<_>, _>>()
+                    .map(serde_json::Value::Array)
+            }
+            Value::Map(entries) => {
+                self.ensure_items("json_stringify object items", entries.len())?;
+                entries
+                    .into_iter()
+                    .map(|(key, value)| Ok((key, self.value_to_json(value, depth + 1)?)))
+                    .collect::<Result<serde_json::Map<_, _>, SpoonError>>()
+                    .map(serde_json::Value::Object)
+            }
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum PathSegment {
+    Key(String),
+    Index(i64),
+}
+
+impl Evaluator {
+    fn get_path(
+        &mut self,
+        value: Value,
+        path: String,
+        optional: bool,
+    ) -> Result<Value, SpoonError> {
+        self.charge_text(&path)?;
+        let segments = parse_path(&path)?;
+        self.charge_items(segments.len())?;
+        let mut current = value;
+        for segment in segments {
+            let next = match (current, segment) {
+                (Value::Map(entries), PathSegment::Key(key)) => entries
+                    .get(&key)
+                    .cloned()
+                    .ok_or(SpoonError::FieldNotFound(key)),
+                (Value::List(items), PathSegment::Index(index)) => match usize::try_from(index) {
+                    Ok(list_index) => {
+                        items
+                            .get(list_index)
+                            .cloned()
+                            .ok_or(SpoonError::IndexOutOfBounds {
+                                index,
+                                length: items.len(),
+                            })
+                    }
+                    Err(_) => Err(SpoonError::IndexOutOfBounds {
+                        index,
+                        length: items.len(),
+                    }),
+                },
+                (Value::Map(_), PathSegment::Index(_)) => Err(SpoonError::TypeError {
+                    expected: "list for a bracket index path segment".into(),
+                    got: "map".into(),
+                }),
+                (Value::List(_), PathSegment::Key(_)) => Err(SpoonError::TypeError {
+                    expected: "map for a key path segment".into(),
+                    got: "list".into(),
+                }),
+                (other, _) => Err(SpoonError::type_error("map or list", &other)),
+            };
+            match next {
+                Ok(next) => current = next,
+                Err(SpoonError::FieldNotFound(_)) | Err(SpoonError::IndexOutOfBounds { .. })
+                    if optional =>
+                {
+                    return Ok(Value::Null);
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(current)
+    }
+}
+
+fn parse_path(path: &str) -> Result<Vec<PathSegment>, SpoonError> {
+    if path.len() > MAX_PATH_BYTES {
+        return Err(SpoonError::IntrinsicLimitExceeded {
+            operation: "path bytes".into(),
+            limit: MAX_PATH_BYTES,
+        });
+    }
+    if path.is_empty() {
+        return Err(invalid_path(path, "path cannot be empty"));
+    }
+
+    let bytes = path.as_bytes();
+    let mut cursor = 0;
+    let mut segments = Vec::new();
+    while cursor < bytes.len() {
+        let segment = match bytes[cursor] {
+            b'.' => return Err(invalid_path(path, "empty dot segment")),
+            b'[' => parse_bracket_segment(path, &mut cursor)?,
+            _ => {
+                let start = cursor;
+                while cursor < bytes.len() && bytes[cursor] != b'.' && bytes[cursor] != b'[' {
+                    if bytes[cursor] == b']' {
+                        return Err(invalid_path(path, "unexpected closing bracket"));
+                    }
+                    cursor += 1;
+                }
+                PathSegment::Key(path[start..cursor].to_owned())
+            }
+        };
+        segments.push(segment);
+        if segments.len() > MAX_PATH_SEGMENTS {
+            return Err(SpoonError::IntrinsicLimitExceeded {
+                operation: "path segments".into(),
+                limit: MAX_PATH_SEGMENTS,
+            });
+        }
+        if cursor == bytes.len() {
+            break;
+        }
+        if bytes[cursor] == b'.' {
+            cursor += 1;
+            if cursor == bytes.len() {
+                return Err(invalid_path(path, "path cannot end with a dot"));
+            }
+        } else if bytes[cursor] != b'[' {
+            return Err(invalid_path(path, "segments must be separated by . or []"));
+        }
+    }
+    Ok(segments)
+}
+
+fn parse_bracket_segment(path: &str, cursor: &mut usize) -> Result<PathSegment, SpoonError> {
+    let bytes = path.as_bytes();
+    *cursor += 1; // '['
+    if *cursor >= bytes.len() {
+        return Err(invalid_path(path, "unterminated bracket segment"));
+    }
+    if bytes[*cursor] == b'"' {
+        let start = *cursor;
+        *cursor += 1;
+        let mut escaped = false;
+        while *cursor < bytes.len() {
+            let byte = bytes[*cursor];
+            *cursor += 1;
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == b'"' {
+                break;
+            }
+        }
+        if *cursor > bytes.len() || bytes.get(*cursor - 1) != Some(&b'"') {
+            return Err(invalid_path(path, "unterminated quoted key"));
+        }
+        let key: String = serde_json::from_str(&path[start..*cursor])
+            .map_err(|error| invalid_path(path, format!("invalid quoted key: {error}")))?;
+        if bytes.get(*cursor) != Some(&b']') {
+            return Err(invalid_path(path, "quoted key must end with ]"));
+        }
+        *cursor += 1;
+        return Ok(PathSegment::Key(key));
+    }
+
+    let start = *cursor;
+    while *cursor < bytes.len() && bytes[*cursor].is_ascii_digit() {
+        *cursor += 1;
+    }
+    if start == *cursor || bytes.get(*cursor) != Some(&b']') {
+        return Err(invalid_path(
+            path,
+            "bracket index must be a non-negative integer",
+        ));
+    }
+    let index = path[start..*cursor]
+        .parse::<i64>()
+        .map_err(|_| invalid_path(path, "bracket index is too large"))?;
+    *cursor += 1;
+    Ok(PathSegment::Index(index))
+}
+
+fn invalid_path(path: &str, reason: impl Into<String>) -> SpoonError {
+    SpoonError::InvalidPath {
+        path: path.to_owned(),
+        reason: reason.into(),
     }
 }
 
@@ -710,10 +2049,14 @@ fn compare(op: BinOp, l: &Value, r: &Value) -> Result<Value, SpoonError> {
 mod tests {
     use super::*;
     use crate::trace::{ConditionCheckStatus, ExecStepStatus};
-    use spoon_core::{Condition, Contract, Param};
+    use spoon_core::{Condition, Contract, IntrinsicOp, Param};
 
     fn lit_int(n: i64) -> Expr {
         Expr::Literal(Value::Int(n))
+    }
+
+    fn lit_float(n: f64) -> Expr {
+        Expr::Literal(Value::Float(n))
     }
 
     fn binop(op: BinOp, left: Expr, right: Expr) -> Expr {
@@ -722,6 +2065,287 @@ mod tests {
             left: Box::new(left),
             right: Box::new(right),
         }
+    }
+
+    fn intrinsic(op: IntrinsicOp, args: Vec<Expr>) -> Expr {
+        Expr::Intrinsic {
+            version: 1,
+            op,
+            args,
+        }
+    }
+
+    fn lit_text(text: &str) -> Expr {
+        Expr::Literal(Value::Text(text.to_string()))
+    }
+
+    #[test]
+    fn text_split_filter_and_length_compose_into_letter_counting() {
+        let split = intrinsic(
+            IntrinsicOp::TextSplit,
+            vec![lit_text("strawberry"), lit_text("")],
+        );
+        let only_rs = Expr::Filter {
+            collection: Box::new(split),
+            var: "character".to_string(),
+            predicate: Box::new(binop(
+                BinOp::Eq,
+                Expr::Var("character".to_string()),
+                lit_text("r"),
+            )),
+        };
+        let expression = intrinsic(IntrinsicOp::Length, vec![only_rs]);
+
+        let result = Evaluator::new().eval(&expression, &mut Env::new()).unwrap();
+
+        assert_eq!(result, Value::Int(3));
+    }
+
+    #[test]
+    fn text_lengths_make_unicode_units_explicit() {
+        let text = lit_text("e\u{301}");
+        let cases = [
+            (IntrinsicOp::TextByteLength, Value::Int(3)),
+            (IntrinsicOp::TextScalarLength, Value::Int(2)),
+            (IntrinsicOp::TextGraphemeLength, Value::Int(1)),
+        ];
+
+        for (op, expected) in cases {
+            let result = Evaluator::new()
+                .eval(&intrinsic(op, vec![text.clone()]), &mut Env::new())
+                .unwrap();
+            assert_eq!(result, expected);
+        }
+    }
+
+    #[test]
+    fn json_parse_and_paths_support_dot_index_and_quoted_keys() {
+        let parsed = intrinsic(
+            IntrinsicOp::JsonParse,
+            vec![lit_text(
+                r#"{"user":{"profile":{"name":"Spoon"}},"items":[{"id":7}],"a.b":"quoted"}"#,
+            )],
+        );
+        let cases = [
+            ("user.profile.name", Value::Text("Spoon".to_string())),
+            ("items[0].id", Value::Int(7)),
+            (r#"["a.b"]"#, Value::Text("quoted".to_string())),
+        ];
+
+        for (path, expected) in cases {
+            let expression = intrinsic(IntrinsicOp::PathGet, vec![parsed.clone(), lit_text(path)]);
+            let result = Evaluator::new().eval(&expression, &mut Env::new()).unwrap();
+            assert_eq!(result, expected);
+        }
+    }
+
+    #[test]
+    fn optional_path_only_turns_absence_into_null() {
+        let parsed = intrinsic(
+            IntrinsicOp::JsonParse,
+            vec![lit_text(r#"{"present":null,"items":[]}"#)],
+        );
+
+        let present_null = intrinsic(
+            IntrinsicOp::PathGet,
+            vec![parsed.clone(), lit_text("present")],
+        );
+        let absent = intrinsic(
+            IntrinsicOp::PathGetOptional,
+            vec![parsed.clone(), lit_text("missing.value")],
+        );
+        let strict_absent = intrinsic(
+            IntrinsicOp::PathGet,
+            vec![parsed.clone(), lit_text("missing.value")],
+        );
+        let malformed = intrinsic(
+            IntrinsicOp::PathGetOptional,
+            vec![parsed, lit_text("items[")],
+        );
+
+        assert_eq!(
+            Evaluator::new()
+                .eval(&present_null, &mut Env::new())
+                .unwrap(),
+            Value::Null
+        );
+        assert_eq!(
+            Evaluator::new().eval(&absent, &mut Env::new()).unwrap(),
+            Value::Null
+        );
+        assert!(matches!(
+            Evaluator::new().eval(&strict_absent, &mut Env::new()),
+            Err(SpoonError::FieldNotFound(_))
+        ));
+        assert!(matches!(
+            Evaluator::new().eval(&malformed, &mut Env::new()),
+            Err(SpoonError::InvalidPath { .. })
+        ));
+    }
+
+    #[test]
+    fn json_and_intrinsic_failures_are_typed() {
+        let invalid_json = intrinsic(IntrinsicOp::JsonParse, vec![lit_text("{")]);
+        let wrong_arity = intrinsic(IntrinsicOp::TextTrim, vec![]);
+        let unsupported_version = Expr::Intrinsic {
+            version: 99,
+            op: IntrinsicOp::Length,
+            args: vec![lit_text("abc")],
+        };
+
+        assert!(matches!(
+            Evaluator::new().eval(&invalid_json, &mut Env::new()),
+            Err(SpoonError::InvalidJson(_))
+        ));
+        assert!(matches!(
+            Evaluator::new().eval(&wrong_arity, &mut Env::new()),
+            Err(SpoonError::ArityMismatch { .. })
+        ));
+        assert!(matches!(
+            Evaluator::new().eval(&unsupported_version, &mut Env::new()),
+            Err(SpoonError::UnsupportedIntrinsicVersion(99))
+        ));
+    }
+
+    #[test]
+    fn json_stringify_is_deterministic_and_round_trips_structure() {
+        let expression = intrinsic(
+            IntrinsicOp::JsonStringify,
+            vec![intrinsic(
+                IntrinsicOp::JsonParse,
+                vec![lit_text(r#"{"z":1,"a":[true,null,2.5]}"#)],
+            )],
+        );
+
+        let result = Evaluator::new().eval(&expression, &mut Env::new()).unwrap();
+
+        assert_eq!(
+            result,
+            Value::Text(r#"{"a":[true,null,2.5],"z":1}"#.to_string())
+        );
+    }
+
+    #[test]
+    fn text_intrinsics_have_composable_v1_semantics() {
+        let cases = [
+            (
+                intrinsic(
+                    IntrinsicOp::TextJoin,
+                    vec![
+                        Expr::ListExpr(vec![lit_text("Spoon"), lit_text("runtime")]),
+                        lit_text(" "),
+                    ],
+                ),
+                Value::Text("Spoon runtime".into()),
+            ),
+            (
+                intrinsic(IntrinsicOp::TextTrim, vec![lit_text("  spoon\n")]),
+                Value::Text("spoon".into()),
+            ),
+            (
+                intrinsic(IntrinsicOp::TextLowercase, vec![lit_text("SpOoN")]),
+                Value::Text("spoon".into()),
+            ),
+            (
+                intrinsic(IntrinsicOp::TextUppercase, vec![lit_text("spoon")]),
+                Value::Text("SPOON".into()),
+            ),
+            (
+                intrinsic(
+                    IntrinsicOp::TextContains,
+                    vec![lit_text("strawberry"), lit_text("raw")],
+                ),
+                Value::Bool(true),
+            ),
+            (
+                intrinsic(
+                    IntrinsicOp::TextStartsWith,
+                    vec![lit_text("strawberry"), lit_text("straw")],
+                ),
+                Value::Bool(true),
+            ),
+            (
+                intrinsic(
+                    IntrinsicOp::TextEndsWith,
+                    vec![lit_text("strawberry"), lit_text("berry")],
+                ),
+                Value::Bool(true),
+            ),
+            (
+                intrinsic(
+                    IntrinsicOp::TextReplace,
+                    vec![lit_text("strawberry"), lit_text("r"), lit_text("R")],
+                ),
+                Value::Text("stRawbeRRy".into()),
+            ),
+        ];
+
+        for (expression, expected) in cases {
+            assert_eq!(
+                Evaluator::new().eval(&expression, &mut Env::new()).unwrap(),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn collection_intrinsics_preserve_value_and_map_semantics() {
+        let list = Expr::ListExpr(vec![lit_int(1), lit_int(2), lit_int(2)]);
+        let map = Expr::Literal(Value::Map(std::collections::BTreeMap::from([
+            ("a".into(), Value::Int(1)),
+            ("b".into(), Value::Int(2)),
+        ])));
+        let cases = [
+            (
+                intrinsic(IntrinsicOp::Length, vec![list.clone()]),
+                Value::Int(3),
+            ),
+            (
+                intrinsic(
+                    IntrinsicOp::CollectionContains,
+                    vec![list.clone(), lit_int(2)],
+                ),
+                Value::Bool(true),
+            ),
+            (
+                intrinsic(IntrinsicOp::CountEqual, vec![list, lit_int(2)]),
+                Value::Int(2),
+            ),
+            (
+                intrinsic(
+                    IntrinsicOp::CollectionContains,
+                    vec![map.clone(), lit_text("b")],
+                ),
+                Value::Bool(true),
+            ),
+            (
+                intrinsic(IntrinsicOp::MapKeys, vec![map.clone()]),
+                Value::List(vec![Value::Text("a".into()), Value::Text("b".into())]),
+            ),
+            (
+                intrinsic(IntrinsicOp::MapValues, vec![map]),
+                Value::List(vec![Value::Int(1), Value::Int(2)]),
+            ),
+        ];
+
+        for (expression, expected) in cases {
+            assert_eq!(
+                Evaluator::new().eval(&expression, &mut Env::new()).unwrap(),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn optional_path_does_not_hide_type_errors() {
+        let expression = intrinsic(
+            IntrinsicOp::PathGetOptional,
+            vec![lit_int(4), lit_text("missing")],
+        );
+        assert!(matches!(
+            Evaluator::new().eval(&expression, &mut Env::new()),
+            Err(SpoonError::TypeError { .. })
+        ));
     }
 
     #[test]
@@ -1165,6 +2789,43 @@ mod tests {
     }
 
     #[test]
+    fn exact_procedure_call_rejects_a_different_registered_revision() {
+        let mut evaluator = Evaluator::new();
+        let double = double_procedure();
+        let double_id = double.id;
+        evaluator.register_procedure(double.clone());
+        let caller = Procedure::new(
+            "PINNED DOUBLE",
+            vec![Param::named("x")],
+            Expr::CallExact {
+                procedure: double_id,
+                version: 1,
+                args: vec![Expr::Var("x".into())],
+            },
+        );
+        let caller_id = caller.id;
+        evaluator.register_procedure(caller);
+        assert_eq!(
+            evaluator
+                .exec_procedure(&caller_id, vec![Value::Int(4)])
+                .unwrap()
+                .value,
+            Value::Int(8)
+        );
+
+        let mut revised = double;
+        revised.version = 2;
+        evaluator.register_procedure(revised);
+        let error = evaluator
+            .exec_procedure(&caller_id, vec![Value::Int(4)])
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            SpoonError::Other(message) if message.contains("exact call") && message.contains("version 1")
+        ));
+    }
+
+    #[test]
     fn conditionals() {
         let mut ev = Evaluator::new();
         let mut env = Env::new();
@@ -1352,5 +3013,381 @@ mod tests {
         let mut ev = Evaluator::new();
         let err = ev.exec_procedure(&ProcedureId::new(), vec![]).unwrap_err();
         assert!(matches!(err, SpoonError::UndefinedProcedure(_)));
+    }
+
+    #[test]
+    fn v1_expansion_has_explicit_text_map_collection_and_conversion_semantics() {
+        let map = Expr::Literal(Value::Map(std::collections::BTreeMap::from([
+            ("b".into(), Value::Int(2)),
+            ("a".into(), Value::Int(1)),
+        ])));
+        let list = Expr::ListExpr(vec![lit_int(3), lit_int(1), lit_int(3), lit_int(2)]);
+        let cases = [
+            (
+                intrinsic(IntrinsicOp::TextNormalizeNfc, vec![lit_text("e\u{301}")]),
+                Value::Text("é".into()),
+            ),
+            (
+                intrinsic(IntrinsicOp::TextNormalizeNfd, vec![lit_text("é")]),
+                Value::Text("e\u{301}".into()),
+            ),
+            (
+                intrinsic(IntrinsicOp::TextNormalizeNfkc, vec![lit_text("Ａ")]),
+                Value::Text("A".into()),
+            ),
+            (
+                intrinsic(IntrinsicOp::TextNormalizeNfkd, vec![lit_text("é")]),
+                Value::Text("e\u{301}".into()),
+            ),
+            (
+                intrinsic(IntrinsicOp::TextTrimStart, vec![lit_text("  x  ")]),
+                Value::Text("x  ".into()),
+            ),
+            (
+                intrinsic(IntrinsicOp::TextTrimEnd, vec![lit_text("  x  ")]),
+                Value::Text("  x".into()),
+            ),
+            (
+                intrinsic(
+                    IntrinsicOp::TextGraphemeSubstring,
+                    vec![lit_text("a👩‍💻b"), lit_int(1), lit_int(1)],
+                ),
+                Value::Text("👩‍💻".into()),
+            ),
+            (
+                intrinsic(
+                    IntrinsicOp::TextIndexOf,
+                    vec![lit_text("a👩‍💻b"), lit_text("b")],
+                ),
+                Value::Int(2),
+            ),
+            (
+                intrinsic(
+                    IntrinsicOp::TextCount,
+                    vec![lit_text("banana"), lit_text("an")],
+                ),
+                Value::Int(2),
+            ),
+            (
+                intrinsic(IntrinsicOp::TextRepeat, vec![lit_text("ab"), lit_int(3)]),
+                Value::Text("ababab".into()),
+            ),
+            (
+                intrinsic(
+                    IntrinsicOp::TextConcatMany,
+                    vec![Expr::ListExpr(vec![lit_text("a"), lit_text("b")])],
+                ),
+                Value::Text("ab".into()),
+            ),
+            (
+                intrinsic(IntrinsicOp::MapEntries, vec![map.clone()]),
+                Value::List(vec![
+                    Value::List(vec![Value::Text("a".into()), Value::Int(1)]),
+                    Value::List(vec![Value::Text("b".into()), Value::Int(2)]),
+                ]),
+            ),
+            (
+                intrinsic(
+                    IntrinsicOp::MapSet,
+                    vec![map.clone(), lit_text("c"), lit_int(3)],
+                ),
+                Value::Map(std::collections::BTreeMap::from([
+                    ("a".into(), Value::Int(1)),
+                    ("b".into(), Value::Int(2)),
+                    ("c".into(), Value::Int(3)),
+                ])),
+            ),
+            (
+                intrinsic(IntrinsicOp::MapDelete, vec![map, lit_text("a")]),
+                Value::Map(std::collections::BTreeMap::from([(
+                    "b".into(),
+                    Value::Int(2),
+                )])),
+            ),
+            (
+                intrinsic(
+                    IntrinsicOp::MapMerge,
+                    vec![
+                        Expr::Literal(Value::Map(std::collections::BTreeMap::from([(
+                            "a".into(),
+                            Value::Int(1),
+                        )]))),
+                        Expr::Literal(Value::Map(std::collections::BTreeMap::from([
+                            ("a".into(), Value::Int(9)),
+                            ("b".into(), Value::Int(2)),
+                        ]))),
+                    ],
+                ),
+                Value::Map(std::collections::BTreeMap::from([
+                    ("a".into(), Value::Int(9)),
+                    ("b".into(), Value::Int(2)),
+                ])),
+            ),
+            (
+                intrinsic(
+                    IntrinsicOp::CollectionSlice,
+                    vec![list.clone(), lit_int(-3), lit_int(2)],
+                ),
+                Value::List(vec![Value::Int(1), Value::Int(3)]),
+            ),
+            (
+                intrinsic(IntrinsicOp::CollectionReverse, vec![list.clone()]),
+                Value::List(vec![
+                    Value::Int(2),
+                    Value::Int(3),
+                    Value::Int(1),
+                    Value::Int(3),
+                ]),
+            ),
+            (
+                intrinsic(IntrinsicOp::CollectionSort, vec![list.clone()]),
+                Value::List(vec![
+                    Value::Int(1),
+                    Value::Int(2),
+                    Value::Int(3),
+                    Value::Int(3),
+                ]),
+            ),
+            (
+                intrinsic(IntrinsicOp::CollectionUnique, vec![list]),
+                Value::List(vec![Value::Int(3), Value::Int(1), Value::Int(2)]),
+            ),
+            (
+                intrinsic(
+                    IntrinsicOp::CollectionFlatten,
+                    vec![Expr::ListExpr(vec![
+                        Expr::ListExpr(vec![lit_int(1)]),
+                        Expr::ListExpr(vec![lit_int(2), lit_int(3)]),
+                    ])],
+                ),
+                Value::List(vec![Value::Int(1), Value::Int(2), Value::Int(3)]),
+            ),
+            (
+                intrinsic(
+                    IntrinsicOp::CollectionZip,
+                    vec![
+                        Expr::ListExpr(vec![lit_int(1), lit_int(2)]),
+                        Expr::ListExpr(vec![lit_text("a")]),
+                    ],
+                ),
+                Value::List(vec![Value::List(vec![
+                    Value::Int(1),
+                    Value::Text("a".into()),
+                ])]),
+            ),
+            (
+                intrinsic(IntrinsicOp::Range, vec![lit_int(1), lit_int(6), lit_int(2)]),
+                Value::List(vec![Value::Int(1), Value::Int(3), Value::Int(5)]),
+            ),
+            (
+                intrinsic(IntrinsicOp::TypeName, vec![lit_int(4)]),
+                Value::Text("int".into()),
+            ),
+            (
+                intrinsic(IntrinsicOp::ParseInt, vec![lit_text(" 42 ")]),
+                Value::Int(42),
+            ),
+            (
+                intrinsic(IntrinsicOp::ParseFloat, vec![lit_text("1.5")]),
+                Value::Float(1.5),
+            ),
+            (
+                intrinsic(IntrinsicOp::ParseBool, vec![lit_text("true")]),
+                Value::Bool(true),
+            ),
+            (
+                intrinsic(IntrinsicOp::ToText, vec![lit_int(42)]),
+                Value::Text("42".into()),
+            ),
+        ];
+        for (expression, expected) in cases {
+            assert_eq!(
+                Evaluator::new().eval(&expression, &mut Env::new()).unwrap(),
+                expected
+            );
+        }
+        assert_eq!(
+            Evaluator::new()
+                .eval(
+                    &intrinsic(IntrinsicOp::ParseBool, vec![lit_text("TRUE")]),
+                    &mut Env::new()
+                )
+                .unwrap(),
+            Value::Null
+        );
+        assert!(matches!(
+            Evaluator::new().eval(
+                &intrinsic(
+                    IntrinsicOp::MapSet,
+                    vec![Expr::Literal(Value::Map(Default::default()))],
+                ),
+                &mut Env::new(),
+            ),
+            Err(SpoonError::ArityMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn intrinsic_linear_work_consumes_budget_and_limits_are_typed() {
+        let expensive = intrinsic(
+            IntrinsicOp::TextGraphemeLength,
+            vec![lit_text(&"x".repeat(256))],
+        );
+        assert!(matches!(
+            Evaluator::new()
+                .with_budget(4)
+                .eval(&expensive, &mut Env::new()),
+            Err(SpoonError::BudgetExceeded)
+        ));
+        let structured = intrinsic(
+            IntrinsicOp::JsonParse,
+            vec![lit_text(r#"[[[1,2,3],[4,5,6]]]"#)],
+        );
+        assert!(matches!(
+            Evaluator::new()
+                .with_budget(4)
+                .eval(&structured, &mut Env::new()),
+            Err(SpoonError::BudgetExceeded)
+        ));
+        let output_limit = intrinsic(
+            IntrinsicOp::TextRepeat,
+            vec![lit_text("x"), lit_int(1_048_577)],
+        );
+        assert!(matches!(
+            Evaluator::new().eval(&output_limit, &mut Env::new()),
+            Err(SpoonError::IntrinsicLimitExceeded { .. })
+        ));
+        let item_limit = intrinsic(
+            IntrinsicOp::Range,
+            vec![lit_int(0), lit_int(100_001), lit_int(1)],
+        );
+        assert!(matches!(
+            Evaluator::new().eval(&item_limit, &mut Env::new()),
+            Err(SpoonError::IntrinsicLimitExceeded { .. })
+        ));
+    }
+
+    #[test]
+    fn numeric_intrinsics_have_bounded_explicit_semantics() {
+        let cases = [
+            (
+                intrinsic(IntrinsicOp::NumericAbs, vec![lit_int(-7)]),
+                Value::Int(7),
+            ),
+            (
+                intrinsic(IntrinsicOp::NumericSign, vec![lit_float(-0.25)]),
+                Value::Int(-1),
+            ),
+            (
+                intrinsic(IntrinsicOp::NumericMin, vec![lit_int(9), lit_float(2.5)]),
+                Value::Float(2.5),
+            ),
+            (
+                intrinsic(IntrinsicOp::NumericMax, vec![lit_int(9), lit_float(2.5)]),
+                Value::Float(9.0),
+            ),
+            (
+                intrinsic(
+                    IntrinsicOp::NumericClamp,
+                    vec![lit_int(10), lit_float(0.5), lit_int(5)],
+                ),
+                Value::Float(5.0),
+            ),
+            (
+                intrinsic(IntrinsicOp::NumericFloor, vec![lit_float(-1.5)]),
+                Value::Float(-2.0),
+            ),
+            (
+                intrinsic(IntrinsicOp::NumericCeil, vec![lit_float(-1.5)]),
+                Value::Float(-1.0),
+            ),
+            (
+                intrinsic(IntrinsicOp::NumericRound, vec![lit_float(-1.5)]),
+                Value::Float(-2.0),
+            ),
+            (
+                intrinsic(IntrinsicOp::NumericTruncate, vec![lit_float(-1.5)]),
+                Value::Float(-1.0),
+            ),
+            (
+                intrinsic(IntrinsicOp::NumericPowInt, vec![lit_int(2), lit_int(10)]),
+                Value::Int(1024),
+            ),
+            (
+                intrinsic(IntrinsicOp::IntegerQuotient, vec![lit_int(-7), lit_int(3)]),
+                Value::Int(-2),
+            ),
+            (
+                intrinsic(IntrinsicOp::IntegerRemainder, vec![lit_int(-7), lit_int(3)]),
+                Value::Int(-1),
+            ),
+        ];
+        for (expression, expected) in cases {
+            assert_eq!(
+                Evaluator::new().eval(&expression, &mut Env::new()).unwrap(),
+                expected
+            );
+        }
+
+        let float_power = intrinsic(
+            IntrinsicOp::NumericPowFloat,
+            vec![lit_int(9), lit_float(0.5)],
+        );
+        let Value::Float(value) = Evaluator::new()
+            .eval(&float_power, &mut Env::new())
+            .unwrap()
+        else {
+            panic!("numeric_pow_float must return a float")
+        };
+        assert!((value - 3.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn numeric_intrinsics_reject_invalid_numbers_and_report_typed_failures() {
+        let non_finite = intrinsic(IntrinsicOp::NumericAbs, vec![lit_float(f64::NAN)]);
+        assert!(matches!(
+            Evaluator::new().eval(&non_finite, &mut Env::new()),
+            Err(SpoonError::InvalidNumber { .. })
+        ));
+
+        let negative_exponent =
+            intrinsic(IntrinsicOp::NumericPowInt, vec![lit_int(2), lit_int(-1)]);
+        assert!(matches!(
+            Evaluator::new().eval(&negative_exponent, &mut Env::new()),
+            Err(SpoonError::NegativeExponent { .. })
+        ));
+
+        let integer_overflow = intrinsic(
+            IntrinsicOp::NumericPowInt,
+            vec![lit_int(i64::MAX), lit_int(2)],
+        );
+        assert!(matches!(
+            Evaluator::new().eval(&integer_overflow, &mut Env::new()),
+            Err(SpoonError::ArithmeticOverflow { .. })
+        ));
+
+        let invalid_range = intrinsic(
+            IntrinsicOp::NumericClamp,
+            vec![lit_int(1), lit_int(3), lit_int(2)],
+        );
+        assert!(matches!(
+            Evaluator::new().eval(&invalid_range, &mut Env::new()),
+            Err(SpoonError::InvalidNumber { .. })
+        ));
+
+        let float_overflow = intrinsic(
+            IntrinsicOp::NumericPowFloat,
+            vec![lit_float(1e308), lit_float(2.0)],
+        );
+        assert!(matches!(
+            Evaluator::new().eval(&float_overflow, &mut Env::new()),
+            Err(SpoonError::InvalidNumber { .. })
+        ));
+
+        let zero_quotient = intrinsic(IntrinsicOp::IntegerQuotient, vec![lit_int(1), lit_int(0)]);
+        assert!(matches!(
+            Evaluator::new().eval(&zero_quotient, &mut Env::new()),
+            Err(SpoonError::DivisionByZero)
+        ));
     }
 }

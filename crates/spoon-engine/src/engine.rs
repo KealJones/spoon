@@ -4,12 +4,14 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use spoon_capability::{
     CapabilityBundle, CapabilityInvocation, CapabilityInvocationAdapter, CapabilityProcedure,
-    CapabilityStore, ImportedCapability, LocalValidation, Permission, PrimitivePolicy,
+    CapabilityStore, ImportedCapability, LocalValidation, Permission, PermissionPolicy,
+    PrimitivePolicy,
 };
 use spoon_core::{
     Concept, ConceptId, ContractCheckResult, Episode, EpisodeCost, EpisodeId, EscalationRung,
-    Evaluation, Lifecycle, ObservedFact, Procedure, ProcedureId, ReasoningTrace, Relationship,
-    RelationshipId, SpoonError, TestCase, TraceStep, TraceStepStatus, Value, VerifiabilityTier,
+    Evaluation, Expr, Lifecycle, ObservedFact, Procedure, ProcedureId, ReasoningTrace,
+    Relationship, RelationshipId, Session, SessionVisibility, SpoonError, TestCase, TraceStep,
+    TraceStepStatus, Value, VerifiabilityTier,
 };
 use spoon_episode::{
     EpisodeFeedback, EpisodeStore, TeacherInteractionMetrics, VerifiedRegressionCase,
@@ -459,6 +461,28 @@ impl Engine {
         policy: &PrimitivePolicy,
         adapter: &mut A,
     ) -> Result<CapabilityExecutionOutcome, EngineError> {
+        self.invoke_capability_with_permission_policy(
+            content_id,
+            procedure_id,
+            input,
+            expected_output,
+            policy,
+            None,
+            adapter,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn invoke_capability_with_permission_policy<A: CapabilityInvocationAdapter>(
+        &self,
+        content_id: &str,
+        procedure_id: &str,
+        input: &serde_json::Value,
+        expected_output: Option<&serde_json::Value>,
+        policy: &PrimitivePolicy,
+        permission_policy: Option<&PermissionPolicy>,
+        adapter: &mut A,
+    ) -> Result<CapabilityExecutionOutcome, EngineError> {
         // Reconstruction is authority-free. It lets a rejected invocation
         // retain the exact declared procedure shape when the durable store can
         // still read it, without ever treating that shape as executable.
@@ -474,10 +498,20 @@ impl Engine {
         let input_digest = json_digest(input);
         let policy_digest = json_digest(policy);
 
-        match self
-            .capabilities
-            .invoke(content_id, procedure_id, input, policy, adapter)
-        {
+        let invocation = match permission_policy {
+            Some(permission_policy) => self.capabilities.invoke_with_permission_policy(
+                content_id,
+                procedure_id,
+                input,
+                policy,
+                permission_policy,
+                adapter,
+            ),
+            None => self
+                .capabilities
+                .invoke(content_id, procedure_id, input, policy, adapter),
+        };
+        match invocation {
             Ok(invocation) => {
                 let output_digest = invocation.output_digest.clone();
                 let mut episode = self.capability_invocation_episode(
@@ -1664,6 +1698,26 @@ impl Engine {
         }
     }
 
+    pub fn create_session(
+        &self,
+        name: Option<String>,
+        visibility: SessionVisibility,
+    ) -> Result<Session, EngineError> {
+        Ok(self.episodes.create_session(name, visibility)?)
+    }
+
+    pub fn list_sessions(&self) -> Result<Vec<Session>, EngineError> {
+        Ok(self.episodes.list_sessions()?)
+    }
+
+    pub fn get_session(&self, id_or_name: &str) -> Result<Option<Session>, EngineError> {
+        Ok(self.episodes.get_session(id_or_name)?)
+    }
+
+    pub fn end_session(&self, id_or_name: &str) -> Result<Session, EngineError> {
+        Ok(self.episodes.end_session(id_or_name)?)
+    }
+
     pub fn enable_admin(&mut self, secret: &str) -> Result<(), EngineError> {
         self.runtime.configure_or_verify_admin(secret)?;
         self.admin_enabled = true;
@@ -1977,7 +2031,7 @@ impl Engine {
             )));
         }
         let args = bind_inputs(&procedure, &inputs, None)?;
-        let mut evaluator = self.current_evaluator()?;
+        let mut evaluator = self.evaluator_for_procedure(&procedure)?;
         let attempt = evaluator.exec_procedure_captured(&procedure_id, args);
         let steps_used = evaluator.budget().steps_used;
         match attempt.result {
@@ -2080,6 +2134,50 @@ impl Engine {
             if is_current_executable(procedure.lifecycle) {
                 evaluator.register_procedure(procedure);
             }
+        }
+        Ok(evaluator)
+    }
+
+    /// Build an evaluator for a stored procedure while restoring every exact
+    /// dependency snapshot it declares. Current procedures remain available
+    /// for legacy calls; an exact dependency intentionally overrides its
+    /// current revision so a learned composition cannot drift after revision.
+    pub(crate) fn evaluator_for_procedure(
+        &self,
+        procedure: &Procedure,
+    ) -> Result<Evaluator, EngineError> {
+        let mut evaluator = self.current_evaluator()?;
+        let mut dependencies = HashSet::new();
+        collect_exact_calls(&procedure.body, &mut dependencies);
+        for condition in procedure
+            .contract
+            .requires
+            .iter()
+            .chain(&procedure.contract.promises)
+            .chain(&procedure.contract.fails_when)
+        {
+            if let Some(check) = &condition.check {
+                collect_exact_calls(check, &mut dependencies);
+            }
+        }
+        for (id, version) in dependencies {
+            let current = self.graph.get_procedure(id)?.ok_or_else(|| {
+                EngineError::InvalidInput(format!("exact dependency {id}@{version} is absent"))
+            })?;
+            if !is_current_executable(current.lifecycle) {
+                return Err(EngineError::InvalidInput(format!(
+                    "exact dependency {id}@{version} is not currently executable"
+                )));
+            }
+            let exact = self
+                .graph
+                .get_procedure_version(id, version)?
+                .ok_or_else(|| {
+                    EngineError::InvalidInput(format!(
+                        "exact dependency {id}@{version} no longer has a stored revision"
+                    ))
+                })?;
+            evaluator.register_procedure(exact);
         }
         Ok(evaluator)
     }
@@ -2621,6 +2719,80 @@ pub(crate) fn is_current_executable(lifecycle: Lifecycle) -> bool {
             | Lifecycle::Superseded
             | Lifecycle::UnderReview
     )
+}
+
+fn collect_exact_calls(expression: &Expr, calls: &mut HashSet<(ProcedureId, u32)>) {
+    match expression {
+        Expr::Literal(_) | Expr::Var(_) => {}
+        Expr::BinOp { left, right, .. } => {
+            collect_exact_calls(left, calls);
+            collect_exact_calls(right, calls);
+        }
+        Expr::UnOp { operand, .. } => collect_exact_calls(operand, calls),
+        Expr::Call { args, .. } => {
+            for argument in args {
+                collect_exact_calls(argument, calls);
+            }
+        }
+        Expr::CallExact {
+            procedure,
+            version,
+            args,
+        } => {
+            calls.insert((*procedure, *version));
+            for argument in args {
+                collect_exact_calls(argument, calls);
+            }
+        }
+        Expr::If { cond, then, else_ } => {
+            collect_exact_calls(cond, calls);
+            collect_exact_calls(then, calls);
+            collect_exact_calls(else_, calls);
+        }
+        Expr::Let { value, body, .. } => {
+            collect_exact_calls(value, calls);
+            collect_exact_calls(body, calls);
+        }
+        Expr::Block(expressions) | Expr::ListExpr(expressions) => {
+            for item in expressions {
+                collect_exact_calls(item, calls);
+            }
+        }
+        Expr::Index { collection, index } => {
+            collect_exact_calls(collection, calls);
+            collect_exact_calls(index, calls);
+        }
+        Expr::FieldAccess { object, .. } => collect_exact_calls(object, calls),
+        Expr::Map {
+            collection, body, ..
+        } => {
+            collect_exact_calls(collection, calls);
+            collect_exact_calls(body, calls);
+        }
+        Expr::Filter {
+            collection,
+            predicate,
+            ..
+        } => {
+            collect_exact_calls(collection, calls);
+            collect_exact_calls(predicate, calls);
+        }
+        Expr::Reduce {
+            collection,
+            init,
+            body,
+            ..
+        } => {
+            collect_exact_calls(collection, calls);
+            collect_exact_calls(init, calls);
+            collect_exact_calls(body, calls);
+        }
+        Expr::Intrinsic { args, .. } => {
+            for argument in args {
+                collect_exact_calls(argument, calls);
+            }
+        }
+    }
 }
 
 pub(crate) fn bind_inputs(

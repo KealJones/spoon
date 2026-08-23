@@ -21,6 +21,7 @@ import type {
   HumanPrompt,
   IdFactory,
   JsonValue,
+  PromptBuilder,
   Teacher,
   TeacherProposal,
   TeacherRequest,
@@ -32,6 +33,7 @@ export interface HumanTeacherOptions {
   reliabilityTracker?: SourceReliabilityTracker;
   now?: Clock;
   idFactory?: IdFactory;
+  promptBuilder?: PromptBuilder;
 }
 
 export class HumanTeacher implements Teacher {
@@ -40,6 +42,7 @@ export class HumanTeacher implements Teacher {
   readonly #now: Clock;
   readonly #idFactory: IdFactory;
   readonly #source: string;
+  readonly #promptBuilder: PromptBuilder;
 
   constructor(options: HumanTeacherOptions = {}) {
     this.#source = `human:${options.name ?? "cli"}`;
@@ -48,12 +51,13 @@ export class HumanTeacher implements Teacher {
       options.reliabilityTracker ?? new SourceReliabilityTracker();
     this.#now = options.now ?? defaultClock;
     this.#idFactory = options.idFactory ?? defaultIdFactory;
+    this.#promptBuilder = options.promptBuilder ?? buildTeacherPrompt;
   }
 
   async propose(request: TeacherRequest): Promise<TeacherProposal> {
     const answer = await atProviderBoundary("human", "prompt failed", () =>
       this.#prompt(
-        `${buildTeacherPrompt(request)}\n\nEnter a JSON proposal matching the schema:\n`,
+        `${this.#promptBuilder(request)}\n\nEnter a JSON response matching the schema:\n`,
       ),
     );
     let content: JsonValue;

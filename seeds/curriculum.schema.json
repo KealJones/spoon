@@ -1,0 +1,509 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spoon.local/schemas/seed-curriculum.schema.json",
+  "title": "Spoon seed curriculum",
+  "description": "A versioned, inspectable design for acquiring ordinary knowledge through the observable learning machinery.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "id",
+    "version",
+    "title",
+    "domain",
+    "evidence",
+    "objective",
+    "lessonContract",
+    "requiredNativeOperations",
+    "requiredCapabilities",
+    "demonstrations",
+    "counterexamples",
+    "exercises",
+    "heldOutGeneralization",
+    "expectedLearnedStructures",
+    "teacherOffGates",
+    "exportPrivacy",
+    "independentCleanImportValidation"
+  ],
+  "properties": {
+    "$schema": { "type": "string", "format": "uri-reference" },
+    "schemaVersion": { "const": 1 },
+    "kind": { "const": "spoon-seed-curriculum" },
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "title": { "type": "string", "minLength": 1 },
+    "domain": { "type": "string", "minLength": 1 },
+    "evidence": { "$ref": "#/$defs/evidence" },
+    "objective": { "type": "string", "minLength": 1 },
+    "scope": { "$ref": "#/$defs/scope" },
+    "lessonContract": { "$ref": "#/$defs/lessonContract" },
+    "requiredNativeOperations": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/nativeOperation" }
+    },
+    "requiredCapabilities": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/capability" }
+    },
+    "demonstrations": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/activity" }
+    },
+    "counterexamples": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/activity" }
+    },
+    "exercises": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/activity" }
+    },
+    "heldOutGeneralization": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/activity" }
+    },
+    "expectedLearnedStructures": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/learnedStructure" }
+    },
+    "teacherOffGates": {
+      "type": "array",
+      "minItems": 2,
+      "items": { "$ref": "#/$defs/teacherOffGate" }
+    },
+    "exportPrivacy": { "$ref": "#/$defs/exportPrivacy" },
+    "independentCleanImportValidation": {
+      "$ref": "#/$defs/cleanImportValidation"
+    },
+    "notes": { "type": "array", "items": { "type": "string" } }
+  },
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "level",
+        "runnerStatus",
+        "claimBoundary",
+        "independentReviewRequired"
+      ],
+      "properties": {
+        "level": { "const": "Declared/design-only" },
+        "runnerStatus": { "const": "not-implemented" },
+        "claimBoundary": { "type": "string", "minLength": 1 },
+        "independentReviewRequired": { "const": true }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["included", "excluded"],
+      "properties": {
+        "included": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "excluded": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "lessonContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "teacherProtocol",
+        "draftShape",
+        "teacherSuppliedFields",
+        "engineOwnedFields",
+        "testCasePolicy"
+      ],
+      "properties": {
+        "teacherProtocol": { "const": "pure_expr_v2" },
+        "draftShape": {
+          "type": "array",
+          "minItems": 5,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "concepts",
+              "relationships",
+              "procedures",
+              "invocation",
+              "contracts",
+              "interpretations"
+            ]
+          }
+        },
+        "teacherSuppliedFields": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "engineOwnedFields": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "testCasePolicy": {
+          "const": "engine-generated-and-replayed-from-curriculum"
+        }
+      }
+    },
+    "nativeOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "role", "determinism", "status"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z][a-z0-9_.-]+$" },
+        "role": { "type": "string", "minLength": 1 },
+        "determinism": {
+          "enum": ["deterministic", "observation", "effectful"]
+        },
+        "status": { "const": "declared-not-verified" }
+      }
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "purpose",
+        "authority",
+        "effects",
+        "grantPolicy",
+        "status"
+      ],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z][a-z0-9_.-]+$" },
+        "purpose": { "type": "string", "minLength": 1 },
+        "authority": {
+          "enum": [
+            "none",
+            "scoped-read",
+            "scoped-write",
+            "sandbox",
+            "observation"
+          ]
+        },
+        "effects": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "none",
+              "file-read",
+              "file-write",
+              "process-exec",
+              "network",
+              "observation"
+            ]
+          }
+        },
+        "grantPolicy": { "const": "local-explicit-grant" },
+        "status": { "const": "declared-not-verified" },
+        "fixtureBoundary": { "type": "string", "minLength": 1 }
+      }
+    },
+    "activity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "purpose",
+        "teacherMode",
+        "taskModel",
+        "expectedBehavior",
+        "expectedDisposition",
+        "evidence"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "purpose": { "type": "string", "minLength": 1 },
+        "teacherMode": { "enum": ["on", "off"] },
+        "taskModel": { "$ref": "#/$defs/taskModel" },
+        "expectedBehavior": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "expectedDisposition": {
+          "enum": ["accept", "clarify", "reject", "abstain", "fail-closed"]
+        },
+        "evidence": { "$ref": "#/$defs/activityEvidence" },
+        "failureSignal": { "type": "string", "minLength": 1 },
+        "notes": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "taskModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inputShape",
+        "operation",
+        "variationPolicy",
+        "noAnswerDump"
+      ],
+      "properties": {
+        "inputShape": { "type": "string", "minLength": 1 },
+        "operation": { "type": "string", "minLength": 1 },
+        "variationPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "surfaceVariation",
+            "valueVariation",
+            "structureVariation"
+          ],
+          "properties": {
+            "surfaceVariation": {
+              "enum": [
+                "none",
+                "paraphrase-families",
+                "structural-variants",
+                "repository-variants"
+              ]
+            },
+            "valueVariation": {
+              "enum": [
+                "none",
+                "held-out-values",
+                "held-out-schemas",
+                "held-out-repository"
+              ]
+            },
+            "structureVariation": {
+              "enum": [
+                "none",
+                "new-composition",
+                "new-error-boundary",
+                "new-toolchain"
+              ]
+            }
+          }
+        },
+        "noAnswerDump": { "const": true },
+        "ambiguityDimensions": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "activityEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tier", "oracle", "assertions"],
+      "properties": {
+        "tier": { "enum": ["hard", "consensus", "deferred-weak"] },
+        "oracle": { "enum": ["deterministic", "independent-judge", "mixed"] },
+        "assertions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "learnedStructure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "structureType",
+        "identityPolicy",
+        "semanticProperties",
+        "compositionRole",
+        "evidenceExpectation"
+      ],
+      "properties": {
+        "structureType": {
+          "enum": [
+            "concept",
+            "relationship",
+            "procedure",
+            "contract",
+            "dependency-graph",
+            "test-set",
+            "intent-frame",
+            "response-plan",
+            "repository-model",
+            "workflow",
+            "semantic-lowering"
+          ]
+        },
+        "identityPolicy": { "const": "semantic-properties-only" },
+        "semanticProperties": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "compositionRole": { "type": "string", "minLength": 1 },
+        "evidenceExpectation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["teacherOff", "replayable", "localValidation"],
+          "properties": {
+            "teacherOff": { "const": true },
+            "replayable": { "const": true },
+            "localValidation": { "const": true }
+          }
+        }
+      }
+    },
+    "teacherOffGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "stage",
+        "teacherMode",
+        "independentStore",
+        "requires",
+        "passCriteria",
+        "failurePolicy"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "stage": {
+          "enum": [
+            "retention",
+            "composition",
+            "held-out-generalization",
+            "clean-import"
+          ]
+        },
+        "teacherMode": { "const": "off" },
+        "independentStore": {
+          "enum": ["same-clean-curriculum-store", "clean-import-target"]
+        },
+        "requires": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "passCriteria": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "failurePolicy": {
+          "enum": ["fail-closed-and-preserve-evidence", "quarantine-and-report"]
+        }
+      }
+    },
+    "exportPrivacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "allow", "deny", "redactions", "secretHandling"],
+      "properties": {
+        "mode": { "const": "reconstructible-only" },
+        "allow": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "deny": {
+          "type": "array",
+          "minItems": 5,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "redactions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "secretHandling": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "neverExportValues",
+            "exportKindsOnly",
+            "machinePathPolicy",
+            "teacherStatePolicy"
+          ],
+          "properties": {
+            "neverExportValues": { "const": true },
+            "exportKindsOnly": { "const": true },
+            "machinePathPolicy": { "const": "omit" },
+            "teacherStatePolicy": { "const": "omit-prompts-and-provider-state" }
+          }
+        }
+      }
+    },
+    "cleanImportValidation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceStore",
+        "targetStore",
+        "importLifecycle",
+        "steps",
+        "promotionGate"
+      ],
+      "properties": {
+        "sourceStore": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["clean", "purpose"],
+          "properties": {
+            "clean": { "const": true },
+            "purpose": { "const": "curriculum-acquisition-output" }
+          }
+        },
+        "targetStore": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["clean", "newInstance", "purpose"],
+          "properties": {
+            "clean": { "const": true },
+            "newInstance": { "const": true },
+            "purpose": { "const": "independent-reconstruction" }
+          }
+        },
+        "importLifecycle": { "const": "quarantine-provisional" },
+        "steps": {
+          "type": "array",
+          "minItems": 5,
+          "items": {
+            "enum": [
+              "verify-manifest-and-content-hashes",
+              "resolve-dependency-closure",
+              "check-local-permissions",
+              "reconstruct-and-run-deterministic-tests",
+              "run-teacher-off-gates",
+              "promote-only-local-evidence"
+            ]
+          }
+        },
+        "promotionGate": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "localEvidenceRequired",
+            "teacherOffRequired",
+            "authorityTransferred",
+            "failureIsAtomic"
+          ],
+          "properties": {
+            "localEvidenceRequired": { "const": true },
+            "teacherOffRequired": { "const": true },
+            "authorityTransferred": { "const": false },
+            "failureIsAtomic": { "const": true }
+          }
+        }
+      }
+    }
+  }
+}

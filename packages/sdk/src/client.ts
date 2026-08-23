@@ -12,6 +12,7 @@ import type {
   CycleInput,
   CycleProgress,
   CapabilityBundle,
+  CapabilityInvocationResult,
   CapabilityProcedure,
   CapabilityPermission,
   CuriosityGap,
@@ -49,7 +50,12 @@ import type {
   RepresentationModel,
   RepresentationRegressionEvaluation,
   ReconstructedCapability,
+  RenderedResponsePlan,
   RelationshipRecord,
+  ResponsePlan,
+  ResponseRenderOptions,
+  Session,
+  SessionVisibility,
   SemanticRecallEvaluation,
   RpcTransport,
   TeacherProposalWire,
@@ -381,6 +387,32 @@ export class SpoonClient {
     );
   }
 
+  invokeCapability(
+    contentId: string,
+    procedureId: string,
+    input: JsonValue,
+  ): Promise<CapabilityInvocationResult> {
+    return this.transport.request<CapabilityInvocationResult>(
+      "capability.invoke",
+      { contentId, procedureId, input },
+    );
+  }
+
+  /**
+   * Render an already-authored response plan through Spoon's deterministic,
+   * evidence-reference-required renderer. This does not verify caller-provided
+   * evidence references or generate new factual wording.
+   */
+  renderResponsePlan(
+    plan: ResponsePlan,
+    options?: ResponseRenderOptions,
+  ): Promise<RenderedResponsePlan> {
+    return this.transport.request<RenderedResponsePlan>(
+      "language.render",
+      options === undefined ? { plan } : { plan, options },
+    );
+  }
+
   metricsSnapshot(): Promise<MetricsSnapshot> {
     return this.transport.request<MetricsSnapshot>("metrics.snapshot", {});
   }
@@ -675,6 +707,28 @@ export class SpoonClient {
       cycleId,
       reason,
     });
+  }
+
+  createSession(
+    name?: string,
+    visibility: SessionVisibility = "global",
+  ): Promise<Session> {
+    return this.transport.request<Session>("session.create", {
+      ...(name === undefined ? {} : { name }),
+      visibility,
+    });
+  }
+
+  listSessions(): Promise<Session[]> {
+    return this.transport.request<Session[]>("session.list", {});
+  }
+
+  getSession(idOrName: string): Promise<Session | null> {
+    return this.transport.request<Session | null>("session.get", { idOrName });
+  }
+
+  endSession(idOrName: string): Promise<Session> {
+    return this.transport.request<Session>("session.end", { idOrName });
   }
 
   close(): void {

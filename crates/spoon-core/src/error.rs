@@ -20,6 +20,18 @@ pub enum SpoonError {
         got: usize,
     },
 
+    #[error("unsupported intrinsic vocabulary version: {0}")]
+    UnsupportedIntrinsicVersion(u16),
+
+    #[error("invalid JSON: {0}")]
+    InvalidJson(String),
+
+    #[error("invalid path {path:?}: {reason}")]
+    InvalidPath { path: String, reason: String },
+
+    #[error("intrinsic {operation} exceeded its limit of {limit}")]
+    IntrinsicLimitExceeded { operation: String, limit: usize },
+
     #[error("contract violation: {0}")]
     ContractViolation(String),
 
@@ -28,6 +40,12 @@ pub enum SpoonError {
 
     #[error("arithmetic overflow during {operation}")]
     ArithmeticOverflow { operation: String },
+
+    #[error("invalid number during {operation}: {reason}")]
+    InvalidNumber { operation: String, reason: String },
+
+    #[error("negative exponent is not allowed during {operation}")]
+    NegativeExponent { operation: String },
 
     #[error("index out of bounds: {index} in collection of length {length}")]
     IndexOutOfBounds { index: i64, length: usize },

@@ -20,6 +20,8 @@ import type {
   CommandResult,
   CommandRunner,
   IdFactory,
+  PromptBuilder,
+  ProposalSchema,
   Teacher,
   TeacherProposal,
   TeacherRequest,
@@ -33,6 +35,8 @@ export interface ClaudeTeacherOptions {
   reliabilityTracker?: SourceReliabilityTracker;
   now?: Clock;
   idFactory?: IdFactory;
+  systemPrompt?: string;
+  promptBuilder?: PromptBuilder;
 }
 
 export class ClaudeTeacher implements Teacher {
@@ -44,6 +48,8 @@ export class ClaudeTeacher implements Teacher {
   readonly #now: Clock;
   readonly #idFactory: IdFactory;
   readonly #source: string;
+  readonly #systemPrompt: string;
+  readonly #promptBuilder: PromptBuilder;
 
   constructor(options: ClaudeTeacherOptions = {}) {
     this.#command = options.command ?? "claude";
@@ -55,6 +61,8 @@ export class ClaudeTeacher implements Teacher {
     this.#now = options.now ?? defaultClock;
     this.#idFactory = options.idFactory ?? defaultIdFactory;
     this.#source = `claude:${this.#model ?? "default"}`;
+    this.#systemPrompt = options.systemPrompt ?? TEACHER_SYSTEM_PROMPT;
+    this.#promptBuilder = options.promptBuilder ?? buildTeacherPrompt;
   }
 
   async propose(request: TeacherRequest): Promise<TeacherProposal> {
@@ -63,14 +71,14 @@ export class ClaudeTeacher implements Teacher {
       "--output-format",
       "json",
       "--json-schema",
-      JSON.stringify(request.desiredOutput),
+      JSON.stringify(normalizeClaudeSchema(request.desiredOutput)),
       "--tools",
       "",
       "--system-prompt",
-      TEACHER_SYSTEM_PROMPT,
+      this.#systemPrompt,
     ];
     if (this.#model !== undefined) args.push("--model", this.#model);
-    args.push(buildTeacherPrompt(request));
+    args.push(this.#promptBuilder(request));
 
     const result = await atProviderBoundary(
       "claude",
@@ -142,6 +150,57 @@ export class ClaudeTeacher implements Teacher {
       reliabilityTracker: this.#tracker,
     });
   }
+}
+
+/**
+ * Claude Code validates --json-schema in strict AJV mode and rejects the
+ * JSON-Schema shorthand `type: [..]`. The engine intentionally uses that
+ * shorthand for nullable scalar values, so lower it to an equivalent anyOf
+ * form at this provider boundary. The canonical schema and Spoon validator
+ * remain unchanged for the other adapters.
+ */
+export function normalizeClaudeSchema(
+  schema: ProposalSchema | boolean,
+): ProposalSchema | boolean {
+  if (typeof schema === "boolean") return schema;
+
+  const normalized: ProposalSchema = { ...schema };
+  if (schema.properties !== undefined) {
+    normalized.properties = Object.fromEntries(
+      Object.entries(schema.properties).map(([key, value]) => [
+        key,
+        normalizeClaudeSchema(value),
+      ]),
+    );
+  }
+  if (schema.additionalProperties !== undefined) {
+    normalized.additionalProperties =
+      typeof schema.additionalProperties === "boolean"
+        ? schema.additionalProperties
+        : normalizeClaudeSchema(schema.additionalProperties);
+  }
+  if (schema.items !== undefined) {
+    normalized.items = normalizeClaudeSchema(schema.items);
+  }
+  for (const key of ["allOf", "anyOf", "oneOf"] as const) {
+    const children = schema[key];
+    if (children !== undefined) {
+      normalized[key] = children.map((child) => normalizeClaudeSchema(child));
+    }
+  }
+  if (schema.not !== undefined) {
+    normalized.not = normalizeClaudeSchema(schema.not);
+  }
+
+  if (Array.isArray(schema.type)) {
+    const { type: _type, ...withoutType } = normalized;
+    return {
+      anyOf: schema.type.map((type) =>
+        normalizeClaudeSchema({ ...withoutType, type }),
+      ),
+    };
+  }
+  return normalized;
 }
 
 export function runCommand(

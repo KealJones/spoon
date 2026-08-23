@@ -377,6 +377,42 @@ impl KnowledgeStore {
                     )));
                 }
             }
+            let mut exact_calls = HashSet::new();
+            Self::collect_exact_expression_calls(&procedure.body, &mut exact_calls);
+            for condition in procedure
+                .contract
+                .requires
+                .iter()
+                .chain(&procedure.contract.promises)
+                .chain(&procedure.contract.fails_when)
+            {
+                if let Some(check) = &condition.check {
+                    Self::collect_exact_expression_calls(check, &mut exact_calls);
+                }
+            }
+            for (call, expected_version) in exact_calls {
+                let (actual_version, lifecycle) = tx
+                    .query_row(
+                        "SELECT version, lifecycle FROM procedures WHERE id = ?1",
+                        params![call.0.to_string()],
+                        |row| Ok((row.get::<_, u32>(0)?, row.get::<_, String>(1)?)),
+                    )
+                    .optional()?
+                    .map(|(version, lifecycle)| -> Result<(u32, Lifecycle)> {
+                        Ok((version, serde_json::from_str::<Lifecycle>(&lifecycle)?))
+                    })
+                    .transpose()?
+                    .ok_or_else(|| {
+                        GraphError::InvalidKnowledgeBundle(format!(
+                            "exact procedure call target {call}@{expected_version} is absent"
+                        ))
+                    })?;
+                if actual_version != expected_version || !bundle_reference_lifecycle(lifecycle) {
+                    return Err(GraphError::InvalidKnowledgeBundle(format!(
+                        "exact procedure call target {call}@{expected_version} drifted or is not executable"
+                    )));
+                }
+            }
         }
 
         let mut relationship_ids = HashSet::new();
@@ -530,7 +566,10 @@ impl KnowledgeStore {
                 Self::collect_expression_calls(right, calls);
             }
             Expr::UnOp { operand, .. } => Self::collect_expression_calls(operand, calls),
-            Expr::Call { procedure, args } => {
+            Expr::Call { procedure, args }
+            | Expr::CallExact {
+                procedure, args, ..
+            } => {
                 calls.insert(*procedure);
                 for argument in args {
                     Self::collect_expression_calls(argument, calls);
@@ -578,6 +617,85 @@ impl KnowledgeStore {
                 Self::collect_expression_calls(collection, calls);
                 Self::collect_expression_calls(init, calls);
                 Self::collect_expression_calls(body, calls);
+            }
+            Expr::Intrinsic { args, .. } => {
+                for argument in args {
+                    Self::collect_expression_calls(argument, calls);
+                }
+            }
+        }
+    }
+
+    fn collect_exact_expression_calls(expression: &Expr, calls: &mut HashSet<(ProcedureId, u32)>) {
+        match expression {
+            Expr::Literal(_) | Expr::Var(_) => {}
+            Expr::BinOp { left, right, .. } => {
+                Self::collect_exact_expression_calls(left, calls);
+                Self::collect_exact_expression_calls(right, calls);
+            }
+            Expr::UnOp { operand, .. } => Self::collect_exact_expression_calls(operand, calls),
+            Expr::Call { args, .. } => {
+                for argument in args {
+                    Self::collect_exact_expression_calls(argument, calls);
+                }
+            }
+            Expr::CallExact {
+                procedure,
+                version,
+                args,
+            } => {
+                calls.insert((*procedure, *version));
+                for argument in args {
+                    Self::collect_exact_expression_calls(argument, calls);
+                }
+            }
+            Expr::If { cond, then, else_ } => {
+                Self::collect_exact_expression_calls(cond, calls);
+                Self::collect_exact_expression_calls(then, calls);
+                Self::collect_exact_expression_calls(else_, calls);
+            }
+            Expr::Let { value, body, .. } => {
+                Self::collect_exact_expression_calls(value, calls);
+                Self::collect_exact_expression_calls(body, calls);
+            }
+            Expr::Block(expressions) | Expr::ListExpr(expressions) => {
+                for item in expressions {
+                    Self::collect_exact_expression_calls(item, calls);
+                }
+            }
+            Expr::Index { collection, index } => {
+                Self::collect_exact_expression_calls(collection, calls);
+                Self::collect_exact_expression_calls(index, calls);
+            }
+            Expr::FieldAccess { object, .. } => Self::collect_exact_expression_calls(object, calls),
+            Expr::Map {
+                collection, body, ..
+            } => {
+                Self::collect_exact_expression_calls(collection, calls);
+                Self::collect_exact_expression_calls(body, calls);
+            }
+            Expr::Filter {
+                collection,
+                predicate,
+                ..
+            } => {
+                Self::collect_exact_expression_calls(collection, calls);
+                Self::collect_exact_expression_calls(predicate, calls);
+            }
+            Expr::Reduce {
+                collection,
+                init,
+                body,
+                ..
+            } => {
+                Self::collect_exact_expression_calls(collection, calls);
+                Self::collect_exact_expression_calls(init, calls);
+                Self::collect_exact_expression_calls(body, calls);
+            }
+            Expr::Intrinsic { args, .. } => {
+                for argument in args {
+                    Self::collect_exact_expression_calls(argument, calls);
+                }
             }
         }
     }

@@ -4,9 +4,9 @@ use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use serde::{Deserialize, Serialize};
 use spoon_core::{
     AssembledContext, Assumption, Concept, ConceptId, Episode, EpisodeId, Interpretation,
-    Lifecycle, RelationshipId, Source, SpoonError, Value,
+    Lifecycle, RelationshipId, SessionId, Source, SpoonError, Value,
 };
-use spoon_episode::{EpisodeQuery, EpisodeStore};
+use spoon_episode::{EpisodeQuery, EpisodeRecallMode, EpisodeStore};
 use spoon_graph::{GraphError, KnowledgeStore};
 use thiserror::Error;
 
@@ -196,13 +196,22 @@ impl<'a> ContextAssembler<'a> {
     }
 
     pub fn assemble(&self, request: &ContextRequest) -> Result<KnowledgeContext, ContextError> {
+        self.assemble_for_recall(request, None, EpisodeRecallMode::Global)
+    }
+
+    pub fn assemble_for_recall(
+        &self,
+        request: &ContextRequest,
+        session_id: Option<SessionId>,
+        recall_mode: EpisodeRecallMode,
+    ) -> Result<KnowledgeContext, ContextError> {
         validate_request(request)?;
         self.validate_concepts_exist(request)?;
 
         let entities = self.select_entities(request);
         let relevant_knowledge = self.select_graph_neighborhood(&entities, request)?;
         let relevant_procedures = self.select_relevant_procedures(&entities, request)?;
-        let recent_episodes = self.select_recent_episodes(&entities)?;
+        let recent_episodes = self.select_recent_episodes(&entities, session_id, recall_mode)?;
         let assumptions = request
             .assumptions
             .iter()
@@ -486,6 +495,8 @@ impl<'a> ContextAssembler<'a> {
     fn select_recent_episodes(
         &self,
         entities: &[ConceptId],
+        session_id: Option<SessionId>,
+        recall_mode: EpisodeRecallMode,
     ) -> Result<Vec<RecentEpisode>, ContextError> {
         let limits = &self.config.limits;
         if limits.max_recent_episodes == 0 {
@@ -496,11 +507,15 @@ impl<'a> ContextAssembler<'a> {
         for (entity_rank, concept) in entities.iter().enumerate() {
             let episodes = self
                 .episodes
-                .query(&EpisodeQuery {
-                    concept: Some(*concept),
-                    limit: query_limit,
-                    ..EpisodeQuery::default()
-                })
+                .query_for_recall(
+                    &EpisodeQuery {
+                        concept: Some(*concept),
+                        limit: query_limit,
+                        ..EpisodeQuery::default()
+                    },
+                    session_id,
+                    recall_mode,
+                )
                 .map_err(ContextError::EpisodeStore)?;
             for episode in episodes {
                 ranked
@@ -511,7 +526,7 @@ impl<'a> ContextAssembler<'a> {
         }
         for episode in self
             .episodes
-            .list_recent(query_limit)
+            .list_recent_for_recall(session_id, recall_mode, query_limit)
             .map_err(ContextError::EpisodeStore)?
         {
             ranked

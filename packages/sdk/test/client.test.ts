@@ -256,6 +256,7 @@ test("client maps capability discovery, quarantine, validation, and local grants
     kind: "network_host",
     host: "api.example.test",
   });
+  await client.invokeCapability("cap-1", "forecast", { city: "Phoenix" });
 
   assert.deepEqual(transport.calls, [
     { method: "capability.discover", params: description },
@@ -287,6 +288,14 @@ test("client maps capability discovery, quarantine, validation, and local grants
         adminToken: "admin",
       },
     },
+    {
+      method: "capability.invoke",
+      params: {
+        contentId: "cap-1",
+        procedureId: "forecast",
+        input: { city: "Phoenix" },
+      },
+    },
   ]);
 });
 
@@ -296,6 +305,54 @@ test("client maps native primitive observation", async () => {
   await client.observePrimitive("clock");
   assert.deepEqual(transport.calls, [
     { method: "primitive.observe", params: { target: "clock" } },
+  ]);
+});
+
+test("client maps a typed bounded response-plan render request", async () => {
+  const transport = new RecordingTransport();
+  const client = new SpoonClient(transport);
+  const plan = {
+    dialogueMove: { act: "Inform" as const, relatesToTurn: null },
+    claims: [
+      {
+        Grounded: {
+          id: "answer",
+          text: "There are 3 r characters in strawberry.",
+          evidence: [
+            {
+              id: "episode:letter-count",
+              sourceKind: "SelfVerified" as const,
+              linkedEpisode: null,
+            },
+          ],
+          provenance: ["procedure:letter-count-v1"],
+        },
+      },
+      {
+        Unsupported: {
+          id: "guess",
+          reason: "No observation supports this claim.",
+        },
+      },
+    ],
+    uncertainty: { level: "Certain" as const, disclosure: null },
+    tone: "Neutral" as const,
+    variant: "Plain" as const,
+  };
+
+  await client.renderResponsePlan(plan, {
+    tone: "Warm",
+    variant: "Bulleted",
+  });
+
+  assert.deepEqual(transport.calls, [
+    {
+      method: "language.render",
+      params: {
+        plan,
+        options: { tone: "Warm", variant: "Bulleted" },
+      },
+    },
   ]);
 });
 

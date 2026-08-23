@@ -8,26 +8,98 @@ use spoon_adapt::{
     Claim, Contradiction, ContradictionId, DemonstratedFeature, Implication, Refinement,
     ScopeAssignment, Uncertainty,
 };
+use spoon_capability::{
+    AdapterExecution, AuthorizedPrimitiveInvocation, CapabilityError, CapabilityInvocationAdapter,
+    NativePrimitive, PrimitivePolicy, ResourceBounds, ScopedFileAdapter,
+};
+use spoon_core::SessionVisibility;
 use spoon_core::{
-    Assumption, Concept, ConceptId, Contract, EpisodeId, EscalationRung, Evaluation, Expr,
-    MutabilityClass, Param, Procedure, ProcedureId, Relationship, RelationshipId,
+    Assumption, Concept, ConceptId, Contract, DialogueMove, EpisodeId, EscalationRung, Evaluation,
+    Expr, LanguageError, MutabilityClass, Param, Procedure, ProcedureId, Relationship,
+    RelationshipId, RenderVariant, RenderedResponse, ResponsePlan, ResponseRenderer, ResponseTone,
     Value as SpoonValue,
 };
 use spoon_engine::{
     AdaptationPlanId, AdaptationPlanRequest, ApplyAdaptationRequest, CapabilityBundle,
-    CuriosityGap, CycleBudget, CycleId, CycleInput, CycleOutcome, CycleProgress, Engine,
-    EngineError, FailureAnalysisRequest, FalsificationMeasurementInput, FalsificationRunInput,
-    GoalKind, InterfaceDescription, LocalValidation, Permission, PromotionReplay, SkillCandidate,
-    TeacherProposalWire,
+    CapabilityExecutionOutcome, CuriosityGap, CycleBudget, CycleId, CycleInput, CycleOutcome,
+    CycleProgress, Engine, EngineError, FailureAnalysisRequest, FalsificationMeasurementInput,
+    FalsificationRunInput, GoalKind, InterfaceDescription, LocalValidation, Permission,
+    PromotionReplay, RecallMode, SkillCandidate, TeacherProposalWire,
 };
 use spoon_episode::{EpisodeFeedback, EpisodeQuery, FeedbackSource};
 use spoon_graph::GraphError;
 use uuid::Uuid;
 
+const MAX_PUBLIC_CAPABILITY_INPUT_BYTES: usize = 1024 * 1024;
+const MAX_PUBLIC_PROCEDURE_ID_BYTES: usize = 512;
+/// The core renderer separately limits claim and plan text. This public
+/// envelope ceiling also bounds evidence/provenance metadata supplied by a
+/// caller before it can reach the renderer.
+const MAX_PUBLIC_LANGUAGE_RENDER_INPUT_BYTES: usize = 128 * 1024;
+
+/// Server-owned registry of concrete host effect adapters. It is configured
+/// out of band by the embedding host; JSON-RPC callers cannot register an
+/// adapter, choose a root, or supply a permission policy.
+#[derive(Debug, Default)]
+pub struct CapabilityHostAdapters {
+    scoped_files: Option<ScopedFileAdapter>,
+}
+
+impl CapabilityHostAdapters {
+    pub fn with_scoped_files(
+        binding: impl Into<String>,
+        root: impl AsRef<std::path::Path>,
+        bounds: ResourceBounds,
+    ) -> Result<Self, CapabilityError> {
+        Ok(Self {
+            scoped_files: Some(ScopedFileAdapter::new(binding, root, bounds)?),
+        })
+    }
+
+    fn supports(&self, primitive: &NativePrimitive) -> bool {
+        matches!(
+            primitive,
+            NativePrimitive::FileRead | NativePrimitive::FileWrite
+        ) && self.scoped_files.is_some()
+    }
+
+    fn policy(&self, primitive: &NativePrimitive) -> Option<PrimitivePolicy> {
+        if !self.supports(primitive) {
+            return None;
+        }
+        self.scoped_files
+            .as_ref()
+            .map(|adapter| adapter.policy().clone())
+    }
+}
+
+impl CapabilityInvocationAdapter for CapabilityHostAdapters {
+    fn execute(
+        &mut self,
+        invocation: &AuthorizedPrimitiveInvocation,
+    ) -> Result<AdapterExecution, CapabilityError> {
+        match invocation.primitive {
+            NativePrimitive::FileRead | NativePrimitive::FileWrite => self
+                .scoped_files
+                .as_mut()
+                .ok_or_else(|| {
+                    CapabilityError::AdapterViolation(
+                        "no scoped file host adapter is configured".into(),
+                    )
+                })?
+                .execute(invocation),
+            _ => Err(CapabilityError::AdapterViolation(
+                "no host adapter is configured for the requested primitive".into(),
+            )),
+        }
+    }
+}
+
 pub struct RpcServer {
     engine: Engine,
     admin_token: Option<String>,
     feedback_source_identity: String,
+    capability_adapters: CapabilityHostAdapters,
 }
 
 impl RpcServer {
@@ -36,7 +108,15 @@ impl RpcServer {
             engine,
             admin_token: None,
             feedback_source_identity: "spoon-server".into(),
+            capability_adapters: CapabilityHostAdapters::default(),
         }
+    }
+
+    /// Install an explicit server-local host adapter registry. This is the
+    /// only supported way to make `capability.invoke` effectful.
+    pub fn with_capability_host_adapters(mut self, adapters: CapabilityHostAdapters) -> Self {
+        self.capability_adapters = adapters;
+        self
     }
 
     pub fn with_admin_token(mut self, token: impl Into<String>) -> Result<Self, EngineError> {
@@ -340,6 +420,51 @@ impl RpcServer {
                         .require_capability_procedure(&input.content_id, &input.procedure_id)
                         .map_err(engine_error)?,
                 )
+            }
+            "capability.invoke" => {
+                let input: CapabilityInvokeParam = decode(params)?;
+                validate_capability_invocation_request(&input)?;
+                let procedure = self
+                    .engine
+                    .require_capability_procedure(&input.content_id, &input.procedure_id)
+                    .map_err(capability_authorization_error)?;
+                let policy = self
+                    .capability_adapters
+                    .policy(&procedure.primitive)
+                    .ok_or_else(capability_adapter_unavailable)?;
+                let outcome = self
+                    .engine
+                    .invoke_capability(
+                        &input.content_id,
+                        &input.procedure_id,
+                        &input.input,
+                        None,
+                        &policy,
+                        &mut self.capability_adapters,
+                    )
+                    .map_err(capability_invocation_error)?;
+                Ok(public_capability_invocation(outcome))
+            }
+            "language.render" => {
+                let input: LanguageRenderParam = decode(params)?;
+                validate_language_render_request(&input)?;
+                let mut plan = input.plan;
+                if let Some(options) = input.options {
+                    if let Some(tone) = options.tone {
+                        plan.tone = tone;
+                    }
+                    if let Some(variant) = options.variant {
+                        plan.variant = variant;
+                    }
+                }
+                let rendered = ResponseRenderer
+                    .render(&plan)
+                    .map_err(language_render_error)?;
+                Ok(public_language_render_response(
+                    plan.dialogue_move,
+                    rendered,
+                    plan.claims.len(),
+                ))
             }
             "metrics.snapshot" => encode(self.engine.metrics_snapshot().map_err(engine_error)?),
             "telemetry.createRun" => {
@@ -859,6 +984,31 @@ impl RpcServer {
                         .map_err(contradiction_error)?,
                 ))
             }
+            "session.create" => {
+                let input: CreateSessionParams = decode(params)?;
+                encode(
+                    self.engine
+                        .create_session(input.name, input.visibility)
+                        .map_err(app_error)?,
+                )
+            }
+            "session.list" => encode(self.engine.list_sessions().map_err(app_error)?),
+            "session.get" => {
+                let input: SessionLookupParams = decode(params)?;
+                encode(
+                    self.engine
+                        .get_session(&input.id_or_name)
+                        .map_err(app_error)?,
+                )
+            }
+            "session.end" => {
+                let input: SessionLookupParams = decode(params)?;
+                encode(
+                    self.engine
+                        .end_session(&input.id_or_name)
+                        .map_err(app_error)?,
+                )
+            }
             "episode.get" => {
                 let input: EpisodeIdParam = decode(params)?;
                 encode(
@@ -1001,6 +1151,36 @@ struct CapabilityProcedureParam {
     content_id: String,
     #[serde(rename = "procedureId")]
     procedure_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CapabilityInvokeParam {
+    content_id: String,
+    procedure_id: String,
+    input: Value,
+}
+
+/// Public wrapper for a deterministic rendering request. The response plan is
+/// data, not an authority grant: evidence and provenance references are
+/// required for plan validation but are never treated as server-verified.
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LanguageRenderParam {
+    plan: ResponsePlan,
+    #[serde(default)]
+    options: Option<LanguageRenderOptions>,
+}
+
+/// Content-free overrides. Tone remains metadata in the current deterministic
+/// renderer; `variant` selects plain or bullet formatting only.
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LanguageRenderOptions {
+    #[serde(default)]
+    tone: Option<ResponseTone>,
+    #[serde(default)]
+    variant: Option<RenderVariant>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1314,6 +1494,134 @@ fn encode<T: Serialize>(value: T) -> Result<Value, RpcFault> {
             "cause": error.to_string(),
         }))
     })
+}
+
+fn validate_capability_invocation_request(input: &CapabilityInvokeParam) -> Result<(), RpcFault> {
+    let digest = input.content_id.strip_prefix("sha256:");
+    if digest.is_none_or(|digest| {
+        digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+    }) {
+        return Err(RpcFault::new(-32602, "invalid params").with_data(json!({
+            "kind": "invalid_capability_identity"
+        })));
+    }
+    if input.procedure_id.is_empty()
+        || input.procedure_id.len() > MAX_PUBLIC_PROCEDURE_ID_BYTES
+        || input.procedure_id.chars().any(char::is_control)
+    {
+        return Err(RpcFault::new(-32602, "invalid params").with_data(json!({
+            "kind": "invalid_capability_procedure_identity"
+        })));
+    }
+    let input_bytes = serde_json::to_vec(&input.input).map_err(|_| {
+        RpcFault::new(-32602, "invalid params")
+            .with_data(json!({"kind": "invalid_capability_input"}))
+    })?;
+    if input_bytes.len() > MAX_PUBLIC_CAPABILITY_INPUT_BYTES {
+        return Err(RpcFault::new(-32602, "invalid params").with_data(json!({
+            "kind": "capability_input_too_large",
+            "maxBytes": MAX_PUBLIC_CAPABILITY_INPUT_BYTES
+        })));
+    }
+    Ok(())
+}
+
+fn validate_language_render_request(input: &LanguageRenderParam) -> Result<(), RpcFault> {
+    let encoded = serde_json::to_vec(input).map_err(|_| {
+        RpcFault::new(-32602, "invalid params")
+            .with_data(json!({"kind": "invalid_language_render_request"}))
+    })?;
+    if encoded.len() > MAX_PUBLIC_LANGUAGE_RENDER_INPUT_BYTES {
+        return Err(RpcFault::new(-32602, "invalid params").with_data(json!({
+            "kind": "language_render_input_too_large",
+            "maxBytes": MAX_PUBLIC_LANGUAGE_RENDER_INPUT_BYTES,
+        })));
+    }
+    Ok(())
+}
+
+/// This endpoint deliberately does not resolve caller-provided evidence or
+/// provenance identifiers into trusted Engine facts. It only proves that the
+/// bounded renderer accepted references and did not emit unsupported claims.
+/// Consequently the public audit reports their status as unverified and never
+/// returns raw evidence/provenance fields.
+fn public_language_render_response(
+    dialogue_move: DialogueMove,
+    rendered: RenderedResponse,
+    claims_submitted: usize,
+) -> Value {
+    json!({
+        "text": rendered.text,
+        "includedClaimIds": rendered.included_claim_ids,
+        "omittedClaimIds": rendered.omitted_claim_ids,
+        "uncertainty": rendered.uncertainty,
+        "tone": rendered.tone,
+        "dialogueMove": dialogue_move,
+        "audit": {
+            "renderer": "bounded_response_plan_v1",
+            "claimsSubmitted": claims_submitted,
+            "evidenceStatus": "caller_supplied_unverified",
+            "provenanceRedacted": true,
+            "redacted": true,
+        }
+    })
+}
+
+fn language_render_error(_: LanguageError) -> RpcFault {
+    RpcFault::new(-32602, "invalid language response plan").with_data(json!({
+        "kind": "invalid_language_response_plan",
+        "redacted": true,
+    }))
+}
+
+fn public_capability_invocation(outcome: CapabilityExecutionOutcome) -> Value {
+    let invocation = outcome.invocation;
+    json!({
+        "contentId": invocation.content_id,
+        "procedureId": invocation.procedure_id,
+        "output": invocation.output,
+        "outputDigest": invocation.output_digest,
+        "receipt": {
+            "primitive": invocation.receipt.primitive,
+            "effect": invocation.receipt.effect,
+            "payloadDigest": invocation.receipt.payload_digest,
+            "bounds": invocation.receipt.bounds,
+            "redacted": true,
+            "replayable": invocation.receipt.replayable,
+        },
+        "usage": invocation.usage,
+        "episodeId": outcome.episode.id,
+        "redacted": true,
+    })
+}
+
+fn capability_adapter_unavailable() -> RpcFault {
+    RpcFault::new(-32020, "capability adapter unavailable").with_data(json!({
+        "kind": "capability_adapter_unavailable"
+    }))
+}
+
+fn capability_authorization_error(_: EngineError) -> RpcFault {
+    RpcFault::new(-32021, "capability authorization failed").with_data(json!({
+        "kind": "capability_authorization_failed",
+        "redacted": true
+    }))
+}
+
+fn capability_invocation_error(error: EngineError) -> RpcFault {
+    match error {
+        EngineError::CapabilityInvocationFailed { episode_id, .. } => {
+            RpcFault::new(-32022, "capability invocation failed").with_data(json!({
+                "kind": "capability_invocation_failed",
+                "episodeId": episode_id,
+                "redacted": true
+            }))
+        }
+        _ => RpcFault::new(-32022, "capability invocation failed").with_data(json!({
+            "kind": "capability_invocation_failed",
+            "redacted": true
+        })),
+    }
 }
 
 fn app_error(error: impl std::fmt::Display) -> RpcFault {
@@ -2062,6 +2370,10 @@ struct EpisodeListParams {
     outcome: Option<String>,
     rung: Option<EscalationRung>,
     concept_id: Option<String>,
+    session_id: Option<String>,
+    session_visibility: Option<SessionVisibility>,
+    #[serde(default)]
+    include_isolated: bool,
     #[serde(default = "default_limit")]
     limit: u32,
 }
@@ -2084,6 +2396,12 @@ struct BeginCycleParams {
     assumptions: Vec<Assumption>,
     budget: CycleBudgetParams,
     teacher_allowed: bool,
+    #[serde(default)]
+    session_id: Option<String>,
+    #[serde(default)]
+    recall_mode: RecallMode,
+    #[serde(default)]
+    permission_mode: Option<String>,
 }
 
 impl BeginCycleParams {
@@ -2098,8 +2416,26 @@ impl BeginCycleParams {
                 max_teacher_turns: self.budget.max_teacher_turns,
             },
             teacher_allowed: self.teacher_allowed,
+            session_id: self.session_id,
+            recall_mode: self.recall_mode,
+            permission_mode: self.permission_mode,
         }
     }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CreateSessionParams {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    visibility: SessionVisibility,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SessionLookupParams {
+    id_or_name: String,
 }
 
 #[derive(Deserialize)]
@@ -2145,6 +2481,12 @@ impl EpisodeListParams {
                 .map(|id| parse_uuid(&id).map(ConceptId))
                 .transpose()?,
             limit: self.limit,
+            session_id: self
+                .session_id
+                .map(|id| parse_uuid(&id).map(spoon_core::SessionId))
+                .transpose()?,
+            session_visibility: self.session_visibility,
+            exclude_isolated: !self.include_isolated,
         })
     }
 }

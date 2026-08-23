@@ -202,6 +202,25 @@ test("provider failures abort the pending cycle instead of abandoning it", async
   });
 });
 
+test("Teacher-OFF cycles abort cleanly through the public cycle path", async () => {
+  const transport = new AbortCycleTransport();
+  const outcome = await runCycle(
+    new SpoonClient(transport),
+    "unknown",
+    undefined,
+  );
+
+  assert.equal(outcome.disposition, "abstained");
+  assert.deepEqual(
+    transport.calls.map((call) => call.method),
+    ["cycle.begin", "cycle.abort"],
+  );
+  assert.deepEqual(transport.calls[1]?.params, {
+    cycleId: "cycle-failure",
+    reason: "teacher is disabled for this run",
+  });
+});
+
 test("a malformed lesson can consume one bounded retry and then complete", async () => {
   const transport = new RetryCycleTransport();
   const teacher = new FakeTeacher();

@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 spoon-adapt.workspace = true
+spoon-capability.workspace = true
 spoon-core.workspace = true
 spoon-engine.workspace = true
 spoon-episode.workspace = true

@@ -116,8 +116,12 @@ export class StdioTransport extends StreamTransport {
   static spawn(
     command = "target/debug/spoon-server",
     args: string[] = [],
+    options: { env?: NodeJS.ProcessEnv } = {},
   ): StdioTransport {
-    const child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(command, args, {
+      ...options,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
     return new StdioTransport(child);
   }
 

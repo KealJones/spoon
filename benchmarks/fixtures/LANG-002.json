@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "LANG-002",
+  "title": "Paraphrase of Double",
+  "suite": "language-context",
+  "family": "LANG",
+  "track": "language-context",
+  "claimTested": "Spoon maps materially different surface forms to the same reusable operation.",
+  "novelty": {"exactRepeatForbidden": true, "heldOutFamily": false},
+  "phases": [
+    {
+      "id": "acquisition",
+      "order": 1,
+      "purpose": "Solve a canonical paraphrase while Teacher assistance is available.",
+      "teacher": {"mode": "on"},
+      "input": {"prompt": "Make 9 twice as big."},
+      "expectedOutcome": {"type": "answer", "value": 18, "criteria": ["interprets twice as big as doubling"]}
+    },
+    {
+      "id": "retention",
+      "order": 2,
+      "purpose": "Repeat the paraphrase without Teacher assistance.",
+      "teacher": {"mode": "off"},
+      "input": {"prompt": "Make 9 twice as big."},
+      "expectedOutcome": {"type": "answer", "value": 18, "criteria": ["answers 18 with Teacher OFF"]}
+    },
+    {
+      "id": "generalization",
+      "order": 3,
+      "purpose": "Use a new paraphrase and value.",
+      "teacher": {"mode": "off"},
+      "input": {"prompt": "Take 12 and make it twice what it is."},
+      "expectedOutcome": {"type": "answer", "value": 24, "criteria": ["maps a novel surface form to doubling"]}
+    }
+  ]
+}

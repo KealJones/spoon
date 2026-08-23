@@ -58,7 +58,20 @@ export interface TeacherRequest {
   desiredOutput: ProposalSchema;
 }
 
-export type ProviderKind = "claude" | "codex" | "openai" | "ollama" | "human";
+/**
+ * Provider adapters are shared by distinct structured-output protocols. The
+ * default builder is the Spoon Teacher prompt; callers such as the benchmark
+ * Judge provide their own protocol-specific builder and system prompt.
+ */
+export type PromptBuilder = (request: TeacherRequest) => string;
+
+export interface ProviderPromptOptions {
+  systemPrompt?: string;
+  promptBuilder?: PromptBuilder;
+}
+
+export type ProviderKind =
+  "claude" | "codex" | "cli" | "openai" | "ollama" | "human";
 
 export interface ProposalProvenance {
   provider: ProviderKind;

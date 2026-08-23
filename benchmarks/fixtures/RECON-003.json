@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "RECON-003",
+  "title": "Belief Reconciliation",
+  "suite": "memory-reconciliation",
+  "family": "RECON",
+  "track": "memory-reconciliation",
+  "claimTested": "Spoon updates current belief while preserving the historical record of the previous constraint.",
+  "phases": [
+    {
+      "id": "acquisition",
+      "order": 1,
+      "purpose": "Establish the original constraint as a dated belief.",
+      "teacher": {"mode": "on"},
+      "input": {"prompt": "Project Marbles cannot use internet access."},
+      "expectedOutcome": {"type": "action", "criteria": ["records the original offline constraint"]}
+    },
+    {
+      "id": "retention",
+      "order": 2,
+      "purpose": "Reconcile a later update without rewriting history.",
+      "teacher": {"mode": "off"},
+      "input": {"prompt": "Project Marbles can now use internet access. What changed?"},
+      "expectedOutcome": {"type": "reconciliation", "criteria": ["identifies the revised constraint", "preserves the previous belief as historical state"]}
+    },
+    {
+      "id": "historical-check",
+      "order": 3,
+      "purpose": "Ask about the prior state after reconciliation.",
+      "teacher": {"mode": "off"},
+      "input": {"prompt": "What did the old Project Marbles policy say?"},
+      "expectedOutcome": {"type": "memory_recall", "criteria": ["recalls the former no-internet policy without treating it as current"]}
+    }
+  ]
+}

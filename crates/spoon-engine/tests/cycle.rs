@@ -18,6 +18,9 @@ fn cycle_input(situation: &str, teacher_allowed: bool) -> CycleInput {
             max_teacher_turns: 1,
         },
         teacher_allowed,
+        session_id: None,
+        recall_mode: Default::default(),
+        permission_mode: None,
     }
 }
 
@@ -36,6 +39,45 @@ fn seed_double(engine: &Engine) -> (Concept, Procedure) {
     .with_concept(concept.id);
     engine.admin_insert_procedure(&procedure).unwrap();
     (concept, procedure)
+}
+
+#[test]
+fn isolated_session_episode_is_not_in_global_recall_context() {
+    let mut engine = Engine::in_memory_with_admin("session-test-admin").unwrap();
+    let isolated = engine
+        .create_session(
+            Some("private".into()),
+            spoon_core::SessionVisibility::Isolated,
+        )
+        .unwrap();
+    let mut private_input = cycle_input("private memory", false);
+    private_input.session_id = Some(isolated.id.to_string());
+    private_input.recall_mode = spoon_engine::RecallMode::Session;
+    let private = engine.begin_cycle(private_input).unwrap();
+    let CycleProgress::Completed(private) = private else {
+        panic!("private cycle should complete");
+    };
+    assert_eq!(private.episode.session_id, Some(isolated.id));
+    assert_eq!(
+        private.episode.session_visibility,
+        spoon_core::SessionVisibility::Isolated
+    );
+    assert_eq!(private.episode.turn_index, Some(0));
+
+    let global = engine
+        .begin_cycle(cycle_input("global check", false))
+        .unwrap();
+    let CycleProgress::Completed(global) = global else {
+        panic!("global cycle should complete");
+    };
+    assert!(
+        global
+            .episode
+            .context
+            .recent_episodes
+            .iter()
+            .all(|episode| episode.episode_id != private.episode.id)
+    );
 }
 
 fn proposal(situation: &str, content: serde_json::Value) -> TeacherProposalWire {
@@ -106,6 +148,429 @@ fn reusable_double_lesson(value: i64) -> serde_json::Value {
     })
 }
 
+fn reusable_count_occurrences_lesson(
+    items: serde_json::Value,
+    needle: serde_json::Value,
+) -> serde_json::Value {
+    json!({
+        "proposalKind": "reusable_lesson",
+        "interpretations": [],
+        "lesson": {
+            "primitiveSet": "pure_expr_v2",
+            "concepts": [{
+                "key": "count-occurrences",
+                "name": "COUNT OCCURRENCES",
+                "description": "Count values equal to a requested needle"
+            }],
+            "relationships": [],
+            "procedures": [{
+                "key": "count-occurrences-procedure",
+                "name": "COUNT OCCURRENCES",
+                "concept": { "kind": "new_concept", "key": "count-occurrences" },
+                "parameters": [
+                    { "name": "items", "description": "values to inspect" },
+                    { "name": "needle", "description": "value to count" }
+                ],
+                "body": {
+                    "kind": "intrinsic",
+                    "version": 1,
+                    "op": "count_equal",
+                    "args": [
+                        { "kind": "parameter", "name": "items" },
+                        { "kind": "parameter", "name": "needle" }
+                    ]
+                },
+                "contract": { "requires": [], "promises": [], "failsWhen": [] }
+            }],
+            "invocation": {
+                "procedureKey": "count-occurrences-procedure",
+                "inputs": [
+                    { "name": "items", "value": items },
+                    { "name": "needle", "value": needle }
+                ]
+            }
+        },
+        "procedure": null,
+        "answer": 2,
+        "abstainReason": null
+    })
+}
+
+fn reusable_json_path_lesson() -> serde_json::Value {
+    json!({
+        "proposalKind": "reusable_lesson",
+        "interpretations": [],
+        "lesson": {
+            "primitiveSet": "pure_expr_v2",
+            "concepts": [{
+                "key": "json-path",
+                "name": "JSON PATH",
+                "description": "Read a value from JSON using a path"
+            }],
+            "relationships": [],
+            "procedures": [{
+                "key": "json-path-procedure",
+                "name": "JSON PATH",
+                "concept": { "kind": "new_concept", "key": "json-path" },
+                "parameters": [
+                    { "name": "document", "description": "JSON text" },
+                    { "name": "path", "description": "path to read" }
+                ],
+                "body": {
+                    "kind": "intrinsic", "version": 1, "op": "path_get",
+                    "args": [
+                        { "kind": "intrinsic", "version": 1, "op": "json_parse", "args": [{ "kind": "parameter", "name": "document" }] },
+                        { "kind": "parameter", "name": "path" }
+                    ]
+                },
+                "contract": { "requires": [], "promises": [], "failsWhen": [] }
+            }],
+            "invocation": {
+                "procedureKey": "json-path-procedure",
+                "inputs": [
+                    { "name": "document", "value": r#"{"items":[{"id":7}]}"# },
+                    { "name": "path", "value": "items[0]" }
+                ]
+            }
+        },
+        "procedure": null,
+        "answer": { "id": 7 },
+        "abstainReason": null
+    })
+}
+
+fn begin_teacher_cycle(engine: &mut Engine, situation: &str) -> spoon_engine::CycleId {
+    let CycleProgress::NeedTeacher { cycle_id, .. } =
+        engine.begin_cycle(cycle_input(situation, true)).unwrap()
+    else {
+        panic!("unknown input must ask the teacher");
+    };
+    cycle_id
+}
+
+fn begin_teacher_cycle_with_request(
+    engine: &mut Engine,
+    situation: &str,
+) -> (spoon_engine::CycleId, spoon_engine::TeacherRequestWire) {
+    let CycleProgress::NeedTeacher { cycle_id, request } =
+        engine.begin_cycle(cycle_input(situation, true)).unwrap()
+    else {
+        panic!("unknown input must ask the teacher");
+    };
+    (cycle_id, request)
+}
+
+fn reusable_dependency_lesson(alias: &str, value: i64) -> serde_json::Value {
+    let call = |argument| {
+        json!({
+            "kind": "dependency",
+            "alias": alias,
+            "args": [argument]
+        })
+    };
+    json!({
+        "proposalKind": "reusable_lesson",
+        "interpretations": [],
+        "lesson": {
+            "primitiveSet": "pure_expr_v2",
+            "concepts": [{
+                "key": "quadruple",
+                "name": "QUADRUPLE",
+                "description": "Apply the advertised doubling procedure twice"
+            }],
+            "relationships": [],
+            "procedures": [{
+                "key": "quadruple-procedure",
+                "name": "QUADRUPLE",
+                "concept": { "kind": "new_concept", "key": "quadruple" },
+                "parameters": [{ "name": "x", "description": "numeric input" }],
+                "body": call(call(json!({ "kind": "parameter", "name": "x" }))),
+                "contract": { "requires": [], "promises": [], "failsWhen": [] }
+            }],
+            "invocation": {
+                "procedureKey": "quadruple-procedure",
+                "inputs": [{ "name": "x", "value": value }]
+            }
+        },
+        "procedure": null,
+        "answer": value * 4,
+        "abstainReason": null
+    })
+}
+
+#[test]
+fn pure_expr_v2_count_occurrences_compiles_executes_persists_and_reuses_without_teacher() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    let cycle_id = begin_teacher_cycle(&mut engine, "count occurrences of red");
+    let learned = engine
+        .resume_cycle(
+            cycle_id,
+            proposal(
+                "count occurrences of red",
+                reusable_count_occurrences_lesson(json!(["red", "blue", "red"]), json!("red")),
+            ),
+        )
+        .unwrap();
+    let CycleProgress::Completed(learned) = learned else {
+        panic!("v2 lesson should execute");
+    };
+    assert_eq!(learned.answer, Some(Value::Int(2)));
+    assert_eq!(engine.graph().list_procedures().unwrap().len(), 1);
+
+    let mut held_out = cycle_input("count occurrences", false);
+    held_out.environment.insert(
+        "items".into(),
+        Value::List(vec![
+            Value::Text("red".into()),
+            Value::Text("red".into()),
+            Value::Text("blue".into()),
+        ]),
+    );
+    held_out
+        .environment
+        .insert("needle".into(), Value::Text("red".into()));
+    let CycleProgress::Completed(reused) = engine.begin_cycle(held_out).unwrap() else {
+        panic!("persisted v2 lesson should run locally");
+    };
+    assert_eq!(reused.disposition, CycleDisposition::Provisional);
+    assert_eq!(reused.answer, Some(Value::Int(2)));
+    assert!(reused.episode.teacher_interaction.is_none());
+}
+
+#[test]
+fn pure_expr_v2_dependency_aliases_pin_exact_pure_procedure_versions_and_reuse_offline() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    let (_, double) = seed_double(&engine);
+    let (cycle_id, request) = begin_teacher_cycle_with_request(&mut engine, "quadruple 3");
+    let dependencies = request.context["pureProcedureDependencies"]
+        .as_array()
+        .expect("teacher context must advertise pure dependency aliases");
+    assert_eq!(dependencies.len(), 1);
+    assert_eq!(dependencies[0]["name"], "DOUBLE");
+    assert!(dependencies[0].get("id").is_none());
+    let alias = dependencies[0]["alias"].as_str().unwrap();
+
+    let CycleProgress::Completed(learned) = engine
+        .resume_cycle(
+            cycle_id,
+            proposal("quadruple 3", reusable_dependency_lesson(alias, 3)),
+        )
+        .unwrap()
+    else {
+        panic!("engine-owned dependency alias should compose");
+    };
+    assert_eq!(learned.answer, Some(Value::Int(12)));
+    let learned_procedure = engine
+        .graph()
+        .list_procedures()
+        .unwrap()
+        .into_iter()
+        .find(|procedure| procedure.name == "QUADRUPLE")
+        .unwrap();
+    let stored_body = serde_json::to_value(&learned_procedure.body).unwrap();
+    assert_eq!(
+        stored_body["CallExact"]["procedure"],
+        serde_json::to_value(double.id).unwrap()
+    );
+    assert_eq!(stored_body["CallExact"]["version"], json!(1));
+
+    let mut revised_double = double.clone();
+    revised_double.version = 2;
+    revised_double.body = Expr::BinOp {
+        op: BinOp::Mul,
+        left: Box::new(Expr::Var("x".into())),
+        right: Box::new(Expr::Literal(Value::Int(3))),
+    };
+    engine.admin_revise_procedure(&revised_double, 1).unwrap();
+
+    let mut held_out = cycle_input("quadruple", false);
+    held_out.environment.insert("x".into(), Value::Int(4));
+    let CycleProgress::Completed(reused) = engine.begin_cycle(held_out).unwrap() else {
+        panic!("stored dependency lesson should run with Teacher disabled");
+    };
+    assert_eq!(reused.answer, Some(Value::Int(16)));
+    assert!(reused.episode.teacher_interaction.is_none());
+    let trace: ExecTrace = serde_json::from_value(reused.episode.execution_trace.unwrap()).unwrap();
+    assert!(trace.steps.iter().any(|step| {
+        step.procedure_called == Some(double.id) && step.procedure_version == Some(1)
+    }));
+}
+
+#[test]
+fn unsafe_or_unadvertised_dependency_aliases_do_not_mutate_lesson_knowledge() {
+    for (case, alias, extra) in [
+        ("unknown", "not-advertised", json!({})),
+        ("draft", "draft-only", json!({})),
+        (
+            "effect-shaped",
+            "not-advertised",
+            json!({ "effect": "file_write" }),
+        ),
+    ] {
+        let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+        seed_double(&engine);
+        let mut draft =
+            Procedure::new("DRAFT ONLY", vec![Param::named("x")], Expr::Var("x".into()));
+        draft.lifecycle = spoon_core::Lifecycle::Provisional;
+        engine.admin_insert_procedure(&draft).unwrap();
+        let (cycle_id, request) = begin_teacher_cycle_with_request(&mut engine, "quadruple 3");
+        let advertised = request.context["pureProcedureDependencies"]
+            .as_array()
+            .unwrap();
+        assert!(advertised.iter().all(|item| item["name"] != "DRAFT ONLY"));
+        let mut lesson = reusable_dependency_lesson(alias, 3);
+        if !extra.as_object().unwrap().is_empty() {
+            lesson["lesson"]["procedures"][0]["body"]["effect"] = extra["effect"].clone();
+        }
+        let before_concepts = engine.graph().list_concepts().unwrap().len();
+        let before_procedures = engine.graph().list_procedures().unwrap().len();
+        let CycleProgress::Completed(_outcome) = engine
+            .resume_cycle(cycle_id, proposal("quadruple 3", lesson))
+            .unwrap()
+        else {
+            panic!("unsafe dependency lesson must complete as an abstention");
+        };
+        // A separately useful Teacher answer may remain provisional, but the
+        // rejected lesson itself must be atomic: no new durable knowledge.
+        assert_eq!(
+            engine.graph().list_concepts().unwrap().len(),
+            before_concepts,
+            "{case}"
+        );
+        assert_eq!(
+            engine.graph().list_procedures().unwrap().len(),
+            before_procedures,
+            "{case}"
+        );
+    }
+}
+
+#[test]
+fn dependency_alias_revision_drift_rejects_lesson_admission_atomically() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    let (_, double) = seed_double(&engine);
+    let (cycle_id, request) = begin_teacher_cycle_with_request(&mut engine, "quadruple 3");
+    let alias = request.context["pureProcedureDependencies"][0]["alias"]
+        .as_str()
+        .unwrap();
+    let mut revised_double = double;
+    revised_double.version = 2;
+    engine.admin_revise_procedure(&revised_double, 1).unwrap();
+
+    let before_concepts = engine.graph().list_concepts().unwrap().len();
+    let before_procedures = engine.graph().list_procedures().unwrap().len();
+    let CycleProgress::Completed(_outcome) = engine
+        .resume_cycle(
+            cycle_id,
+            proposal("quadruple 3", reusable_dependency_lesson(alias, 3)),
+        )
+        .unwrap()
+    else {
+        panic!("revision-drifted lesson must not be persisted");
+    };
+    assert_eq!(
+        engine.graph().list_concepts().unwrap().len(),
+        before_concepts
+    );
+    assert_eq!(
+        engine.graph().list_procedures().unwrap().len(),
+        before_procedures
+    );
+}
+
+#[test]
+fn pure_expr_v2_json_path_procedure_uses_only_engine_intrinsics() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    let cycle_id = begin_teacher_cycle(&mut engine, "read json path");
+    let CycleProgress::Completed(outcome) = engine
+        .resume_cycle(
+            cycle_id,
+            proposal("read json path", reusable_json_path_lesson()),
+        )
+        .unwrap()
+    else {
+        panic!("json/path lesson should execute");
+    };
+    assert_eq!(
+        outcome.answer,
+        Some(serde_json::from_value(json!({ "id": 7 })).unwrap())
+    );
+    assert_eq!(engine.graph().list_procedures().unwrap().len(), 1);
+}
+
+#[test]
+fn pure_expr_v2_authors_new_v1_intrinsics_through_the_schema_and_compiler() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    let cycle_id = begin_teacher_cycle(&mut engine, "find a text position");
+    let mut lesson = reusable_count_occurrences_lesson(json!("a👩‍💻b"), json!("b"));
+    lesson["lesson"]["procedures"][0]["body"] = json!({
+        "kind": "intrinsic", "version": 1, "op": "text_index_of",
+        "args": [
+            { "kind": "parameter", "name": "items" },
+            { "kind": "parameter", "name": "needle" }
+        ]
+    });
+    lesson["answer"] = json!(2);
+    let CycleProgress::Completed(outcome) = engine
+        .resume_cycle(cycle_id, proposal("find a text position", lesson))
+        .unwrap()
+    else {
+        panic!("expanded intrinsic should compile and execute");
+    };
+    assert_eq!(outcome.answer, Some(Value::Int(2)));
+}
+
+#[test]
+fn pure_expr_v2_numeric_intrinsic_is_teacher_authorable_and_reusable() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    let cycle_id = begin_teacher_cycle(&mut engine, "absolute value");
+    let mut lesson = reusable_count_occurrences_lesson(json!([-9]), json!(-9));
+    lesson["lesson"]["procedures"][0]["parameters"] = json!([
+        { "name": "x", "description": "numeric input" }
+    ]);
+    lesson["lesson"]["procedures"][0]["body"] = json!({
+        "kind": "intrinsic", "version": 1, "op": "numeric_abs",
+        "args": [{ "kind": "parameter", "name": "x" }]
+    });
+    lesson["lesson"]["invocation"]["inputs"] = json!([
+        { "name": "x", "value": -9 }
+    ]);
+    lesson["answer"] = json!(9);
+    let CycleProgress::Completed(outcome) = engine
+        .resume_cycle(cycle_id, proposal("absolute value", lesson))
+        .unwrap()
+    else {
+        panic!("numeric intrinsic should compile and execute");
+    };
+    assert_eq!(outcome.answer, Some(Value::Int(9)));
+}
+
+#[test]
+fn unsafe_pure_expr_v2_drafts_do_not_mutate_knowledge() {
+    for body in [
+        json!({ "kind": "literal", "value": null, "unknown": true }),
+        json!({ "kind": "call", "procedure": "teacher-minted", "args": [] }),
+        json!({ "kind": "intrinsic", "version": 1, "op": "network_fetch", "args": [] }),
+        (0..=MAX_TEST_EXPR_DEPTH).enumerate().fold(
+            json!({ "kind": "parameter", "name": "items" }),
+            |body, (index, _)| json!({ "kind": "let", "name": format!("x{index}"), "value": { "kind": "literal", "value": null }, "body": body }),
+        ),
+    ] {
+        let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+        let cycle_id = begin_teacher_cycle(&mut engine, "count occurrences");
+        let mut proposal_body = reusable_count_occurrences_lesson(json!(["red", "red"]), json!("red"));
+        proposal_body["lesson"]["procedures"][0]["body"] = body;
+        let progress = engine
+            .resume_cycle(cycle_id, proposal("count occurrences", proposal_body))
+            .unwrap();
+        assert!(matches!(progress, CycleProgress::Completed(_)));
+        assert!(engine.graph().list_concepts().unwrap().is_empty());
+        assert!(engine.graph().list_procedures().unwrap().is_empty());
+    }
+}
+
+const MAX_TEST_EXPR_DEPTH: usize = 33;
+
 #[test]
 fn empty_graph_teacher_lesson_bootstraps_generic_double_then_runs_locally() {
     let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
@@ -125,7 +590,7 @@ fn empty_graph_teacher_lesson_bootstraps_generic_double_then_runs_locally() {
     );
     assert_eq!(
         request.context["authoringProtocol"]["primitiveSet"],
-        "pure_rpn_v1"
+        "pure_expr_v2"
     );
 
     let learned = engine

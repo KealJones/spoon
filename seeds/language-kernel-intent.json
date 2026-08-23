@@ -1,0 +1,564 @@
+{
+  "$schema": "https://spoon.local/schemas/seed-curriculum.schema.json",
+  "schemaVersion": 1,
+  "kind": "spoon-seed-curriculum",
+  "id": "language-kernel-intent",
+  "version": "0.1.0",
+  "title": "Language kernel and intent",
+  "domain": "language",
+  "evidence": {
+    "level": "Declared/design-only",
+    "runnerStatus": "not-implemented",
+    "claimBoundary": "This manifest designs acquisition probes; it does not claim that Spoon currently interprets language, counts graphemes, or renders response plans.",
+    "independentReviewRequired": true
+  },
+  "objective": "Acquire a small compositional language substrate that maps varied surface forms to intent frames, preserves spans and ambiguity, and renders grounded response plans without memorizing answer text.",
+  "scope": {
+    "included": [
+      "Unicode byte, scalar, and grapheme distinctions",
+      "token and source-span preservation",
+      "letter-count intent with text, unit, and spelling-basis slots",
+      "paraphrase families, reference, clarification, dialogue acts, and response plans"
+    ],
+    "excluded": [
+      "open-domain world knowledge",
+      "speaker identification or biometric inference",
+      "private user corpora and provider prompts",
+      "a neural renderer with authority to invent claims"
+    ]
+  },
+  "lessonContract": {
+    "teacherProtocol": "pure_expr_v2",
+    "draftShape": [
+      "concepts",
+      "relationships",
+      "procedures",
+      "invocation",
+      "contracts",
+      "interpretations"
+    ],
+    "teacherSuppliedFields": [
+      "concept names and descriptions",
+      "relationship references",
+      "procedure parameter names",
+      "pure procedure bodies and contract checks",
+      "invocation inputs"
+    ],
+    "engineOwnedFields": [
+      "stable IDs",
+      "lifecycle",
+      "versions",
+      "timestamps",
+      "confidence",
+      "mutability",
+      "test cases"
+    ],
+    "testCasePolicy": "engine-generated-and-replayed-from-curriculum"
+  },
+  "requiredNativeOperations": [
+    {
+      "name": "text.unicode_byte_length",
+      "role": "Expose byte length as a distinct, explicit counting unit.",
+      "determinism": "deterministic",
+      "status": "declared-not-verified"
+    },
+    {
+      "name": "text.unicode_scalar_length",
+      "role": "Count Unicode scalar values without conflating them with grapheme clusters.",
+      "determinism": "deterministic",
+      "status": "declared-not-verified"
+    },
+    {
+      "name": "text.grapheme_length",
+      "role": "Count user-visible grapheme clusters with a versioned Unicode policy.",
+      "determinism": "deterministic",
+      "status": "declared-not-verified"
+    },
+    {
+      "name": "text.tokenize_with_spans",
+      "role": "Retain token boundaries and source offsets for grounded interpretation.",
+      "determinism": "deterministic",
+      "status": "declared-not-verified"
+    },
+    {
+      "name": "language.intent_frame_validate",
+      "role": "Check required slots, ambiguity markers, and dialogue-act shape.",
+      "determinism": "deterministic",
+      "status": "declared-not-verified"
+    },
+    {
+      "name": "language.response_plan_render",
+      "role": "Render only claims and uncertainty present in an immutable response plan.",
+      "determinism": "deterministic",
+      "status": "declared-not-verified"
+    }
+  ],
+  "requiredCapabilities": [
+    {
+      "name": "language.proposal_context",
+      "purpose": "Provide bounded prior concepts and interpretations to the Teacher without granting effect authority.",
+      "authority": "none",
+      "effects": ["none"],
+      "grantPolicy": "local-explicit-grant",
+      "status": "declared-not-verified",
+      "fixtureBoundary": "in-memory curriculum context only"
+    }
+  ],
+  "demonstrations": [
+    {
+      "id": "demonstrate-counting-units",
+      "purpose": "Separate byte, Unicode scalar, and grapheme counting before learning a letter-count intent.",
+      "teacherMode": "on",
+      "taskModel": {
+        "inputShape": "text values containing ASCII, combining marks, and emoji sequences paired with an explicit or absent counting unit",
+        "operation": "classify counting unit and produce a count procedure with source-span provenance",
+        "variationPolicy": {
+          "surfaceVariation": "none",
+          "valueVariation": "held-out-values",
+          "structureVariation": "none"
+        },
+        "noAnswerDump": true
+      },
+      "expectedBehavior": [
+        "Represent the requested unit explicitly.",
+        "Do not substitute byte length for grapheme length.",
+        "Keep the input span and normalization assumptions inspectable."
+      ],
+      "expectedDisposition": "accept",
+      "evidence": {
+        "tier": "hard",
+        "oracle": "deterministic",
+        "assertions": [
+          "The selected operation agrees with the declared unit.",
+          "The procedure remains bounded and replayable."
+        ]
+      }
+    },
+    {
+      "id": "demonstrate-intent-and-response-plan",
+      "purpose": "Show how a surface request becomes an intent frame and then a response plan rather than a memorized sentence.",
+      "teacherMode": "on",
+      "taskModel": {
+        "inputShape": "a request-shaped text span with a count target, optional unit, optional spelling basis, and a desired dialogue act",
+        "operation": "construct intent frame, mark slot confidence, and render a grounded response plan",
+        "variationPolicy": {
+          "surfaceVariation": "paraphrase-families",
+          "valueVariation": "held-out-values",
+          "structureVariation": "new-composition"
+        },
+        "noAnswerDump": true
+      },
+      "expectedBehavior": [
+        "Capture slots and their provenance.",
+        "Keep response wording downstream of the response plan.",
+        "Leave unresolved slots visible instead of guessing."
+      ],
+      "expectedDisposition": "accept",
+      "evidence": {
+        "tier": "consensus",
+        "oracle": "mixed",
+        "assertions": [
+          "Independent frame validation and plan validation agree.",
+          "No rendered claim exceeds the plan."
+        ]
+      }
+    }
+  ],
+  "counterexamples": [
+    {
+      "id": "counter-byte-count-as-letter-count",
+      "purpose": "Reject the shortcut that treats encoded byte length as the meaning of letter count.",
+      "teacherMode": "on",
+      "taskModel": {
+        "inputShape": "a non-ASCII text value with a surface request that leaves the counting unit implicit",
+        "operation": "compare candidate byte, scalar, and grapheme interpretations",
+        "variationPolicy": {
+          "surfaceVariation": "paraphrase-families",
+          "valueVariation": "held-out-values",
+          "structureVariation": "new-error-boundary"
+        },
+        "noAnswerDump": true,
+        "ambiguityDimensions": [
+          "encoding versus linguistic unit",
+          "surface spelling versus canonical spelling"
+        ]
+      },
+      "expectedBehavior": [
+        "Do not silently select byte count.",
+        "Represent competing interpretations and their assumptions.",
+        "Ask for clarification when context cannot settle the unit."
+      ],
+      "expectedDisposition": "clarify",
+      "evidence": {
+        "tier": "hard",
+        "oracle": "deterministic",
+        "assertions": [
+          "Ambiguous unit is preserved as ambiguity.",
+          "A clarification path is available without inventing a count."
+        ]
+      },
+      "failureSignal": "A byte-based answer is emitted as if it were a linguistic letter count."
+    },
+    {
+      "id": "counter-canonical-spelling-assumption",
+      "purpose": "Prevent a hidden canonical-spelling assumption when the user may mean literal surface text.",
+      "teacherMode": "on",
+      "taskModel": {
+        "inputShape": "a text target with alternate spellings or normalization forms and no declared spelling basis",
+        "operation": "separate surface-text and canonical-text interpretations",
+        "variationPolicy": {
+          "surfaceVariation": "paraphrase-families",
+          "valueVariation": "held-out-values",
+          "structureVariation": "new-error-boundary"
+        },
+        "noAnswerDump": true,
+        "ambiguityDimensions": [
+          "literal surface versus canonical form",
+          "normalization provenance"
+        ]
+      },
+      "expectedBehavior": [
+        "Keep spelling basis as a slot.",
+        "Prefer a clarification dialogue act when both bases are plausible.",
+        "Never hide normalization in a canned answer."
+      ],
+      "expectedDisposition": "clarify",
+      "evidence": {
+        "tier": "consensus",
+        "oracle": "mixed",
+        "assertions": [
+          "Both candidate frames are inspectable.",
+          "The selected response plan discloses the unresolved basis."
+        ]
+      },
+      "failureSignal": "The procedure normalizes or canonicalizes without a declared policy."
+    }
+  ],
+  "exercises": [
+    {
+      "id": "exercise-paraphrase-to-intent",
+      "purpose": "Compose paraphrase-family recognition with slot filling and the learned count procedure.",
+      "teacherMode": "on",
+      "taskModel": {
+        "inputShape": "unseen surface forms from a known semantic family with a concrete text target and explicit unit",
+        "operation": "interpret, execute the count procedure, and produce a response plan",
+        "variationPolicy": {
+          "surfaceVariation": "paraphrase-families",
+          "valueVariation": "held-out-values",
+          "structureVariation": "new-composition"
+        },
+        "noAnswerDump": true
+      },
+      "expectedBehavior": [
+        "Reuse the intent frame rather than a phrase match.",
+        "Compose interpretation, execution, and rendering.",
+        "Record the path from input span to response claim."
+      ],
+      "expectedDisposition": "accept",
+      "evidence": {
+        "tier": "hard",
+        "oracle": "deterministic",
+        "assertions": [
+          "The procedure executes on the supplied target.",
+          "The response plan retains provenance and unit."
+        ]
+      }
+    },
+    {
+      "id": "exercise-clarify-underspecified-count",
+      "purpose": "Practice clarification when a letter-count request omits a material unit or spelling-basis choice.",
+      "teacherMode": "on",
+      "taskModel": {
+        "inputShape": "a request-shaped text span with one or more missing slots and a context that does not resolve them",
+        "operation": "rank interpretations and emit the smallest useful clarification choice",
+        "variationPolicy": {
+          "surfaceVariation": "paraphrase-families",
+          "valueVariation": "held-out-values",
+          "structureVariation": "new-error-boundary"
+        },
+        "noAnswerDump": true,
+        "ambiguityDimensions": ["count unit", "spelling basis", "referent"]
+      },
+      "expectedBehavior": [
+        "Ask only about unresolved decision-relevant slots.",
+        "Do not answer from a memorized example.",
+        "Keep clarification as a dialogue act in the episode."
+      ],
+      "expectedDisposition": "clarify",
+      "evidence": {
+        "tier": "consensus",
+        "oracle": "independent-judge",
+        "assertions": [
+          "The clarification addresses the actual ambiguity.",
+          "No unsupported count is presented as final."
+        ]
+      }
+    }
+  ],
+  "heldOutGeneralization": [
+    {
+      "id": "heldout-new-paraphrase-family",
+      "purpose": "Test retention of intent structure on a surface-form family absent from demonstrations and exercises.",
+      "teacherMode": "off",
+      "taskModel": {
+        "inputShape": "a new paraphrase family, unseen text values, and an explicit count unit",
+        "operation": "map to the existing intent frame and execute without Teacher assistance",
+        "variationPolicy": {
+          "surfaceVariation": "paraphrase-families",
+          "valueVariation": "held-out-values",
+          "structureVariation": "new-composition"
+        },
+        "noAnswerDump": true
+      },
+      "expectedBehavior": [
+        "Interpret by compositional slots, not memorized utterance.",
+        "Use the correct explicit counting operation.",
+        "Remain Teacher-OFF throughout the turn."
+      ],
+      "expectedDisposition": "accept",
+      "evidence": {
+        "tier": "hard",
+        "oracle": "deterministic",
+        "assertions": [
+          "Teacher call count is zero.",
+          "The response plan is grounded in the held-out input."
+        ]
+      }
+    },
+    {
+      "id": "heldout-letter-count-ambiguity",
+      "purpose": "Test clarification and ambiguity preservation on an unseen word and unseen normalization or spelling contrast.",
+      "teacherMode": "off",
+      "taskModel": {
+        "inputShape": "an unseen text value with an underspecified letter-count request and competing surface/canonical interpretations",
+        "operation": "retain competing frames and clarify the decision-relevant slot",
+        "variationPolicy": {
+          "surfaceVariation": "paraphrase-families",
+          "valueVariation": "held-out-values",
+          "structureVariation": "new-error-boundary"
+        },
+        "noAnswerDump": true,
+        "ambiguityDimensions": [
+          "grapheme versus scalar",
+          "surface versus canonical spelling"
+        ]
+      },
+      "expectedBehavior": [
+        "Do not leak a demonstration's answer or phrasing.",
+        "Clarify rather than collapse ambiguity.",
+        "Preserve source-span and normalization provenance."
+      ],
+      "expectedDisposition": "clarify",
+      "evidence": {
+        "tier": "consensus",
+        "oracle": "independent-judge",
+        "assertions": [
+          "Teacher call count is zero.",
+          "The ambiguity and clarification rationale remain inspectable."
+        ]
+      }
+    }
+  ],
+  "expectedLearnedStructures": [
+    {
+      "structureType": "concept",
+      "identityPolicy": "semantic-properties-only",
+      "semanticProperties": [
+        "counting unit is explicit",
+        "byte, scalar, and grapheme lengths are distinct"
+      ],
+      "compositionRole": "Provides typed vocabulary for count procedures.",
+      "evidenceExpectation": {
+        "teacherOff": true,
+        "replayable": true,
+        "localValidation": true
+      }
+    },
+    {
+      "structureType": "intent-frame",
+      "identityPolicy": "semantic-properties-only",
+      "semanticProperties": [
+        "text target slot",
+        "count-unit slot",
+        "spelling-basis slot",
+        "ambiguity and confidence are represented"
+      ],
+      "compositionRole": "Maps paraphrase families to a reusable request structure.",
+      "evidenceExpectation": {
+        "teacherOff": true,
+        "replayable": true,
+        "localValidation": true
+      }
+    },
+    {
+      "structureType": "procedure",
+      "identityPolicy": "semantic-properties-only",
+      "semanticProperties": [
+        "bounded text counting",
+        "span and normalization provenance",
+        "composes with intent interpretation"
+      ],
+      "compositionRole": "Executes the selected count operation without answer memorization.",
+      "evidenceExpectation": {
+        "teacherOff": true,
+        "replayable": true,
+        "localValidation": true
+      }
+    },
+    {
+      "structureType": "response-plan",
+      "identityPolicy": "semantic-properties-only",
+      "semanticProperties": [
+        "grounded claim",
+        "uncertainty disclosure",
+        "dialogue act",
+        "deterministic renderer boundary"
+      ],
+      "compositionRole": "Constrains wording while preserving claims and provenance.",
+      "evidenceExpectation": {
+        "teacherOff": true,
+        "replayable": true,
+        "localValidation": true
+      }
+    },
+    {
+      "structureType": "test-set",
+      "identityPolicy": "semantic-properties-only",
+      "semanticProperties": [
+        "counterexample for byte substitution",
+        "ambiguity clarification case",
+        "held-out paraphrase and value families"
+      ],
+      "compositionRole": "Protects the learned structure from shortcut regressions.",
+      "evidenceExpectation": {
+        "teacherOff": true,
+        "replayable": true,
+        "localValidation": true
+      }
+    }
+  ],
+  "teacherOffGates": [
+    {
+      "id": "language-retention-off",
+      "stage": "retention",
+      "teacherMode": "off",
+      "independentStore": "same-clean-curriculum-store",
+      "requires": [
+        "demonstrations complete",
+        "counterexample distinctions recorded"
+      ],
+      "passCriteria": [
+        "No Teacher calls during retention probes.",
+        "Known intent and count procedures remain executable.",
+        "Ambiguous unit or spelling basis is not silently guessed."
+      ],
+      "failurePolicy": "fail-closed-and-preserve-evidence"
+    },
+    {
+      "id": "language-composition-off",
+      "stage": "composition",
+      "teacherMode": "off",
+      "independentStore": "same-clean-curriculum-store",
+      "requires": [
+        "retention gate passes",
+        "intent frame and count procedure are available"
+      ],
+      "passCriteria": [
+        "Interpretation, execution, and response planning compose.",
+        "Claims stay within the response plan.",
+        "Teacher remains absent from the full turn."
+      ],
+      "failurePolicy": "fail-closed-and-preserve-evidence"
+    },
+    {
+      "id": "language-heldout-off",
+      "stage": "held-out-generalization",
+      "teacherMode": "off",
+      "independentStore": "same-clean-curriculum-store",
+      "requires": [
+        "composition gate passes",
+        "held-out families are withheld during acquisition"
+      ],
+      "passCriteria": [
+        "Unseen paraphrase family is handled by slots.",
+        "Unseen values do not require a stored answer.",
+        "Clarification remains correct on unseen ambiguity."
+      ],
+      "failurePolicy": "quarantine-and-report"
+    },
+    {
+      "id": "language-clean-import-off",
+      "stage": "clean-import",
+      "teacherMode": "off",
+      "independentStore": "clean-import-target",
+      "requires": [
+        "import remains Provisional until local tests pass",
+        "local permissions are explicit"
+      ],
+      "passCriteria": [
+        "Reconstructed procedures pass deterministic tests.",
+        "All held-out probes pass with Teacher OFF.",
+        "No trust, prompt, or authority is imported."
+      ],
+      "failurePolicy": "quarantine-and-report"
+    }
+  ],
+  "exportPrivacy": {
+    "mode": "reconstructible-only",
+    "allow": [
+      "semantic concept and relationship descriptions",
+      "neutral procedure drafts",
+      "contracts and deterministic test specifications",
+      "Unicode policy and source-independent provenance rules"
+    ],
+    "deny": [
+      "user text beyond synthetic fixtures",
+      "provider prompts and responses",
+      "API keys, cookies, and bearer tokens",
+      "ambient permission grants",
+      "machine-local paths",
+      "episode identifiers used as trust receipts"
+    ],
+    "redactions": [
+      "replace concrete user text with shape descriptors",
+      "replace secret values with secret kinds",
+      "remove timestamps and provider request IDs when not needed for reconstruction"
+    ],
+    "secretHandling": {
+      "neverExportValues": true,
+      "exportKindsOnly": true,
+      "machinePathPolicy": "omit",
+      "teacherStatePolicy": "omit-prompts-and-provider-state"
+    }
+  },
+  "independentCleanImportValidation": {
+    "sourceStore": {
+      "clean": true,
+      "purpose": "curriculum-acquisition-output"
+    },
+    "targetStore": {
+      "clean": true,
+      "newInstance": true,
+      "purpose": "independent-reconstruction"
+    },
+    "importLifecycle": "quarantine-provisional",
+    "steps": [
+      "verify-manifest-and-content-hashes",
+      "resolve-dependency-closure",
+      "check-local-permissions",
+      "reconstruct-and-run-deterministic-tests",
+      "run-teacher-off-gates",
+      "promote-only-local-evidence"
+    ],
+    "promotionGate": {
+      "localEvidenceRequired": true,
+      "teacherOffRequired": true,
+      "authorityTransferred": false,
+      "failureIsAtomic": true
+    }
+  },
+  "notes": [
+    "These activities describe semantic families and synthetic shapes, not canned utterances or answer dumps.",
+    "A future runner must record acquisition, retention, generalization, structure, Teacher dependence, and unresolved assumptions separately."
+  ]
+}

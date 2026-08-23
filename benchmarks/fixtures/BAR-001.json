@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "BAR-001",
+  "title": "Bar Test (Human Rated)",
+  "suite": "bar-test",
+  "family": "BAR",
+  "track": "bar-test",
+  "claimTested": "Spoon can sustain natural conversation without requiring API-shaped reformulation.",
+  "phases": [
+    {
+      "id": "acquisition",
+      "order": 1,
+      "purpose": "Record a human-rated unscripted conversation session; this fixture is a manual protocol, not an answer key.",
+      "teacher": {"mode": "on"},
+      "input": {"prompt": "Run the 30-minute Bar Test conversation protocol from ekg-benchmark-suite/10-bar-test.md."},
+      "expectedOutcome": {"type": "conversation", "criteria": ["human rates continuity, repair, memory, uncertainty, and helpfulness on a 1–5 scale"]}
+    },
+    {
+      "id": "retention",
+      "order": 2,
+      "purpose": "Repeat the same conversational evaluation with Teacher removed.",
+      "teacher": {"mode": "off"},
+      "input": {"prompt": "Run the 30-minute Bar Test conversation protocol from ekg-benchmark-suite/10-bar-test.md with Teacher OFF."},
+      "expectedOutcome": {"type": "conversation", "criteria": ["human records the same 12 dimensions and overall 1–5 judgment"]}
+    }
+  ]
+}

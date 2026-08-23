@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "id": "spoon-developmental-catalog",
+  "title": "Spoon Developmental Benchmark Catalog",
+  "purpose": "Track whether Spoon acquires durable, reusable behavior rather than producing isolated correct answers.",
+  "source": "../ekg-benchmark-suite",
+  "suites": [
+    {
+      "id": "foundations",
+      "title": "Foundations",
+      "purpose": "Verify execution, contracts, traces, evaluation, and episode recording.",
+      "fixtures": ["FOUNDATION-002"]
+    },
+    {
+      "id": "language-context",
+      "title": "Language, Context, and Ambiguity",
+      "purpose": "Test paraphrase interpretation, contextual reference, and appropriate clarification.",
+      "fixtures": ["LANG-002", "AMBIG-001"]
+    },
+    {
+      "id": "learning-composition",
+      "title": "Learning and Composition",
+      "purpose": "Test novel procedure acquisition and composition from reusable procedures.",
+      "fixtures": ["LEARN-001", "COMPOSE-003"]
+    },
+    {
+      "id": "procedure-selection",
+      "title": "Procedure Selection Under Interference",
+      "purpose": "Test whether Spoon selects the named capability rather than a merely available distractor procedure.",
+      "fixtures": ["INTERF-001"]
+    },
+    {
+      "id": "credit-adaptation",
+      "title": "Credit Assignment, Contracts, and Adaptation",
+      "purpose": "Test local failure attribution, contract refinement, and prevention of repeated failure.",
+      "fixtures": ["CONTRACT-003", "ADAPT-002"]
+    },
+    {
+      "id": "memory-reconciliation",
+      "title": "Memory, Retroactive Supervision, and Reconciliation",
+      "purpose": "Test episodic recall, provenance, belief revision, and historical preservation.",
+      "fixtures": ["MEM-001", "RECON-003"]
+    },
+    {
+      "id": "transfer-abstraction",
+      "title": "Transfer, Critics, and Abstraction",
+      "purpose": "Test reuse of learned structure in held-out domains without direct answer teaching.",
+      "fixtures": ["TRANSFER-001"]
+    },
+    {
+      "id": "conversation",
+      "title": "Normal Conversation",
+      "purpose": "Test continuity, correction handling, and history-grounded conversation.",
+      "fixtures": ["CONV-CORR-001"]
+    },
+    {
+      "id": "teacher-ablation",
+      "title": "Teacher Ablation",
+      "purpose": "Measure whether capability remains when Teacher assistance is removed.",
+      "fixtures": ["ABLATION-001"]
+    },
+    {
+      "id": "bar-test",
+      "title": "Bar Test",
+      "purpose": "Provide an explicitly human-rated, largely unscripted conversational assessment.",
+      "fixtures": ["BAR-001"]
+    }
+  ]
+}

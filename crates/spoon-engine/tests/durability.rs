@@ -121,6 +121,9 @@ fn failed_attempt_and_teacher_continuation_are_durable_together() {
                     max_teacher_turns: 1,
                 },
                 teacher_allowed: true,
+                session_id: None,
+                recall_mode: Default::default(),
+                permission_mode: None,
             })
             .unwrap();
         let CycleProgress::NeedTeacher {

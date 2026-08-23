@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "ADAPT-002",
+  "title": "Prevent a Known Contract Failure",
+  "suite": "credit-adaptation",
+  "family": "ADAPT",
+  "track": "credit-adaptation",
+  "claimTested": "After a known failure, Spoon adapts the contract and prevents the same unsafe execution.",
+  "phases": [
+    {
+      "id": "acquisition",
+      "order": 1,
+      "purpose": "Expose the denominator-zero failure and its local cause.",
+      "teacher": {"mode": "on"},
+      "input": {"prompt": "ZORP(x) means 10 divided by (x minus 5). Try Zorp 5 and record what went wrong."},
+      "expectedOutcome": {"type": "attribution", "criteria": ["attributes the failure to the denominator becoming zero"]}
+    },
+    {
+      "id": "retention",
+      "order": 2,
+      "purpose": "Retry the unsafe input with Teacher removed.",
+      "teacher": {"mode": "off"},
+      "input": {"prompt": "Try Zorp 5 again."},
+      "expectedOutcome": {"type": "abstain", "criteria": ["does not blindly execute into the known failure", "uses the revised contract or asks for a safe input"]}
+    }
+  ]
+}

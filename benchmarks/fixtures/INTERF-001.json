@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "id": "INTERF-001",
+  "title": "Procedure Selection Under Interference",
+  "suite": "procedure-selection",
+  "family": "INTERFERENCE",
+  "track": "procedure-selection",
+  "claimTested": "After learning similarly shaped procedures, Spoon retrieves the procedure named by the request and does not substitute a merely available one.",
+  "phases": [
+    {
+      "id": "acquisition",
+      "order": 1,
+      "purpose": "Teach the existing florp procedure in a dedicated Teacher-ON turn.",
+      "teacher": {"mode": "on"},
+      "input": {"prompt": "A florp operation means multiply a number by three and add one."},
+      "expectedOutcome": {"type": "action", "criteria": ["records or acknowledges a reusable florp procedure"]}
+    },
+    {
+      "id": "teach-zorp",
+      "order": 2,
+      "purpose": "Teach the existing zorp procedure separately, so both procedures are available before recall is tested.",
+      "teacher": {"mode": "on"},
+      "input": {"prompt": "ZORP(x) means 10 divided by (x minus 5). Zorp 8 is valid."},
+      "expectedOutcome": {"type": "action", "criteria": ["records the zorp procedure and its valid example"]}
+    },
+    {
+      "id": "retention",
+      "order": 3,
+      "purpose": "Recall florp with zorp present, without Teacher assistance.",
+      "teacher": {"mode": "off"},
+      "input": {"prompt": "Florp 10."},
+      "expectedOutcome": {"type": "answer", "value": 31, "criteria": ["selects florp rather than zorp", "derives 31 with zero Teacher calls"]}
+    },
+    {
+      "id": "zorp-valid",
+      "order": 4,
+      "purpose": "Recall zorp with florp present, using a valid input.",
+      "teacher": {"mode": "off"},
+      "input": {"prompt": "Zorp 10."},
+      "expectedOutcome": {"type": "answer", "value": 2, "criteria": ["selects zorp rather than florp", "derives 2 from the zorp procedure"]}
+    },
+    {
+      "id": "zorp-boundary",
+      "order": 5,
+      "purpose": "Confirm that the presence of florp does not bypass zorp's invalid boundary.",
+      "teacher": {"mode": "off"},
+      "input": {"prompt": "Zorp 5."},
+      "expectedOutcome": {"type": "abstain", "criteria": ["does not substitute florp", "does not execute division by zero", "identifies the zorp denominator boundary"]}
+    }
+  ]
+}

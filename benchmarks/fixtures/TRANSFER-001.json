@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "TRANSFER-001",
+  "title": "Far Transfer From Scaling",
+  "suite": "transfer-abstraction",
+  "family": "TRANSFER",
+  "track": "transfer-abstraction",
+  "claimTested": "Spoon reuses a scaling abstraction in a held-out software domain rather than memorizing recipe answers.",
+  "setup": {"trainingDomains": ["recipes", "paint", "concrete"], "forbiddenTrainingDomains": ["software load testing"]},
+  "novelty": {"exactRepeatForbidden": true, "heldOutFamily": true},
+  "phases": [
+    {
+      "id": "acquisition",
+      "order": 1,
+      "purpose": "Expose a scaling lesson in a non-held-out domain.",
+      "teacher": {"mode": "on"},
+      "input": {"prompt": "When scaling a recipe from 4 servings to 40, should every ingredient and every preparation step simply be multiplied by ten?"},
+      "expectedOutcome": {"type": "transfer", "criteria": ["distinguishes linear quantities from bottlenecks or thresholds", "does not endorse blind multiplication"]}
+    },
+    {
+      "id": "retention",
+      "order": 2,
+      "purpose": "Test the acquired scaling structure in a held-out software domain with Teacher OFF.",
+      "teacher": {"mode": "off"},
+      "input": {"prompt": "We're moving from 100 concurrent users to 5,000. What parts of the system should I expect to scale linearly, and what parts shouldn't I blindly multiply by 50?"},
+      "expectedOutcome": {"type": "transfer", "criteria": ["rejects blind linear scaling", "identifies differently scaling components", "uses a reusable abstraction learned outside software"]}
+    },
+    {
+      "id": "generalization",
+      "order": 3,
+      "purpose": "Probe a second held-out system without naming the abstraction.",
+      "teacher": {"mode": "off"},
+      "input": {"prompt": "If I double every resource in this queue-processing system, should throughput necessarily double?"},
+      "expectedOutcome": {"type": "transfer", "criteria": ["checks for a limiting component before predicting throughput"]}
+    }
+  ]
+}

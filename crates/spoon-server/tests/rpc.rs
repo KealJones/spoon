@@ -5,9 +5,12 @@ use spoon_core::{
     BinOp, Concept, Condition, Evaluation, Expr, MutabilityClass, Param, Procedure,
     Value as SpoonValue, VerifiabilityTier,
 };
-use spoon_engine::{Engine, EngineError};
+use spoon_engine::{
+    CapabilityBundle, CapabilityTest, Effect, Engine, EngineError, NativePrimitive, Permission,
+    ResourceBounds, bundle_content_id, discover_interface,
+};
 use spoon_episode::{EpisodeFeedback, FeedbackSource};
-use spoon_server::RpcServer;
+use spoon_server::{CapabilityHostAdapters, RpcServer};
 
 const ADMIN_TOKEN: &str = "test-bootstrap-secret";
 
@@ -58,6 +61,156 @@ fn call(server: &mut RpcServer, id: u64, method: &str, mut params: Value) -> Val
     assert_eq!(response["id"], id);
     assert!(response.get("error").is_none(), "{response}");
     response["result"].clone()
+}
+
+fn raw_call(server: &mut RpcServer, id: u64, method: &str, params: Value) -> Value {
+    serde_json::from_str(
+        &server.handle_line(
+            &json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "method": method,
+                "params": params,
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap()
+}
+
+struct TestDirectory(std::path::PathBuf);
+
+impl TestDirectory {
+    fn new() -> Self {
+        let path = std::env::temp_dir().join(format!("spoon-rpc-files-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&path).unwrap();
+        Self(path)
+    }
+}
+
+impl Drop for TestDirectory {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+fn file_bundle(logical_path: &str, primitive: NativePrimitive, max_bytes: u64) -> CapabilityBundle {
+    let operation_name = match primitive {
+        NativePrimitive::FileRead => "read_file",
+        NativePrimitive::FileWrite => "write_file",
+        _ => panic!("test helper only constructs file capabilities"),
+    };
+    let description = spoon_engine::InterfaceDescription {
+        source: format!("rpc-file-{operation_name}"),
+        fingerprint: format!("rpc-file-{operation_name}-v1"),
+        operations: vec![spoon_engine::DiscoveredOperation {
+            name: operation_name.into(),
+            input_schema: json!({"type": "object"}),
+            output_schema: json!({"type": "object"}),
+            host: "placeholder.invalid".into(),
+            method: "GET".into(),
+            response_fixture: json!({}),
+        }],
+    };
+    let mut bundle = discover_interface(&description).unwrap();
+    let procedure = &mut bundle.procedures[0];
+    procedure.primitive = primitive.clone();
+    procedure.input_schema = match primitive {
+        NativePrimitive::FileWrite => json!({"type": "string"}),
+        _ => json!({"type": "object"}),
+    };
+    procedure.output_schema = json!({"type": "object"});
+    procedure.contract = json!({"path": logical_path, "bytes": max_bytes});
+    procedure.permissions = vec![match primitive {
+        NativePrimitive::FileRead => Permission::FileReadPrefix {
+            path_prefix: "workspace".into(),
+        },
+        NativePrimitive::FileWrite => Permission::FileWritePrefix {
+            path_prefix: "workspace".into(),
+        },
+        _ => unreachable!(),
+    }];
+    procedure.effects = vec![match primitive {
+        NativePrimitive::FileRead => Effect::FileRead,
+        NativePrimitive::FileWrite => Effect::FileWrite,
+        _ => unreachable!(),
+    }];
+    procedure.bounds = ResourceBounds {
+        max_bytes,
+        max_steps: 8,
+        max_millis: 2_000,
+    };
+    procedure.tests = vec![CapabilityTest {
+        name: "portable fixture".into(),
+        input: match primitive {
+            NativePrimitive::FileWrite => json!("fixture"),
+            _ => json!({}),
+        },
+        expected_output: match primitive {
+            NativePrimitive::FileWrite => json!({"bytesWritten": 7}),
+            _ => json!({"bytes": [102, 105, 120, 116, 117, 114, 101]}),
+        },
+        fixture_output: match primitive {
+            NativePrimitive::FileWrite => json!({"bytesWritten": 7}),
+            _ => json!({"bytes": [102, 105, 120, 116, 117, 114, 101]}),
+        },
+    }];
+    bundle.content_id = bundle_content_id(&bundle).unwrap();
+    bundle
+}
+
+fn revalidate_without_grant(
+    server: &mut RpcServer,
+    bundle: &CapabilityBundle,
+) -> (String, String, Value) {
+    let imported = call(server, 900, "capability.import", json!({"bundle": bundle}));
+    let content_id = imported["contentId"].as_str().unwrap().to_owned();
+    let validation_episode = call(
+        server,
+        901,
+        "observation.recordAuthenticated",
+        json!({
+            "predicate": "capability.fixture",
+            "value": true,
+            "scope": {},
+            "evaluation": {
+                "tier": "Hard",
+                "success": true,
+                "details": "fixture matched",
+                "surprise": 0.0
+            },
+            "verifierIdentity": "rpc-file-test"
+        }),
+    );
+    call(
+        server,
+        902,
+        "capability.revalidate",
+        json!({
+            "contentId": content_id,
+            "validation": {
+                "passed": true,
+                "validationEpisodes": [validation_episode["id"]],
+                "environmentDigest": "rpc-file-test-v1"
+            }
+        }),
+    );
+    let permission = serde_json::to_value(&bundle.procedures[0].permissions[0]).unwrap();
+    (content_id, bundle.procedures[0].id.clone(), permission)
+}
+
+fn revalidate_and_grant(
+    server: &mut RpcServer,
+    bundle: &CapabilityBundle,
+) -> (String, String, Value) {
+    let (content_id, procedure_id, permission) = revalidate_without_grant(server, bundle);
+    call(
+        server,
+        903,
+        "capability.grant",
+        json!({"contentId": content_id, "permission": permission}),
+    );
+    (content_id, procedure_id, permission)
 }
 
 #[test]
@@ -138,6 +291,244 @@ fn capability_rpc_round_trip_keeps_imports_provisional_and_grants_local() {
 }
 
 #[test]
+fn capability_invoke_reaches_real_scoped_file_effects_and_revocation_is_immediate() {
+    let directory = TestDirectory::new();
+    let bounds = ResourceBounds {
+        max_bytes: 4096,
+        max_steps: 16,
+        max_millis: 2_000,
+    };
+    let adapters =
+        CapabilityHostAdapters::with_scoped_files("workspace", &directory.0, bounds).unwrap();
+    let mut server = test_server().with_capability_host_adapters(adapters);
+    let path = directory.0.join("effect.txt");
+
+    let write_bundle = file_bundle("workspace/effect.txt", NativePrimitive::FileWrite, 4096);
+    let (write_content_id, write_procedure_id, write_permission) =
+        revalidate_and_grant(&mut server, &write_bundle);
+    let written = call(
+        &mut server,
+        910,
+        "capability.invoke",
+        json!({
+            "contentId": write_content_id,
+            "procedureId": write_procedure_id,
+            "input": "real temporary-directory effect"
+        }),
+    );
+    assert_eq!(written["output"]["bytesWritten"], 31);
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        "real temporary-directory effect"
+    );
+    assert_eq!(written["redacted"], true);
+    assert_eq!(written["receipt"]["redacted"], true);
+    assert!(written["receipt"].get("target").is_none());
+    assert!(written["receipt"].get("permission").is_none());
+
+    let read_bundle = file_bundle("workspace/effect.txt", NativePrimitive::FileRead, 4096);
+    let (read_content_id, read_procedure_id, _) = revalidate_and_grant(&mut server, &read_bundle);
+    let read = call(
+        &mut server,
+        911,
+        "capability.invoke",
+        json!({
+            "contentId": read_content_id,
+            "procedureId": read_procedure_id,
+            "input": {}
+        }),
+    );
+    assert_eq!(
+        read["output"]["bytes"],
+        serde_json::to_value(b"real temporary-directory effect").unwrap()
+    );
+
+    call(
+        &mut server,
+        912,
+        "capability.revoke",
+        json!({
+            "contentId": write_content_id,
+            "permission": write_permission
+        }),
+    );
+    let denied = raw_call(
+        &mut server,
+        913,
+        "capability.invoke",
+        json!({
+            "contentId": write_content_id,
+            "procedureId": write_procedure_id,
+            "input": "must not be written"
+        }),
+    );
+    assert_eq!(
+        denied["error"]["data"]["kind"],
+        "capability_authorization_failed"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        "real temporary-directory effect"
+    );
+}
+
+#[test]
+fn capability_invoke_rejects_malformed_ambient_authority_and_resource_overruns() {
+    let directory = TestDirectory::new();
+    let bounds = ResourceBounds {
+        max_bytes: 4096,
+        max_steps: 16,
+        max_millis: 2_000,
+    };
+    let adapters =
+        CapabilityHostAdapters::with_scoped_files("workspace", &directory.0, bounds).unwrap();
+    let mut server = test_server().with_capability_host_adapters(adapters);
+    let path = directory.0.join("bounded.txt");
+    let bundle = file_bundle("workspace/bounded.txt", NativePrimitive::FileWrite, 64);
+    let (content_id, procedure_id, permission) = revalidate_without_grant(&mut server, &bundle);
+
+    let ungranted = raw_call(
+        &mut server,
+        919,
+        "capability.invoke",
+        json!({
+            "contentId": content_id,
+            "procedureId": procedure_id,
+            "input": "payload"
+        }),
+    );
+    assert_eq!(
+        ungranted["error"]["data"]["kind"],
+        "capability_authorization_failed"
+    );
+    assert!(!path.exists());
+    call(
+        &mut server,
+        918,
+        "capability.grant",
+        json!({"contentId": content_id, "permission": permission}),
+    );
+
+    let ambient = raw_call(
+        &mut server,
+        920,
+        "capability.invoke",
+        json!({
+            "contentId": content_id,
+            "procedureId": procedure_id,
+            "input": "payload",
+            "permissionMode": "full-access",
+            "root": "/"
+        }),
+    );
+    assert_eq!(ambient["error"]["code"], -32602);
+    assert_eq!(ambient["error"]["data"]["kind"], "invalid_params");
+
+    let overrun = raw_call(
+        &mut server,
+        921,
+        "capability.invoke",
+        json!({
+            "contentId": content_id,
+            "procedureId": procedure_id,
+            "input": "x".repeat(65)
+        }),
+    );
+    assert_eq!(
+        overrun["error"]["data"]["kind"],
+        "capability_invocation_failed"
+    );
+    assert_eq!(overrun["error"]["data"]["redacted"], true);
+    assert!(overrun["error"]["data"].get("cause").is_none());
+    assert!(!path.exists());
+
+    let protocol_overrun = raw_call(
+        &mut server,
+        922,
+        "capability.invoke",
+        json!({
+            "contentId": content_id,
+            "procedureId": procedure_id,
+            "input": "x".repeat(1024 * 1024 + 1)
+        }),
+    );
+    assert_eq!(protocol_overrun["error"]["code"], -32602);
+    assert_eq!(
+        protocol_overrun["error"]["data"]["kind"],
+        "capability_input_too_large"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn capability_invoke_rejects_symlink_escape_and_unsupported_primitive() {
+    use std::os::unix::fs::symlink;
+
+    let directory = TestDirectory::new();
+    let outside = TestDirectory::new();
+    let outside_path = outside.0.join("outside.txt");
+    std::fs::write(&outside_path, "unchanged").unwrap();
+    let link = directory.0.join("escape.txt");
+    symlink(&outside_path, &link).unwrap();
+    let bounds = ResourceBounds {
+        max_bytes: 4096,
+        max_steps: 16,
+        max_millis: 2_000,
+    };
+    let adapters =
+        CapabilityHostAdapters::with_scoped_files("workspace", &directory.0, bounds).unwrap();
+    let mut server = test_server().with_capability_host_adapters(adapters);
+    let bundle = file_bundle("workspace/escape.txt", NativePrimitive::FileWrite, 4096);
+    let (content_id, procedure_id, _) = revalidate_and_grant(&mut server, &bundle);
+    let escaped = raw_call(
+        &mut server,
+        930,
+        "capability.invoke",
+        json!({
+            "contentId": content_id,
+            "procedureId": procedure_id,
+            "input": "escaped"
+        }),
+    );
+    assert_eq!(
+        escaped["error"]["data"]["kind"],
+        "capability_invocation_failed"
+    );
+    assert_eq!(std::fs::read_to_string(&outside_path).unwrap(), "unchanged");
+    assert!(!escaped.to_string().contains(outside_path.to_str().unwrap()));
+
+    let network_bundle = discover_interface(&spoon_engine::InterfaceDescription {
+        source: "unsupported-network".into(),
+        fingerprint: "unsupported-network-v1".into(),
+        operations: vec![spoon_engine::DiscoveredOperation {
+            name: "request".into(),
+            input_schema: json!({"type": "object"}),
+            output_schema: json!({"type": "object"}),
+            host: "api.example.test".into(),
+            method: "GET".into(),
+            response_fixture: json!({"ok": true}),
+        }],
+    })
+    .unwrap();
+    let (network_content_id, network_procedure_id, _) =
+        revalidate_and_grant(&mut server, &network_bundle);
+    let unsupported = raw_call(
+        &mut server,
+        931,
+        "capability.invoke",
+        json!({
+            "contentId": network_content_id,
+            "procedureId": network_procedure_id,
+            "input": {}
+        }),
+    );
+    assert_eq!(
+        unsupported["error"]["data"]["kind"],
+        "capability_adapter_unavailable"
+    );
+}
+
+#[test]
 fn metrics_goals_and_curiosity_endpoints_are_bounded_and_camel_case() {
     let mut server = test_server();
     let metrics = call(&mut server, 50, "metrics.snapshot", json!({}));
@@ -205,6 +596,36 @@ fn metrics_goals_and_curiosity_endpoints_are_bounded_and_camel_case() {
     );
     assert_eq!(clock["receipt"]["target"], "clock");
     assert_eq!(clock["output"]["source"], "native:clock");
+}
+
+#[test]
+fn session_lifecycle_is_public_and_preserves_isolation_metadata() {
+    let mut server = test_server();
+    let session = call(
+        &mut server,
+        700,
+        "session.create",
+        json!({"name": "private-chat", "visibility": "isolated"}),
+    );
+    assert_eq!(session["visibility"], "isolated");
+    assert_eq!(session["state"], "active");
+    let listed = call(&mut server, 701, "session.list", json!({}));
+    assert_eq!(listed.as_array().unwrap().len(), 1);
+    let found = call(
+        &mut server,
+        702,
+        "session.get",
+        json!({"idOrName": "private-chat"}),
+    );
+    assert_eq!(found["id"], session["id"]);
+    let ended = call(
+        &mut server,
+        703,
+        "session.end",
+        json!({"idOrName": "private-chat"}),
+    );
+    assert_eq!(ended["state"], "ended");
+    assert!(ended["endedAt"].is_number());
 }
 
 #[test]
@@ -1583,5 +2004,135 @@ fn cycle_abort_records_provider_failure_as_a_terminal_attempt() {
     assert_eq!(
         aborted["episode"]["teacher_interaction"]["providerError"],
         "provider unavailable"
+    );
+}
+
+#[test]
+fn language_render_is_public_bounded_and_never_elevates_caller_provenance() {
+    let mut server = test_server();
+    let plan = json!({
+        "dialogueMove": {"act": "Inform", "relatesToTurn": null},
+        "claims": [
+            {"Grounded": {
+                "id": "letter-count",
+                "text": "There are 3 r characters in strawberry.",
+                "evidence": [{
+                    "id": "episode:checked-letter-count",
+                    "sourceKind": "SelfVerified",
+                    "linkedEpisode": null
+                }],
+                "provenance": ["procedure:private-letter-count"]
+            }},
+            {"Unsupported": {
+                "id": "guess",
+                "reason": "No observation supports this second claim."
+            }}
+        ],
+        "uncertainty": {"level": "Certain", "disclosure": null},
+        "tone": "Neutral",
+        "variant": "Plain"
+    });
+
+    let rendered = call(
+        &mut server,
+        1,
+        "language.render",
+        json!({"plan": plan, "options": {"tone": "Warm", "variant": "Bulleted"}}),
+    );
+    assert_eq!(
+        rendered["text"],
+        "- There are 3 r characters in strawberry."
+    );
+    assert_eq!(rendered["includedClaimIds"], json!(["letter-count"]));
+    assert_eq!(rendered["omittedClaimIds"], json!(["guess"]));
+    assert_eq!(rendered["tone"], "Warm");
+    assert_eq!(rendered["dialogueMove"]["act"], "Inform");
+    assert_eq!(
+        rendered["audit"],
+        json!({
+            "renderer": "bounded_response_plan_v1",
+            "claimsSubmitted": 2,
+            "evidenceStatus": "caller_supplied_unverified",
+            "provenanceRedacted": true,
+            "redacted": true,
+        })
+    );
+    let public = rendered.to_string();
+    assert!(!public.contains("private-letter-count"));
+    assert!(!public.contains("SelfVerified"));
+
+    let ungrounded = raw_call(
+        &mut server,
+        2,
+        "language.render",
+        json!({
+            "plan": {
+                "dialogueMove": {"act": "Inform", "relatesToTurn": null},
+                "claims": [{"Grounded": {
+                    "id": "unsupported-as-fact",
+                    "text": "This must not be rendered.",
+                    "evidence": [],
+                    "provenance": []
+                }}],
+                "uncertainty": {"level": "Certain", "disclosure": null},
+                "tone": "Neutral",
+                "variant": "Plain"
+            }
+        }),
+    );
+    assert_eq!(ungrounded["error"]["code"], -32602);
+    assert_eq!(
+        ungrounded["error"]["data"]["kind"],
+        "invalid_language_response_plan"
+    );
+    assert_eq!(ungrounded["error"]["data"]["redacted"], true);
+
+    let ambient_trust = raw_call(
+        &mut server,
+        3,
+        "language.render",
+        json!({
+            "plan": {
+                "dialogueMove": {"act": "Inform", "relatesToTurn": null},
+                "claims": [{"Grounded": {
+                    "id": "ambient-trust",
+                    "text": "No ambient trust field is accepted.",
+                    "evidence": [{
+                        "id": "unverified",
+                        "sourceKind": "Observed",
+                        "linkedEpisode": null,
+                        "trust": "administrator"
+                    }],
+                    "provenance": []
+                }}],
+                "uncertainty": {"level": "Certain", "disclosure": null},
+                "tone": "Neutral",
+                "variant": "Plain"
+            }
+        }),
+    );
+    assert_eq!(ambient_trust["error"]["code"], -32602);
+
+    let oversized = raw_call(
+        &mut server,
+        4,
+        "language.render",
+        json!({
+            "plan": {
+                "dialogueMove": {"act": "Abstain", "relatesToTurn": null},
+                "claims": [{"Unsupported": {
+                    "id": "large-metadata",
+                    "reason": "x".repeat(130 * 1024)
+                }}],
+                "uncertainty": {"level": "Unknown", "disclosure": null},
+                "tone": "Neutral",
+                "variant": "Plain"
+            }
+        }),
+    );
+    assert_eq!(oversized["error"]["code"], -32602);
+    assert_eq!(
+        oversized["error"]["data"]["kind"],
+        "language_render_input_too_large"
     );
 }

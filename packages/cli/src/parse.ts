@@ -1,4 +1,5 @@
 import type { JsonValue } from "@spoon/sdk";
+import type { PermissionMode, RecallMode } from "./config.js";
 
 export type Command =
   | { kind: "concept.add"; name: string }
@@ -35,7 +36,39 @@ export type Command =
   | { kind: "contradiction.refine"; request: Record<string, JsonValue> }
   | { kind: "contradiction.uncertainty"; claimId: string }
   | { kind: "primitive.observe"; target: string }
-  | { kind: "cycle.run"; situation: string; quiet: boolean; explain: boolean };
+  | { kind: "config.path" }
+  | { kind: "config.show"; withSources: boolean }
+  | { kind: "config.validate" }
+  | {
+      kind: "config.set";
+      key: string;
+      value: JsonValue;
+      layer: "user" | "project" | "local";
+    }
+  | { kind: "config.unset"; key: string; layer: "user" | "project" | "local" }
+  | { kind: "session.start"; name?: string; isolated: boolean }
+  | { kind: "session.list" }
+  | { kind: "session.show"; idOrName: string }
+  | { kind: "session.end"; idOrName: string }
+  | {
+      kind: "cycle.run";
+      situation: string;
+      quiet: boolean;
+      explain: boolean;
+      teacher?: "on" | "off";
+      session?: string;
+      recall?: RecallMode;
+      permissionMode?: PermissionMode;
+    }
+  | {
+      kind: "chat.run";
+      session?: string;
+      isolated: boolean;
+      recall?: RecallMode;
+      permissionMode?: PermissionMode;
+    }
+  | { kind: "benchmark.run"; fixturePath: string; reportPath?: string }
+  | { kind: "benchmark.report"; reportPath: string };
 
 const usage = `Usage:
   spoon concept add <name>
@@ -58,7 +91,15 @@ const usage = `Usage:
   spoon contradiction refine '<json>'
   spoon contradiction uncertainty <claim-id>
   spoon primitive observe <target>
-  spoon ask [--quiet|-q|--explain] <situation>`;
+  spoon config path|show [--sources]|validate
+  spoon config set <key> <json-value> [--layer user|project|local]
+  spoon config unset <key> [--layer user|project|local]
+  spoon session start [--name <name>] [--isolated]
+  spoon session list|show <id-or-name>|end <id-or-name>
+  spoon ask [--quiet|-q|--explain] [--teacher on|off] [--session <id>] [--recall global|session|none] [--permission-mode ask|workspace|full-access] <situation>
+  spoon chat [--session <id>] [--isolated] [--recall global|session|none] [--permission-mode ask|workspace|full-access]
+  spoon benchmark run <fixture.json> [report.json]
+  spoon benchmark report <report.json>`;
 
 export function parseCommand(args: string[]): Command {
   const [resource, action, ...rest] = args;
@@ -167,21 +208,154 @@ export function parseCommand(args: string[]): Command {
   if (resource === "primitive" && action === "observe" && rest.length === 1) {
     return { kind: "primitive.observe", target: rest[0]! };
   }
+  if (resource === "config" && action === "path" && rest.length === 0) {
+    return { kind: "config.path" };
+  }
+  if (resource === "config" && action === "show") {
+    if (rest.length === 0) return { kind: "config.show", withSources: false };
+    if (rest.length === 1 && rest[0] === "--sources")
+      return { kind: "config.show", withSources: true };
+  }
+  if (resource === "config" && action === "validate" && rest.length === 0) {
+    return { kind: "config.validate" };
+  }
+  if (resource === "config" && (action === "set" || action === "unset")) {
+    const key = rest[0];
+    if (!key) throw new Error(usage);
+    let layer: "user" | "project" | "local" = "project";
+    const layerIndex = rest.indexOf("--layer");
+    if (layerIndex >= 0) {
+      const value = rest[layerIndex + 1];
+      if (value !== "user" && value !== "project" && value !== "local")
+        throw new Error(usage);
+      layer = value;
+    }
+    if (action === "set") {
+      const rawValue = rest[1];
+      if (!rawValue) throw new Error(usage);
+      return { kind: "config.set", key, value: parseJson(rawValue), layer };
+    }
+    return { kind: "config.unset", key, layer };
+  }
+  if (resource === "session" && action === "list" && rest.length === 0) {
+    return { kind: "session.list" };
+  }
+  if (resource === "session" && action === "show" && rest.length === 1) {
+    return { kind: "session.show", idOrName: rest[0]! };
+  }
+  if (resource === "session" && action === "end" && rest.length === 1) {
+    return { kind: "session.end", idOrName: rest[0]! };
+  }
+  if (resource === "session" && action === "start") {
+    let name: string | undefined;
+    let isolated = false;
+    for (let index = 0; index < rest.length; index += 1) {
+      const argument = rest[index]!;
+      if (argument === "--isolated") isolated = true;
+      else if (argument === "--name") name = rest[++index];
+      else if (argument.startsWith("--name="))
+        name = argument.slice("--name=".length);
+      else throw new Error(usage);
+    }
+    return {
+      kind: "session.start",
+      ...(name === undefined ? {} : { name }),
+      isolated,
+    };
+  }
+  if (resource === "chat") {
+    let session: string | undefined;
+    let isolated = false;
+    let recall: RecallMode | undefined;
+    let permissionMode: PermissionMode | undefined;
+    for (
+      let index = 0;
+      index < (action === undefined ? 0 : [action, ...rest].length);
+      index += 1
+    ) {
+      const argument = [action, ...rest][index];
+      if (argument === undefined) continue;
+      if (argument === "--isolated") isolated = true;
+      else if (argument === "--session") session = [action, ...rest][++index];
+      else if (argument === "--recall")
+        recall = parseRecall([action, ...rest][++index]);
+      else if (argument === "--permission-mode")
+        permissionMode = parsePermissionMode([action, ...rest][++index]);
+      else throw new Error(usage);
+    }
+    return {
+      kind: "chat.run",
+      ...(session === undefined ? {} : { session }),
+      isolated,
+      ...(recall === undefined ? {} : { recall }),
+      ...(permissionMode === undefined ? {} : { permissionMode }),
+    };
+  }
   if (resource === "ask" && action) {
-    const leadingExplain = action === "--explain";
-    const trailingExplain = rest.at(-1) === "--explain";
-    const leadingQuiet = action === "--quiet" || action === "-q";
-    const trailingQuiet = rest.at(-1) === "--quiet" || rest.at(-1) === "-q";
-    const quiet = leadingQuiet || trailingQuiet;
-    const explain = leadingExplain || trailingExplain;
-    const question =
-      leadingQuiet || leadingExplain
-        ? rest
-        : trailingQuiet || trailingExplain
-          ? [action, ...rest.slice(0, -1)]
-          : [action, ...rest];
+    const askArgs = [action, ...rest];
+    let quiet = false;
+    let explain = false;
+    let teacher: "on" | "off" | undefined;
+    let session: string | undefined;
+    let recall: RecallMode | undefined;
+    let permissionMode: PermissionMode | undefined;
+    const question: string[] = [];
+    for (let index = 0; index < askArgs.length; index += 1) {
+      const argument = askArgs[index]!;
+      if (argument === "--quiet" || argument === "-q") {
+        quiet = true;
+      } else if (argument === "--explain") {
+        explain = true;
+      } else if (argument === "--teacher") {
+        const value = askArgs[++index];
+        if (value !== "on" && value !== "off") throw new Error(usage);
+        teacher = value;
+      } else if (argument.startsWith("--teacher=")) {
+        const value = argument.slice("--teacher=".length);
+        if (value !== "on" && value !== "off") throw new Error(usage);
+        teacher = value;
+      } else if (argument === "--session") {
+        session = askArgs[++index];
+        if (!session) throw new Error(usage);
+      } else if (argument.startsWith("--session=")) {
+        session = argument.slice("--session=".length);
+        if (!session) throw new Error(usage);
+      } else if (argument === "--recall") {
+        recall = parseRecall(askArgs[++index]);
+      } else if (argument.startsWith("--recall=")) {
+        recall = parseRecall(argument.slice("--recall=".length));
+      } else if (argument === "--permission-mode") {
+        permissionMode = parsePermissionMode(askArgs[++index]);
+      } else if (argument.startsWith("--permission-mode=")) {
+        permissionMode = parsePermissionMode(
+          argument.slice("--permission-mode=".length),
+        );
+      } else {
+        question.push(argument);
+      }
+    }
     if (question.length === 0) throw new Error(usage);
-    return { kind: "cycle.run", situation: question.join(" "), quiet, explain };
+    return {
+      kind: "cycle.run",
+      situation: question.join(" "),
+      quiet,
+      explain,
+      ...(teacher === undefined ? {} : { teacher }),
+      ...(session === undefined ? {} : { session }),
+      ...(recall === undefined ? {} : { recall }),
+      ...(permissionMode === undefined ? {} : { permissionMode }),
+    };
+  }
+  if (resource === "benchmark" && action === "run") {
+    if (rest.length < 1 || rest.length > 2) throw new Error(usage);
+    return {
+      kind: "benchmark.run",
+      fixturePath: rest[0]!,
+      ...(rest[1] === undefined ? {} : { reportPath: rest[1] }),
+    };
+  }
+  if (resource === "benchmark" && action === "report" && rest.length === 1) {
+    return { kind: "benchmark.report", reportPath: rest[0]! };
   }
 
   throw new Error(usage);
@@ -208,4 +382,16 @@ function parseJson(value: string): JsonValue {
   } catch {
     return value;
   }
+}
+
+function parseRecall(value: string | undefined): RecallMode {
+  if (value === "global" || value === "session" || value === "none")
+    return value;
+  throw new Error(usage);
+}
+
+function parsePermissionMode(value: string | undefined): PermissionMode {
+  if (value === "ask" || value === "workspace" || value === "full-access")
+    return value;
+  throw new Error(usage);
 }

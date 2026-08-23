@@ -1,0 +1,550 @@
+{
+  "$schema": "https://spoon.local/schemas/seed-curriculum.schema.json",
+  "schemaVersion": 1,
+  "kind": "spoon-seed-curriculum",
+  "id": "structured-data-transforms",
+  "version": "0.1.0",
+  "title": "Structured data, paths, and collection transforms",
+  "domain": "structured-data",
+  "evidence": {
+    "level": "Declared/design-only",
+    "runnerStatus": "not-implemented",
+    "claimBoundary": "This manifest specifies JSON and collection learning probes; no parser, path evaluator, or learned transform is claimed to be available from the manifest alone.",
+    "independentReviewRequired": true
+  },
+  "objective": "Acquire bounded, composable procedures for JSON parsing, strict and optional paths, collection transforms, and error-sensitive aggregation while preserving null-versus-missing semantics.",
+  "scope": {
+    "included": [
+      "bounded JSON parse and deterministic stringify",
+      "dot and bracket path traversal over objects and arrays",
+      "strict access, optional access, and explicit missing values",
+      "map, filter, reduce, find, grouping, sorting, and aggregation"
+    ],
+    "excluded": [
+      "unbounded recursion or regular expressions",
+      "implicit mutation of input data",
+      "network-fetched schemas or data",
+      "private production payloads and credentials"
+    ]
+  },
+  "lessonContract": {
+    "teacherProtocol": "pure_expr_v2",
+    "draftShape": [
+      "concepts",
+      "relationships",
+      "procedures",
+      "invocation",
+      "contracts",
+      "interpretations"
+    ],
+    "teacherSuppliedFields": [
+      "concept names and descriptions",
+      "relationship references",
+      "procedure parameter names",
+      "pure procedure bodies and contract checks",
+      "invocation inputs"
+    ],
+    "engineOwnedFields": [
+      "stable IDs",
+      "lifecycle",
+      "versions",
+      "timestamps",
+      "confidence",
+      "mutability",
+      "test cases"
+    ],
+    "testCasePolicy": "engine-generated-and-replayed-from-curriculum"
+  },
+  "requiredNativeOperations": [
+    {
+      "name": "json.parse_bounded",
+      "role": "Parse JSON under depth, byte, and item budgets.",
+      "determinism": "deterministic",
+      "status": "declared-not-verified"
+    },
+    {
+      "name": "json.stringify_canonical",
+      "role": "Serialize JSON deterministically for round-trip and comparison checks.",
+      "determinism": "deterministic",
+      "status": "declared-not-verified"
+    },
+    {
+      "name": "json.path_get_strict",
+      "role": "Traverse dot and bracket paths while distinguishing missing from present null.",
+      "determinism": "deterministic",
+      "status": "declared-not-verified"
+    },
+    {
+      "name": "json.path_get_optional",
+      "role": "Return null only for an absent path while preserving malformed-path errors.",
+      "determinism": "deterministic",
+      "status": "declared-not-verified"
+    },
+    {
+      "name": "collections.map_filter_reduce",
+      "role": "Execute bounded collection transforms with item budgets.",
+      "determinism": "deterministic",
+      "status": "declared-not-verified"
+    },
+    {
+      "name": "collections.group_sort_aggregate",
+      "role": "Compose grouping, stable sorting, and aggregation under explicit comparison rules.",
+      "determinism": "deterministic",
+      "status": "declared-not-verified"
+    }
+  ],
+  "requiredCapabilities": [
+    {
+      "name": "structured-data.synthetic-fixtures",
+      "purpose": "Supply generated JSON values and schemas without importing private payloads.",
+      "authority": "none",
+      "effects": ["none"],
+      "grantPolicy": "local-explicit-grant",
+      "status": "declared-not-verified",
+      "fixtureBoundary": "generated in-memory values only"
+    }
+  ],
+  "demonstrations": [
+    {
+      "id": "demonstrate-json-roundtrip",
+      "purpose": "Establish bounded parse/stringify round-trip behavior and value-type distinctions.",
+      "teacherMode": "on",
+      "taskModel": {
+        "inputShape": "synthetic JSON objects and arrays containing nested scalars, nulls, and empty collections",
+        "operation": "parse, inspect, and canonical-stringify without changing value meaning",
+        "variationPolicy": {
+          "surfaceVariation": "none",
+          "valueVariation": "held-out-values",
+          "structureVariation": "none"
+        },
+        "noAnswerDump": true
+      },
+      "expectedBehavior": [
+        "Respect depth and size budgets.",
+        "Preserve null and collection types.",
+        "Produce deterministic serialization."
+      ],
+      "expectedDisposition": "accept",
+      "evidence": {
+        "tier": "hard",
+        "oracle": "deterministic",
+        "assertions": [
+          "Canonical round-trip preserves the parsed value.",
+          "Budget violations fail explicitly."
+        ]
+      }
+    },
+    {
+      "id": "demonstrate-path-and-collection-composition",
+      "purpose": "Teach extraction followed by filtering, mapping, and reduction over nested records.",
+      "teacherMode": "on",
+      "taskModel": {
+        "inputShape": "an array of synthetic records with nested object fields, optional fields, and numeric or text collection members",
+        "operation": "traverse a declared path, apply a bounded collection transform, and return a typed result",
+        "variationPolicy": {
+          "surfaceVariation": "none",
+          "valueVariation": "held-out-values",
+          "structureVariation": "new-composition"
+        },
+        "noAnswerDump": true
+      },
+      "expectedBehavior": [
+        "Keep path semantics explicit.",
+        "Compose transforms without mutating input.",
+        "Retain a contract for item and output types."
+      ],
+      "expectedDisposition": "accept",
+      "evidence": {
+        "tier": "hard",
+        "oracle": "deterministic",
+        "assertions": [
+          "The transform matches an independently computed result.",
+          "The input remains unchanged."
+        ]
+      }
+    }
+  ],
+  "counterexamples": [
+    {
+      "id": "counter-missing-versus-null",
+      "purpose": "Prevent a path procedure from collapsing missing fields and present null values.",
+      "teacherMode": "on",
+      "taskModel": {
+        "inputShape": "parallel records where one nested field is absent and another is present with null",
+        "operation": "run strict and optional access and classify the two outcomes",
+        "variationPolicy": {
+          "surfaceVariation": "none",
+          "valueVariation": "held-out-values",
+          "structureVariation": "new-error-boundary"
+        },
+        "noAnswerDump": true
+      },
+      "expectedBehavior": [
+        "Strict access reports absence distinctly.",
+        "Optional access returns null only for absence.",
+        "Present null remains a value rather than an error."
+      ],
+      "expectedDisposition": "accept",
+      "evidence": {
+        "tier": "hard",
+        "oracle": "deterministic",
+        "assertions": [
+          "Missing and null remain distinguishable in the trace.",
+          "Malformed paths are not converted to null."
+        ]
+      },
+      "failureSignal": "The procedure treats every failed path lookup as a present null."
+    },
+    {
+      "id": "counter-implicit-input-mutation",
+      "purpose": "Reject transforms that mutate source collections or rely on unstable ordering.",
+      "teacherMode": "on",
+      "taskModel": {
+        "inputShape": "a collection reused by two downstream transforms, with equal sort keys and nested records",
+        "operation": "run independent transforms and compare source fingerprint, output order, and aggregation",
+        "variationPolicy": {
+          "surfaceVariation": "none",
+          "valueVariation": "held-out-values",
+          "structureVariation": "new-error-boundary"
+        },
+        "noAnswerDump": true
+      },
+      "expectedBehavior": [
+        "Inputs are immutable.",
+        "Tie ordering is explicit and deterministic.",
+        "Each transform can be replayed independently."
+      ],
+      "expectedDisposition": "reject",
+      "evidence": {
+        "tier": "hard",
+        "oracle": "deterministic",
+        "assertions": [
+          "Source fingerprint is unchanged.",
+          "Repeated execution has the same result and trace."
+        ]
+      },
+      "failureSignal": "A sort, grouping, or reduction changes shared input state or depends on incidental map order."
+    }
+  ],
+  "exercises": [
+    {
+      "id": "exercise-path-filter-reduce",
+      "purpose": "Compose strict path extraction with filtering and reduction on a new synthetic record shape.",
+      "teacherMode": "on",
+      "taskModel": {
+        "inputShape": "a held-out nested record schema with a collection path, a predicate field, and a numeric aggregation field",
+        "operation": "extract, filter, map, and reduce using reusable procedures and explicit contracts",
+        "variationPolicy": {
+          "surfaceVariation": "none",
+          "valueVariation": "held-out-schemas",
+          "structureVariation": "new-composition"
+        },
+        "noAnswerDump": true
+      },
+      "expectedBehavior": [
+        "Resolve each dependency by semantic contract.",
+        "Report missing or malformed paths according to policy.",
+        "Compose without a special-case answer."
+      ],
+      "expectedDisposition": "accept",
+      "evidence": {
+        "tier": "hard",
+        "oracle": "deterministic",
+        "assertions": [
+          "Independent recomputation agrees.",
+          "Intermediate values and failures are traceable."
+        ]
+      }
+    },
+    {
+      "id": "exercise-group-and-compare",
+      "purpose": "Learn grouping and stable comparison as reusable structure rather than one aggregate recipe.",
+      "teacherMode": "on",
+      "taskModel": {
+        "inputShape": "a collection of records with a grouping key, nullable members, and repeated comparison keys",
+        "operation": "group, sort with declared tie policy, and aggregate while preserving null semantics",
+        "variationPolicy": {
+          "surfaceVariation": "none",
+          "valueVariation": "held-out-schemas",
+          "structureVariation": "new-composition"
+        },
+        "noAnswerDump": true
+      },
+      "expectedBehavior": [
+        "Use explicit grouping and tie rules.",
+        "Do not infer missing values from nulls.",
+        "Return a deterministic shape suitable for a second transform."
+      ],
+      "expectedDisposition": "accept",
+      "evidence": {
+        "tier": "hard",
+        "oracle": "deterministic",
+        "assertions": [
+          "Group membership is complete and non-duplicated.",
+          "Repeated runs preserve order and totals."
+        ]
+      }
+    }
+  ],
+  "heldOutGeneralization": [
+    {
+      "id": "heldout-new-json-schema",
+      "purpose": "Test path and collection composition on a schema family absent from acquisition.",
+      "teacherMode": "off",
+      "taskModel": {
+        "inputShape": "an unseen nested JSON schema with a new path spelling mix and a collection transform composition",
+        "operation": "parse, traverse, transform, and stringify without Teacher assistance",
+        "variationPolicy": {
+          "surfaceVariation": "structural-variants",
+          "valueVariation": "held-out-schemas",
+          "structureVariation": "new-composition"
+        },
+        "noAnswerDump": true
+      },
+      "expectedBehavior": [
+        "Reuse path and collection semantics compositionally.",
+        "Honor budgets and immutable inputs.",
+        "Keep Teacher disabled for the whole probe."
+      ],
+      "expectedDisposition": "accept",
+      "evidence": {
+        "tier": "hard",
+        "oracle": "deterministic",
+        "assertions": [
+          "Teacher call count is zero.",
+          "Independent transform and stringify checks pass."
+        ]
+      }
+    },
+    {
+      "id": "heldout-error-sensitive-transform",
+      "purpose": "Test missing, null, malformed path, and budget boundaries on unseen data without collapsing errors.",
+      "teacherMode": "off",
+      "taskModel": {
+        "inputShape": "an unseen JSON value containing absent fields, present nulls, malformed path segments, and a bounded-size edge",
+        "operation": "select strict or optional access by contract and fail closed on malformed or over-budget input",
+        "variationPolicy": {
+          "surfaceVariation": "structural-variants",
+          "valueVariation": "held-out-values",
+          "structureVariation": "new-error-boundary"
+        },
+        "noAnswerDump": true
+      },
+      "expectedBehavior": [
+        "Preserve the error taxonomy.",
+        "Never turn malformed input into a plausible aggregate.",
+        "Return inspectable failure evidence under Teacher OFF."
+      ],
+      "expectedDisposition": "fail-closed",
+      "evidence": {
+        "tier": "hard",
+        "oracle": "deterministic",
+        "assertions": [
+          "Teacher call count is zero.",
+          "Malformed and over-budget cases are rejected deterministically."
+        ]
+      }
+    }
+  ],
+  "expectedLearnedStructures": [
+    {
+      "structureType": "concept",
+      "identityPolicy": "semantic-properties-only",
+      "semanticProperties": [
+        "missing is distinct from null",
+        "strict and optional access have different contracts"
+      ],
+      "compositionRole": "Provides stable error-sensitive path vocabulary.",
+      "evidenceExpectation": {
+        "teacherOff": true,
+        "replayable": true,
+        "localValidation": true
+      }
+    },
+    {
+      "structureType": "procedure",
+      "identityPolicy": "semantic-properties-only",
+      "semanticProperties": [
+        "bounded JSON parse and canonical stringify",
+        "dot and bracket paths",
+        "immutable collection transforms"
+      ],
+      "compositionRole": "Builds reusable data traversal and transform steps.",
+      "evidenceExpectation": {
+        "teacherOff": true,
+        "replayable": true,
+        "localValidation": true
+      }
+    },
+    {
+      "structureType": "contract",
+      "identityPolicy": "semantic-properties-only",
+      "semanticProperties": [
+        "input and output shape",
+        "budget bounds",
+        "null and missing behavior",
+        "malformed path behavior"
+      ],
+      "compositionRole": "Prevents plausible but semantically invalid data workflows.",
+      "evidenceExpectation": {
+        "teacherOff": true,
+        "replayable": true,
+        "localValidation": true
+      }
+    },
+    {
+      "structureType": "dependency-graph",
+      "identityPolicy": "semantic-properties-only",
+      "semanticProperties": [
+        "parse precedes path access",
+        "path access feeds collection transforms",
+        "aggregation has explicit comparison and null policy"
+      ],
+      "compositionRole": "Allows procedures to be reused in new compositions.",
+      "evidenceExpectation": {
+        "teacherOff": true,
+        "replayable": true,
+        "localValidation": true
+      }
+    },
+    {
+      "structureType": "test-set",
+      "identityPolicy": "semantic-properties-only",
+      "semanticProperties": [
+        "null versus missing counterexample",
+        "immutable input counterexample",
+        "unseen schemas and error boundaries"
+      ],
+      "compositionRole": "Guards against shortcut transforms and silent coercion.",
+      "evidenceExpectation": {
+        "teacherOff": true,
+        "replayable": true,
+        "localValidation": true
+      }
+    }
+  ],
+  "teacherOffGates": [
+    {
+      "id": "data-retention-off",
+      "stage": "retention",
+      "teacherMode": "off",
+      "independentStore": "same-clean-curriculum-store",
+      "requires": [
+        "round-trip demonstration complete",
+        "path error distinctions recorded"
+      ],
+      "passCriteria": [
+        "Known JSON and path transforms execute without Teacher.",
+        "Null, missing, and malformed paths remain distinct.",
+        "Input data is not mutated."
+      ],
+      "failurePolicy": "fail-closed-and-preserve-evidence"
+    },
+    {
+      "id": "data-composition-off",
+      "stage": "composition",
+      "teacherMode": "off",
+      "independentStore": "same-clean-curriculum-store",
+      "requires": [
+        "retention gate passes",
+        "path and collection procedures are available"
+      ],
+      "passCriteria": [
+        "Extraction, filtering, mapping, grouping, and reduction compose.",
+        "Contracts reject invalid intermediate shapes.",
+        "Repeated execution is deterministic."
+      ],
+      "failurePolicy": "fail-closed-and-preserve-evidence"
+    },
+    {
+      "id": "data-heldout-off",
+      "stage": "held-out-generalization",
+      "teacherMode": "off",
+      "independentStore": "same-clean-curriculum-store",
+      "requires": [
+        "composition gate passes",
+        "held-out schemas withheld during acquisition"
+      ],
+      "passCriteria": [
+        "Unseen schemas are handled without answer lookup.",
+        "Error-sensitive access works on unseen values.",
+        "Budget and immutability checks still hold."
+      ],
+      "failurePolicy": "quarantine-and-report"
+    },
+    {
+      "id": "data-clean-import-off",
+      "stage": "clean-import",
+      "teacherMode": "off",
+      "independentStore": "clean-import-target",
+      "requires": [
+        "import is quarantined as Provisional",
+        "local deterministic tests are reconstructed"
+      ],
+      "passCriteria": [
+        "Dependency closure is complete.",
+        "All held-out transforms pass with Teacher OFF.",
+        "No source payload, path, or authority is transferred."
+      ],
+      "failurePolicy": "quarantine-and-report"
+    }
+  ],
+  "exportPrivacy": {
+    "mode": "reconstructible-only",
+    "allow": [
+      "neutral JSON schemas",
+      "synthetic fixture generators",
+      "procedure drafts and contracts",
+      "canonicalization and error policy descriptions"
+    ],
+    "deny": [
+      "production JSON payloads",
+      "user identifiers and private records",
+      "API keys, cookies, and bearer tokens",
+      "ambient permission grants",
+      "machine-local paths",
+      "provider prompts and hidden state"
+    ],
+    "redactions": [
+      "replace records with generated shape descriptors",
+      "replace credentials with secret kinds",
+      "omit host-specific file roots and environment values"
+    ],
+    "secretHandling": {
+      "neverExportValues": true,
+      "exportKindsOnly": true,
+      "machinePathPolicy": "omit",
+      "teacherStatePolicy": "omit-prompts-and-provider-state"
+    }
+  },
+  "independentCleanImportValidation": {
+    "sourceStore": {
+      "clean": true,
+      "purpose": "curriculum-acquisition-output"
+    },
+    "targetStore": {
+      "clean": true,
+      "newInstance": true,
+      "purpose": "independent-reconstruction"
+    },
+    "importLifecycle": "quarantine-provisional",
+    "steps": [
+      "verify-manifest-and-content-hashes",
+      "resolve-dependency-closure",
+      "check-local-permissions",
+      "reconstruct-and-run-deterministic-tests",
+      "run-teacher-off-gates",
+      "promote-only-local-evidence"
+    ],
+    "promotionGate": {
+      "localEvidenceRequired": true,
+      "teacherOffRequired": true,
+      "authorityTransferred": false,
+      "failureIsAtomic": true
+    }
+  },
+  "notes": [
+    "All data examples are shapes and policies rather than payload dumps.",
+    "The curriculum deliberately tests missing-versus-null and malformed-path boundaries because successful happy paths alone do not establish learned structure."
+  ]
+}

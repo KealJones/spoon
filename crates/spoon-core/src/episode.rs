@@ -30,6 +30,67 @@ impl std::fmt::Display for EpisodeId {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct SessionId(pub Uuid);
+
+impl SessionId {
+    pub fn new() -> Self {
+        Self(Uuid::new_v4())
+    }
+}
+
+impl Default for SessionId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl std::fmt::Display for SessionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionVisibility {
+    #[default]
+    Global,
+    Isolated,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionState {
+    #[default]
+    Active,
+    Ended,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Session {
+    pub id: SessionId,
+    pub name: Option<String>,
+    pub visibility: SessionVisibility,
+    pub state: SessionState,
+    pub created_at: i64,
+    pub ended_at: Option<i64>,
+}
+
+impl Session {
+    pub fn new(name: Option<String>, visibility: SessionVisibility) -> Self {
+        Self {
+            id: SessionId::new(),
+            name,
+            visibility,
+            state: SessionState::Active,
+            created_at: now_unix(),
+            ended_at: None,
+        }
+    }
+}
+
 /// A structured record of a complete cognitive event. Not a log entry.
 /// The raw material of every learning mechanism downstream. (section 18)
 ///
@@ -45,6 +106,12 @@ impl std::fmt::Display for EpisodeId {
 pub struct Episode {
     pub id: EpisodeId,
     pub situation: String,
+    #[serde(default)]
+    pub session_id: Option<SessionId>,
+    #[serde(default)]
+    pub session_visibility: SessionVisibility,
+    #[serde(default)]
+    pub turn_index: Option<u64>,
     pub interpretations: Vec<Interpretation>,
     pub context: AssembledContext,
     pub knowledge_considered: Vec<KnowledgeCandidate>,
@@ -77,6 +144,9 @@ impl Episode {
         Self {
             id: EpisodeId::new(),
             situation: situation.into(),
+            session_id: None,
+            session_visibility: SessionVisibility::Global,
+            turn_index: None,
             interpretations: Vec::new(),
             context: AssembledContext::default(),
             knowledge_considered: Vec::new(),

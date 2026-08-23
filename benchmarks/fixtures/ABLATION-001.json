@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "ABLATION-001",
+  "title": "Teacher-Off Language Ablation",
+  "suite": "teacher-ablation",
+  "family": "ABLATION",
+  "track": "teacher-ablation",
+  "claimTested": "A previously acquired language capability remains available when Teacher is forbidden.",
+  "novelty": {"exactRepeatForbidden": true, "heldOutFamily": false},
+  "phases": [
+    {
+      "id": "acquisition",
+      "order": 1,
+      "purpose": "Acquire a language operation before ablation.",
+      "teacher": {"mode": "on"},
+      "input": {"prompt": "Double 11."},
+      "expectedOutcome": {"type": "answer", "value": 22, "criteria": ["answers 22"]}
+    },
+    {
+      "id": "retention",
+      "order": 2,
+      "purpose": "Repeat the capability with Teacher forbidden.",
+      "teacher": {"mode": "off"},
+      "input": {"prompt": "What is 11 twice as much?"},
+      "expectedOutcome": {"type": "answer", "value": 22, "criteria": ["answers 22 with zero Teacher calls"]}
+    }
+  ]
+}

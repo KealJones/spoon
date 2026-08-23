@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spoon.dev/schemas/config-v1.json",
+  "title": "Spoon configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version"],
+  "properties": {
+    "version": { "const": 1 },
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "path": { "type": "string", "minLength": 1 } }
+    },
+    "teacher": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "provider": { "type": "string", "minLength": 1 },
+        "model": { "type": ["string", "null"] }
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "permissionMode": { "enum": ["ask", "workspace", "full-access"] }
+      }
+    },
+    "recall": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "enum": ["global", "session", "none"] },
+        "lookback": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9]+(s|m|h|d|w)$"
+        },
+        "maxEpisodes": { "type": "integer", "minimum": 0, "maximum": 100000 }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "mode": { "enum": ["quiet", "normal", "explain"] } }
+    }
+  }
+}

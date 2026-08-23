@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "CONTRACT-003",
+  "title": "Contract Failure Boundary",
+  "suite": "credit-adaptation",
+  "family": "CONTRACT",
+  "track": "credit-adaptation",
+  "claimTested": "Spoon can distinguish an invalid input from an invalid procedure and preserve the valid procedure over a narrower domain.",
+  "phases": [
+    {
+      "id": "acquisition",
+      "order": 1,
+      "purpose": "Establish the procedure and its initially incomplete contract.",
+      "teacher": {"mode": "on"},
+      "input": {"prompt": "ZORP(x) means 10 divided by (x minus 5). Zorp 8 is valid."},
+      "expectedOutcome": {"type": "action", "criteria": ["records the procedure and a valid example"]}
+    },
+    {
+      "id": "retention",
+      "order": 2,
+      "purpose": "Exercise the known invalid boundary without Teacher assistance.",
+      "teacher": {"mode": "off"},
+      "input": {"prompt": "Zorp 5."},
+      "expectedOutcome": {"type": "abstain", "criteria": ["does not execute division by zero", "identifies the denominator condition"]}
+    },
+    {
+      "id": "generalization",
+      "order": 3,
+      "purpose": "Confirm valid inputs remain usable after recognizing the boundary.",
+      "teacher": {"mode": "off"},
+      "input": {"prompt": "Zorp 10."},
+      "expectedOutcome": {"type": "answer", "value": 2, "criteria": ["preserves valid behavior outside the forbidden input"]}
+    }
+  ]
+}

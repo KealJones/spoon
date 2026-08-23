@@ -873,6 +873,9 @@ fn offline_capability_is_denied_while_a_teacher_cycle_is_pending() {
             environment: BTreeMap::new(),
             assumptions: Vec::new(),
             teacher_allowed: true,
+            session_id: None,
+            recall_mode: Default::default(),
+            permission_mode: None,
             budget: CycleBudget {
                 max_exec_steps: 100,
                 max_context_items: 10,
@@ -908,6 +911,9 @@ fn maintenance_lease_and_active_cycles_exclude_each_other_across_engines() {
             environment: BTreeMap::new(),
             assumptions: Vec::new(),
             teacher_allowed: true,
+            session_id: None,
+            recall_mode: Default::default(),
+            permission_mode: None,
             budget: CycleBudget {
                 max_exec_steps: 100,
                 max_context_items: 10,
@@ -946,6 +952,9 @@ fn maintenance_lease_and_active_cycles_exclude_each_other_across_engines() {
                 environment: BTreeMap::new(),
                 assumptions: Vec::new(),
                 teacher_allowed: false,
+                session_id: None,
+                recall_mode: Default::default(),
+                permission_mode: None,
                 budget: CycleBudget {
                     max_exec_steps: 100,
                     max_context_items: 10,
@@ -1335,6 +1344,9 @@ fn assumption_corrections_are_durable_for_future_context_assembly() {
                 },
             ],
             teacher_allowed: false,
+            session_id: None,
+            recall_mode: Default::default(),
+            permission_mode: None,
             budget: CycleBudget {
                 max_exec_steps: 100,
                 max_context_items: 10,
@@ -1385,6 +1397,9 @@ fn assumption_corrections_are_durable_for_future_context_assembly() {
                 concept: None,
             }],
             teacher_allowed: false,
+            session_id: None,
+            recall_mode: Default::default(),
+            permission_mode: None,
             budget: CycleBudget {
                 max_exec_steps: 100,
                 max_context_items: 10,
@@ -1462,6 +1477,9 @@ fn contradiction_reads_are_engine_owned_and_episode_backed() {
             environment: BTreeMap::new(),
             assumptions: Vec::new(),
             teacher_allowed: false,
+            session_id: None,
+            recall_mode: Default::default(),
+            permission_mode: None,
             budget: CycleBudget {
                 max_exec_steps: 100,
                 max_context_items: 10,
@@ -1542,6 +1560,9 @@ fn engine_contradiction_refinement_persists_and_clears_inherited_uncertainty() {
             environment: BTreeMap::new(),
             assumptions: Vec::new(),
             teacher_allowed: false,
+            session_id: None,
+            recall_mode: Default::default(),
+            permission_mode: None,
             budget: CycleBudget {
                 max_exec_steps: 100,
                 max_context_items: 10,
@@ -1589,6 +1610,9 @@ fn engine_contradiction_refinement_persists_and_clears_inherited_uncertainty() {
             ]),
             assumptions: Vec::new(),
             teacher_allowed: false,
+            session_id: None,
+            recall_mode: Default::default(),
+            permission_mode: None,
             budget: CycleBudget {
                 max_exec_steps: 100,
                 max_context_items: 10,
@@ -1616,6 +1640,9 @@ fn engine_contradiction_refinement_persists_and_clears_inherited_uncertainty() {
             ]),
             assumptions: Vec::new(),
             teacher_allowed: false,
+            session_id: None,
+            recall_mode: Default::default(),
+            permission_mode: None,
             budget: CycleBudget {
                 max_exec_steps: 100,
                 max_context_items: 10,

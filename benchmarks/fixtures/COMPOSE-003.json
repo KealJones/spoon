@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "COMPOSE-003",
+  "title": "Compose Known Procedures",
+  "suite": "learning-composition",
+  "family": "COMPOSE",
+  "track": "learning-composition",
+  "claimTested": "Spoon can compose independently known procedures and preserve the composition as reusable structure.",
+  "phases": [
+    {
+      "id": "acquisition",
+      "order": 1,
+      "purpose": "Establish two independently reusable operations.",
+      "teacher": {"mode": "on"},
+      "input": {"prompt": "GLORP(x) means x plus 5. SNIP(x) means x divided by 2."},
+      "expectedOutcome": {"type": "action", "criteria": ["records both operations and their contracts"]}
+    },
+    {
+      "id": "retention",
+      "order": 2,
+      "purpose": "Compose the operations without Teacher assistance.",
+      "teacher": {"mode": "off"},
+      "input": {"prompt": "Glorp 7 and then snip it."},
+      "expectedOutcome": {"type": "answer", "value": 6, "criteria": ["executes glorp then snip in order", "does not reverse the composition"]}
+    },
+    {
+      "id": "generalization",
+      "order": 3,
+      "purpose": "Reuse the composition with a new input.",
+      "teacher": {"mode": "off"},
+      "input": {"prompt": "Use glorp followed by snip on 25."},
+      "expectedOutcome": {"type": "answer", "value": 15, "criteria": ["derives 15 from the reusable composition"]}
+    }
+  ]
+}

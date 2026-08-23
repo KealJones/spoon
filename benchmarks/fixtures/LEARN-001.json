@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "LEARN-001",
+  "title": "Learn a Novel Procedure",
+  "suite": "learning-composition",
+  "family": "LEARN",
+  "track": "learning-composition",
+  "claimTested": "Spoon can retain a procedure definition and derive answers for novel inputs instead of memorizing examples.",
+  "phases": [
+    {
+      "id": "acquisition",
+      "order": 1,
+      "purpose": "Provide a reusable procedure definition once.",
+      "teacher": {"mode": "on"},
+      "input": {"prompt": "A florp operation means multiply a number by three and add one."},
+      "expectedOutcome": {"type": "action", "criteria": ["records or acknowledges a reusable florp procedure"]}
+    },
+    {
+      "id": "retention",
+      "order": 2,
+      "purpose": "Invoke the learned procedure on a new input without Teacher assistance.",
+      "teacher": {"mode": "off"},
+      "input": {"prompt": "Florp 10."},
+      "expectedOutcome": {"type": "answer", "value": 31, "criteria": ["derives 31 from the stored procedure", "does not need Teacher calls"]}
+    },
+    {
+      "id": "generalization",
+      "order": 3,
+      "purpose": "Use a negative input to test procedure generality.",
+      "teacher": {"mode": "off"},
+      "input": {"prompt": "Can you florp -2?"},
+      "expectedOutcome": {"type": "answer", "value": -5, "criteria": ["applies the procedure to a novel negative input"]}
+    }
+  ]
+}

@@ -26,6 +26,18 @@ identifiers are named Spoon.
   never carry trust, ambient authority, secret values, or unverified
   environment assumptions. Imports enter quarantine as Provisional and must
   pass local permission checks and local revalidation before promotion.
+- **Configuration**: Spoon uses versioned, hierarchical configuration. User
+  defaults come from `~/.spoon/config.json`; directory-level
+  `.spoon/config.json` files are inherited from shallowest parent to the
+  working directory; machine-local overrides, environment variables, and CLI
+  flags are applied afterward. Configuration may select behavior and narrow
+  authority, but repository-controlled files can never grant permissions,
+  transfer secrets, or relax a local safety ceiling.
+- **Episodic memory**: Recall is global by default. A named session is normally
+  a continuity and ranking hint, not a memory wall. Isolation is explicit and
+  durable: episodes created in an isolated session are available only inside
+  that session and never enter global recall. Recall can be disabled for a
+  request without disabling immutable episode recording.
 
 ### Execution model routing and spend policy
 
@@ -58,6 +70,7 @@ claim of success is never final evidence on its own.
 | P4 consolidation/skill discovery | regression fixtures, reporting, routine package work | promotion gates, discovery pipeline, reconciliation | adversarial promotion and rollback review |
 | P5 curiosity/self-modification and capability acquisition/sharing | bundle fixtures, docs, import/export round trips, routine tests | native primitive implementations, typed procedure generation, local revalidation | sandbox escape, permissions/effects, secrets, provenance, and self-modification authorization |
 | P6 inspector/metrics | dashboard data transforms, snapshots, visual/test maintenance | server/SDK/dashboard integration and performance work | only for a security-sensitive exposure of evidence or authority |
+| P7 configuration/session memory | config fixtures, schemas, CLI help, migration fixtures, conversational benchmark cases | resolver, native administration capability, session lifecycle, recall policy, SDK/server integration | config/grant authority lattice, isolation non-leakage, secrets, and migration audit |
 
 The practical switch policy is: start a bounded task on Luna; retry once there
 if the failure is mechanical; move to Terra for substantive code or a second
@@ -98,6 +111,409 @@ quality/cost policy, not a guarantee of app-specific credit consumption.
     programming/       # programming domain bootstrap tests
     falsification/     # section 38 metric measurement harness
 ```
+
+---
+
+## Implementation Reality Gate
+
+The high-level current audit is [`STATUS.md`](STATUS.md); the operation-level
+inventory is [`PRIMITIVE-CAPABILITY-INVENTORY.md`](PRIMITIVE-CAPABILITY-INVENTORY.md).
+Update both when evidence materially changes a completion claim.
+
+Every phase, capability, benchmark, README, and handoff must distinguish these
+evidence levels instead of using “implemented” as an ambiguous umbrella:
+
+1. **Declared** — a type, schema, enum, trait, command, or document names it.
+2. **Compiled** — the declaration has an implementation that builds.
+3. **Unit-executed** — focused tests execute useful logic and assert outcomes.
+4. **Publicly reachable** — a supported engine/server/SDK/CLI path can invoke it.
+5. **Integrated** — the real cognitive workflow selects, invokes, records, and
+   evaluates it with production configuration and lifecycle rules.
+6. **Adversarially tested** — denial, malformed input, resource exhaustion,
+   revocation, dependency drift, and relevant attack paths have evidence.
+7. **Production-real** — a non-mock adapter or environment performs the claimed
+   effect end to end; fixture success is labeled fixture success.
+
+Status language is strict:
+
+- **Implemented** requires levels 1–4 for pure operations and 1–5 for workflow
+  behavior.
+- **Production-ready** requires all applicable levels through 7.
+- Types, stubs, TODO branches, simulated receipts, deterministic fixtures,
+  mocks, and injected closures are useful scaffolding but cannot alone support
+  either claim.
+- Every `[x]`, phase exit claim, and readiness summary cites the executable
+  entrypoint and meaningful test or benchmark evidence. Missing evidence
+  downgrades the claim; it is never filled in from intent.
+- Audits inspect callers, configuration, feature flags, disabled branches,
+  default adapters, error propagation, and persistence—not only defining files.
+
+The living operation inventory is
+[`PRIMITIVE-CAPABILITY-INVENTORY.md`](PRIMITIVE-CAPABILITY-INVENTORY.md). Run an
+implementation-reality audit before closing each milestone and after any status
+inventory rewrite.
+
+---
+
+## Priority Foundation Completion Track: Host-Capable Procedures, Language, and Programming
+
+**Implementation status**: Active remediation. The core value/expression model
+already contains lists, maps, indexing, field access, collection iteration, and
+procedure calls, but the Teacher-admissible `pure_rpn_v1` lesson format exposes
+only scalar arithmetic and boolean operations. That format is a safe bootstrap
+subset, not the intended ceiling of learned behavior.
+
+**Goal**: Complete the missing P0.3/P1.2/P5.3 substrate before treating later
+capability, language, or programming benchmarks as meaningful. Spoon should be
+able to learn rich, decomposable procedures over data and to request any host
+behavior through typed, permissioned, locally authorized capability adapters.
+
+The auditable operation-by-operation status and candidate backlog live in
+[`PRIMITIVE-CAPABILITY-INVENTORY.md`](PRIMITIVE-CAPABILITY-INVENTORY.md). A
+checkbox is complete only when the operation is publicly executable and tested;
+declaring an enum variant or adapter contract counts as partial at most.
+
+### Native machinery versus seeded knowledge
+
+Native machinery is the smallest trusted substrate that cannot be usefully
+expressed as ordinary Spoon knowledge. Seeded knowledge is normal inspectable,
+versioned, testable knowledge that happens to ship with Spoon.
+
+| Native / built in | Seeded or acquired knowledge |
+| --- | --- |
+| Value and expression semantics, budgets, tracing, deterministic pure intrinsics | Concepts, procedures, contracts, tests, language rules, domain workflows |
+| Permission enforcement and typed network/file/observation/sandbox mechanisms | Dictionary clients, repository workflows, API integrations, spell checking |
+| Cannot be mutated by ordinary learning | May be revised, superseded, retired, exported, and relearned |
+| Changes require a runtime release | Changes through ordinary evidence and promotion gates |
+| May exercise explicit local grants at the host boundary | Cannot create, widen, or transfer authority |
+
+If a behavior can be transparently composed from existing primitives, prefer a
+seeded/acquired procedure over another privileged native operation. Shipped
+seed bundles do not inherit ambient trust: reconstruct and run their deterministic
+bootstrap tests locally before marking them Validated.
+
+### P0F.1 - Versioned Portable Procedure IR
+
+Preserve `pure_rpn_v1` for compatibility and add a richer, versioned portable
+expression grammar. Reuse `spoon-core::Expr` rather than creating a parallel VM.
+
+The new grammar must express, with hard depth/node/item limits:
+
+- literals for every neutral value type;
+- variables, lexical bindings, conditionals, blocks, and immutable construction;
+- list and map construction;
+- indexing, strict field/path access, and optional access;
+- bounded map, filter, reduce, find, count, any/all, sort, unique, flatten,
+  zip, and slice;
+- calls to exact engine-resolved procedure identities and versions;
+- calls to a versioned pure intrinsic vocabulary;
+- executable contract expressions and multiple declared test cases.
+
+Teacher output refers to existing dependencies by stable engine-supplied keys,
+never by Teacher-minted IDs. The engine resolves and pins identities before
+execution or storage. Persisted legacy expressions remain readable.
+
+**Deliverable**: a Teacher can propose a bounded, recursive, decomposable pure
+procedure over text, lists, maps, and JSON, and Spoon can compile, trace, replay,
+serialize, and reject it deterministically.
+
+### P0F.2 - Complete Pure Standard Library
+
+Add versioned, budget-charged intrinsics with explicit semantics and errors.
+
+**Text and Unicode**
+
+- byte length, Unicode scalar length, and grapheme-cluster length are separate;
+- normalize, case-fold, lower/upper, trim, concatenate, split, join, search,
+  replace, substring, prefix/suffix, and bounded non-backtracking regular expressions;
+- split-on-empty operates on grapheme clusters rather than silently exposing
+  UTF-8 bytes;
+- token/span operations retain source offsets and normalization provenance.
+
+**Collections and objects**
+
+- length, keys, values, entries, contains, count, map, filter, reduce, find,
+  any/all, sort, unique, flatten, zip, slice, and bounded range generation;
+- immutable get/set/delete/update operations;
+- strict access distinguishes a missing key/index from a present null;
+- optional access returns null only for absence, not malformed paths or type errors.
+
+**JSON and structured data**
+
+- bounded parse and deterministic stringify;
+- dot and bracket paths such as `user.profile.name`, `items[0].id`, and
+  `["keys.with.dots"]`, plus a standards-based JSON Pointer operation;
+- parse/stringify and property traversal preserve JSON structure and numeric
+  validity, with byte/depth/segment limits;
+- schema/type checks, conversions, coalesce, and deterministic hashing/encoding.
+
+This layer is authority-free. Clocks, randomness, environment variables,
+network, files, processes, and secrets are observations/effects and never pure
+intrinsics.
+
+**Deliverable**: `count_letter("strawberry", "r")`, nested JSON extraction,
+and nontrivial collection transforms are expressible and testable without a
+Teacher or host effect after their procedures have been learned.
+
+### P0F.3 - Typed Host Effect Bridge
+
+Anything the host can do should be exposable, but only through the existing
+capability authority boundary:
+
+```text
+learned procedure
+  -> typed capability dependency and effect request
+  -> exact local capability/version resolution
+  -> schema, contract, bounds, and grant checks
+  -> injected host adapter
+  -> redacted receipt, observation, evaluation, and trace
+```
+
+Complete the native mechanism families:
+
+- scoped network requests with method/host/path/body/response budgets;
+- scoped file read, write, list, metadata, and atomic patch operations;
+- identified observation/sensor calls with time and provenance;
+- sandboxed execution with declared executable identity, arguments, inputs,
+  outputs, environment keys, filesystem/network policy, timeout, memory, and
+  output limits;
+- secret references resolved only at invocation, never stored in procedures,
+  prompts, bundles, traces, or receipts.
+
+Every invocation re-checks current local grants and mandatory denials. Pure
+evaluation cannot reach these adapters directly. Full-access mode removes
+routine prompts but not declarations, bounds, quarantine, receipts, or
+operating-system limits.
+
+**Deliverable**: a locally revalidated learned procedure can compose pure
+steps with authorized network/file/observation/sandbox steps; revocation takes
+effect before the next invocation.
+
+### P0F.4 - Candidate Laboratory and Admission
+
+Wire capability acquisition into the cognitive cycle:
+
+1. Detect an explicit missing operation, interface, dependency, or language mapping.
+2. Search existing pure procedures and locally available capabilities first.
+3. Inspect an operator-authorized schema, help document, fixture, source tree,
+   or observed exchange.
+4. Synthesize several typed candidates with contracts, effects, dependencies,
+   tests, and provenance.
+5. Compile in quarantine and run declared examples, generated boundary cases,
+   counterexamples, and selected regressions under budgets.
+6. Admit a successful candidate as Provisional with no automatic grants.
+7. Promote only after locally trusted evidence satisfies the Phase 4 gate.
+8. Persist rejected candidates and failure traces without partially mutating
+   active knowledge.
+
+The laboratory may ask a Teacher to propose candidates, but candidate creation,
+testing, comparison, and admission are first-class Engine states. A later phase
+must let Spoon originate and revise candidates before Teacher escalation.
+
+**Deliverable**: gap -> candidate -> local test -> provisional capability ->
+Teacher-OFF reuse is visible as one durable public workflow.
+
+### P0F.5 - Language Substrate
+
+Language is a first-class capability domain over the same values and procedures,
+not a privileged answer generator.
+
+Add explicit representations for:
+
+- normalized text, tokens, graphemes, spans, entities, and references;
+- weighted intent frames, slots, scope, ambiguity, and clarification choices;
+- dialogue acts, corrections, conversational state, and user preferences;
+- response plans containing grounded claims, requested action, uncertainty,
+  provenance, tone, and disclosure requirements;
+- semantic-to-text generation procedures and a deterministic no-model renderer.
+
+Learn mappings from surface forms to intent frames and from response plans to
+utterances. Purpose-built fuzzy/neural interpreters and renderers are allowed,
+including small local models, but they propose structure or wording; they do
+not contain the authoritative facts, create effects, or mutate knowledge. A
+renderer is constrained to the immutable response plan and checked for claim
+and provenance preservation.
+
+Seed only the linguistic substrate needed to bootstrap acquisition: core
+token/span operations, a small intent/dialogue ontology, deterministic grammar,
+and validation fixtures. Vocabulary, paraphrases, domain language, repair
+strategies, and stylistic preferences should grow as ordinary knowledge.
+
+**Initial bounded slice (implemented, bounded public rendering only):** UTF-8 token streams preserve
+byte offsets; serializable intent frames/slots/scope/ambiguity and dialogue moves
+carry neutral structure; response plans carry evidence-backed claims, provenance,
+uncertainty, tone, and a formatting variant. The no-model renderer preserves
+claim text verbatim, omits explicitly unsupported claims, rejects claims without
+evidence references, and varies only plain versus bullet formatting. A bounded
+`language.render` Server/SDK path accepts typed plans and content-free tone/format
+overrides, redacts raw provenance, and labels caller evidence references
+unverified rather than elevating them. This is deliberately not semantic
+interpretation, server-side evidence verification, or natural-language
+generation. Its current proof is five focused `spoon-core` tests plus server and
+real-stdio SDK tests for bounds, omission, redaction, and rejection.
+
+**Deliverable**: Spoon learns a general letter-count intent and procedure,
+handles paraphrases with Teacher OFF, asks when literal versus canonical
+spelling matters, and renders a grounded conversational answer without relying
+on a canned exact phrase.
+
+### P0F.6 - Programming Knowledge and Coding Capabilities
+
+Programming is the first broad grounded domain because compilers, tests,
+parsers, and repositories manufacture strong feedback.
+
+**Repository knowledge**
+
+- scoped file/tree observations and language detection;
+- manifests, configuration formats, modules, files, symbols, types, imports,
+  references, dependencies, call edges, tests, diagnostics, and ownership;
+- AST and source-span provenance through typed parser capabilities;
+- incremental invalidation when file fingerprints change.
+
+**Acquired programming capabilities**
+
+- compiler, interpreter, formatter, linter, test-runner, package-manager,
+  documentation, Git-read/status/diff, patch, and build-system interfaces;
+- exact executable/version/environment fingerprints and reconstructible tests;
+- read/observe, sandbox execution, network, and mutation effects kept distinct;
+- safe workflows such as inspect -> hypothesize -> patch in scope -> run focused
+  checks -> evaluate -> retain/revise.
+
+**Bidirectional semantic IR/code bridge**
+
+Treat language constructs as evidence about shared semantic operations, not as
+textual aliases. Maintain a versioned many-to-many mapping among Spoon
+intrinsics/procedures/contracts/effects and target-language AST/type constructs.
+
+- **Lowering**: translate an exact Spoon procedure and its dependency closure
+  into typed TypeScript, Rust, Python, or another target plus source maps,
+  runtime shims, declared imports, effects, and build/test instructions.
+- **Lifting**: parse authorized source through a typed AST capability, recognize
+  representable semantic regions, and propose neutral concepts/procedures with
+  source-span provenance. Unrepresentable or effectful regions remain opaque,
+  typed capability dependencies rather than invented pure semantics.
+- **Equivalence**: execute the neutral IR and generated code against declared,
+  boundary, generated, and held-out inputs in separate sandboxes; compare
+  outputs, typed failures, effects, and resource envelopes before admission.
+- **Semantic false friends**: require explicit target shims or reject lowering
+  when language behavior differs. For example, JavaScript `split("")` operates
+  on UTF-16 code units and is not Spoon's grapheme split; optional chaining is
+  not strict path access; floating-point, overflow, object ordering, null/missing,
+  exception, async, and Unicode semantics must remain explicit.
+- **Artifact policy**: neutral IR, contracts, tests, dependency identities, and
+  provenance remain authoritative. Generated source/binaries are reproducible
+  cached artifacts, never a transfer of authority or a substitute for local
+  compilation and validation.
+
+Seed a small cross-language semantic ontology—expression, binding, function,
+call, collection transform, record/property, result/error, module/import,
+effect, async task, contract, test, and type relationships—then acquire target
+syntax, libraries, idioms, and compiler constraints as ordinary knowledge.
+
+**Deliverable**: Spoon lowers one nontrivial learned data procedure to at least
+TypeScript and Rust, proves differential equivalence on held-out cases, imports
+an equivalent hand-written implementation back into a neutral candidate, and
+rejects a deliberately misleading syntax-level translation.
+
+**Grounded explanation and conversation**
+
+- build a response plan from inspected files, symbols, dependencies, tests,
+  and observed runtime behavior;
+- link every factual repository claim to evidence;
+- explain at the user's altitude and retain conversational corrections without
+  allowing prose fluency to substitute for code evidence.
+
+**Deliverable**: on an authorized fixture repository, Spoon can learn the
+local toolchain, build an inspectable code knowledge graph, answer “what is this
+repo doing?” conversationally from evidence, and acquire a reusable tested
+coding workflow without ambient shell or file authority.
+
+### P0F.7 - Foundation Benchmarks and Exit Gate
+
+Add isolated public fixtures that prove behavior rather than one-shot answers:
+
+- JSON parse/stringify and strict/optional nested property access;
+- Unicode letter/grapheme counting, including `strawberry` and held-out words;
+- learned list filtering/reduction and procedure composition;
+- fake dictionary interface discovery, permission denial, local validation,
+  revocation, offline fallback, and provenance;
+- paraphrase-to-intent retention and clarification behavior;
+- deterministic and varied response generation from one immutable response plan;
+- fixture-repository indexing, grounded explanation, test workflow acquisition,
+  safe patching, and Teacher-OFF reuse;
+- adversarial depth/size/budget, schema, path, regex, secret, effect, and sandbox cases.
+
+Each fixture gets a fresh database to prevent cross-fixture knowledge leakage.
+Acquisition, retention, and held-out variants share only that fixture database.
+Reports count step-level acquisition/retention/generalization failures directly
+and include the learned procedure/capability structure needed by the Judge.
+
+### P0F.8 - Seed Forge and Curated Learning Curricula
+
+Seed knowledge is produced through the same observable learning machinery used
+in normal operation, not inserted as opaque privileged state. A seed curriculum
+is a versioned set of concepts, demonstrations, counterexamples, exercises,
+held-out variants, expected structural observations, and promotion criteria.
+
+The seed-forge workflow is:
+
+1. Start a clean Spoon with only native machinery and an empty knowledge store.
+2. Run a named curriculum with explicitly selected Teacher and capability grants.
+3. Inspect the acquired concepts, procedures, contracts, dependencies, tests,
+   failures, and provenance rather than accepting answer accuracy alone.
+4. Remove Teacher access and run retention, composition, and held-out
+   generalization experiments.
+5. Export only reconstructible knowledge; omit episodes or examples that would
+   leak private data, secrets, ambient grants, machine paths, or Teacher state.
+6. Import into a second clean Spoon as Provisional, resolve dependencies, and
+   rerun deterministic tests plus the curriculum's Teacher-OFF validation set.
+7. Sign and publish the bundle manifest only after independent reconstruction
+   succeeds. Installation never transfers trust or authority; each target
+   performs its own local validation and promotion.
+
+Initial designed curricula:
+
+- **language kernel**: graphemes, tokens, spans, compositional meaning, intent,
+  slots, reference, ambiguity, clarification, dialogue acts, and response plans;
+- **structured data**: JSON, paths, schemas, collection transforms, comparison,
+  grouping, aggregation, and error-sensitive data workflows;
+- **everyday reasoning**: units, time representations, counting, classification,
+  decomposition, verification, and explanation strategies;
+- **programming foundations**: syntax/AST concepts, types, modules, dependency
+  graphs, testing, diagnostics, version control, debugging, and safe change loops;
+- **tool-use patterns**: interface discovery, typed adapter construction,
+  permission requests, provenance, fallback, revocation, and capability repair.
+
+A curriculum may deliberately use a strong Teacher to accelerate acquisition,
+but Teacher text is training evidence, not shipped cognition. The exported seed
+must remain useful with the Teacher absent and must expose the structures that
+cause its behavior. Seeds are revisable ordinary knowledge: users may inspect,
+replace, retire, or relearn them.
+
+**Deliverable**: a reproducible command creates a seed bundle from a clean
+database, independently reconstructs and validates it in another clean database,
+and emits a curriculum report distinguishing acquisition, retention,
+generalization, structure, Teacher dependence, and unresolved assumptions.
+
+### P0F Exit Criteria
+
+- The pure IR can express rich deterministic transforms over text, collections,
+  maps, and JSON with complete budgeted traces.
+- Learned procedures can compose exact-version pure and locally authorized
+  effectful dependencies without ambient authority.
+- New host integrations require typed adapters/bundles, not changes to the
+  trusted evaluator.
+- Candidate synthesis, tests, quarantine, admission, rejection, and promotion
+  evidence are durable public workflow states.
+- Curated seed bundles are reproducibly learned, exported, reconstructed, and
+  independently validated rather than copied from a trusted database snapshot.
+- Letter counting and JSON traversal are learned once and generalized with the
+  Teacher disabled.
+- Spoon can construct a grounded repository model and conversational explanation,
+  then acquire a safe programming workflow from local evidence.
+- Legacy databases and `pure_rpn_v1` lessons remain readable and executable.
+- Workspace tests, clippy, TypeScript tests/typecheck/build/depcheck, adversarial
+  capability tests, and isolated public benchmarks are green.
 
 ---
 
@@ -494,6 +910,61 @@ contradictions, never silent averaging.
 **Goal**: First compounding step. Search gets cheaper, more problems
 become reachable, more episodes accumulate.
 
+### P3.0 - Public Benchmark Harness
+
+Benchmark probes must exercise the same public `spoon ask` entrypoint as a
+human rather than calling engine internals. The runner accepts normalized JSON
+fixtures and writes JSON plus Markdown reports.
+
+For acquisition/retention probes, the runner enforces this sequence:
+
+1. Teacher ON canonical prompt: allow an answer or reusable lesson.
+2. Teacher OFF exact repeat: measure retention only; mark it as a regression
+   repeat rather than new capability evidence.
+3. Teacher OFF paraphrase or novel-value variants: run only after exact
+   retention passes; these are the generalization checks.
+4. Fresh public CLI/server process against the fixture's database: verify
+   durable persistence. Catalog execution creates a fresh temporary database
+   per fixture, so unrelated fixtures cannot confound a capability-acquisition
+   result. Deliberate interference belongs in a fixture that teaches its own
+   competing procedures.
+
+Each step records the public answer, disposition, episode, Teacher usage,
+action, rung, trace/cost summary, and novelty identity. Held-out variants stay
+in separate fixture families, and failed retention gates produce explicit
+`skipped` variants rather than misleading successes.
+
+Semantic fixture criteria are evaluated after fixture completion by a separate
+**Judge** protocol. Judge reuses the provider transport/adapters (CLI or API)
+but has its own prompt and strict verdict schema; it receives batched,
+immutable, redacted per-step evidence and returns one independent verdict per
+step. It has no engine, graph, episode, promotion, or capability-write path. A
+Teacher-OFF result remains Teacher-OFF because Judge cannot influence
+execution. Deterministic assertions remain authoritative for exact values,
+contracts, and Teacher-call policy; Judge verdicts grade rubric criteria and
+record their provider/model/provenance. Human ratings remain required for the
+Bar Test.
+
+User-facing commands:
+
+```text
+spoon ask --teacher off "..."
+spoon benchmark run <fixture.json> [report.json]
+spoon benchmark report <report.json>
+```
+
+The developmental catalog lives in `benchmarks/catalog.json`, with starter
+experiments under `benchmarks/fixtures/`. Its source of truth is the
+developmental probe suite in `ekg-benchmark-suite/`; the harness is
+intentionally a runner/reporting layer and does not seed answers or silently
+bypass the normal Teacher and episode paths.
+
+Passing `benchmarks/catalog.json` to the same `benchmark run` command resolves
+its suite fixture IDs, runs each fixture as a public experiment, and writes one
+aggregate report with per-fixture telemetry run IDs. A catalog run preserves
+fixture-local acquisition, optional `teach-*`, retention, and held-out gates
+within a clean fixture-local database.
+
 ### P3.1 - Recall Index (section 14, stage 1)
 
 Cheap, broad candidate generation without scanning everything.
@@ -797,6 +1268,474 @@ Anti-gaming rules (section 38):
 
 ---
 
+## Phase 7: Hierarchical Configuration + Episodic Sessions
+
+**Status**: In progress — the first public vertical slice is implemented
+**Maps to**: Sections 14 and 18 plus the product/configuration boundary needed
+to expose them safely
+**Goal**: Give users predictable project-local behavior and human-like global
+episodic continuity while preserving explicit, testable isolation when a task
+or benchmark requires it.
+
+This phase is a follow-on integration layer over the completed engine. It does
+not replace graph knowledge, episode provenance, capability grants, or the
+Phase 3 recall/ranking machinery. It supplies a single resolved runtime policy
+to all of them.
+
+### P7.1 - Versioned Hierarchical Configuration
+
+**Implementation status**: Implemented in the CLI: strict v1 resolution,
+source/shadow diagnostics, schema publication, environment projection, safe
+path validation, atomic layer writes, and redacted receipts are live.
+
+Add one typed configuration model shared by CLI startup, public server launch,
+benchmarks, and the SDK's local-process helper. Configuration files are strict
+JSON with a checked `version` field and a published JSON Schema. Unknown keys,
+invalid durations, invalid paths, and incompatible versions fail with a useful
+source location rather than being silently ignored.
+
+Resolution order, from lowest to highest precedence:
+
+1. Built-in safe defaults.
+2. User defaults in `~/.spoon/config.json`.
+3. `.spoon/config.json` files in ancestor directories, applied shallowest to
+   deepest and ending at the process working directory. The home config is
+   de-duplicated if it is also encountered as an ancestor.
+4. The nearest `.spoon/config.local.json`, intended for uncommitted
+   machine-specific values and ignored by Git.
+5. `SPOON_*` environment variables.
+6. Explicit CLI flags or equivalent per-call SDK options.
+
+Merge and path rules:
+
+- Objects deep-merge, scalars override, and arrays replace rather than append.
+- `null` clears a parent value only where the schema explicitly permits it.
+- Relative paths resolve against the directory containing the file that
+  declared them, not against whichever directory later launches Spoon.
+- Symlinks are canonicalized for source identity and cycle/duplicate detection.
+- A resolved config includes source metadata internally so every effective
+  value can explain where it came from.
+- Runtime limits use a safety lattice: a child config may reduce a hard cap but
+  may not exceed a stricter parent/admin cap.
+
+Configuration trust classes are deliberately separate:
+
+- Portable repository config may choose recall behavior, ordinary budgets,
+  provider/model names, output style, benchmark defaults, and requested
+  capability requirements. It may also further restrict effects.
+- User-home config may contain machine paths and mappings to locally installed
+  teacher adapters, subject to local policy. Repository-adjacent local config
+  remains subject to the project path and authority boundaries.
+- Secrets remain in environment variables or a future secret store. They are
+  never accepted from committed config and never appear in `config show`.
+- Capability grants remain revocable local/admin records. No repository-
+  controlled config file can self-grant file, network, observation, sandbox,
+  process, environment, or secret access. A user-home full-access policy is an
+  explicit local-operator decision, never inherited from a project. Authority
+  is checked again at invocation time.
+
+Initial public shape:
+
+```json
+{
+  "$schema": "https://spoon.dev/schemas/config-v1.json",
+  "version": 1,
+  "database": { "path": ".spoon/spoon.sqlite" },
+  "teacher": { "provider": "codex", "model": null },
+  "capabilities": { "permissionMode": "ask" },
+  "recall": {
+    "mode": "global",
+    "lookback": "90d",
+    "maxEpisodes": 64
+  },
+  "output": { "mode": "explain" }
+}
+```
+
+Public diagnostics:
+
+```text
+spoon config path
+spoon config show
+spoon config show --sources
+spoon config validate
+```
+
+`config show` renders a redacted effective configuration. `--sources` annotates
+each value with its winning file/environment/flag source and reports shadowed
+values. `validate` checks every discovered layer and the merged result without
+starting the engine or contacting a teacher.
+
+**Deliverable**: Running Spoon from any directory produces one deterministic,
+explainable, schema-valid configuration; relocating a project does not break
+paths declared relative to that project; repository config cannot acquire
+authority or expose a secret.
+
+Portable project paths are confined to the project tree by default. A path
+outside it requires an explicit user-home, environment, or CLI override; merely
+checking out and entering a repository must not make Spoon open or create an
+arbitrary machine path.
+
+### P7.2 - Native Configuration and Permission Administration
+
+**Implementation status**: The deterministic local administration slice is
+live for teacher enablement, permission mode, recall mode, and database path;
+it writes user-layer changes and redacted receipts. Generic typed permission
+grant UX and interactive confirmation remain follow-on hardening.
+
+Configuration and permission management are built-in Spoon administration
+operations, not learned procedures and not general file-access primitives.
+They are fixed, typed, non-exportable, non-retirable, and unavailable to
+imported capabilities. This lets a user manage Spoon naturally through
+`spoon ask` or `spoon chat` without giving the engine arbitrary write access to
+its own policy files.
+
+The native administration surface exposes narrow operations:
+
+- Inspect the supported config schema and effective redacted configuration.
+- Explain a setting, its allowed values, its winning source, and what a change
+  would affect.
+- Propose a typed JSON Patch against a named config layer, validate the
+  resulting layer and effective configuration, and show the redacted diff.
+- Apply an authorized patch atomically with locking, a recovery copy, config
+  version checks, and an immutable administration receipt.
+- Inspect capability requirements, local grants, denials, scope, expiry, and
+  provenance; request, narrowly grant, renew, or revoke a local permission.
+- Report whether a setting applies immediately, on the next cycle, or only
+  after the server/database is restarted.
+
+The effective configuration includes capability *policy*, but distinguishes
+three sources of authority:
+
+1. Project config may declare required permissions and may deny or narrow
+   effects. These are requests/constraints, never grants.
+2. User-home config may define approval defaults, hard ceilings, and mandatory
+   denials. It still does not contain bearer tokens or transferable grants.
+3. Actual grants are scoped, revocable objects in Spoon's local authority
+   store, bound to a capability identity/content hash, exact effects/resources,
+   optional expiry, granting actor, and audit receipt. They appear in
+   `config show --sources` as a separate local-authority source but are never
+   serialized into portable project config or capability bundles.
+
+Natural-language management uses the ordinary interpretation path to produce a
+typed administration intent, then crosses a separate authorization gate. A
+teacher may help map “turn the teacher off,” “use this database next time,” or
+“allow this weather capability to call api.example.com” into a proposed patch,
+but the teacher's text is untrusted input and can neither execute the patch nor
+authorize it. Common administration intents should also have a deterministic
+local interpretation path so turning off or changing the teacher does not
+itself require a working teacher.
+
+Effect classes determine interaction behavior:
+
+- Authority-reducing changes, such as disabling the teacher, revoking a grant,
+  lowering a budget, or changing recall to `none`, may be applied from the
+  user's explicit chat request and return a receipt.
+- Reversible behavior changes, such as output mode, lookback, or global/session
+  recall defaults, apply to the appropriate layer and report their effective
+  time.
+- Authority-expanding or context-switching changes, including new capability
+  grants, broader network/file scopes, arbitrary machine paths, teacher command
+  mappings, or a database-pointer change, require an explicit redacted diff and
+  local operator confirmation. Non-interactive use requires a separately
+  authenticated admin mechanism; a teacher, imported bundle, benchmark, or
+  ordinary capability can never confirm on the user's behalf.
+
+Capability permission mode is a first-class user preference with three levels:
+
+- `ask` (default): declared capability requirements resolve against explicit
+  local grants, and missing authority produces a bounded approval request.
+- `workspace`: automatically authorize declared file read/write and sandboxed
+  execution effects inside the resolved project root for the active workspace.
+  External paths, network hosts, secret-store references, and broader effects
+  still require grants.
+- `full-access`: automatically satisfy declared native capability permission
+  requirements within the operating-system authority of the Spoon process,
+  without per-capability approval prompts. It may be enabled for one chat/
+  process or persisted in user-home config.
+
+`full-access` is intentionally comparable to other coding agents' bypass/full
+access modes: the user opts in once instead of approving every file, host, or
+sandbox request. It bypasses Spoon's routine capability *grant prompts*, but it
+does not bypass non-permission invariants:
+
+- A capability must still declare its effects and typed resource requirements;
+  undeclared effects are rejected rather than silently allowed.
+- Imported capabilities remain quarantined until structural validation and
+  local revalidation succeed; full access is not automatic trust or promotion.
+- Contract checks, budgets, timeouts, deterministic traces, provenance,
+  redacted audit records, and atomic mutation rules remain active.
+- Full access cannot raise operating-system privileges, disable the episode
+  trail, mutate the administration control plane, confirm its own config/grant
+  change, or override a mandatory user/admin denial.
+- Dedicated secret-store injection remains separately declared. Full file
+  access can nevertheless expose credentials present in readable files, so the
+  UI and documentation must state that risk plainly rather than implying that
+  redaction is a security boundary.
+
+Only an explicit local user action may enable `workspace` or `full-access`.
+Project and imported config may force a *stricter* mode but may never elevate
+one. Chat accepts natural requests such as “give capabilities full access for
+this chat” or “always use workspace permissions”; persistent full access shows
+a single redacted confirmation before activation. The CLI/server/inspector
+display a persistent `FULL ACCESS` indicator while it is effective. Revocation
+or an emergency `ask` override takes effect before the next primitive
+invocation, including during a long-running chat.
+
+Equivalent recovery and automation controls use the same authorization path:
+
+```text
+spoon chat --permission-mode workspace
+spoon chat --permission-mode full-access
+spoon ask --permission-mode full-access "..."
+spoon config set capabilities.permissionMode full-access --layer user
+spoon permission mode ask|workspace|full-access
+```
+
+Non-interactive persistent activation requires an explicit acknowledgement
+flag or authenticated admin policy. The acknowledgement suppresses repeated
+prompts; it is not repeated for each capability invocation.
+
+Database changes are especially conservative. The administration operation
+validates and writes the new pointer but does not hot-swap the database beneath
+an active cycle. It reports that the change takes effect on restart, verifies
+whether the target is new or existing, and never deletes, moves, or mutates the
+previous database as a side effect.
+
+Explicit commands remain available for scripting and recovery, backed by the
+same native operations used by chat:
+
+```text
+spoon config explain <key>
+spoon config set <key> <json-value> [--layer user|project|local]
+spoon config unset <key> [--layer user|project|local]
+spoon config apply <patch.json> [--dry-run]
+spoon permission list
+spoon permission grant <capability> <scoped-permission>
+spoon permission revoke <grant-id>
+```
+
+Every mutation records the requesting user text, normalized intent, target
+layer, redacted before/after hashes, exact non-secret patch, authorization
+source, result, and effective time. Failed validation and denied authorization
+also produce receipts. Secret values are accepted only through a dedicated
+secret-reference flow and are never echoed, passed through a teacher, written
+to config, or retained in episode text.
+
+**Deliverable**: A user can ask Spoon in ordinary language to explain or safely
+change any supported setting and can manage narrowly scoped local capability
+permissions. The result is schema-valid, atomic, auditable, source-aware, and
+cannot be triggered or authorized by untrusted teacher/capability content.
+
+### P7.3 - Session and Recall Data Model
+
+**Implementation status**: Implemented end to end through SQLite, the engine,
+JSON-RPC, SDK, CLI session commands, and global/session/none recall filtering.
+
+Sessions are first-class continuity records, not the default unit of memory.
+Add a durable `Session` record with an opaque ID, optional unique human name,
+timestamps, lifecycle state, and `Global` or `Isolated` visibility. Add optional
+episode metadata for `session_id`, monotonically assigned `turn_index`, and
+durable memory visibility. Do not infer isolation from a session name.
+
+Keep storage and retrieval policy distinct:
+
+- `session.visibility = global`: its episodes remain eligible for ordinary
+  global recall. When that session is active, same-session episodes receive a
+  ranking boost but global evidence remains available.
+- `session.visibility = isolated`: its episodes may be recalled only by later
+  turns in that same session. They are excluded from global recall, other
+  sessions, learning corpora, consolidation, automatic regression promotion,
+  and capability evidence unless a future explicit export/promotion operation
+  is authorized.
+- `recall.mode = global` (default): search all non-isolated episodes, bounded
+  by time, score, and item budget, with an active-session continuity boost.
+- `recall.mode = session`: recall only the active session. This requires a
+  session ID but does not retroactively change the visibility of older rows.
+- `recall.mode = none`: assemble no episodic context for this cycle. The new
+  episode is still recorded with its configured visibility and provenance.
+
+An isolated session may use a teacher for its current answer, but may not
+silently mutate the global graph, ranker, procedures, capability store, or
+regression suite. Any reusable lesson it produces remains a provisional
+session-local artifact until a future explicit, locally revalidated promotion
+operation crosses that boundary. The first implementation may conservatively
+disable isolated-session learning if a complete session-local overlay is not
+yet available.
+
+Global recall means “eligible retrieval pool,” not “copy all history into the
+prompt.” Candidate generation remains bounded and ranked using entity
+relevance, learned recall score, same-session continuity, recency, and frequency.
+`lookback`, `maxEpisodes`, and the cycle's existing context budget provide hard
+limits. The effective item count is the minimum of all applicable caps.
+
+SQLite migration must be additive and backward compatible:
+
+- Existing episodes deserialize with `session_id = null` and global visibility.
+- Add indexed query columns for session, visibility, turn, and creation time;
+  preserve the immutable historical episode JSON rather than rewriting it.
+- New JSON fields use serde defaults so old databases and exported episodes
+  remain readable.
+- Backfill indexes transactionally and idempotently; interruption must leave a
+  database that can be reopened and resumed.
+- Episode queries gain explicit visibility/session filters. Internal callers
+  must choose a recall policy; they may not accidentally use an unfiltered
+  “recent rows” helper for reasoning.
+
+**Deliverable**: Existing databases continue to provide global recall without
+migration surprises; session continuity improves ranking; isolated episodes
+cannot influence any global reasoning, learning, metric, or promotion path.
+
+### P7.4 - Public Runtime and Human CLI
+
+**Implementation status**: Implemented for `ask`, `chat`, session lifecycle,
+recall flags, permission-mode flags, and human-readable configuration/admin
+surfaces.
+
+Carry the resolved policy through the same public path a user exercises:
+CLI -> SDK -> JSON-RPC server -> `CycleInput` -> context assembly -> episode
+recording. The server records the effective non-secret recall policy and config
+fingerprint in episode provenance so an explanation can say why a memory was
+or was not eligible.
+
+Public commands and flags:
+
+```text
+spoon chat
+spoon chat --session <id-or-name>
+spoon session start [--name <name>] [--isolated]
+spoon session list
+spoon session show <id-or-name>
+spoon session end <id-or-name>
+spoon ask --session <id-or-name> "..."
+spoon ask --session <id-or-name> --recall session "..."
+spoon ask --recall none "..."
+```
+
+`spoon chat` is the simple human interface: it starts or resumes a session,
+prints concise answers by default, and offers the existing explain view on
+demand. A normal chat session remains globally recallable. `--isolated` is
+visibly marked in the prompt/header and cannot be toggled off for that session
+after episodes exist; avoiding a leaky boundary is more important than
+convenience.
+
+The SDK exposes the same typed `Session`, `SessionVisibility`, `RecallMode`, and
+`RecallPolicy` values. RPC methods cover session lifecycle and filtered episode
+views. Inspector and CLI explanations display the active session, recall mode,
+lookback/cap, candidate counts by source, exclusions caused by isolation, and
+the selected memories without exposing redacted content. Isolated sessions are
+absent from default/global listings and metrics, but remain inspectable through
+an explicit request for that session by the local operator.
+
+**Deliverable**: A user can chat naturally across process restarts, inspect
+what Spoon remembered and why, deliberately run without episodic recall, or
+create a provably isolated conversation without changing databases manually.
+
+### P7.5 - Conversational Public Benchmarks
+
+**Implementation status**: Ordered conversational fixtures are validated and
+executed through public `session start` and `ask` subprocesses, with separate
+Teacher-ON acquisition and Teacher-OFF retention sessions and per-turn reports.
+
+Extend the benchmark JSON Schema with ordered conversations while retaining
+the existing single-prompt format. A case may contain setup variables and a
+sequence of turns, each with a user prompt, optional expected answer/regex,
+disposition requirements, teacher-use requirements, and memory assertions.
+Later prompts may interpolate captured public outputs but may not query engine
+internals to construct an answer.
+
+Conversational acquisition/retention follows the same public-entrypoint rule:
+
+1. Teacher ON conversation in a fresh named session.
+2. Teacher OFF exact replay in a new process against the same database, using
+   either the same global memory pool or an explicitly declared session mode.
+3. Teacher OFF paraphrased conversation after exact replay passes.
+4. Isolation probes run a control conversation outside the isolated session
+   and must demonstrate non-recall, not merely a different answer.
+
+Reports group results by conversation, pass/fail each turn, identify the first
+memory-dependent failure, and show teacher calls, learned/reused artifacts,
+episode IDs, session IDs, recall policy, and skipped downstream gates. Fixture
+validation rejects ambiguous cases such as `recall: session` without a session
+or an isolation assertion that reuses the isolated session.
+
+**Deliverable**: Multi-turn learning, durable conversational continuity,
+teacher weaning, paraphrase transfer, and isolation non-leakage are all tested
+through `spoon ask`/`spoon chat` rather than direct engine answer APIs.
+
+### P7.6 - Safety, Migration, and Usability Gate
+
+**Implementation status**: Core migration, isolation, permission-mode, and
+CLI regression coverage is green; the broader adversarial matrix remains the
+remaining Phase 7 hardening gate.
+
+Required test matrix:
+
+- Precedence tests for defaults, home, multiple parents, local override, env,
+  and flags; source annotations must identify the winner.
+- Relocation, symlink, malformed JSON, unknown key, unsupported version,
+  invalid duration, and partial-file tests.
+- Security tests proving repository config cannot grant capabilities, increase
+  hard limits, escape the project with a machine path, select an arbitrary
+  executable, inject a secret, or reveal a redacted value.
+- Administration tests proving schema-only typed patching, atomic recovery,
+  source-correct edits, redacted receipts, and correct immediate/restart
+  behavior. Teacher responses, imported capabilities, benchmark prompts, and
+  recalled episode text must all fail to authorize a mutation or grant.
+- Permission-mode tests covering `ask`, workspace path containment, full-access
+  prompt bypass, one-chat versus persistent scope, visible mode indicators,
+  immediate emergency downgrade, mandatory denials, and rejection of project-
+  supplied elevation. Full access must not bypass undeclared-effect, quarantine,
+  validation, budget, provenance, control-plane, or operating-system limits.
+- Natural-language tests for deterministic local intents and teacher-assisted
+  interpretation, covering config explanation, teacher disablement, recall
+  changes, database-pointer proposals, narrow permission grants, and revocation.
+- Old-database migration, interrupted migration/reopen, mixed old/new episode,
+  and deterministic turn-order tests.
+- Global-default, same-session boost, session-only, recall-none, lookback, and
+  budget-bound retrieval tests.
+- Adversarial cross-session tests across context assembly, learned ranking,
+  self-supervision, consolidation, regression promotion, metrics, inspector,
+  export, and capability provenance. Isolated content must not affect any
+  global output, count, score, or learned artifact.
+- End-to-end public CLI tests spanning fresh processes and conversational
+  benchmark acquisition/exact-retention/paraphrase gates.
+
+Human documentation is part of the gate: root, CLI, SDK, server, episode,
+reason, benchmark, and inspector READMEs explain configuration precedence,
+global memory, isolation, recall-off semantics, privacy limitations, migration,
+and copy-paste examples. Documentation must explicitly say that isolation is a
+retrieval/learning boundary inside a local Spoon instance, not encryption or an
+operating-system security boundary.
+
+### P7 Exit Criteria
+
+- The effective configuration is deterministic, redacted, explainable, and
+  identical across CLI/server/benchmark local launches.
+- Project configuration cannot create authority, carry secrets, or relax local
+  safety policy.
+- Through `ask`/`chat`, Spoon can explain and update every supported setting
+  through schema-bound native operations, with an auditable receipt and no
+  general-purpose access to its policy files.
+- Permission requests/constraints are visible in effective config, while
+  actual grants remain local, scoped, revocable, identity-bound, and impossible
+  for a teacher or capability to authorize.
+- Workspace and full-access modes remove repetitive capability prompts when the
+  local user opts in, remain visibly active, and can be downgraded immediately;
+  no repository, teacher, imported bundle, or learned procedure can enable or
+  preserve the elevated mode.
+- Normal sessions retain global episodic continuity across restarts.
+- Recall remains bounded; “global” never means unbounded prompt injection.
+- Recall can be disabled without suppressing episode recording.
+- Isolated session data produces zero influence outside its session across
+  reasoning, learning, promotion, global metrics/default inspection, and
+  export paths; explicit local inspection of that session remains possible.
+- Multi-turn teacher ON -> teacher OFF exact -> teacher OFF paraphrase suites
+  run through public user entrypoints and report per-turn retention clearly.
+- Existing databases migrate without rewriting or losing historical episodes.
+
+---
+
 ## Open Problems (from Appendix D)
 
 Ranked by likelihood of sinking the project:
@@ -813,6 +1752,9 @@ Ranked by likelihood of sinking the project:
 10. Discriminating feature discovery for scope refinement (P2.6)
 11. Safe interface discovery under adversarial schemas and responses (P5.3)
 12. Portable reconstruction across runtime and environment drift (P5.4)
+13. Recall contamination across long-lived global histories (P7.3)
+14. Session isolation across indirect learning and metric side channels (P7.6)
+15. Hierarchical config provenance and authority composition (P7.1-P7.2)
 
 These are where the experiment produces information regardless of outcome.
 
@@ -834,6 +1776,9 @@ P4.1 -> P4.2 -> P4.3 -> P4.4 -> P4.5              (consolidation, ~3-4 weeks)
 P5.1 -> P5.2 -> P5.3 -> P5.4 -> P5.5               (curiosity + capability,
                                   |                  ~5-8 weeks)
 P6.1 -> P6.2                                       (inspector, ~2-3 weeks)
+                          |
+P7.1 -> P7.2 -> P7.3 -> P7.4 -> P7.5 -> P7.6       (configuration + sessions,
+                                                     ~3-5 weeks)
 ```
 
 P6 (inspector) can start alongside P1 and grow incrementally - you'll want
@@ -842,6 +1787,13 @@ solo-developer pace.
 
 Total rough estimate: 6-9 months to a working system that can measure
 whether the flywheel turns. This is aggressive but not insane.
+
+Phase 7 is a follow-on estimate of roughly 3-5 weeks at solo-developer pace.
+Its safe order is resolver/schema first, native administration and authorization
+second, session storage third, public wiring fourth, conversational benchmarks
+fifth, and the cross-cutting leakage audit last. Once the shared config/session
+wire types are fixed, P7.2 administration fixtures and P7.3's Rust migration
+can proceed in parallel, but P7.4 must integrate both before P7.5 begins.
 
 ## What Success Looks Like
 

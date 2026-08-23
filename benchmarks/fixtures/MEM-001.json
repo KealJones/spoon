@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "MEM-001",
+  "title": "Long-Term Episodic Memory",
+  "suite": "memory-reconciliation",
+  "family": "MEM",
+  "track": "memory-reconciliation",
+  "claimTested": "Spoon can retain a relevant episodic fact and report its provenance rather than fabricate a memory.",
+  "setup": {"session": "memory-acquisition", "requiresDelay": true},
+  "phases": [
+    {
+      "id": "acquisition",
+      "order": 1,
+      "purpose": "Record the constraint in an episode.",
+      "teacher": {"mode": "on"},
+      "input": {"prompt": "We're calling this thing Project Marbles. The important constraint is that it can't depend on internet access."},
+      "expectedOutcome": {"type": "action", "criteria": ["records Project Marbles and its offline constraint"]}
+    },
+    {
+      "id": "retention",
+      "order": 2,
+      "purpose": "Recall the constraint after a process boundary with Teacher removed.",
+      "teacher": {"mode": "off"},
+      "input": {"prompt": "What was the constraint on Project Marbles?"},
+      "expectedOutcome": {"type": "memory_recall", "criteria": ["recalls no internet dependency", "distinguishes remembered evidence from inference"]}
+    },
+    {
+      "id": "provenance",
+      "order": 3,
+      "purpose": "Ask for source attribution rather than only the remembered content.",
+      "teacher": {"mode": "off"},
+      "input": {"prompt": "Was that something I told you, or something you inferred?"},
+      "expectedOutcome": {"type": "attribution", "criteria": ["identifies the remembered statement as user-provided or reports uncertainty"]}
+    }
+  ]
+}

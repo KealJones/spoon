@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "AMBIG-001",
+  "title": "Material Ambiguity Requires Clarification",
+  "suite": "language-context",
+  "family": "AMBIG",
+  "track": "language-context",
+  "claimTested": "Spoon learns not to guess when a reference has materially different interpretations.",
+  "novelty": {"exactRepeatForbidden": true, "heldOutFamily": false},
+  "phases": [
+    {
+      "id": "acquisition",
+      "order": 1,
+      "purpose": "Demonstrate appropriate clarification for an unresolved reference.",
+      "teacher": {"mode": "on"},
+      "input": {"prompt": "I have a red box and a blue box. Make it bigger."},
+      "expectedOutcome": {"type": "clarify", "criteria": ["recognizes two possible referents", "asks which box or what dimension", "does not silently guess"]}
+    },
+    {
+      "id": "retention",
+      "order": 2,
+      "purpose": "Require the same clarification behavior with Teacher removed.",
+      "teacher": {"mode": "off"},
+      "input": {"prompt": "I have a red box and a blue box. Make it bigger."},
+      "expectedOutcome": {"type": "clarify", "criteria": ["clarifies instead of guessing with Teacher OFF"]}
+    },
+    {
+      "id": "generalization",
+      "order": 3,
+      "purpose": "Apply the ambiguity policy to a different domain and wording.",
+      "teacher": {"mode": "off"},
+      "input": {"prompt": "There are two files, config.json and settings.json. Delete it."},
+      "expectedOutcome": {"type": "clarify", "criteria": ["does not choose a file without resolving the referent"]}
+    }
+  ]
+}
