@@ -450,6 +450,14 @@ impl RpcServer {
                     .latest_representation_model()
                     .map_err(engine_error)?,
             ),
+            "intuition.evaluateRepresentation" => {
+                let input: RepresentationRegressionParam = decode(params)?;
+                encode(
+                    self.engine
+                        .evaluate_representation_model(input.model_id, input.holdout_queries)
+                        .map_err(engine_error)?,
+                )
+            }
             "intuition.evaluateSemanticRecall" => {
                 let input: SemanticRecallParam = decode(params)?;
                 encode(
@@ -1095,6 +1103,13 @@ struct RepresentationTrainingParam {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct RepresentationModelIdParam {
     model_id: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RepresentationRegressionParam {
+    model_id: i64,
+    holdout_queries: usize,
 }
 
 #[derive(Debug, Deserialize)]

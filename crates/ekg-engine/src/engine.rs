@@ -1552,6 +1552,16 @@ impl Engine {
         Ok(self.intuition.activate_representation_model(model_id)?)
     }
 
+    pub fn evaluate_representation_model(
+        &self,
+        model_id: i64,
+        holdout_queries: usize,
+    ) -> Result<ekg_intuition::RepresentationRegressionEvaluation, EngineError> {
+        Ok(self
+            .intuition
+            .evaluate_representation_model(model_id, holdout_queries)?)
+    }
+
     pub fn latest_representation_model(
         &self,
     ) -> Result<Option<ekg_intuition::RepresentationModel>, EngineError> {

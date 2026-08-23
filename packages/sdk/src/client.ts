@@ -47,6 +47,7 @@ import type {
   RefineContradictionInput,
   RankingEvaluation,
   RepresentationModel,
+  RepresentationRegressionEvaluation,
   ReconstructedCapability,
   RelationshipRecord,
   SemanticRecallEvaluation,
@@ -418,6 +419,16 @@ export class EkgClient {
     return this.transport.request<RepresentationModel | null>(
       "intuition.latestRepresentation",
       {},
+    );
+  }
+
+  evaluateRepresentationModel(
+    modelId: number,
+    holdoutQueries: number,
+  ): Promise<RepresentationRegressionEvaluation> {
+    return this.transport.request<RepresentationRegressionEvaluation>(
+      "intuition.evaluateRepresentation",
+      { modelId, holdoutQueries },
     );
   }
 

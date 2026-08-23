@@ -308,6 +308,19 @@ export interface RepresentationModel {
   createdAt: number;
 }
 
+export interface RepresentationRegressionEvaluation {
+  id: number;
+  modelId: number;
+  heldOutQueries: number;
+  heldOutSuccesses: number;
+  baselineScoredSuccesses: number;
+  candidateScoredSuccesses: number;
+  baselineMeanRank?: number | null;
+  candidateMeanRank?: number | null;
+  preservesSearch: boolean;
+  createdAt: number;
+}
+
 export interface SemanticRecallEvaluation {
   id: number;
   candidateLimit: number;

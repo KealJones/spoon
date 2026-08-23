@@ -172,6 +172,26 @@ pub struct RepresentationModel {
     pub created_at: i64,
 }
 
+/// Offline evidence used before a representation/search policy may become
+/// active.  This is deliberately separate from the model artifact: producing
+/// a model is not permission to change retrieval behavior.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RepresentationRegressionEvaluation {
+    pub id: i64,
+    pub model_id: i64,
+    pub held_out_queries: u64,
+    pub held_out_successes: u64,
+    pub baseline_scored_successes: u64,
+    pub candidate_scored_successes: u64,
+    pub baseline_mean_rank: Option<f64>,
+    pub candidate_mean_rank: Option<f64>,
+    /// True only when the candidate does not lose either held-out coverage or
+    /// successful-candidate rank against the unmodified policy.
+    pub preserves_search: bool,
+    pub created_at: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SupervisionTask {
     pub id: i64,
@@ -357,6 +377,21 @@ impl IntuitionStore {
              );
              CREATE INDEX IF NOT EXISTS idx_representation_models_created
                  ON representation_models(created_at DESC);
+             CREATE TABLE IF NOT EXISTS representation_regression_evaluations (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 model_id INTEGER NOT NULL,
+                 held_out_queries INTEGER NOT NULL,
+                 held_out_successes INTEGER NOT NULL,
+                 baseline_scored_successes INTEGER NOT NULL,
+                 candidate_scored_successes INTEGER NOT NULL,
+                 baseline_mean_rank REAL,
+                 candidate_mean_rank REAL,
+                 preserves_search INTEGER NOT NULL,
+                 created_at INTEGER NOT NULL,
+                 FOREIGN KEY(model_id) REFERENCES representation_models(id)
+             );
+             CREATE INDEX IF NOT EXISTS idx_representation_regressions_model
+                 ON representation_regression_evaluations(model_id, id DESC);
              CREATE TABLE IF NOT EXISTS intuition_stats (
                  id INTEGER PRIMARY KEY CHECK (id = 1),
                  retrieval_queries INTEGER NOT NULL DEFAULT 0,
@@ -509,6 +544,21 @@ impl IntuitionStore {
         } else {
             direct_semantic_features(query)
         };
+        self.candidates_for_query_with_features(
+            query,
+            candidate_limit,
+            track_retrieval,
+            semantic_features,
+        )
+    }
+
+    fn candidates_for_query_with_features(
+        &self,
+        _query: &str,
+        candidate_limit: usize,
+        track_retrieval: bool,
+        semantic_features: BTreeMap<String, f64>,
+    ) -> Result<Vec<RecallCandidate>, IntuitionError> {
         if semantic_features.is_empty() {
             return Ok(Vec::new());
         }
@@ -1008,6 +1058,17 @@ impl IntuitionStore {
                 "representation model not found".into(),
             ));
         }
+        let Some(regression) = self.latest_representation_regression(id)? else {
+            return Err(IntuitionError::Invalid(
+                "representation model requires an offline held-out regression evaluation before activation".into(),
+            ));
+        };
+        if !regression.preserves_search {
+            return Err(IntuitionError::Invalid(format!(
+                "representation model failed held-out search regression (evaluation {})",
+                regression.id
+            )));
+        }
         self.conn
             .execute("UPDATE representation_models SET activated = 0", [])?;
         self.conn.execute(
@@ -1017,6 +1078,128 @@ impl IntuitionStore {
         self.representation_model(id)?.ok_or_else(|| {
             IntuitionError::Invalid("representation model activation was not readable".into())
         })
+    }
+
+    /// Compare a proposed representation artifact with the currently active
+    /// policy on a chronological held-out suffix of successful retrieval
+    /// outcomes. This is intentionally offline and bounded; activation is
+    /// refused unless this evidence has been persisted and shows no loss.
+    pub fn evaluate_representation_model(
+        &self,
+        model_id: i64,
+        holdout_queries: usize,
+    ) -> Result<RepresentationRegressionEvaluation, IntuitionError> {
+        if holdout_queries == 0 || holdout_queries > MAX_RANKING_EVALUATION_HOLDOUT {
+            return Err(IntuitionError::Invalid(format!(
+                "representation regression holdout must be 1..={MAX_RANKING_EVALUATION_HOLDOUT}"
+            )));
+        }
+        let model = self
+            .representation_model(model_id)?
+            .ok_or_else(|| IntuitionError::Invalid("representation model not found".into()))?;
+        let mut statement = self.conn.prepare(
+            "SELECT query FROM recall_ranking_examples
+             GROUP BY query ORDER BY MAX(id) DESC, query ASC LIMIT ?1",
+        )?;
+        let mut queries = statement
+            .query_map(params![holdout_queries as i64], |row| {
+                row.get::<_, String>(0)
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        if queries.is_empty() {
+            return Err(IntuitionError::Invalid(
+                "representation regression requires ranking examples".into(),
+            ));
+        }
+        queries.sort();
+        let query_set = queries
+            .iter()
+            .map(|query| format!("'{}'", query.replace('\'', "''")))
+            .collect::<Vec<_>>()
+            .join(",");
+        let mut successes = self.conn.prepare(&format!(
+            "SELECT query, candidate_id FROM recall_ranking_examples
+             WHERE query IN ({query_set}) AND used = 1 AND succeeded = 1
+             ORDER BY id DESC LIMIT {MAX_SEMANTIC_EVALUATION_EXAMPLES}"
+        ))?;
+        let successes = successes
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut baseline_scored_successes = 0u64;
+        let mut candidate_scored_successes = 0u64;
+        let mut baseline_rank_total = 0u64;
+        let mut candidate_rank_total = 0u64;
+        for (query, candidate_id) in &successes {
+            let mut baseline_features = self.unmodified_semantic_features(query)?;
+            self.apply_active_representation_model(&mut baseline_features)?;
+            let mut candidate_features = self.unmodified_semantic_features(query)?;
+            self.apply_representation_model(&mut candidate_features, &model);
+            let baseline =
+                self.candidates_for_query_with_features(query, 128, false, baseline_features)?;
+            let candidate =
+                self.candidates_for_query_with_features(query, 128, false, candidate_features)?;
+            if let Some(rank) = baseline.iter().position(|item| &item.id == candidate_id) {
+                baseline_scored_successes += 1;
+                baseline_rank_total += rank as u64 + 1;
+            }
+            if let Some(rank) = candidate.iter().position(|item| &item.id == candidate_id) {
+                candidate_scored_successes += 1;
+                candidate_rank_total += rank as u64 + 1;
+            }
+        }
+        let baseline_mean_rank = (baseline_scored_successes > 0)
+            .then(|| baseline_rank_total as f64 / baseline_scored_successes as f64);
+        let candidate_mean_rank = (candidate_scored_successes > 0)
+            .then(|| candidate_rank_total as f64 / candidate_scored_successes as f64);
+        let preserves_search = candidate_scored_successes >= baseline_scored_successes
+            && candidate_mean_rank
+                .zip(baseline_mean_rank)
+                .is_some_and(|(candidate, baseline)| candidate <= baseline)
+            && candidate_scored_successes > 0;
+        let created_at = unix_time();
+        self.conn.execute(
+            "INSERT INTO representation_regression_evaluations
+             (model_id, held_out_queries, held_out_successes,
+              baseline_scored_successes, candidate_scored_successes,
+              baseline_mean_rank, candidate_mean_rank, preserves_search, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![
+                model_id,
+                queries.len() as i64,
+                successes.len() as i64,
+                baseline_scored_successes as i64,
+                candidate_scored_successes as i64,
+                baseline_mean_rank,
+                candidate_mean_rank,
+                i64::from(preserves_search),
+                created_at,
+            ],
+        )?;
+        self.latest_representation_regression(model_id)?
+            .ok_or_else(|| {
+                IntuitionError::Invalid("representation regression insert was not readable".into())
+            })
+    }
+
+    pub fn latest_representation_regression(
+        &self,
+        model_id: i64,
+    ) -> Result<Option<RepresentationRegressionEvaluation>, IntuitionError> {
+        self.conn
+            .query_row(
+                "SELECT id, model_id, held_out_queries, held_out_successes,
+                        baseline_scored_successes, candidate_scored_successes,
+                        baseline_mean_rank, candidate_mean_rank, preserves_search,
+                        created_at
+                 FROM representation_regression_evaluations
+                 WHERE model_id = ?1 ORDER BY id DESC LIMIT 1",
+                params![model_id],
+                row_to_representation_regression,
+            )
+            .optional()
+            .map_err(IntuitionError::from)
     }
 
     pub fn latest_representation_model(
@@ -1333,6 +1516,18 @@ impl IntuitionStore {
     }
 
     fn semantic_features(&self, query: &str) -> Result<BTreeMap<String, f64>, IntuitionError> {
+        let mut features = self.unmodified_semantic_features(query)?;
+        self.apply_active_representation_model(&mut features)?;
+        Ok(features)
+    }
+
+    /// Builds the bounded local-semantic query representation without reading
+    /// the active artifact. Offline candidate evaluation uses this to compare
+    /// a proposed artifact with the incumbent policy in the same process.
+    fn unmodified_semantic_features(
+        &self,
+        query: &str,
+    ) -> Result<BTreeMap<String, f64>, IntuitionError> {
         let mut features = direct_semantic_features(query);
         if features.is_empty() {
             return Ok(features);
@@ -1367,7 +1562,6 @@ impl IntuitionStore {
             let weight = SEMANTIC_EXPANSION_WEIGHT * occurrences as f64 / maximum_occurrences;
             features.entry(term).or_insert(weight);
         }
-        self.apply_active_representation_model(&mut features)?;
         Ok(features)
     }
 
@@ -1484,13 +1678,21 @@ impl IntuitionStore {
         let Some(model) = self.active_representation_model()? else {
             return Ok(());
         };
+        self.apply_representation_model(features, &model);
+        Ok(())
+    }
+
+    fn apply_representation_model(
+        &self,
+        features: &mut BTreeMap<String, f64>,
+        model: &RepresentationModel,
+    ) {
         for (term, feature_weight) in features {
             let learned_term_weight = model.term_weights.get(term).copied().unwrap_or(0.0);
             // Activation may only reweight already bounded local features; it
             // cannot introduce remote terms, documents, beliefs, or trust.
             *feature_weight *= 1.0 + learned_term_weight.clamp(0.0, 2.0);
         }
-        Ok(())
     }
 
     fn candidate_success_rate(
@@ -1632,6 +1834,23 @@ fn row_to_representation_model(row: &rusqlite::Row<'_>) -> rusqlite::Result<Repr
             )
         })?,
         created_at: row.get(7)?,
+    })
+}
+
+fn row_to_representation_regression(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<RepresentationRegressionEvaluation> {
+    Ok(RepresentationRegressionEvaluation {
+        id: row.get(0)?,
+        model_id: row.get(1)?,
+        held_out_queries: row.get::<_, i64>(2)? as u64,
+        held_out_successes: row.get::<_, i64>(3)? as u64,
+        baseline_scored_successes: row.get::<_, i64>(4)? as u64,
+        candidate_scored_successes: row.get::<_, i64>(5)? as u64,
+        baseline_mean_rank: row.get(6)?,
+        candidate_mean_rank: row.get(7)?,
+        preserves_search: row.get::<_, i64>(8)? != 0,
+        created_at: row.get(9)?,
     })
 }
 
@@ -2237,6 +2456,23 @@ mod tests {
     #[test]
     fn representation_training_is_bounded_versioned_and_separate_from_beliefs() {
         let store = IntuitionStore::in_memory().unwrap();
+        store
+            .index_document(&document(
+                "double-7",
+                RecallKind::Concept,
+                "double 7 guide",
+                1,
+            ))
+            .unwrap();
+        store
+            .record_ranking_example(&RankingExample {
+                query: "double 7".into(),
+                candidate_id: "double-7".into(),
+                used: true,
+                succeeded: true,
+                rung: 1,
+            })
+            .unwrap();
         for situation in ["double 7", "double 8", "weather now"] {
             store
                 .generate_self_supervision(
@@ -2253,8 +2489,27 @@ mod tests {
         assert_eq!(model.held_out_tasks, 1);
         assert!(!model.model_version.is_empty());
         assert!(!model.activated);
+        let regression = store.evaluate_representation_model(model.id, 1).unwrap();
+        assert!(regression.preserves_search);
         let activated = store.activate_representation_model(model.id).unwrap();
         assert!(activated.activated);
+    }
+
+    #[test]
+    fn representation_activation_requires_offline_regression_evidence() {
+        let store = IntuitionStore::in_memory().unwrap();
+        store
+            .generate_self_supervision(
+                Some("trusted-episode"),
+                serde_json::json!({"situation":"double 7"}),
+                serde_json::json!({"target":"double 7"}),
+                "predict_validated_interpretation",
+                true,
+            )
+            .unwrap();
+        let model = store.train_representation_model(1).unwrap();
+        let error = store.activate_representation_model(model.id).unwrap_err();
+        assert!(error.to_string().contains("offline held-out regression"));
     }
 
     #[test]
@@ -2286,6 +2541,21 @@ mod tests {
         let artifact = store.train_representation_model(1).unwrap();
         assert!(artifact.term_weights["alpha"] > 0.0);
         assert!(!artifact.activated);
+        store
+            .record_ranking_example(&RankingExample {
+                query: "alpha beta".into(),
+                candidate_id: "z-alpha".into(),
+                used: true,
+                succeeded: true,
+                rung: 1,
+            })
+            .unwrap();
+        assert!(
+            store
+                .evaluate_representation_model(artifact.id, 1)
+                .unwrap()
+                .preserves_search
+        );
         store.activate_representation_model(artifact.id).unwrap();
 
         // Activation affects only bounded existing query features. The alpha
