@@ -115,7 +115,7 @@ test("episode narrative unwraps nested teacher observations", () => {
     id: "episode-observation",
     situation: "first line of README",
     action: "teacher-observation:provisional",
-    prediction: "# EKG",
+    prediction: "# Spoon",
     observed_result: null,
     teacher_interaction: {
       request: { situation: "first line of README" },
@@ -127,7 +127,7 @@ test("episode narrative unwraps nested teacher observations", () => {
         },
         content: {
           proposalKind: "external_observation",
-          answer: "# EKG",
+          answer: "# Spoon",
         },
         validation: { status: "provisional" },
       },
@@ -141,10 +141,10 @@ test("episode narrative unwraps nested teacher observations", () => {
     source: "codex:gpt-5.6-sol",
     proposal: {
       proposalKind: "external_observation",
-      answer: "# EKG",
+      answer: "# Spoon",
     },
     proposalKind: "external_observation",
-    proposalSummary: "external observation: # EKG",
+    proposalSummary: "external observation: # Spoon",
     validation: { status: "provisional" },
   });
   assert.deepEqual(detail.narrative.learning, {
