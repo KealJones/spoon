@@ -121,6 +121,8 @@ export interface MetricsSnapshot {
     postPromotionSkillUses: number;
     postPromotionSkillSuccesses: number;
   };
+  /** Immutable benchmark/probe evidence. Metrics with too little evidence say so explicitly. */
+  section38: Section38TelemetrySnapshot;
   intuition: {
     indexedDocuments: number;
     invertedTermRows: number;
@@ -135,6 +137,77 @@ export interface MetricsSnapshot {
     groundedTasks: number;
     groundingRatio: number;
   };
+}
+
+export type ProbeCohort = "training" | "heldOut";
+export type TeacherMode = "on" | "off" | "optional";
+export type GroundingTier = "none" | "teacher" | "soft" | "strong";
+export type MetricEvidenceStatus = "measured" | "insufficientEvidence";
+
+export interface FalsificationRunInput {
+  label: string;
+  benchmark: string;
+  notes?: string | null;
+}
+
+export interface FalsificationRun extends FalsificationRunInput {
+  id: string;
+  createdAt: number;
+}
+
+export interface FalsificationMeasurementInput {
+  domain: string;
+  family: string;
+  cohort: ProbeCohort;
+  probeId: string;
+  noveltyIdentity: string;
+  repeatOf?: string | null;
+  teacherMode: TeacherMode;
+  teacherUsed: boolean;
+  teacherCalls: number;
+  rung: string;
+  steps: number;
+  candidates: number;
+  traceSteps: number;
+  cost: number;
+  abstained: boolean;
+  clarified: boolean;
+  confidence?: number | null;
+  groundingTier: GroundingTier;
+  usedSkillId?: string | null;
+  createdSkillId?: string | null;
+  correct?: boolean | null;
+  failureReason?: string | null;
+  baselineTraceSteps?: number | null;
+  regressionProbe?: boolean;
+  attributionCorrect?: boolean | null;
+  attributionCost?: number | null;
+}
+
+export interface FalsificationMeasurement extends FalsificationMeasurementInput {
+  id: string;
+  runId: string;
+  recordedAt: number;
+}
+
+export interface Section38Metric {
+  slot: number;
+  name: string;
+  status: MetricEvidenceStatus;
+  sampleSize: number;
+  value?: number | null;
+  detail: string;
+}
+
+export interface Section38TelemetrySnapshot {
+  runs: number;
+  measurements: number;
+  failures: number;
+  abstentions: number;
+  clarifications: number;
+  teacherOffViolationsRejected: number;
+  duplicateMeasurementsRejected: number;
+  metrics: Section38Metric[];
 }
 
 export interface RankingEvaluation {

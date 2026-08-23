@@ -13,8 +13,9 @@ use ekg_core::{
 use ekg_engine::{
     AdaptationPlanId, AdaptationPlanRequest, ApplyAdaptationRequest, CapabilityBundle,
     CuriosityGap, CycleBudget, CycleId, CycleInput, CycleOutcome, CycleProgress, Engine,
-    EngineError, FailureAnalysisRequest, GoalKind, InterfaceDescription, LocalValidation,
-    Permission, PromotionReplay, SkillCandidate, TeacherProposalWire,
+    EngineError, FailureAnalysisRequest, FalsificationMeasurementInput, FalsificationRunInput,
+    GoalKind, InterfaceDescription, LocalValidation, Permission, PromotionReplay, SkillCandidate,
+    TeacherProposalWire,
 };
 use ekg_episode::{EpisodeFeedback, EpisodeQuery, FeedbackSource};
 use ekg_graph::GraphError;
@@ -341,6 +342,22 @@ impl RpcServer {
                 )
             }
             "metrics.snapshot" => encode(self.engine.metrics_snapshot().map_err(engine_error)?),
+            "telemetry.createRun" => {
+                let input: FalsificationRunInput = decode(params)?;
+                encode(
+                    self.engine
+                        .create_falsification_run(input)
+                        .map_err(engine_error)?,
+                )
+            }
+            "telemetry.recordMeasurement" => {
+                let input: FalsificationMeasurementParam = decode(params)?;
+                encode(
+                    self.engine
+                        .record_falsification_measurement(&input.run_id, input.measurement)
+                        .map_err(engine_error)?,
+                )
+            }
             "primitive.observe" => {
                 let input: PrimitiveObserveParam = decode(params)?;
                 encode(
@@ -1095,6 +1112,13 @@ struct LimitParam {
 #[derive(Debug, Deserialize)]
 struct PrimitiveObserveParam {
     target: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct FalsificationMeasurementParam {
+    run_id: String,
+    measurement: FalsificationMeasurementInput,
 }
 
 pub fn run_stdio<R: BufRead, W: Write>(

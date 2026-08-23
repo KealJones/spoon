@@ -1,0 +1,36 @@
+{
+  "name": "section38-minimal-falsification-fixtures",
+  "purpose": "Small, deliberately non-production probe set for exercising Section 38 telemetry.",
+  "cases": [
+    {
+      "domain": "arithmetic",
+      "family": "doubles",
+      "cohort": "training",
+      "probeId": "train-1",
+      "noveltyIdentity": "double-2",
+      "teacherMode": "on",
+      "expected": "skill acquisition evidence"
+    },
+    {
+      "domain": "arithmetic",
+      "family": "doubles",
+      "cohort": "heldOut",
+      "probeId": "heldout-1",
+      "noveltyIdentity": "double-97",
+      "teacherMode": "off",
+      "expected": "held-out transfer evidence"
+    },
+    {
+      "probeId": "train-1",
+      "repeatOf": "runtime measurement id",
+      "teacherMode": "off",
+      "expected": "teacher-ablation pair; excluded from acquisition and transfer"
+    },
+    {
+      "probeId": "heldout-clarify",
+      "abstained": true,
+      "clarified": true,
+      "expected": "abstention reported separately from correctness"
+    }
+  ]
+}

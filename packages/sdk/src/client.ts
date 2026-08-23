@@ -25,6 +25,10 @@ import type {
   EkgClientOptions,
   FeedbackInput,
   FailureAnalysisInput,
+  FalsificationMeasurement,
+  FalsificationMeasurementInput,
+  FalsificationRun,
+  FalsificationRunInput,
   JsonValue,
   ImportedCapability,
   InterfaceDescription,
@@ -376,6 +380,20 @@ export class EkgClient {
 
   metricsSnapshot(): Promise<MetricsSnapshot> {
     return this.transport.request<MetricsSnapshot>("metrics.snapshot", {});
+  }
+
+  createFalsificationRun(input: FalsificationRunInput): Promise<FalsificationRun> {
+    return this.transport.request<FalsificationRun>("telemetry.createRun", input);
+  }
+
+  recordFalsificationMeasurement(
+    runId: string,
+    measurement: FalsificationMeasurementInput,
+  ): Promise<FalsificationMeasurement> {
+    return this.transport.request<FalsificationMeasurement>(
+      "telemetry.recordMeasurement",
+      { runId, measurement },
+    );
   }
 
   evaluateRecallRanking(

@@ -107,6 +107,9 @@ pub struct MetricsSnapshot {
     /// only persisted observations, not blanket claims of transfer, weaning,
     /// or regression freedom.
     pub phase6: Phase6EvidenceMetrics,
+    /// Immutable benchmark/probe evidence for the full Section 38 scorecard.
+    /// Empty/insufficient slots are explicit rather than scored optimistically.
+    pub section38: crate::Section38TelemetrySnapshot,
 }
 
 /// Durable, conservative evidence for the Phase 6 exit criteria.
@@ -151,6 +154,7 @@ pub struct Engine {
     pub(crate) capabilities: CapabilityStore,
     pub(crate) goals: crate::goals::GoalStore,
     pub(crate) skills: crate::skills::SkillStore,
+    pub(crate) telemetry: crate::telemetry::FalsificationTelemetryStore,
     pub(crate) instance_id: uuid::Uuid,
     pub(crate) admin_enabled: bool,
 }
@@ -175,6 +179,7 @@ impl Engine {
                 .map_err(|error| EngineError::InvalidInput(format!("capability store: {error}")))?,
             goals: crate::goals::GoalStore::open(path)?,
             skills: crate::skills::SkillStore::open(path)?,
+            telemetry: crate::telemetry::FalsificationTelemetryStore::open(path)?,
             instance_id: uuid::Uuid::new_v4(),
             admin_enabled: false,
         };
@@ -210,6 +215,7 @@ impl Engine {
                 .map_err(|error| EngineError::InvalidInput(format!("capability store: {error}")))?,
             goals: crate::goals::GoalStore::in_memory()?,
             skills: crate::skills::SkillStore::in_memory()?,
+            telemetry: crate::telemetry::FalsificationTelemetryStore::in_memory()?,
             instance_id: uuid::Uuid::new_v4(),
             admin_enabled: false,
         })
@@ -1225,7 +1231,27 @@ impl Engine {
             rung_distribution: self.episodes.rung_distribution()?,
             intuition: self.intuition.metrics()?,
             phase6,
+            section38: self.telemetry.snapshot()?,
         })
+    }
+
+    /// Starts an immutable benchmark/probe run. Measurements added to this run
+    /// are validated before persistence and cannot be edited in place.
+    pub fn create_falsification_run(
+        &self,
+        input: crate::FalsificationRunInput,
+    ) -> Result<crate::FalsificationRun, EngineError> {
+        self.telemetry.create_run(input)
+    }
+
+    /// Persists one falsification measurement. The telemetry store rejects
+    /// teacher-off leakage and undeclared exact repeats before accepting it.
+    pub fn record_falsification_measurement(
+        &self,
+        run_id: &str,
+        input: crate::FalsificationMeasurementInput,
+    ) -> Result<crate::FalsificationMeasurement, EngineError> {
+        self.telemetry.record(run_id, input)
     }
 
     pub fn observe_native_primitive(

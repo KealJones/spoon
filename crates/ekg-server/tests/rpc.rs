@@ -146,6 +146,11 @@ fn metrics_goals_and_curiosity_endpoints_are_bounded_and_camel_case() {
     assert_eq!(metrics["phase6"]["teacherInteractionEpisodes"], 0);
     assert_eq!(metrics["phase6"]["replayPreservedSkillVerdicts"], 0);
     assert_eq!(metrics["phase6"]["postPromotionSkillSuccesses"], 0);
+    assert_eq!(metrics["section38"]["measurements"], 0);
+    assert_eq!(
+        metrics["section38"]["metrics"].as_array().unwrap().len(),
+        12
+    );
     assert!(metrics["intuition"]["indexedDocuments"].is_number());
     let ranking = call(
         &mut server,
@@ -200,6 +205,49 @@ fn metrics_goals_and_curiosity_endpoints_are_bounded_and_camel_case() {
     );
     assert_eq!(clock["receipt"]["target"], "clock");
     assert_eq!(clock["output"]["source"], "native:clock");
+}
+
+#[test]
+fn falsification_telemetry_rpc_rejects_teacher_off_leakage_and_exposes_samples() {
+    let mut server = test_server();
+    let run = call(
+        &mut server,
+        901,
+        "telemetry.createRun",
+        json!({"label":"rpc telemetry", "benchmark":"unit"}),
+    );
+    let run_id = run["id"].as_str().unwrap();
+    let valid = json!({
+        "domain":"math", "family":"doubles", "cohort":"heldOut",
+        "probeId":"heldout-7", "noveltyIdentity":"double-7",
+        "teacherMode":"off", "teacherUsed":false, "teacherCalls":0,
+        "rung":"Direct", "steps":1, "candidates":1, "traceSteps":1,
+        "cost":1.0, "abstained":false, "clarified":false,
+        "confidence":0.9, "groundingTier":"strong", "usedSkillId":"double",
+        "correct":true, "regressionProbe":true,
+        "attributionCorrect":true, "attributionCost":0.2
+    });
+    let recorded = call(
+        &mut server,
+        902,
+        "telemetry.recordMeasurement",
+        json!({"runId":run_id, "measurement":valid}),
+    );
+    assert_eq!(recorded["runId"], run_id);
+    let metrics = call(&mut server, 903, "metrics.snapshot", json!({}));
+    assert_eq!(metrics["section38"]["measurements"], 1);
+    assert_eq!(metrics["section38"]["metrics"][1]["sampleSize"], 1);
+
+    let bad: Value = serde_json::from_str(&server.handle_line(
+        &json!({"jsonrpc":"2.0", "id":904, "method":"telemetry.recordMeasurement", "params":{"runId":run_id, "measurement":{
+          "domain":"math", "family":"doubles", "cohort":"training",
+          "probeId":"leak", "noveltyIdentity":"leak", "teacherMode":"off",
+          "teacherUsed":true, "teacherCalls":1, "rung":"Ask", "steps":1,
+          "candidates":1, "traceSteps":1, "cost":1.0, "abstained":false,
+          "clarified":false, "groundingTier":"teacher"
+        }}}).to_string(),
+    )).unwrap();
+    assert_eq!(bad["error"]["data"]["kind"], "application_error");
 }
 
 #[test]

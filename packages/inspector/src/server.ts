@@ -490,7 +490,10 @@ function html(response: ServerResponse): void {
 }
 
 export function inspectorHtml(): string {
-  return INDEX_HTML;
+  // Keep the human-facing Section 38 cards sourced from the same immutable
+  // probe store as the RPC snapshot. The legacy flywheel counters remain
+  // visible elsewhere, but cannot silently stand in for held-out evidence.
+  return INDEX_HTML.replace("</body>", `${SECTION38_RUNTIME_PATCH}</body>`);
 }
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -601,6 +604,23 @@ function learningSummary(action: string | undefined): string {
     return "Learned or promoted reusable knowledge.";
   return `Recorded action: ${action}.`;
 }
+
+const SECTION38_RUNTIME_PATCH = `<script>
+async function renderSection38Telemetry(){
+  try{
+    const snapshot=await get('/api/metrics'),telemetry=snapshot.section38||{},slots=telemetry.metrics||[];
+    if(!slots.length)return;
+    $('metrics').innerHTML=slots.map(metric=>{
+      const measured=metric.status==='measured',status=measured?'Measured':'Insufficient evidence',value=metric.value===null||metric.value===undefined?'':(' Value: '+Number(metric.value).toFixed(3)+'.');
+      return '<div class="card metric-card"><div class="metric-head"><span class="muted">'+esc(metric.slot+'. '+metric.name)+'</span><span class="metric-status '+(measured?'measured':'partial')+'">'+esc(status)+'</span></div><span class="metric-detail">n='+esc(metric.sampleSize)+'. '+esc(metric.detail)+esc(value)+'</span></div>';
+    }).join('');
+    const tele=$('telemetry');
+    if(tele){tele.querySelectorAll('.section38-telemetry').forEach(node=>node.remove());tele.insertAdjacentHTML('afterbegin',[['Probe measurements',telemetry.measurements],['Probe failures',telemetry.failures],['Abstentions',telemetry.abstentions],['Clarifications',telemetry.clarifications],['Rejected teacher-off claims',telemetry.teacherOffViolationsRejected],['Rejected undeclared repeats',telemetry.duplicateMeasurementsRejected]].map(pair=>'<div class="card section38-telemetry"><span class="muted">'+esc(pair[0])+'</span><span class="value">'+esc(pair[1])+'</span></div>').join(''))}
+  }catch(error){/* The normal inspector refresh reports transport failures. */}
+}
+setTimeout(renderSection38Telemetry,50);
+document.getElementById('refresh')?.addEventListener('click',()=>setTimeout(renderSection38Telemetry,100));
+</script>`;
 
 const LEGACY_INDEX_HTML = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>EKG Inspector</title><style>

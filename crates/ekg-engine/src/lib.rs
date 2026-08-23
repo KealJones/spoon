@@ -11,6 +11,7 @@ mod lesson;
 mod regression;
 mod runtime;
 mod skills;
+mod telemetry;
 mod trust;
 mod view;
 
@@ -59,6 +60,11 @@ pub use regression::{
     RegressionSuiteVerdict, VerifiedAnswerRecord,
 };
 pub use skills::{ManagedSkill, SkillLifecycle};
+pub use telemetry::{
+    FalsificationMeasurement, FalsificationMeasurementInput, FalsificationRun,
+    FalsificationRunInput, GroundingTier, MetricEvidenceStatus, ProbeCohort, Section38Metric,
+    Section38TelemetrySnapshot, TeacherMode,
+};
 pub use trust::{TrustEvidenceKind, TrustReceipt};
 pub use view::{EpisodeView, GraphView};
 
