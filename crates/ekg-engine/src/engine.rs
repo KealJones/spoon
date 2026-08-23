@@ -876,8 +876,35 @@ impl Engine {
         skill_id: &str,
         replays: impl IntoIterator<Item = ekg_adapt::PromotionReplay>,
     ) -> Result<crate::ManagedSkill, EngineError> {
+        let skill = self.skills.get(skill_id)?.ok_or_else(|| {
+            EngineError::InvalidInput(format!("unknown managed skill {skill_id}"))
+        })?;
+        if skill.lifecycle != crate::SkillLifecycle::Candidate {
+            return Err(EngineError::InvalidInput(
+                "only a candidate skill may enter shadow evaluation".into(),
+            ));
+        }
         let replays: Vec<_> = replays.into_iter().collect();
+        let source_ids = skill
+            .candidate
+            .source_episode_ids
+            .iter()
+            .copied()
+            .collect::<HashSet<_>>();
+        let mut seen = HashSet::new();
         for replay in &replays {
+            if !source_ids.contains(&replay.episode_id) {
+                return Err(EngineError::InvalidInput(format!(
+                    "promotion replay episode {} is outside the candidate's derivation evidence",
+                    replay.episode_id
+                )));
+            }
+            if !seen.insert(replay.episode_id) {
+                return Err(EngineError::InvalidInput(format!(
+                    "promotion replay episode {} is duplicated",
+                    replay.episode_id
+                )));
+            }
             let episode = self.episodes.get(replay.episode_id)?;
             if !episode.succeeded() || self.trust.receipt_for_episode(&episode)?.is_none() {
                 return Err(EngineError::InvalidInput(format!(

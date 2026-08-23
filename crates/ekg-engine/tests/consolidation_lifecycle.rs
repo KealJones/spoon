@@ -134,7 +134,11 @@ fn trusted_candidate_moves_through_shadow_promotion_and_reconstructible_retireme
         .unwrap();
     assert_eq!(retired.lifecycle, SkillLifecycle::Retired);
     assert!(retired.retirement.unwrap().reconstructible);
-    assert_eq!(engine.list_managed_skills(8).unwrap()[0].id, managed.id);
+    assert!(engine
+        .list_managed_skills(8)
+        .unwrap()
+        .iter()
+        .any(|skill| skill.id == managed.id && skill.lifecycle == SkillLifecycle::Retired));
 }
 
 #[test]
