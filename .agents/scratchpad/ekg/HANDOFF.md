@@ -132,9 +132,10 @@ procedure, but there is not yet a learned skill-ranking policy or generalized
 neutral skill procedure representation. These are open implementation gaps, not
 claims of completion.
 
-Latest full gates before the current explanation-only patch (2026-08-22): workspace Rust tests/all targets, strict
-workspace Clippy, TypeScript tests, package builds, typecheck, depcheck, and
-diff checks pass. The only intentional tracked worktree modification is the
+Latest full gates after the explanation and Phase 6 test fixes (2026-08-22):
+workspace Rust tests/all targets, strict workspace Clippy, TypeScript tests,
+package builds, typecheck, depcheck, and diff checks pass. The only intentional
+tracked worktree modification is the
 pre-existing whitespace-only change in `crates/ekg-engine/src/runtime.rs`;
 user-owned untracked reference/archive files and agent scratchpads remain
 unstaged.
