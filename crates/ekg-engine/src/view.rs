@@ -53,6 +53,10 @@ impl GraphView<'_> {
         self.store.get_relationship(id)
     }
 
+    pub fn list_relationships(&self, limit: u32) -> Result<Vec<Relationship>, GraphError> {
+        self.store.list_relationships(limit)
+    }
+
     pub fn get_relationship_version(
         &self,
         id: RelationshipId,

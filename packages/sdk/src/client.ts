@@ -44,6 +44,7 @@ import type {
   RankingEvaluation,
   RepresentationModel,
   ReconstructedCapability,
+  RelationshipRecord,
   SemanticRecallEvaluation,
   RpcTransport,
   TeacherProposalWire,
@@ -99,6 +100,10 @@ export class EkgClient {
 
   getRelationship<T = unknown>(relationshipId: string): Promise<T> {
     return this.transport.request<T>("relationship.get", { relationshipId });
+  }
+
+  listRelationships<T = RelationshipRecord[]>(limit = 100): Promise<T> {
+    return this.transport.request<T>("relationship.list", { limit });
   }
 
   updateRelationship<T = unknown>(

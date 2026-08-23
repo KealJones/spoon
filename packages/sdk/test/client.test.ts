@@ -68,6 +68,7 @@ test("client maps every relationship and traversal RPC method with exact params"
 
   await client.createRelationship(createdRelationship);
   await client.getRelationship("relationship-1");
+  await client.listRelationships(25);
   await client.updateRelationship(updatedRelationship);
   await client.deleteRelationship("relationship-1");
   await client.traverse("concept-1", "implemented-by", 2);
@@ -78,6 +79,7 @@ test("client maps every relationship and traversal RPC method with exact params"
       method: "relationship.get",
       params: { relationshipId: "relationship-1" },
     },
+    { method: "relationship.list", params: { limit: 25 } },
     { method: "relationship.update", params: updatedRelationship },
     {
       method: "relationship.delete",

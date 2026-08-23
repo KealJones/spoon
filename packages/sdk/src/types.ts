@@ -7,6 +7,19 @@ export interface ConceptInput {
   [key: string]: JsonValue | undefined;
 }
 
+/** Wire shape returned by the bounded, read-only relationship collection. */
+export interface RelationshipRecord {
+  id: string;
+  source: string;
+  target: string;
+  kind: string;
+  strength: number;
+  scope: JsonValue[];
+  evidence: string[];
+  lifecycle: string;
+  created_at: number;
+}
+
 export interface EpisodeFilter {
   since?: number;
   until?: number;

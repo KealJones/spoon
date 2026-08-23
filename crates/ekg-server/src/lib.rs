@@ -192,6 +192,15 @@ impl RpcServer {
                         .map_err(app_error)?,
                 )
             }
+            "relationship.list" => {
+                let input: LimitParam = decode(params)?;
+                encode(
+                    self.engine
+                        .graph()
+                        .list_relationships(input.limit.unwrap_or(default_limit()))
+                        .map_err(app_error)?,
+                )
+            }
             "relationship.update" => {
                 let input: ReviseRelationshipParams = decode(params)?;
                 let version = self

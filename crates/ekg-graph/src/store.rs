@@ -26,6 +26,12 @@ const MAX_KNOWLEDGE_BUNDLE_CONCEPTS: usize = 8;
 const MAX_KNOWLEDGE_BUNDLE_RELATIONSHIPS: usize = 16;
 const MAX_KNOWLEDGE_BUNDLE_PROCEDURES: usize = 1;
 
+/// Maximum number of relationships returned by the bounded read collection.
+///
+/// The collection is intended for inspection and API consumers, so callers
+/// cannot accidentally turn it into an unbounded database read.
+pub const MAX_RELATIONSHIP_LIST_LIMIT: u32 = 1_024;
+
 fn bundle_reference_lifecycle(lifecycle: Lifecycle) -> bool {
     matches!(
         lifecycle,
@@ -883,6 +889,23 @@ impl KnowledgeStore {
             )
             .optional()?
             .transpose()
+    }
+
+    /// Returns a deterministic, bounded snapshot of current relationships.
+    ///
+    /// This is deliberately read-only. Requests above the hard limit are
+    /// capped rather than causing an unexpectedly large query.
+    pub fn list_relationships(&self, limit: u32) -> Result<Vec<Relationship>> {
+        let limit = limit.min(MAX_RELATIONSHIP_LIST_LIMIT);
+        let mut stmt = self.conn.prepare(
+            "SELECT id, source, target, kind, strength, scope_json, evidence_json, \
+                    lifecycle, created_at \
+             FROM relationships ORDER BY id LIMIT ?1",
+        )?;
+        let rows = stmt.query_map(params![i64::from(limit)], Self::relationship_from_row)?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()?
+            .into_iter()
+            .collect()
     }
 
     pub fn get_relationships_from(&self, concept_id: ConceptId) -> Result<Vec<Relationship>> {
@@ -2400,6 +2423,40 @@ mod tests {
 
         let all = store.list_concepts().unwrap();
         assert_eq!(all.len(), 2);
+    }
+
+    #[test]
+    fn list_relationships_is_bounded_deterministic_and_read_only() {
+        let store = KnowledgeStore::in_memory().unwrap();
+        let source = concept("source");
+        let target = concept("target");
+        store.insert_concept(&source).unwrap();
+        store.insert_concept(&target).unwrap();
+
+        let mut first = Relationship::new(source.id, target.id, "supports");
+        first.id = RelationshipId(Uuid::from_u128(1));
+        let mut second = Relationship::new(source.id, target.id, "tests");
+        second.id = RelationshipId(Uuid::from_u128(2));
+        store.insert_relationship(&second).unwrap();
+        store.insert_relationship(&first).unwrap();
+
+        let limited = store.list_relationships(1).unwrap();
+        assert_eq!(limited.len(), 1);
+        assert_eq!(limited[0].id, first.id);
+        assert!(store.list_relationships(0).unwrap().is_empty());
+        let all = store
+            .list_relationships(MAX_RELATIONSHIP_LIST_LIMIT + 1)
+            .unwrap();
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[0].id, first.id);
+        assert_eq!(all[1].id, second.id);
+
+        // A read collection must not alter either row or its version history.
+        let fetched_first = store.get_relationship(first.id).unwrap().unwrap();
+        assert_eq!(fetched_first.id, first.id);
+        assert_eq!(fetched_first.kind, first.kind);
+        assert_eq!(store.list_relationship_versions(first.id).unwrap().len(), 1);
+        assert_eq!(store.get_relationship(second.id).unwrap().unwrap().id, second.id);
     }
 
     #[test]

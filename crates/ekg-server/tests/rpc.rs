@@ -341,6 +341,72 @@ fn malformed_json_and_unknown_methods_return_json_rpc_errors() {
 }
 
 #[test]
+fn relationship_list_is_read_only_bounded_and_deterministic() {
+    let mut server = test_server();
+    let source = call(
+        &mut server,
+        1,
+        "concept.create",
+        json!({ "name": "SOURCE" }),
+    );
+    let target = call(
+        &mut server,
+        2,
+        "concept.create",
+        json!({ "name": "TARGET" }),
+    );
+    let first = call(
+        &mut server,
+        3,
+        "relationship.create",
+        json!({
+            "source": source["id"],
+            "target": target["id"],
+            "kind": "supports"
+        }),
+    );
+    let second = call(
+        &mut server,
+        4,
+        "relationship.create",
+        json!({
+            "source": source["id"],
+            "target": target["id"],
+            "kind": "tests"
+        }),
+    );
+
+    let limited = call(&mut server, 5, "relationship.list", json!({ "limit": 1 }));
+    assert_eq!(limited.as_array().unwrap().len(), 1);
+    let all = call(
+        &mut server,
+        6,
+        "relationship.list",
+        json!({ "limit": 10_000 }),
+    );
+    assert_eq!(all.as_array().unwrap().len(), 2);
+    let ids: Vec<&str> = all
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| row["id"].as_str().unwrap())
+        .collect();
+    assert!(ids[0] < ids[1]);
+
+    let empty = call(&mut server, 7, "relationship.list", json!({ "limit": 0 }));
+    assert_eq!(empty, json!([]));
+    let after = call(
+        &mut server,
+        8,
+        "relationship.get",
+        json!({ "relationshipId": first["id"] }),
+    );
+    assert_eq!(after["id"], first["id"]);
+    assert_eq!(after["kind"], first["kind"]);
+    assert_ne!(first["id"], second["id"]);
+}
+
+#[test]
 fn phase_two_requests_reject_unknown_snake_case_and_offline_capability_fields() {
     let mut server = test_server();
     let mut invalid_requests = vec![

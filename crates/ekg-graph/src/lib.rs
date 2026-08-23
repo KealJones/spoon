@@ -17,5 +17,6 @@ pub use error::{GraphError, Result};
 pub use store::{
     AppliedLifecycleChange, DependencyReport, DependencyTarget, Dependent, KnowledgeStore,
     LifecycleChange, LifecycleChangeReceipt, LifecycleChangeSet, LifecycleTarget,
-    ProcedureDependencyKind, RelationshipDependency, RelationshipDependencyDirection,
+    MAX_RELATIONSHIP_LIST_LIMIT, ProcedureDependencyKind, RelationshipDependency,
+    RelationshipDependencyDirection,
 };
