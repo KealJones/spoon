@@ -3,8 +3,10 @@ import test from "node:test";
 
 import {
   createInspectorServer,
+  knowledgeGraph,
   episodeDetail,
   inspectorHtml,
+  procedureDetail,
   redactSensitive,
 } from "../src/server.js";
 
@@ -219,4 +221,124 @@ test("episode detail endpoint is read-only and returns the redacted projection",
       teacher_interaction: { token: "[REDACTED]" },
     },
   });
+});
+
+test("knowledge projection keeps bounded nodes and edges while preserving relationships", () => {
+  const graph = knowledgeGraph(
+    [
+      { id: "c1", name: "addition", lifecycle: "active" },
+      { id: "c2", name: "numbers", lifecycle: "validated" },
+    ],
+    [{ id: "p1", name: "ADD", version: 2, concept: "c1" }],
+    [{ id: "r1", source: "c1", target: "c2", kind: "supports", strength: 0.9 }],
+    2,
+    1,
+  );
+
+  assert.equal(graph.nodes.length, 2);
+  assert.equal(graph.edges.length, 1);
+  assert.equal(graph.edges[0]?.kind, "supports");
+  assert.equal(graph.bounded, true);
+});
+
+test("inspector exposes graph, procedure history, contradictions, filtered episodes, and replay", async (t) => {
+  const server = createInspectorServer({
+    metricsSnapshot: async () => ({}),
+    listConcepts: async () => [{ id: "c1", name: "addition" }],
+    listProcedures: async () => [{ id: "p1", name: "ADD", version: 2 }],
+    listRelationships: async () => [
+      {
+        id: "r1",
+        source: "c1",
+        target: "p1",
+        kind: "implements",
+        token: "hide-me",
+      },
+    ],
+    listProcedureVersions: async () => [
+      { id: "p1", name: "ADD", version: 1 },
+      { id: "p1", name: "ADD", version: 2 },
+    ],
+    getProcedure: async () => ({
+      id: "p1",
+      name: "ADD",
+      contract: { preconditions: [] },
+      test_cases: [{ expected_output: 3 }],
+    }),
+    listContradictions: async () => [
+      {
+        id: 4,
+        status: "Held",
+        left: { statement: "a", supportingEpisodes: ["e1"] },
+        right: { statement: "not a", supportingEpisodes: ["e2"] },
+      },
+    ],
+    getContradiction: async () => ({
+      id: 4,
+      left: { statement: "a", apiKey: "do-not-show" },
+      right: { statement: "not a" },
+    }),
+    listEpisodes: async () => [
+      { id: "e1", situation: "double 7", action: "answer-only" },
+      { id: "e2", situation: "time", action: "teacher" },
+    ],
+    getEpisode: async (id) => ({ id, situation: "double 7" }),
+    replayEpisode: async (_id, substitutions) => ({
+      observed: 14,
+      substitutions,
+      token: "should-not-show",
+    }),
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(
+    () =>
+      new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      ),
+  );
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const base = `http://127.0.0.1:${address.port}`;
+
+  const graph = await (await fetch(`${base}/api/knowledge`)).json();
+  assert.equal(graph.edges[0].kind, "implements");
+  assert.equal(graph.edges[0].token, undefined);
+
+  const procedure = await (await fetch(`${base}/api/procedures/p1`)).json();
+  assert.equal(procedure.versions.length, 2);
+  assert.equal(procedure.procedure.contract.preconditions.length, 0);
+
+  const contradiction = await (
+    await fetch(`${base}/api/contradictions/4`)
+  ).json();
+  assert.equal(contradiction.left.apiKey, "[REDACTED]");
+
+  const episodes = await (await fetch(`${base}/api/episodes?q=double`)).json();
+  assert.deepEqual(
+    episodes.map((episode: { id: string }) => episode.id),
+    ["e1"],
+  );
+
+  const replay = await (
+    await fetch(
+      `${base}/api/episodes/e1/replay?substitutions=${encodeURIComponent(JSON.stringify({ token: "secret" }))}`,
+    )
+  ).json();
+  assert.equal(replay.readOnly, true);
+  assert.equal(replay.result.token, "[REDACTED]");
+  assert.equal(replay.result.substitutions.token, "[REDACTED]");
+});
+
+test("procedure detail redacts contract and test secrets", () => {
+  const detail = procedureDetail({ id: "p1", contract: { apiKey: "secret" } }, [
+    { version: 1, tests: [{ token: "secret" }] },
+  ]);
+  assert.equal(
+    (detail.procedure as { contract: { apiKey: string } }).contract.apiKey,
+    "[REDACTED]",
+  );
+  assert.equal(
+    (detail.versions[0] as { tests: Array<{ token: string }> }).tests[0]?.token,
+    "[REDACTED]",
+  );
 });
