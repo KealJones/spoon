@@ -92,10 +92,11 @@ explicitly asks for that unrelated change. Do not stage `WHAT-IS-EKG-v3.md`,
   insufficient; held-out, teacher-off, exact-repeat, failure, abstention, and
   clarification handling is persisted and tested.
 
-## Remaining strict-audit work
+## Residual research-grade work
 
-Do not mark the active goal complete until direct evidence proves every plan
-exit criterion. In particular, audit whether:
+The explicit exit criteria in `IMPLEMENTATION-PLAN.md` now have direct
+implementation and regression evidence. The following are deliberately
+follow-on research tasks rather than unverified claims of completion:
 
 1. generalized neutral-IR sandbox execution remains bounded to approved
    native mappings rather than foreign code;

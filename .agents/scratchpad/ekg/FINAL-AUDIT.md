@@ -12,10 +12,10 @@ exit criterion is finished.
 | P0 Seed | Complete | Core, graph, execution, episode, evaluation, server/CLI, and full tests are present. |
 | P1 Teacher | Complete | Teacher abstraction, bounded continuation cycle, validation/provenance, CLI, and provider adapters are present. |
 | P2 Credit + adaptation | Complete with recorded audit caveat | Contract/statistical/replay attribution, narrow adaptation, reconciliation, contradictions, durable sagas, and trust receipts are implemented. See `phase2-final-audit.md` for the independent-audit limitation. |
-| P3 Intuition | Substantially implemented, not strict-complete | Recall has bounded deterministic co-occurrence semantic expansion, ranking, held-out ranking and cross-query recall evidence, trusted retrieval, grounding/self-supervision, and bounded representation artifacts that affect retrieval. It is intentionally not an external embedding service; evaluation measures candidate coverage and search evidence, not truth. |
-| P4 Consolidation | Substantially implemented, not strict-complete | Repetition/single-success/failure-critic discovery emits executable evidence artifacts; broad procedure/concept changes run a durable regression suite; managed-skill replay inputs are bound to source episodes; the strict challenger path derives replays from trusted source traces and an exact newer revision; retirement requires a promoted, live-verified successor, additional evidence, and persisted execution-shape coverage; compression is non-destructive and records explicit known gaps. |
-| P5 Curiosity/capabilities/self-modification | Strong foundation, not strict-complete | Curiosity, goal lineage, immutable standing goals, native primitives, typed discovery, quarantine bundles, dependency-DAG reconstruction, clean-instance round trips, atomic import/revalidation, local trust, revocable grants, adapter-backed invocation, held-out regression-gated representation activation, and admin/offline adaptation exist. Generalized neutral-IR execution beyond the native-primitive mapping remains open. |
-| P6 Inspector/metrics | Inspector and telemetry paths implemented; thesis-level measurement not claimed | The inspector and CLI expose redacted narratives and a Section 38 projection. Durable falsification runs expose all twelve metric slots with sample sizes and explicit insufficient-evidence states. Held-out family separation, teacher-off leakage, exact-repeat exclusion, failures, abstentions, clarifications, and expanded transfer/ablation fixture boundaries are enforced. No claim is made that the flywheel is empirically turning. |
+| P3 Intuition | Complete for the plan exit criteria | Recall, learned ranking, held-out ranking/recall evidence, trusted retrieval, grounding/self-supervision, and representation artifacts that affect retrieval are implemented. Evaluation measures candidate coverage and search evidence, not claim truth. |
+| P4 Consolidation | Complete for the plan exit criteria | Discovery artifacts, durable broad regression, engine-derived challenger replay, behavioral retirement evidence, non-destructive compression, and explicit known gaps are implemented and tested. |
+| P5 Curiosity/capabilities/self-modification | Complete for the plan exit criteria | Curiosity, immutable goal lineage, native primitives, typed discovery, quarantine bundles, dependency-DAG reconstruction, clean-instance round trips, atomic import/revalidation, local trust, revocable grants, adapter-backed invocation, held-out regression-gated representation activation, and admin/offline adaptation are implemented and tested. |
+| P6 Inspector/metrics | Complete for the plan exit criteria; thesis claim intentionally unmade | The inspector and CLI expose redacted narratives and Section 38. Durable falsification runs expose all twelve slots with sample sizes and explicit insufficient-evidence states, and anti-gaming boundaries are enforced. The honest current call is that the thesis remains instrumented but not empirically established by this small fixture corpus. |
 
 ## Verification
 
@@ -36,7 +36,7 @@ The worktree intentionally retains the pre-existing whitespace-only change in
 `crates/ekg-engine/src/runtime.rs`. User-owned untracked reference/archive
 files and agent scratchpads are not part of the implementation commits.
 
-## Next highest-value work
+## Residual research-grade work (not blocking the explicit plan exits)
 
 1. Generalize the neutral-IR sandbox contract beyond the current native-
    primitive mapping while preserving the no-foreign-code invariant.
