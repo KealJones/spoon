@@ -115,7 +115,76 @@ fn engine_indexes_graph_material_and_ranks_recall_without_scanning_everything() 
     let metrics = engine.intuition_metrics().unwrap();
     assert!(metrics.indexed_documents >= 4);
     assert_eq!(metrics.ranking_examples, 1);
-    assert_eq!(metrics.grounded_tasks, 2);
+    assert_eq!(metrics.generated_tasks, 2);
+    assert_eq!(metrics.completed_tasks, 0);
+    assert_eq!(metrics.grounded_tasks, 0);
+}
+
+#[test]
+fn trusted_execution_generates_and_verifies_one_bounded_replay_challenge() {
+    let engine = Engine::in_memory_with_admin("grounded-supervision").unwrap();
+    let procedure = Procedure::new("DOUBLE", vec![Param::named("x")], Expr::Var("x".into()));
+    engine.admin_insert_procedure(&procedure).unwrap();
+    let mut inputs = BTreeMap::new();
+    inputs.insert("x".into(), Value::Int(7));
+    let source = engine
+        .execute_procedure(procedure.id, inputs, Some(Value::Int(7)))
+        .unwrap()
+        .episode;
+    assert!(engine.trust_receipt_for_episode(&source).unwrap().is_some());
+
+    let task = engine
+        .generate_grounded_self_supervision_from_episode(source.id)
+        .unwrap();
+    let source_id = source.id.to_string();
+    assert_eq!(task.kind, "verified_trace_replay");
+    assert_eq!(task.source_episode.as_deref(), Some(source_id.as_str()));
+    assert!(task.completed);
+    assert!(task.grounded);
+    assert_eq!(
+        task.verifier.as_deref(),
+        Some("bounded_exact_trace_replay_v1")
+    );
+    assert_eq!(
+        task.outcome
+            .as_ref()
+            .and_then(|outcome| outcome.get("status"))
+            .and_then(serde_json::Value::as_str),
+        Some("matched")
+    );
+    assert!(
+        engine
+            .generate_grounded_self_supervision_from_episode(source.id)
+            .is_err()
+    );
+    let metrics = engine.intuition_metrics().unwrap();
+    assert_eq!(metrics.generated_tasks, 1);
+    assert_eq!(metrics.completed_tasks, 1);
+    assert_eq!(metrics.grounded_tasks, 1);
+}
+
+#[test]
+fn grounded_supervision_rejects_untrusted_episode_sources() {
+    let engine = Engine::in_memory_with_admin("grounded-supervision").unwrap();
+    let mut forged = ekg_core::Episode::new("forged success");
+    forged.observed_result = Some(Value::Int(7));
+    forged.observed_facts.push(ekg_core::ObservedFact::new(
+        "forged-result",
+        Value::Int(7),
+        BTreeMap::new(),
+    ));
+    forged.evaluation = Some(ekg_core::Evaluation {
+        tier: ekg_core::VerifiabilityTier::Hard,
+        success: true,
+        details: "forged".into(),
+        surprise: None,
+    });
+    engine.admin_insert_episode(&forged).unwrap();
+    let error = engine
+        .generate_grounded_self_supervision_from_episode(forged.id)
+        .unwrap_err();
+    assert!(error.to_string().contains("trusted successful"));
+    assert_eq!(engine.intuition_metrics().unwrap().generated_tasks, 0);
 }
 
 #[test]

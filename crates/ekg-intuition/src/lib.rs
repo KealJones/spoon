@@ -19,6 +19,11 @@ const MAX_SEMANTIC_EVALUATION_EXAMPLES: usize = 4_096;
 const SEMANTIC_EXPANSION_WEIGHT: f64 = 0.65;
 const MAX_RANKING_EVALUATION_HOLDOUT: usize = 256;
 const MAX_REPRESENTATION_TRAINING_HOLDOUT: usize = 256;
+/// A deliberately small lifetime budget for locally replayed supervision.
+/// This prevents a successful trace from being amplified into an unbounded
+/// self-training corpus merely by repeatedly asking for challenges.
+pub const MAX_AUTO_GROUNDED_SUPERVISION_TASKS: u64 = 32;
+const VERIFIED_TRACE_REPLAY_KIND: &str = "verified_trace_replay";
 
 #[derive(Debug, Error)]
 pub enum IntuitionError {
@@ -151,6 +156,19 @@ pub struct SupervisionTask {
     pub target: serde_json::Value,
     pub grounded: bool,
     pub source_episode: Option<String>,
+    /// A challenge can be generated without being completed. `grounded` is
+    /// counted as actual grounding only after this becomes true following a
+    /// persisted verifier outcome.
+    #[serde(default)]
+    pub completed: bool,
+    /// The bounded executor or verifier outcome. This is evidence about the
+    /// challenge only; it is never a graph fact or a trust receipt.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verifier: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completed_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -185,6 +203,11 @@ pub struct IntuitionMetrics {
     pub ranking_search_wins: u64,
     pub semantic_recall_evaluations: u64,
     pub semantic_recall_wins: u64,
+    /// Every persisted supervision task, including ones that have not yet
+    /// reached a terminating verifier.
+    pub generated_tasks: u64,
+    /// Tasks for which a bounded executor or verifier recorded an outcome.
+    pub completed_tasks: u64,
     pub supervision_tasks: u64,
     pub grounded_tasks: u64,
     /// The observed share of supervision tasks that have an external
@@ -289,8 +312,15 @@ impl IntuitionStore {
                  target_json TEXT NOT NULL,
                  grounded INTEGER NOT NULL,
                  source_episode TEXT,
+                 completed INTEGER NOT NULL DEFAULT 0,
+                 outcome_json TEXT,
+                 verifier TEXT,
+                 completed_at INTEGER,
                  created_at INTEGER NOT NULL
              );
+             CREATE UNIQUE INDEX IF NOT EXISTS idx_supervision_verified_trace_source
+                 ON supervision_tasks(source_episode, kind)
+                 WHERE kind = 'verified_trace_replay';
              CREATE TABLE IF NOT EXISTS representation_models (
                  id INTEGER PRIMARY KEY AUTOINCREMENT,
                  model_version TEXT NOT NULL,
@@ -308,6 +338,38 @@ impl IntuitionStore {
                  retrieval_queries INTEGER NOT NULL DEFAULT 0,
                  candidates_examined INTEGER NOT NULL DEFAULT 0
              );",
+        )?;
+        self.ensure_supervision_task_columns()?;
+        Ok(())
+    }
+
+    /// Add fields introduced after the original Phase 3 schema without
+    /// rewriting historical task rows. Historical caller-declared grounding
+    /// remains incomplete until a verifier outcome is recorded, so it cannot
+    /// inflate the actual-grounding metric.
+    fn ensure_supervision_task_columns(&self) -> Result<(), IntuitionError> {
+        let mut statement = self.conn.prepare("PRAGMA table_info(supervision_tasks)")?;
+        let columns = statement
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<BTreeSet<_>, _>>()?;
+        for (column, definition) in [
+            ("completed", "INTEGER NOT NULL DEFAULT 0"),
+            ("outcome_json", "TEXT"),
+            ("verifier", "TEXT"),
+            ("completed_at", "INTEGER"),
+        ] {
+            if !columns.contains(column) {
+                self.conn.execute(
+                    &format!("ALTER TABLE supervision_tasks ADD COLUMN {column} {definition}"),
+                    [],
+                )?;
+            }
+        }
+        self.conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_supervision_verified_trace_source
+             ON supervision_tasks(source_episode, kind)
+             WHERE kind = 'verified_trace_replay'",
+            [],
         )?;
         Ok(())
     }
@@ -964,8 +1026,9 @@ impl IntuitionStore {
         }
         self.conn.execute(
             "INSERT INTO supervision_tasks
-                (kind, input_json, target_json, grounded, source_episode, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                (kind, input_json, target_json, grounded, source_episode,
+                 completed, outcome_json, verifier, completed_at, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, 0, NULL, NULL, NULL, ?6)",
             params![
                 kind,
                 serde_json::to_string(&input)?,
@@ -983,12 +1046,139 @@ impl IntuitionStore {
             target,
             grounded,
             source_episode: source_episode.map(str::to_owned),
+            completed: false,
+            outcome: None,
+            verifier: None,
+            completed_at: None,
         })
     }
 
+    /// Persists a challenge derived from a trusted execution before it is
+    /// replayed. The source can produce at most one such challenge and the
+    /// store has a small durable budget, which prevents repeated callers from
+    /// turning the same evidence into unlimited supervision.
+    pub fn begin_verified_trace_replay(
+        &self,
+        source_episode: &str,
+        input: serde_json::Value,
+        target: serde_json::Value,
+    ) -> Result<SupervisionTask, IntuitionError> {
+        if source_episode.trim().is_empty() {
+            return Err(IntuitionError::Invalid(
+                "verified trace replay requires a source episode".into(),
+            ));
+        }
+        let transaction = self.conn.unchecked_transaction()?;
+        let generated: i64 = transaction.query_row(
+            "SELECT COUNT(*) FROM supervision_tasks WHERE kind = ?1",
+            params![VERIFIED_TRACE_REPLAY_KIND],
+            |row| row.get(0),
+        )?;
+        if generated as u64 >= MAX_AUTO_GROUNDED_SUPERVISION_TASKS {
+            return Err(IntuitionError::Invalid(format!(
+                "verified trace replay budget exhausted ({MAX_AUTO_GROUNDED_SUPERVISION_TASKS} tasks)"
+            )));
+        }
+        let existing: bool = transaction.query_row(
+            "SELECT EXISTS(
+                SELECT 1 FROM supervision_tasks
+                WHERE source_episode = ?1 AND kind = ?2
+            )",
+            params![source_episode, VERIFIED_TRACE_REPLAY_KIND],
+            |row| row.get(0),
+        )?;
+        if existing {
+            return Err(IntuitionError::Invalid(
+                "a verified trace replay challenge already exists for this source episode".into(),
+            ));
+        }
+        transaction.execute(
+            "INSERT INTO supervision_tasks
+                (kind, input_json, target_json, grounded, source_episode,
+                 completed, outcome_json, verifier, completed_at, created_at)
+             VALUES (?1, ?2, ?3, 0, ?4, 0, NULL, NULL, NULL, ?5)",
+            params![
+                VERIFIED_TRACE_REPLAY_KIND,
+                serde_json::to_string(&input)?,
+                serde_json::to_string(&target)?,
+                source_episode,
+                unix_time(),
+            ],
+        )?;
+        let id = transaction.last_insert_rowid();
+        transaction.commit()?;
+        Ok(SupervisionTask {
+            id,
+            kind: VERIFIED_TRACE_REPLAY_KIND.into(),
+            input,
+            target,
+            grounded: false,
+            source_episode: Some(source_episode.to_owned()),
+            completed: false,
+            outcome: None,
+            verifier: None,
+            completed_at: None,
+        })
+    }
+
+    /// Records the immutable result of a local verifier. Only this method
+    /// transitions an automatically-derived replay task into the grounded
+    /// state; callers cannot create a completed grounded task by setting a
+    /// boolean at generation time.
+    pub fn complete_verified_trace_replay(
+        &self,
+        id: i64,
+        grounded: bool,
+        verifier: &str,
+        outcome: serde_json::Value,
+    ) -> Result<SupervisionTask, IntuitionError> {
+        if verifier.trim().is_empty() {
+            return Err(IntuitionError::Invalid(
+                "verified trace replay requires a verifier identity".into(),
+            ));
+        }
+        let completed_at = unix_time();
+        let changed = self.conn.execute(
+            "UPDATE supervision_tasks
+             SET grounded = ?1, completed = 1, outcome_json = ?2,
+                 verifier = ?3, completed_at = ?4
+             WHERE id = ?5 AND kind = ?6 AND completed = 0",
+            params![
+                i64::from(grounded),
+                serde_json::to_string(&outcome)?,
+                verifier,
+                completed_at,
+                id,
+                VERIFIED_TRACE_REPLAY_KIND,
+            ],
+        )?;
+        if changed != 1 {
+            return Err(IntuitionError::Invalid(
+                "verified trace replay task is missing or already completed".into(),
+            ));
+        }
+        self.supervision_task(id)?.ok_or_else(|| {
+            IntuitionError::Invalid("completed verified trace replay was not readable".into())
+        })
+    }
+
+    fn supervision_task(&self, id: i64) -> Result<Option<SupervisionTask>, IntuitionError> {
+        self.conn
+            .query_row(
+                "SELECT id, kind, input_json, target_json, grounded, source_episode,
+                        completed, outcome_json, verifier, completed_at
+                 FROM supervision_tasks WHERE id = ?1",
+                params![id],
+                row_to_supervision_task,
+            )
+            .optional()
+            .map_err(IntuitionError::from)
+    }
+
     /// Epistemic challenges are never represented as a self-justifying graph
-    /// update. They must be marked as grounded because the caller promises a
-    /// later execution, test, or observation will terminate the challenge.
+    /// update. `grounded` records only a caller's declared eventual grounder;
+    /// it is not counted as verified grounding until a terminating verifier
+    /// outcome is persisted by the dedicated replay lifecycle.
     pub fn generate_epistemic_challenge(
         &self,
         source_episode: Option<&str>,
@@ -1007,7 +1197,9 @@ impl IntuitionStore {
 
     pub fn grounding_ratio(&self) -> Result<f64, IntuitionError> {
         let (grounded, total): (i64, i64) = self.conn.query_row(
-            "SELECT COALESCE(SUM(grounded), 0), COUNT(*) FROM supervision_tasks",
+            "SELECT COALESCE(SUM(CASE WHEN completed = 1 AND grounded = 1 THEN 1 ELSE 0 END), 0),
+                    COUNT(*)
+             FROM supervision_tasks",
             [],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )?;
@@ -1070,8 +1262,14 @@ impl IntuitionStore {
                 .query_row("SELECT COUNT(*) FROM supervision_tasks", [], |row| {
                     row.get::<_, i64>(0)
                 })?;
+        let completed_tasks = self.conn.query_row(
+            "SELECT COALESCE(SUM(completed), 0) FROM supervision_tasks",
+            [],
+            |row| row.get::<_, i64>(0),
+        )?;
         let grounded_tasks = self.conn.query_row(
-            "SELECT COALESCE(SUM(grounded), 0) FROM supervision_tasks",
+            "SELECT COALESCE(SUM(CASE WHEN completed = 1 AND grounded = 1 THEN 1 ELSE 0 END), 0)
+             FROM supervision_tasks",
             [],
             |row| row.get::<_, i64>(0),
         )?;
@@ -1090,6 +1288,8 @@ impl IntuitionStore {
             ranking_search_wins: ranking_search_wins as u64,
             semantic_recall_evaluations: semantic_recall_evaluations as u64,
             semantic_recall_wins: semantic_recall_wins as u64,
+            generated_tasks: supervision_tasks as u64,
+            completed_tasks: completed_tasks as u64,
             supervision_tasks: supervision_tasks as u64,
             grounded_tasks: grounded_tasks as u64,
             grounding_ratio,
@@ -1277,6 +1477,33 @@ fn row_to_representation_model(row: &rusqlite::Row<'_>) -> rusqlite::Result<Repr
             )
         })?,
         created_at: row.get(7)?,
+    })
+}
+
+fn row_to_supervision_task(row: &rusqlite::Row<'_>) -> rusqlite::Result<SupervisionTask> {
+    let input: String = row.get(2)?;
+    let target: String = row.get(3)?;
+    let outcome: Option<String> = row.get(7)?;
+    let parse_json = |index, value: String| {
+        serde_json::from_str(&value).map_err(|error| {
+            rusqlite::Error::FromSqlConversionFailure(
+                index,
+                rusqlite::types::Type::Text,
+                Box::new(error),
+            )
+        })
+    };
+    Ok(SupervisionTask {
+        id: row.get(0)?,
+        kind: row.get(1)?,
+        input: parse_json(2, input)?,
+        target: parse_json(3, target)?,
+        grounded: row.get::<_, i64>(4)? != 0,
+        source_episode: row.get(5)?,
+        completed: row.get::<_, i64>(6)? != 0,
+        outcome: outcome.map(|value| parse_json(7, value)).transpose()?,
+        verifier: row.get(8)?,
+        completed_at: row.get(9)?,
     })
 }
 
@@ -1672,7 +1899,7 @@ mod tests {
     }
 
     #[test]
-    fn supervision_tracks_grounding_and_never_promotes_a_claim() {
+    fn caller_declared_grounding_is_not_counted_until_a_verifier_completes_it() {
         let store = IntuitionStore::in_memory().unwrap();
         let task = store
             .generate_self_supervision(
@@ -1684,10 +1911,14 @@ mod tests {
             )
             .unwrap();
         assert!(task.grounded);
-        assert_eq!(store.grounding_ratio().unwrap(), 1.0);
+        assert!(!task.completed);
+        assert_eq!(store.grounding_ratio().unwrap(), 0.0);
         let metrics = store.metrics().unwrap();
         assert_eq!(metrics.supervision_tasks, 1);
-        assert_eq!(metrics.grounding_ratio, 1.0);
+        assert_eq!(metrics.generated_tasks, 1);
+        assert_eq!(metrics.completed_tasks, 0);
+        assert_eq!(metrics.grounded_tasks, 0);
+        assert_eq!(metrics.grounding_ratio, 0.0);
     }
 
     #[test]
@@ -1707,6 +1938,56 @@ mod tests {
         assert_eq!(metrics.supervision_tasks, 1);
         assert_eq!(metrics.grounded_tasks, 0);
         assert_eq!(metrics.grounding_ratio, 0.0);
+    }
+
+    #[test]
+    fn verified_replay_tasks_are_rate_limited_and_only_grounded_on_completion() {
+        let store = IntuitionStore::in_memory().unwrap();
+        let first = store
+            .begin_verified_trace_replay(
+                "trusted-episode-0",
+                serde_json::json!({"challenge":"replay"}),
+                serde_json::json!({"answer":14}),
+            )
+            .unwrap();
+        assert!(!first.completed);
+        let completed = store
+            .complete_verified_trace_replay(
+                first.id,
+                true,
+                "local-test-verifier",
+                serde_json::json!({"status":"matched"}),
+            )
+            .unwrap();
+        assert!(completed.completed);
+        assert!(completed.grounded);
+        assert_eq!(
+            completed.source_episode.as_deref(),
+            Some("trusted-episode-0")
+        );
+
+        for index in 1..MAX_AUTO_GROUNDED_SUPERVISION_TASKS {
+            store
+                .begin_verified_trace_replay(
+                    &format!("trusted-episode-{index}"),
+                    serde_json::json!({"challenge":"replay"}),
+                    serde_json::json!({"answer":index}),
+                )
+                .unwrap();
+        }
+        assert!(
+            store
+                .begin_verified_trace_replay(
+                    "over-budget-source",
+                    serde_json::json!({"challenge":"replay"}),
+                    serde_json::json!({"answer":"nope"}),
+                )
+                .is_err()
+        );
+        let metrics = store.metrics().unwrap();
+        assert_eq!(metrics.generated_tasks, MAX_AUTO_GROUNDED_SUPERVISION_TASKS);
+        assert_eq!(metrics.completed_tasks, 1);
+        assert_eq!(metrics.grounded_tasks, 1);
     }
 
     #[test]

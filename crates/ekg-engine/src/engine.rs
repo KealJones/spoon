@@ -23,6 +23,11 @@ use thiserror::Error;
 
 use crate::evaluate_deterministic;
 
+/// A self-supervision replay is deliberately much smaller than the normal
+/// execution allowance. It verifies one known trace; it is not a back door to
+/// an open-ended autonomous run.
+const MAX_GROUNDED_SUPERVISION_REPLAY_STEPS: u32 = 256;
+
 #[derive(Debug, Error)]
 pub enum EngineError {
     #[error(transparent)]
@@ -814,6 +819,114 @@ impl Engine {
         )?)
     }
 
+    /// Derive and immediately terminate one challenge from a successful,
+    /// trusted execution episode. The target is the episode's observed result
+    /// and the verifier is an exact-version replay with a much smaller local
+    /// step budget. This records supervision evidence only; it never promotes
+    /// a claim, changes lifecycle, or mints trust.
+    pub fn generate_grounded_self_supervision_from_episode(
+        &self,
+        source_episode: EpisodeId,
+    ) -> Result<SupervisionTask, EngineError> {
+        let episode = self.episodes.get(source_episode)?;
+        let receipt = self.trust.receipt_for_episode(&episode)?;
+        if receipt.is_none()
+            || !episode.succeeded()
+            || !episode.evaluation.as_ref().is_some_and(|evaluation| {
+                matches!(
+                    evaluation.tier,
+                    VerifiabilityTier::Hard | VerifiabilityTier::Consensus
+                )
+            })
+        {
+            return Err(EngineError::InvalidInput(
+                "grounded self-supervision requires a trusted successful Hard or Consensus episode"
+                    .into(),
+            ));
+        }
+        let observed = episode.observed_result.clone().ok_or_else(|| {
+            EngineError::InvalidInput(
+                "grounded self-supervision requires an externally terminated observed result"
+                    .into(),
+            )
+        })?;
+        if episode.observed_facts.is_empty() {
+            return Err(EngineError::InvalidInput(
+                "grounded self-supervision requires an authenticated observed fact".into(),
+            ));
+        }
+        let trace_json = episode.execution_trace.clone().ok_or_else(|| {
+            EngineError::InvalidInput(
+                "grounded self-supervision requires a replayable execution trace".into(),
+            )
+        })?;
+        let trace: ExecTrace = serde_json::from_value(trace_json)?;
+        let top = trace.steps.last().ok_or_else(|| {
+            EngineError::InvalidInput(
+                "grounded self-supervision requires a non-empty execution trace".into(),
+            )
+        })?;
+        let procedure = top.procedure_called.ok_or_else(|| {
+            EngineError::InvalidInput(
+                "grounded self-supervision trace lacks a top-level procedure".into(),
+            )
+        })?;
+        let version = top.procedure_version.ok_or_else(|| {
+            EngineError::InvalidInput(
+                "grounded self-supervision trace lacks an exact procedure version".into(),
+            )
+        })?;
+        let source = source_episode.to_string();
+        let input = serde_json::json!({
+            "challenge": "replay_exact_trace",
+            "sourceEpisode": source,
+            "procedure": procedure.to_string(),
+            "procedureVersion": version,
+            "inputs": top.input,
+        });
+        let target = serde_json::json!({
+            "observedResult": observed,
+        });
+        let task = self
+            .intuition
+            .begin_verified_trace_replay(&source, input, target)?;
+
+        let verifier = "bounded_exact_trace_replay_v1";
+        let completion = match self.replay_episode_with_budget(
+            source_episode,
+            BTreeMap::new(),
+            MAX_GROUNDED_SUPERVISION_REPLAY_STEPS,
+        ) {
+            Ok(replay) => {
+                let matches_observation = replay.value == observed;
+                (
+                    matches_observation,
+                    serde_json::json!({
+                        "status": if matches_observation { "matched" } else { "mismatched" },
+                        "expected": observed,
+                        "actual": replay.value,
+                        "traceSteps": replay.trace.len(),
+                        "maxSteps": MAX_GROUNDED_SUPERVISION_REPLAY_STEPS,
+                    }),
+                )
+            }
+            Err(error) => (
+                false,
+                serde_json::json!({
+                    "status": "replay_error",
+                    "error": error.to_string(),
+                    "maxSteps": MAX_GROUNDED_SUPERVISION_REPLAY_STEPS,
+                }),
+            ),
+        };
+        Ok(self.intuition.complete_verified_trace_replay(
+            task.id,
+            completion.0,
+            verifier,
+            completion.1,
+        )?)
+    }
+
     pub fn intuition_metrics(&self) -> Result<IntuitionMetrics, EngineError> {
         Ok(self.intuition.metrics()?)
     }
@@ -1270,6 +1383,15 @@ impl Engine {
         episode_id: EpisodeId,
         substitutions: BTreeMap<String, Value>,
     ) -> Result<ReplayOutcome, EngineError> {
+        self.replay_episode_with_budget(episode_id, substitutions, self.max_steps)
+    }
+
+    fn replay_episode_with_budget(
+        &self,
+        episode_id: EpisodeId,
+        substitutions: BTreeMap<String, Value>,
+        max_steps: u32,
+    ) -> Result<ReplayOutcome, EngineError> {
         let episode = self.episodes.get(episode_id)?;
         let trace_json = episode
             .execution_trace
@@ -1292,7 +1414,7 @@ impl Engine {
         let original = top.input.as_ref().and_then(Value::as_list);
         let args = bind_inputs(&procedure, &substitutions, original)?;
 
-        let mut evaluator = Evaluator::new().with_budget(self.max_steps);
+        let mut evaluator = Evaluator::new().with_budget(max_steps.max(1));
         let mut registered = HashSet::new();
         for step in &trace.steps {
             let (Some(id), Some(version)) = (step.procedure_called, step.procedure_version) else {

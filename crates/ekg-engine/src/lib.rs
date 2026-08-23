@@ -41,8 +41,9 @@ pub use ekg_graph::{
     TypedRelationshipTraversal,
 };
 pub use ekg_intuition::{
-    EpistemicChallengeKind, IntuitionMetrics, RankingEvaluation, RankingExample, RecallCandidate,
-    RecallDocument, RecallKind, RepresentationModel, SemanticRecallEvaluation, SupervisionTask,
+    EpistemicChallengeKind, IntuitionMetrics, MAX_AUTO_GROUNDED_SUPERVISION_TASKS,
+    RankingEvaluation, RankingExample, RecallCandidate, RecallDocument, RecallKind,
+    RepresentationModel, SemanticRecallEvaluation, SupervisionTask,
 };
 pub use engine::{
     Engine, EngineError, ExecutionOutcome, MetricsSnapshot, Phase6EvidenceMetrics, ReplayOutcome,
