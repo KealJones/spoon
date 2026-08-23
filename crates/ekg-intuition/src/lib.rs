@@ -18,7 +18,10 @@ const MAX_SEMANTIC_SEED_DOCUMENTS: usize = 256;
 const MAX_SEMANTIC_EVALUATION_EXAMPLES: usize = 4_096;
 const SEMANTIC_EXPANSION_WEIGHT: f64 = 0.65;
 const MAX_RANKING_EVALUATION_HOLDOUT: usize = 256;
+const MAX_RANKING_MODEL_EXAMPLES: usize = 4_096;
 const MAX_REPRESENTATION_TRAINING_HOLDOUT: usize = 256;
+const RANKING_FEATURE_COUNT: usize = 5;
+const RANKING_MODEL_REGULARIZATION: f64 = 0.02;
 /// A deliberately small lifetime budget for locally replayed supervision.
 /// This prevents a successful trace from being amplified into an unbounded
 /// self-training corpus merely by repeatedly asking for challenges.
@@ -83,6 +86,27 @@ pub struct RankingExample {
     pub used: bool,
     pub succeeded: bool,
     pub rung: u8,
+}
+
+/// An inspectable, bounded linear ranking policy fitted from persisted
+/// retrieval outcomes. It is deliberately a search-policy artifact: its
+/// inputs are retrieval features and prior use outcomes, never graph beliefs
+/// or trust state.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FittedRankingModel {
+    /// Number of persisted examples that actually contributed a retrievable
+    /// candidate feature vector.
+    pub training_examples: u64,
+    pub positive_examples: u64,
+    /// A model with only one class has no useful fitted signal and falls back
+    /// to the bounded baseline score.
+    pub fitted: bool,
+    pub intercept: f64,
+    /// Feature names and their bounded fitted coefficients, kept public so a
+    /// caller can inspect why local ranking changed.
+    pub feature_weights: BTreeMap<String, f64>,
+    pub feature_means: BTreeMap<String, f64>,
 }
 
 /// A time-split, query-conditioned evaluation of the ranker.  It compares
@@ -567,13 +591,21 @@ impl IntuitionStore {
         candidate_limit: usize,
     ) -> Result<Vec<RecallCandidate>, IntuitionError> {
         let mut candidates = self.candidates_for_query(query, candidate_limit, true)?;
-        let weights = self.learned_weights()?;
+        let model = self.fitted_ranking_model_before(i64::MAX)?;
         for candidate in &mut candidates {
             let outcome = self.candidate_success_rate(query, &candidate.id)?;
-            candidate.learned_score = score_candidate(candidate, weights, outcome);
+            let features = ranking_features(candidate, outcome);
+            candidate.learned_score = score_candidate(&model, features);
         }
         candidates.sort_by(compare_learned_score);
         Ok(candidates)
+    }
+
+    /// Returns the deterministic, bounded ranker fitted from the persisted
+    /// outcome rows currently available locally. This is intentionally an
+    /// inspection API rather than a promotion or belief-update mechanism.
+    pub fn fitted_ranking_model(&self) -> Result<FittedRankingModel, IntuitionError> {
+        self.fitted_ranking_model_before(i64::MAX)
     }
 
     pub fn record_ranking_example(&self, example: &RankingExample) -> Result<(), IntuitionError> {
@@ -654,10 +686,14 @@ impl IntuitionStore {
         baseline.sort_by(compare_activation);
         let mut learned = candidates;
         let cutoff = first_held_out_id.unwrap_or(i64::MAX);
-        let weights = self.learned_weights_before(cutoff)?;
+        // The ranker is fitted with exactly the rows before the chronological
+        // cutoff. The held-out rows below are therefore only scored, never
+        // used to fit a coefficient or candidate-success feature.
+        let model = self.fitted_ranking_model_before(cutoff)?;
         for candidate in &mut learned {
             let outcome = self.candidate_success_rate_before(&query, &candidate.id, cutoff)?;
-            candidate.learned_score = score_candidate(candidate, weights, outcome);
+            let features = ranking_features(candidate, outcome);
+            candidate.learned_score = score_candidate(&model, features);
         }
         learned.sort_by(compare_learned_score);
 
@@ -1331,47 +1367,130 @@ impl IntuitionStore {
             let weight = SEMANTIC_EXPANSION_WEIGHT * occurrences as f64 / maximum_occurrences;
             features.entry(term).or_insert(weight);
         }
+        self.apply_active_representation_model(&mut features)?;
         Ok(features)
     }
 
-    fn learned_weights(&self) -> Result<(f64, f64, f64, f64), IntuitionError> {
-        self.learned_weights_before(i64::MAX)
-    }
-
-    fn learned_weights_before(
+    /// Fit a small ridge-like linear policy from historical ranking examples.
+    /// Every row's prior-success feature is calculated strictly before its own
+    /// id. A time-split evaluation passes the first held-out id as the cutoff,
+    /// keeping the complete held-out suffix out of both fitting and scoring.
+    fn fitted_ranking_model_before(
         &self,
         cutoff_exclusive: i64,
-    ) -> Result<(f64, f64, f64, f64), IntuitionError> {
+    ) -> Result<FittedRankingModel, IntuitionError> {
         let mut statement = self.conn.prepare(
-            "SELECT used, succeeded, rung FROM recall_ranking_examples
+            "SELECT id, query, candidate_id, used, succeeded FROM recall_ranking_examples
              WHERE id < ?1
-             ORDER BY id DESC LIMIT 4096",
+             ORDER BY id DESC LIMIT ?2",
         )?;
-        let mut total = 0.0;
-        let mut success = 0.0;
-        let mut cheap = 0.0;
-        for row in statement.query_map(params![cutoff_exclusive], |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, i64>(1)?,
-                row.get::<_, i64>(2)?,
-            ))
-        })? {
-            let (used, succeeded, rung) = row?;
-            total += 1.0;
-            success += (used * succeeded) as f64;
-            cheap += if used > 0 {
-                1.0 / (rung.max(1) as f64)
-            } else {
-                0.0
+        let mut examples = statement
+            .query_map(
+                params![cutoff_exclusive, MAX_RANKING_MODEL_EXAMPLES as i64],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, i64>(3)? != 0,
+                        row.get::<_, i64>(4)? != 0,
+                    ))
+                },
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
+        examples.reverse();
+
+        let mut rows = Vec::with_capacity(examples.len());
+        for (id, query, candidate_id, used, succeeded) in examples {
+            let candidates = self.candidates_for_query(&query, 1_024, false)?;
+            let Some(candidate) = candidates
+                .into_iter()
+                .find(|candidate| candidate.id == candidate_id)
+            else {
+                // A removed or no-longer-retrievable document has no honest
+                // current feature vector. Do not make one up for fitting.
+                continue;
             };
+            let outcome = self.candidate_success_rate_before(&query, &candidate_id, id)?;
+            rows.push((
+                ranking_features(&candidate, outcome),
+                f64::from(used && succeeded),
+            ));
         }
-        if total == 0.0 {
-            return Ok((0.7, 0.2, 0.1, 0.0));
+
+        let training_examples = rows.len() as u64;
+        let positive_examples = rows.iter().filter(|(_, target)| *target > 0.0).count() as u64;
+        let mut means = [0.0; RANKING_FEATURE_COUNT];
+        let target_mean = if rows.is_empty() {
+            0.0
+        } else {
+            for (features, _) in &rows {
+                for (index, value) in features.iter().enumerate() {
+                    means[index] += value;
+                }
+            }
+            for mean in &mut means {
+                *mean /= rows.len() as f64;
+            }
+            rows.iter().map(|(_, target)| target).sum::<f64>() / rows.len() as f64
+        };
+        let fitted = training_examples >= 4
+            && positive_examples > 0
+            && positive_examples < training_examples;
+        let mut weights = [0.0; RANKING_FEATURE_COUNT];
+        if fitted {
+            for feature_index in 0..RANKING_FEATURE_COUNT {
+                let mut covariance = 0.0;
+                let mut variance = 0.0;
+                for (features, target) in &rows {
+                    let centered = features[feature_index] - means[feature_index];
+                    covariance += centered * (target - target_mean);
+                    variance += centered * centered;
+                }
+                weights[feature_index] = (covariance
+                    / (variance + RANKING_MODEL_REGULARIZATION * rows.len() as f64))
+                    .clamp(-2.0, 2.0);
+            }
         }
-        let use_rate = success / total;
-        let cheap_rate = cheap / total;
-        Ok((0.55 + 0.25 * use_rate, 0.15 + 0.1 * cheap_rate, 0.1, 0.2))
+        Ok(FittedRankingModel {
+            training_examples,
+            positive_examples,
+            fitted,
+            intercept: target_mean,
+            feature_weights: ranking_feature_map(weights),
+            feature_means: ranking_feature_map(means),
+        })
+    }
+
+    fn active_representation_model(&self) -> Result<Option<RepresentationModel>, IntuitionError> {
+        self.conn
+            .query_row(
+                "SELECT id, model_version, training_tasks, held_out_tasks,
+                        held_out_coverage, activated, term_weights_json, created_at
+                 FROM representation_models
+                 WHERE activated = 1
+                 ORDER BY id DESC LIMIT 1",
+                [],
+                row_to_representation_model,
+            )
+            .optional()
+            .map_err(IntuitionError::from)
+    }
+
+    fn apply_active_representation_model(
+        &self,
+        features: &mut BTreeMap<String, f64>,
+    ) -> Result<(), IntuitionError> {
+        let Some(model) = self.active_representation_model()? else {
+            return Ok(());
+        };
+        for (term, feature_weight) in features {
+            let learned_term_weight = model.term_weights.get(term).copied().unwrap_or(0.0);
+            // Activation may only reweight already bounded local features; it
+            // cannot introduce remote terms, documents, beliefs, or trust.
+            *feature_weight *= 1.0 + learned_term_weight.clamp(0.0, 2.0);
+        }
+        Ok(())
     }
 
     fn candidate_success_rate(
@@ -1423,16 +1542,52 @@ fn compare_learned_score(left: &RecallCandidate, right: &RecallCandidate) -> std
         .then_with(|| left.id.cmp(&right.id))
 }
 
-fn score_candidate(
-    candidate: &RecallCandidate,
-    weights: (f64, f64, f64, f64),
-    outcome: f64,
-) -> f64 {
-    weights.0 * candidate.similarity
-        + weights.1 * candidate.recency
-        + weights.2 * candidate.frequency
-        + weights.3 * candidate.activation
-        + 0.35 * outcome
+fn ranking_feature_names() -> [&'static str; RANKING_FEATURE_COUNT] {
+    [
+        "similarity",
+        "recency",
+        "frequency",
+        "activation",
+        "prior_success",
+    ]
+}
+
+fn ranking_feature_map(values: [f64; RANKING_FEATURE_COUNT]) -> BTreeMap<String, f64> {
+    ranking_feature_names()
+        .into_iter()
+        .zip(values)
+        .map(|(name, value)| (name.to_owned(), value))
+        .collect()
+}
+
+fn ranking_features(candidate: &RecallCandidate, outcome: f64) -> [f64; RANKING_FEATURE_COUNT] {
+    [
+        candidate.similarity,
+        candidate.recency,
+        candidate.frequency,
+        candidate.activation,
+        outcome,
+    ]
+}
+
+/// The fallback score keeps cold-start retrieval stable. Once the local model
+/// has both positive and negative persisted outcomes, its bounded prediction
+/// is blended in and changes ordering using only those outcomes.
+fn score_candidate(model: &FittedRankingModel, features: [f64; RANKING_FEATURE_COUNT]) -> f64 {
+    let baseline = 0.7 * features[0] + 0.2 * features[1] + 0.1 * features[2] + 0.35 * features[4];
+    if !model.fitted {
+        return baseline;
+    }
+    let prediction = ranking_feature_names()
+        .into_iter()
+        .enumerate()
+        .fold(model.intercept, |score, (index, name)| {
+            let coefficient = model.feature_weights.get(name).copied().unwrap_or(0.0);
+            let mean = model.feature_means.get(name).copied().unwrap_or(0.0);
+            score + coefficient * (features[index] - mean)
+        })
+        .clamp(0.0, 1.0);
+    0.45 * baseline + 0.55 * prediction
 }
 
 fn rank_of(candidates: &[RecallCandidate], candidate_id: &str) -> Option<usize> {
@@ -1788,6 +1943,95 @@ mod tests {
     }
 
     #[test]
+    fn fitted_local_ranker_changes_order_only_after_persisted_outcomes() {
+        let store = IntuitionStore::in_memory().unwrap();
+        store
+            .index_document(&document("a", RecallKind::Concept, "math arithmetic", 1))
+            .unwrap();
+        store
+            .index_document(&document("b", RecallKind::Concept, "math arithmetic", 1))
+            .unwrap();
+        // With no local episode outcomes, deterministic activation tie-breaks
+        // preserve document id order.
+        assert_eq!(store.rank("math", 2).unwrap()[0].id, "a");
+        for (candidate_id, succeeded) in [("b", true), ("b", true), ("a", false), ("a", false)] {
+            store
+                .record_ranking_example(&RankingExample {
+                    query: "math".into(),
+                    candidate_id: candidate_id.into(),
+                    used: true,
+                    succeeded,
+                    rung: 1,
+                })
+                .unwrap();
+        }
+
+        let model = store.fitted_ranking_model().unwrap();
+        assert!(model.fitted);
+        assert_eq!(model.training_examples, 4);
+        assert_eq!(model.positive_examples, 2);
+        assert!(model.feature_weights["prior_success"] > 0.0);
+        // The only changed input is persisted local usage evidence; indexing
+        // never writes graph truth and rank only returns a reordered pool.
+        assert_eq!(store.rank("math", 2).unwrap()[0].id, "b");
+    }
+
+    #[test]
+    fn ranking_evaluation_fits_no_coefficients_from_its_held_out_suffix() {
+        let store = IntuitionStore::in_memory().unwrap();
+        store
+            .index_document(&document("a", RecallKind::Concept, "math arithmetic", 1))
+            .unwrap();
+        store
+            .index_document(&document("b", RecallKind::Concept, "math arithmetic", 1))
+            .unwrap();
+        for (candidate_id, succeeded) in [("b", true), ("b", true), ("a", false), ("a", false)] {
+            store
+                .record_ranking_example(&RankingExample {
+                    query: "math".into(),
+                    candidate_id: candidate_id.into(),
+                    used: true,
+                    succeeded,
+                    rung: 1,
+                })
+                .unwrap();
+        }
+        // This newest outcome is deliberately contrary to the learned policy.
+        // It must be scored, but must not be allowed to reshape the model.
+        store
+            .record_ranking_example(&RankingExample {
+                query: "math".into(),
+                candidate_id: "a".into(),
+                used: true,
+                succeeded: true,
+                rung: 1,
+            })
+            .unwrap();
+        let held_out_id = store
+            .conn
+            .query_row("SELECT MAX(id) FROM recall_ranking_examples", [], |row| {
+                row.get::<_, i64>(0)
+            })
+            .unwrap();
+        let pre_holdout_model = store.fitted_ranking_model_before(held_out_id).unwrap();
+        let full_model = store.fitted_ranking_model().unwrap();
+        let evaluation = store.evaluate_ranking("math", 2, 1).unwrap();
+
+        assert_eq!(pre_holdout_model.training_examples, 4);
+        assert_eq!(
+            evaluation.training_examples,
+            pre_holdout_model.training_examples
+        );
+        assert_eq!(full_model.training_examples, 5);
+        assert_eq!(evaluation.held_out_successes, 1);
+        // `a` is rank one under activation but rank two under the policy fitted
+        // before its held-out success. A leaky evaluator would incorrectly
+        // train on that final row.
+        assert_eq!(evaluation.baseline_mean_rank, Some(1.0));
+        assert_eq!(evaluation.learned_mean_rank, Some(2.0));
+    }
+
+    #[test]
     fn ranking_evaluation_uses_a_bounded_time_split_and_records_evidence() {
         let store = IntuitionStore::in_memory().unwrap();
         store
@@ -2011,5 +2255,42 @@ mod tests {
         assert!(!model.activated);
         let activated = store.activate_representation_model(model.id).unwrap();
         assert!(activated.activated);
+    }
+
+    #[test]
+    fn activated_representation_artifact_reweights_retrieval_from_prior_episode_tasks() {
+        let store = IntuitionStore::in_memory().unwrap();
+        store
+            .index_document(&document("a-beta", RecallKind::Concept, "beta guide", 1))
+            .unwrap();
+        store
+            .index_document(&document("z-alpha", RecallKind::Concept, "alpha guide", 1))
+            .unwrap();
+        // Equal lexical evidence starts in deterministic id order.
+        assert_eq!(store.retrieve("alpha beta", 2).unwrap()[0].id, "a-beta");
+        for (episode, situation) in [
+            ("trusted-episode-1", "alpha observation one"),
+            ("trusted-episode-2", "alpha observation two"),
+            ("trusted-episode-3", "held out unrelated task"),
+        ] {
+            store
+                .generate_self_supervision(
+                    Some(episode),
+                    serde_json::json!({"situation": situation}),
+                    serde_json::json!({"target": situation}),
+                    "predict_validated_interpretation",
+                    true,
+                )
+                .unwrap();
+        }
+        let artifact = store.train_representation_model(1).unwrap();
+        assert!(artifact.term_weights["alpha"] > 0.0);
+        assert!(!artifact.activated);
+        store.activate_representation_model(artifact.id).unwrap();
+
+        // Activation affects only bounded existing query features. The alpha
+        // preference comes from prior episode-backed training tasks, not a
+        // belief update, remote model, or new candidate introduction.
+        assert_eq!(store.retrieve("alpha beta", 2).unwrap()[0].id, "z-alpha");
     }
 }
