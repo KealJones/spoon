@@ -17,6 +17,10 @@ Latest substantive commits:
 
 - `24a1765` — derive managed-skill challenger replays from trusted source
   traces and an exact newer procedure revision.
+- `0ad1d21` — require additional successor behavior evidence and persist
+  execution-shape subsumption records for retirement.
+- `76500ef` — gate representation/search-policy activation on durable held-out
+  regression evidence and expose the evaluation through RPC/SDK.
 - `a303603` — record compression known gaps, add clean-instance capability
   round-trip evidence, and expand falsification fixtures.
 - `41fc76d` — align inspector examples with the public Spoon rename.
@@ -69,12 +73,13 @@ explicitly asks for that unrelated change. Do not stage `WHAT-IS-EKG-v3.md`,
   regression suite; compression is non-destructive, preserves failures, and
   records explicit known gaps; the strict managed-skill challenger path derives
   replay evidence from trusted source traces and an exact newer revision;
-  retirement requires a promoted successor with live verification and complete
-  source coverage.
+  retirement requires a promoted successor with live verification, additional
+  behavior evidence, and persisted execution-shape coverage.
 - **P5:** native network/file/observe/sandbox primitives are typed and policy
   enforced; discovery/synthesis, local validation, revocable grants, actual
   adapter-backed invocation, clean-instance bundle round trips, bounded
-  curiosity scheduling, and broad mutation authorization are present. Bundle
+  curiosity scheduling, held-out regression-gated representation activation,
+  and broad mutation authorization are present. Bundle
   format v2 is deterministic, content-addressed, dependency-closed,
   quarantine-first, locally revalidated, and rejects secrets, local authority,
   malformed reconstruction, and over-permissioned procedures atomically.
@@ -92,13 +97,9 @@ explicitly asks for that unrelated change. Do not stage `WHAT-IS-EKG-v3.md`,
 Do not mark the active goal complete until direct evidence proves every plan
 exit criterion. In particular, audit whether:
 
-1. retirement evidence demonstrates behavioral subsumption rather than only a
-   promoted successor and source coverage;
-2. generalized neutral-IR sandbox execution remains bounded to approved
+1. generalized neutral-IR sandbox execution remains bounded to approved
    native mappings rather than foreign code;
-3. structural search-policy changes have the same slow/offline regression gate
-   as broad procedure/concept changes;
-4. Section 38 fixtures cover representative held-out domain transfer, teacher
+2. Section 38 fixtures cover representative held-out domain transfer, teacher
    ablation, attribution faults, calibration, and longitudinal compounding
    strongly enough to make a thesis-level call rather than merely proving the
    storage/API path.
