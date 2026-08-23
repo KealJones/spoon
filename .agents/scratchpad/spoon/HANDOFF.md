@@ -15,6 +15,7 @@ untracked reference/archive files and the intentional whitespace-only change in
 
 Latest substantive commits:
 
+- `bfbdd75` — expose the human-facing `pnpm spoon ...` workspace command.
 - `2a3d25a` — rename Rust crates, TypeScript packages, binaries, environment
   variables, SQLite identifiers, docs, tests, and tracked scratchpad paths to
   Spoon; ignore local archives and scratchpads.
