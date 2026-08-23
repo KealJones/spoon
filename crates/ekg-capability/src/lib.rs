@@ -2619,6 +2619,34 @@ mod tests {
 
     #[test]
     fn invocation_checks_schema_effect_bounds_and_revocation_at_the_last_moment() {
+        let unvalidated_bundle = discover_interface(&interface()).unwrap();
+        let unvalidated_store = CapabilityStore::in_memory().unwrap();
+        let quarantined = unvalidated_store
+            .import(&export_bundle(&unvalidated_bundle).unwrap())
+            .unwrap();
+        let unvalidated_policy = PrimitivePolicy {
+            network_hosts: BTreeSet::from(["api.example.test".into()]),
+            bounds: unvalidated_bundle.procedures[0].bounds.clone(),
+            ..PrimitivePolicy::default()
+        };
+        let mut unvalidated_adapter = MockAdapter {
+            output: serde_json::json!({"temperature": 72}),
+            effect: Effect::Network,
+            usage: ResourceUsage::default(),
+            calls: 0,
+        };
+        assert!(matches!(
+            unvalidated_store.invoke(
+                &quarantined.content_id,
+                &unvalidated_bundle.procedures[0].id,
+                &serde_json::json!({}),
+                &unvalidated_policy,
+                &mut unvalidated_adapter,
+            ),
+            Err(CapabilityError::NotRevalidated)
+        ));
+        assert_eq!(unvalidated_adapter.calls, 0);
+
         let (store, bundle, imported, policy) = validated_store();
         let mut valid = MockAdapter {
             output: serde_json::json!({"temperature": 72}),
