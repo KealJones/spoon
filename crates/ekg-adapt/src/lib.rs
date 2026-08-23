@@ -8,11 +8,12 @@ mod promotion;
 mod reconciliation;
 
 pub use consolidation::{
-    ContractEvidence, DiscoveryArtifact, DiscoveryEvidence, DiscoveryKind, EpisodeCompressionPlan,
-    ExecutableStep, ExecutableStructure, GuardContractSection, PreventiveGuardSpecification,
-    RetirementRecord, SkillCandidate, discover_failure_critic, discover_failure_critic_artifact,
-    discover_single_success, discover_single_success_artifact, discover_skill_artifacts,
-    discover_skills, plan_episode_compression, retire_skill,
+    BehavioralSubsumptionEvidence, ContractEvidence, DiscoveryArtifact, DiscoveryEvidence,
+    DiscoveryKind, EpisodeCompressionPlan, ExecutableStep, ExecutableStructure,
+    GuardContractSection, PreventiveGuardSpecification, RetirementRecord, SkillCandidate,
+    discover_failure_critic, discover_failure_critic_artifact, discover_single_success,
+    discover_single_success_artifact, discover_skill_artifacts, discover_skills,
+    plan_episode_compression, retire_skill, retire_skill_with_evidence,
 };
 pub use contradiction::{
     AppliedPredicateRefinement, Claim, Contradiction, ContradictionId, ContradictionStatus,

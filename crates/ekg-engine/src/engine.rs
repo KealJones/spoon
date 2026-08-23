@@ -1279,9 +1279,30 @@ impl Engine {
                 "a failure critic cannot be the successor of an executable skill".into(),
             ));
         }
-        if !retired
+        if successor.shadow_live_wins == 0 {
+            return Err(EngineError::InvalidInput(
+                "retirement requires a successor with a trusted live behavior check".into(),
+            ));
+        }
+        let retired_source_episodes = retired
             .candidate
             .source_episode_ids
+            .iter()
+            .map(|episode_id| self.episodes.get(*episode_id))
+            .collect::<Result<Vec<_>, _>>()?;
+        let successor_source_episodes = successor
+            .candidate
+            .source_episode_ids
+            .iter()
+            .map(|episode_id| self.episodes.get(*episode_id))
+            .collect::<Result<Vec<_>, _>>()?;
+        let retired_source_ids = retired
+            .candidate
+            .source_episode_ids
+            .iter()
+            .copied()
+            .collect::<HashSet<_>>();
+        if !retired_source_ids
             .iter()
             .all(|episode_id| successor.candidate.source_episode_ids.contains(episode_id))
         {
@@ -1290,7 +1311,81 @@ impl Engine {
                     .into(),
             ));
         }
-        let record = ekg_adapt::retire_skill(skill_id, successor_skill, reason);
+        let additional_successor_episode_ids = successor
+            .candidate
+            .source_episode_ids
+            .iter()
+            .filter(|episode_id| !retired_source_ids.contains(episode_id))
+            .copied()
+            .collect::<Vec<_>>();
+        if additional_successor_episode_ids.is_empty() {
+            return Err(EngineError::InvalidInput(
+                "retirement requires additional successor behavior evidence".into(),
+            ));
+        }
+        for episode in retired_source_episodes
+            .iter()
+            .chain(successor_source_episodes.iter())
+        {
+            if !episode.succeeded() || self.trust.receipt_for_episode(episode)?.is_none() {
+                return Err(EngineError::InvalidInput(format!(
+                    "retirement behavior evidence episode {} is not a successful trusted observation",
+                    episode.id
+                )));
+            }
+        }
+        let retired_digests = retired_source_episodes
+            .iter()
+            .map(behavior_digest)
+            .collect::<Result<Vec<_>, _>>()?;
+        let successor_digests = successor_source_episodes
+            .iter()
+            .map(behavior_digest)
+            .collect::<Result<Vec<_>, _>>()?;
+        let additional_digests = additional_successor_episode_ids
+            .iter()
+            .map(|episode_id| {
+                successor_source_episodes
+                    .iter()
+                    .find(|episode| episode.id == *episode_id)
+                    .ok_or_else(|| {
+                        EngineError::InvalidInput(format!(
+                            "missing successor behavior evidence episode {episode_id}"
+                        ))
+                    })
+                    .and_then(behavior_digest)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut covered_behavior_digests = retired_digests.clone();
+        covered_behavior_digests.sort();
+        covered_behavior_digests.dedup();
+        if covered_behavior_digests
+            .iter()
+            .any(|digest| !successor_digests.contains(digest))
+        {
+            return Err(EngineError::InvalidInput(
+                "retirement successor does not cover every retired behavior shape".into(),
+            ));
+        }
+        if covered_behavior_digests
+            .iter()
+            .any(|digest| !additional_digests.contains(digest))
+        {
+            return Err(EngineError::InvalidInput(
+                "retirement successor has no new evidence for a retired behavior shape".into(),
+            ));
+        }
+        let record = ekg_adapt::retire_skill_with_evidence(
+            skill_id,
+            successor_skill,
+            reason,
+            ekg_adapt::BehavioralSubsumptionEvidence {
+                retired_source_episode_ids: retired.candidate.source_episode_ids.clone(),
+                successor_source_episode_ids: successor.candidate.source_episode_ids.clone(),
+                covered_behavior_digests,
+                additional_successor_episode_ids,
+            },
+        );
         self.skills.retire(skill_id, &record)
     }
 
@@ -2546,6 +2641,38 @@ pub(crate) fn bind_inputs(
                 .ok_or_else(|| EngineError::InvalidInput(format!("missing input '{}'", param.name)))
         })
         .collect()
+}
+
+/// Returns a stable, input/output-independent fingerprint of an observed
+/// execution shape. Retirement uses this only to prove that new successor
+/// evidence exercises every retired behavior path again; it is not a claim
+/// that two different inputs produce the same answer.
+fn behavior_digest(episode: &Episode) -> Result<String, EngineError> {
+    let trace_json = episode
+        .execution_trace
+        .clone()
+        .ok_or(EngineError::MissingTrace(episode.id))?;
+    let trace: ExecTrace = serde_json::from_value(trace_json)?;
+    if trace.steps.is_empty() {
+        return Err(EngineError::MissingTopLevelProcedure);
+    }
+    let shape = trace
+        .steps
+        .iter()
+        .map(|step| {
+            (
+                step.procedure_called.map(|id| id.to_string()),
+                step.procedure_version,
+                step.expr_description.clone(),
+                matches!(step.status, ExecStepStatus::Succeeded),
+                step.contract_checks.requires.len(),
+                step.contract_checks.promises.len(),
+                step.contract_checks.fails_when.len(),
+            )
+        })
+        .collect::<Vec<_>>();
+    let canonical = serde_json::to_vec(&(episode.action.as_deref(), shape))?;
+    Ok(format!("{:x}", Sha256::digest(canonical)))
 }
 
 fn parse_procedure_action(action: Option<&str>) -> Option<(ProcedureId, u32)> {

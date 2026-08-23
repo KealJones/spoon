@@ -311,6 +311,11 @@ impl SkillStore {
                 "retirement must retain a reconstructible record for this skill".into(),
             ));
         }
+        if record.behavioral_subsumption.is_none() {
+            return Err(EngineError::InvalidInput(
+                "retirement must retain engine-derived behavioral subsumption evidence".into(),
+            ));
+        }
         let now = unix_time();
         let record_json = serde_json::to_string(record)?;
         self.conn.execute(

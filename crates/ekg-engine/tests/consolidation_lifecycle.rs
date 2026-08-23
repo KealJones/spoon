@@ -129,11 +129,76 @@ fn trusted_candidate_moves_through_shadow_promotion_and_reconstructible_retireme
             "local-test-verifier",
         )
         .unwrap();
+
+    // A promoted successor that only repeats the retired candidate's exact
+    // provenance is not behavioral subsumption evidence. Retirement must
+    // reject this tempting but under-evidenced shortcut.
+    assert!(
+        engine
+            .retire_managed_skill(&managed.id, &successor.id, "subsumed")
+            .is_err()
+    );
+
+    let third = engine
+        .execute_procedure(procedure.id, inputs(4), Some(Value::Int(8)))
+        .unwrap();
+    let mut behaviorally_verified_successor_candidate = candidate.clone();
+    behaviorally_verified_successor_candidate.name =
+        "DOUBLE behaviorally verified successor".into();
+    behaviorally_verified_successor_candidate.rationale =
+        "independently verified successor with new source behavior evidence".into();
+    behaviorally_verified_successor_candidate
+        .source_episode_ids
+        .push(third.episode.id);
+    behaviorally_verified_successor_candidate.support_count += 1;
+    let behaviorally_verified_successor = engine
+        .register_skill_candidate(&behaviorally_verified_successor_candidate)
+        .unwrap();
+    engine
+        .evaluate_skill_for_shadow(
+            &behaviorally_verified_successor.id,
+            [PromotionReplay {
+                episode_id: first.episode.id,
+                incumbent_correct: true,
+                challenger_correct: true,
+                incumbent_trace_steps: Some(2),
+                challenger_trace_steps: Some(1),
+                incumbent_candidates_explored: Some(4),
+                challenger_candidates_explored: Some(2),
+                transfer: false,
+            }],
+        )
+        .unwrap();
+    engine
+        .record_skill_shadow_live_win(
+            &behaviorally_verified_successor.id,
+            Value::Int(4),
+            BTreeMap::from([("x".into(), Value::Int(2))]),
+            Evaluation {
+                tier: VerifiabilityTier::Hard,
+                success: true,
+                details: "successor behavior check".into(),
+                surprise: None,
+            },
+            "local-test-verifier",
+        )
+        .unwrap();
     let retired = engine
-        .retire_managed_skill(&managed.id, &successor.id, "subsumed")
+        .retire_managed_skill(&managed.id, &behaviorally_verified_successor.id, "subsumed")
         .unwrap();
     assert_eq!(retired.lifecycle, SkillLifecycle::Retired);
-    assert!(retired.retirement.unwrap().reconstructible);
+    let retirement = retired.retirement.unwrap();
+    assert!(retirement.reconstructible);
+    let evidence = retirement.behavioral_subsumption.unwrap();
+    assert_eq!(
+        evidence.retired_source_episode_ids,
+        candidate.source_episode_ids
+    );
+    assert!(
+        evidence
+            .additional_successor_episode_ids
+            .contains(&third.episode.id)
+    );
     assert!(
         engine
             .list_managed_skills(8)

@@ -76,9 +76,9 @@ pub use adaptation::{
     AttributionSelector, MutationScope, OfflineCapability,
 };
 pub use ekg_adapt::{
-    Claim, Contradiction, ContradictionId, ContradictionStatus, DemonstratedFeature,
-    EpisodeCompressionPlan, Implication, PromotionGate, PromotionReplay, PromotionVerdict,
-    PromotionWin, Refinement, RetirementRecord, ScopeAssignment, SkillCandidate,
+    BehavioralSubsumptionEvidence, Claim, Contradiction, ContradictionId, ContradictionStatus,
+    DemonstratedFeature, EpisodeCompressionPlan, Implication, PromotionGate, PromotionReplay,
+    PromotionVerdict, PromotionWin, Refinement, RetirementRecord, ScopeAssignment, SkillCandidate,
     discover_failure_critic, discover_single_success, discover_skills, plan_episode_compression,
     retire_skill,
 };

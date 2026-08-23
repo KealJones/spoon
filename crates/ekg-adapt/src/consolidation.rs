@@ -519,6 +519,24 @@ pub struct RetirementRecord {
     pub successor_skill: String,
     pub reason: String,
     pub reconstructible: bool,
+    /// Engine-derived evidence that the successor covers the retired
+    /// skill's observed behavior. Older records may omit this field; the
+    /// engine will not create a new retirement without it.
+    #[serde(default)]
+    pub behavioral_subsumption: Option<BehavioralSubsumptionEvidence>,
+}
+
+/// Durable, inspectable evidence for a retirement decision. The episode ids
+/// are retained so the behavior can be reconstructed locally; the additional
+/// ids must demonstrate every retired execution shape again rather than merely
+/// repeating the retired candidate's provenance.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BehavioralSubsumptionEvidence {
+    pub retired_source_episode_ids: Vec<EpisodeId>,
+    pub successor_source_episode_ids: Vec<EpisodeId>,
+    pub covered_behavior_digests: Vec<String>,
+    pub additional_successor_episode_ids: Vec<EpisodeId>,
 }
 
 pub fn retire_skill(
@@ -531,6 +549,22 @@ pub fn retire_skill(
         successor_skill: successor_skill.into(),
         reason: reason.into(),
         reconstructible: true,
+        behavioral_subsumption: None,
+    }
+}
+
+pub fn retire_skill_with_evidence(
+    retired_skill: impl Into<String>,
+    successor_skill: impl Into<String>,
+    reason: impl Into<String>,
+    behavioral_subsumption: BehavioralSubsumptionEvidence,
+) -> RetirementRecord {
+    RetirementRecord {
+        retired_skill: retired_skill.into(),
+        successor_skill: successor_skill.into(),
+        reason: reason.into(),
+        reconstructible: true,
+        behavioral_subsumption: Some(behavioral_subsumption),
     }
 }
 
