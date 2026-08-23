@@ -237,4 +237,23 @@ fn compression_materializes_summaries_without_deleting_source_episodes() {
         engine.list_episode_compression_records(32).unwrap().len(),
         result.archived_episode_ids.len()
     );
+    assert_eq!(
+        result.plan.forgotten_as_known_gap, result.plan.summarize,
+        "summarized episodes must remain explicit known gaps"
+    );
+    let record = engine
+        .list_episode_compression_records(32)
+        .unwrap()
+        .pop()
+        .unwrap();
+    let gaps = record.summary["knownGaps"].as_array().unwrap();
+    assert!(
+        gaps.iter()
+            .any(|gap| gap.as_str().unwrap().contains("execution trace"))
+    );
+    assert!(
+        gaps.iter()
+            .any(|gap| gap.as_str().unwrap().contains("behavioral subsumption"))
+    );
+    assert!(!record.archived_episode["execution_trace"].is_null());
 }

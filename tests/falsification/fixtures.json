@@ -1,6 +1,6 @@
 {
   "name": "section38-minimal-falsification-fixtures",
-  "purpose": "Small, deliberately non-production probe set for exercising Section 38 telemetry.",
+  "purpose": "Bounded falsification probe set for exercising Section 38 telemetry across acquisition, transfer, ablation, failure, and clarification.",
   "cases": [
     {
       "domain": "arithmetic",
@@ -31,6 +31,42 @@
       "abstained": true,
       "clarified": true,
       "expected": "abstention reported separately from correctness"
+    },
+    {
+      "domain": "arithmetic",
+      "family": "doubles",
+      "cohort": "training",
+      "probeId": "train-failure",
+      "noveltyIdentity": "double-invalid-input",
+      "teacherMode": "on",
+      "expected": "failed execution is retained and not counted as a success"
+    },
+    {
+      "domain": "arithmetic",
+      "family": "triples",
+      "cohort": "training",
+      "probeId": "train-triples-1",
+      "noveltyIdentity": "triple-4",
+      "teacherMode": "on",
+      "expected": "a second task family supplies a separate acquisition cohort"
+    },
+    {
+      "domain": "arithmetic",
+      "family": "triples-held-out",
+      "cohort": "heldOut",
+      "probeId": "heldout-triples-1",
+      "noveltyIdentity": "triple-91",
+      "teacherMode": "off",
+      "expected": "held-out transfer remains family-isolated"
+    },
+    {
+      "domain": "arithmetic",
+      "family": "subtraction",
+      "cohort": "training",
+      "probeId": "train-ablation-1",
+      "noveltyIdentity": "subtract-9",
+      "teacherMode": "off",
+      "expected": "teacher-off cost and trace can be compared without teacher leakage"
     }
   ]
 }

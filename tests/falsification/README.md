@@ -1,9 +1,12 @@
 # Section 38 falsification harness
 
-These tiny fixtures drive the durable telemetry test in
+These bounded fixtures drive the durable telemetry tests in
 `crates/ekg-engine/tests/falsification_telemetry.rs`. They are intentionally a
-schema/harness demonstration, not a benchmark result or evidence that Spoon has
-passed the twelve Section 38 metrics.
+representative schema/harness corpus, not a benchmark result or evidence that
+Spoon has passed the twelve Section 38 metrics. The cases include successful
+acquisition, held-out transfer from distinct families, teacher ablation,
+failure retention, and abstention/clarification so each boundary is visible in
+review.
 
 Each recorded probe must carry its cohort, novelty identity, teacher usage,
 cost/trace data, grounding tier, outcome, and optional skill/attribution data.

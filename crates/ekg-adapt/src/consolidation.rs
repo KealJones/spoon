@@ -500,10 +500,15 @@ pub fn plan_episode_compression(episodes: &[Episode]) -> EpisodeCompressionPlan 
     }
     retain_full.sort_unstable_by_key(|id| id.to_string());
     summarize.sort_unstable_by_key(|id| id.to_string());
+    // A summarized episode is still archived, but its bounded summary omits
+    // details such as the complete execution trace and context. Keep that
+    // omission explicit so compression cannot be mistaken for lossless
+    // behavioral evidence.
+    let forgotten_as_known_gap = summarize.clone();
     EpisodeCompressionPlan {
         retain_full,
         summarize,
-        forgotten_as_known_gap: Vec::new(),
+        forgotten_as_known_gap,
     }
 }
 

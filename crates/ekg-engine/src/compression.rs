@@ -3,7 +3,8 @@
 //! Compression never deletes the source episode. It stores a bounded summary
 //! and an archived copy so later extraction, audit, and reconstruction remain
 //! possible; failures are intentionally excluded from summarization by the
-//! planning function.
+//! planning function. Every summary carries an explicit known-gap list: the
+//! summary is not a substitute for the archived trace or full context.
 
 use ekg_adapt::EpisodeCompressionPlan;
 use ekg_core::{Episode, EpisodeId};
@@ -94,6 +95,11 @@ impl CompressionStore {
                 "observedResult": episode.observed_result,
                 "rung": episode.cost.rung_reached,
                 "steps": episode.cost.steps_taken,
+                "knownGaps": [
+                    "full execution trace is retained only in archivedEpisode",
+                    "full context and knowledge candidates are retained only in archivedEpisode",
+                    "summary is not sufficient evidence for behavioral subsumption"
+                ],
             });
             let archived = serde_json::to_value(episode)?;
             self.conn.execute(

@@ -244,3 +244,91 @@ fn engine_capability_invocation_is_explicit_redacted_and_revocation_is_immediate
             .is_err()
     );
 }
+
+#[test]
+fn capability_bundle_round_trips_into_a_clean_instance_before_invocation() {
+    // Discovery and export belong to the source instance; no trust, grant, or
+    // environment assumption is allowed to hitch a ride with the bundle.
+    let source = Engine::in_memory_with_admin("capability-source").unwrap();
+    let bundle = source
+        .discover_capability(&InterfaceDescription {
+            source: "clean-instance-api".into(),
+            fingerprint: "clean-instance-v1".into(),
+            operations: vec![DiscoveredOperation {
+                name: "lookup".into(),
+                input_schema: serde_json::json!({"type":"object"}),
+                output_schema: serde_json::json!({"type":"object"}),
+                host: "api.example.test".into(),
+                method: "GET".into(),
+                response_fixture: serde_json::json!({"temperature":72}),
+            }],
+        })
+        .unwrap();
+    let bytes = ekg_engine::export_bundle(&bundle).unwrap();
+
+    let clean = Engine::in_memory_with_admin("capability-clean-instance").unwrap();
+    let imported = clean.import_capability_bundle(&bytes).unwrap();
+    assert_eq!(imported.status, CapabilityStatus::Quarantined);
+    let validation_episode = clean
+        .record_authenticated_observation(
+            "clean.lookup",
+            Value::Map(BTreeMap::from([(
+                String::from("temperature"),
+                Value::Int(72),
+            )])),
+            BTreeMap::new(),
+            Evaluation {
+                tier: VerifiabilityTier::Hard,
+                success: true,
+                details: "clean local fixture matched".into(),
+                surprise: Some(0.0),
+            },
+            "clean-instance-validation",
+        )
+        .unwrap();
+    let validated = clean
+        .revalidate_capability(
+            &imported.content_id,
+            &LocalValidation {
+                passed: true,
+                validation_episodes: vec![validation_episode.id.to_string()],
+                environment_digest: "clean-instance".into(),
+            },
+        )
+        .unwrap();
+    assert_eq!(validated.status, CapabilityStatus::Provisional);
+    let permission = Permission::NetworkHost {
+        host: "api.example.test".into(),
+    };
+    clean
+        .grant_capability_permission(&validated.content_id, &permission)
+        .unwrap();
+    let policy = PrimitivePolicy {
+        network_hosts: BTreeSet::from(["api.example.test".into()]),
+        bounds: bundle.procedures[0].bounds.clone(),
+        ..PrimitivePolicy::default()
+    };
+    let mut adapter = DeterministicFixtureAdapter {
+        calls: 0,
+        expected_content_id: validated.content_id.clone(),
+    };
+    let outcome = clean
+        .invoke_capability(
+            &validated.content_id,
+            &bundle.procedures[0].id,
+            &serde_json::json!({"query":"today","apiSecret":"do-not-persist"}),
+            Some(&serde_json::json!({"temperature":72})),
+            &policy,
+            &mut adapter,
+        )
+        .unwrap();
+    assert!(outcome.episode.succeeded());
+    assert_eq!(adapter.calls, 1);
+    assert!(
+        outcome
+            .episode
+            .action
+            .as_deref()
+            .is_some_and(|action| action.ends_with(":invoked"))
+    );
+}
