@@ -841,8 +841,19 @@ fn offline_adaptation_is_admin_only_and_consumes_capability_internally() {
                 left: Box::new(Expr::Var("factor".into())),
                 right: Box::new(Expr::Literal(EkgValue::Int(0))),
             }),
-        );
+    );
     engine.admin_insert_procedure(&procedure).unwrap();
+    // Broad revisions now require an independently recorded, replayable
+    // baseline for every affected executable behavior. The failing contract
+    // episodes below are evidence for the revision, not a passing regression
+    // case, so establish the ordinary positive-factor behavior first.
+    engine
+        .execute_procedure(
+            procedure.id,
+            BTreeMap::from([("factor".into(), EkgValue::Int(1))]),
+            Some(EkgValue::Int(1)),
+        )
+        .unwrap();
     let mut failures = Vec::new();
     let mut feedback_ids = Vec::new();
     for index in 0..5 {
