@@ -1,8 +1,12 @@
-# EKG
+# Spoon
 
-EKG (Executable Knowledge Graph) is a local, inspectable knowledge engine. It
-records episodes, evaluates results, learns reusable procedures, and keeps
-teacher advice provisional until local checks establish trust.
+Spoon is a local, inspectable executable knowledge engine. It records episodes,
+evaluates results, learns reusable procedures, and keeps teacher advice
+provisional until local checks establish trust.
+
+The repository is transitioning from the historical EKG name. Internal Rust
+crate names, npm package names, and `EKG_*` environment variables remain stable
+for compatibility with existing scripts.
 
 ## Quick start
 
@@ -28,11 +32,11 @@ proposed, validation, prediction versus observation, learning/reuse, and cost.
 
 ## Packages
 
-- [`@ekg/cli`](packages/cli/README.md) — human-facing commands and chat flow.
-- [`@ekg/sdk`](packages/sdk/README.md) — TypeScript JSON-RPC client.
+- [`@ekg/cli`](packages/cli/README.md) — Spoon's human-facing commands and chat flow.
+- [`@ekg/sdk`](packages/sdk/README.md) — Spoon's TypeScript JSON-RPC client.
 - [`@ekg/teacher`](packages/teacher/README.md) — Claude, Codex, OpenAI, Ollama,
   and human teacher adapters.
-- [`@ekg/inspector`](packages/inspector/README.md) — local read-only dashboard
+- [`@ekg/inspector`](packages/inspector/README.md) — Spoon's local read-only dashboard
   and “What happened?” episode narratives.
 - `crates/` — Rust core, graph, execution, episodes, adaptation, capabilities,
   engine, and JSON-RPC server.
@@ -59,5 +63,5 @@ pnpm build
 pnpm depcheck
 ```
 
-EKG stores data in SQLite. Imported capabilities are quarantined, do not carry
+Spoon stores data in SQLite. Imported capabilities are quarantined, do not carry
 secrets or trust, and require local permission grants and trusted revalidation.

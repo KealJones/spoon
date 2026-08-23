@@ -1,6 +1,6 @@
-# `@ekg/cli`
+# Spoon CLI (`@ekg/cli`)
 
-The CLI is the simplest way to talk to a local EKG server.
+The CLI is the simplest way to talk to a local Spoon server.
 
 ## Run it from the workspace
 
@@ -38,12 +38,12 @@ and `primitive observe clock`.
 
 ## Teacher selection
 
-The default is Claude via its local CLI. Set `EKG_TEACHER` to `claude`,
+The default is Claude via its local CLI. Set the legacy `EKG_TEACHER` variable to `claude`,
 `codex`, `openai`, `ollama`, or `human`; set `EKG_TEACHER_MODEL` when required.
 The OpenAI adapter reads `OPENAI_API_KEY` from the process environment. Keep
 credentials outside the database and do not commit `.env` files.
 
-Admin-only mutations use `EKG_ADMIN_TOKEN`.
+Admin-only mutations use the legacy `EKG_ADMIN_TOKEN` variable.
 
 ## Package checks
 

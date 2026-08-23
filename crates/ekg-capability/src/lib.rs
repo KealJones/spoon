@@ -148,7 +148,7 @@ pub struct PrimitiveExecution {
 }
 
 /// The only request shape exposed to a host capability adapter. It is made by
-/// EKG from a stored, locally revalidated procedure; an adapter never receives
+/// Spoon from a stored, locally revalidated procedure; an adapter never receives
 /// a bundle, ambient credentials, or foreign executable code.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -162,7 +162,7 @@ pub struct AuthorizedPrimitiveInvocation {
     pub bounds: ResourceBounds,
 }
 
-/// Usage reported by an injected host adapter. EKG independently accounts for
+/// Usage reported by an injected host adapter. Spoon independently accounts for
 /// serialized input/output bytes and rejects a report that exceeds the stored
 /// procedure or local policy envelope.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]

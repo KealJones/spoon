@@ -38,27 +38,27 @@ export type Command =
   | { kind: "cycle.run"; situation: string; quiet: boolean; explain: boolean };
 
 const usage = `Usage:
-  ekg concept add <name>
-  ekg concept list
-  ekg relationship add <source-id> <kind> <target-id>
-  ekg graph traverse <concept-id> <kind> [max-hops]
-  ekg procedure define '<json>'
-  ekg procedure list
-  ekg procedure run <name-or-id> [key=json-value ...]
-  ekg episode list [limit]
-  ekg episode get <episode-id>
-  ekg failure analyze '<json>'
-  ekg failure plan '<json>'
-  ekg failure apply <plan-id>
-  ekg failure apply-offline <plan-id>
-  ekg adaptation show <plan-id>
-  ekg contradiction list
-  ekg contradiction get <id>
-  ekg contradiction record '<json>'
-  ekg contradiction refine '<json>'
-  ekg contradiction uncertainty <claim-id>
-  ekg primitive observe <target>
-  ekg ask [--quiet|-q|--explain] <situation>`;
+  spoon concept add <name>
+  spoon concept list
+  spoon relationship add <source-id> <kind> <target-id>
+  spoon graph traverse <concept-id> <kind> [max-hops]
+  spoon procedure define '<json>'
+  spoon procedure list
+  spoon procedure run <name-or-id> [key=json-value ...]
+  spoon episode list [limit]
+  spoon episode get <episode-id>
+  spoon failure analyze '<json>'
+  spoon failure plan '<json>'
+  spoon failure apply <plan-id>
+  spoon failure apply-offline <plan-id>
+  spoon adaptation show <plan-id>
+  spoon contradiction list
+  spoon contradiction get <id>
+  spoon contradiction record '<json>'
+  spoon contradiction refine '<json>'
+  spoon contradiction uncertainty <claim-id>
+  spoon primitive observe <target>
+  spoon ask [--quiet|-q|--explain] <situation>`;
 
 export function parseCommand(args: string[]): Command {
   const [resource, action, ...rest] = args;

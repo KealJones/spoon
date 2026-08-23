@@ -59,6 +59,7 @@ fn durable_telemetry_scores_only_explicit_probe_evidence() {
 
     let mut held_out = observation("heldout-1", "double-97");
     held_out.cohort = ProbeCohort::HeldOut;
+    held_out.family = "held-out-doubles".into();
     held_out.used_skill_id = Some("double-number".into());
     held_out.created_skill_id = None;
     held_out.teacher_mode = TeacherMode::Off;
@@ -83,6 +84,7 @@ fn durable_telemetry_scores_only_explicit_probe_evidence() {
 
     let mut abstention = observation("heldout-clarify", "ambiguous-double");
     abstention.cohort = ProbeCohort::HeldOut;
+    abstention.family = "held-out-clarifications".into();
     abstention.abstained = true;
     abstention.clarified = true;
     abstention.correct = None;
@@ -167,5 +169,36 @@ fn held_out_measurements_cannot_train_or_claim_teacher_grounding_when_off() {
         engine
             .record_falsification_measurement(&run.id, teacher_grounding)
             .is_err()
+    );
+}
+
+#[test]
+fn training_and_held_out_cohorts_cannot_share_a_task_family() {
+    let engine = Engine::in_memory().unwrap();
+    let run = engine
+        .create_falsification_run(FalsificationRunInput {
+            label: "cohort separation".into(),
+            benchmark: "unit".into(),
+            notes: None,
+        })
+        .unwrap();
+    engine
+        .record_falsification_measurement(&run.id, observation("train", "input-1"))
+        .unwrap();
+    let mut held_out = observation("held-out", "input-2");
+    held_out.cohort = ProbeCohort::HeldOut;
+    held_out.created_skill_id = None;
+    assert!(
+        engine
+            .record_falsification_measurement(&run.id, held_out)
+            .is_err()
+    );
+    assert_eq!(
+        engine
+            .metrics_snapshot()
+            .unwrap()
+            .section38
+            .cohort_leakage_rejected,
+        1
     );
 }

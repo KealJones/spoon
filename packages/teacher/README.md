@@ -1,8 +1,8 @@
-# `@ekg/teacher`
+# Spoon Teacher Protocol (`@ekg/teacher`)
 
-This package defines the teacher protocol and provider adapters used when EKG
+This package defines the teacher protocol and provider adapters used when Spoon
 cannot resolve a situation locally. Teacher output is structured, provenance-
-bound, and provisional until the validation pipeline accepts it and EKG’s own
+bound, and provisional until the validation pipeline accepts it and Spoon’s own
 evaluation establishes evidence.
 
 ## Providers
@@ -32,7 +32,7 @@ const proposal = await teacher.propose({
 console.log(proposal);
 ```
 
-Prefer the CLI/provider factory for normal EKG use so request fingerprints,
+Prefer the CLI/provider factory for normal Spoon use so request fingerprints,
 validation, reliability tracking, and bounded teacher turns stay consistent.
 
 ## Development

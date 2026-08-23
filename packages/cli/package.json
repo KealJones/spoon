@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "bin": {
+    "spoon": "./src/main.ts",
     "ekg": "./src/main.ts"
   },
   "scripts": {

@@ -54,7 +54,7 @@ const request: TeacherRequest = {
     relationships: [],
     procedures: [],
   },
-  specificQuestion: "What reusable lesson should EKG learn?",
+    specificQuestion: "What reusable lesson should Spoon learn?",
   desiredOutput: schema,
 };
 

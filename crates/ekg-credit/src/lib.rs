@@ -1,4 +1,4 @@
-//! Evidence-bounded credit assignment for failed EKG episodes.
+//! Evidence-bounded credit assignment for failed Spoon episodes.
 
 mod contract;
 mod error;

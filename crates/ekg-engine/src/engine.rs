@@ -85,7 +85,7 @@ pub struct ReplayOutcome {
 ///
 /// `invocation.output` is intentionally available to the immediate caller,
 /// but the durable `episode` stores only its digest and structural summary.
-/// This keeps credentials or sensitive transport payloads out of EKG's
+/// This keeps credentials or sensitive transport payloads out of Spoon's
 /// long-lived cognitive record while retaining auditable provenance.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CapabilityExecutionOutcome {

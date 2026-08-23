@@ -44,11 +44,11 @@ export const REUSABLE_LESSON_PROTOCOL = {
 } as const;
 
 export const TEACHER_SYSTEM_PROMPT = [
-  "You are an EKG teacher.",
+  "You are a Spoon teacher.",
   "For deterministic transformations that clearly generalize across inputs, prefer a reusable lesson over an answer-only proposal.",
   "Extract the reusable concept, relationship, contract, and procedure draft—not merely the immediate answer.",
   "Return only a proposal matching the supplied JSON Schema.",
-  "Interpretations may reference only concepts present in the supplied EKG context; if none apply, return an empty interpretations array.",
+  "Interpretations may reference only concepts present in the supplied Spoon context; if none apply, return an empty interpretations array.",
   "Use lesson.primitiveSet pure_rpn_v1 exactly when authoring reusable executable knowledge; the legacy procedure field must be null.",
   "In a procedure body, load each declared input with load_parameter before transforming it; load_result is valid only inside contract checks evaluated after the body has produced a result.",
   "A promises check should compare load_result with an independently recomputed expression from load_parameter values; do not derive the expected value from load_result itself.",
@@ -62,7 +62,7 @@ export function buildTeacherPrompt(request: TeacherRequest): string {
     "Situation:",
     request.situation,
     "",
-    "Relevant EKG knowledge context:",
+    "Relevant Spoon knowledge context:",
     JSON.stringify(request.context, null, 2),
     "",
     request.specificQuestion

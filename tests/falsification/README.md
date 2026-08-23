@@ -2,7 +2,7 @@
 
 These tiny fixtures drive the durable telemetry test in
 `crates/ekg-engine/tests/falsification_telemetry.rs`. They are intentionally a
-schema/harness demonstration, not a benchmark result or evidence that EKG has
+schema/harness demonstration, not a benchmark result or evidence that Spoon has
 passed the twelve Section 38 metrics.
 
 Each recorded probe must carry its cohort, novelty identity, teacher usage,

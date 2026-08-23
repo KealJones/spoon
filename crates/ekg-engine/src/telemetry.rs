@@ -146,6 +146,7 @@ pub struct Section38TelemetrySnapshot {
     pub clarifications: u64,
     pub teacher_off_violations_rejected: u64,
     pub duplicate_measurements_rejected: u64,
+    pub cohort_leakage_rejected: u64,
     pub metrics: Vec<Section38Metric>,
 }
 
@@ -248,6 +249,12 @@ impl FalsificationTelemetryStore {
                 "a repeated probe/novelty pair must declare repeatOf; repeats are excluded from acquisition and transfer".into(),
             ));
         }
+        if observation.repeat_of.is_none() && self.cross_cohort_family(&observation)? {
+            self.reject("cohortLeakage")?;
+            return Err(EngineError::InvalidInput(
+                "a task family cannot be both training and held-out evidence".into(),
+            ));
+        }
         let measurement = FalsificationMeasurement {
             id: Uuid::new_v4().to_string(),
             run_id: run_id.to_owned(),
@@ -313,8 +320,34 @@ impl FalsificationTelemetryStore {
             clarifications,
             teacher_off_violations_rejected: self.rejections("teacherOffViolations")?,
             duplicate_measurements_rejected: self.rejections("duplicateMeasurements")?,
+            cohort_leakage_rejected: self.rejections("cohortLeakage")?,
             metrics: report(&records),
         })
+    }
+
+    fn cross_cohort_family(
+        &self,
+        observation: &FalsificationMeasurementInput,
+    ) -> Result<bool, EngineError> {
+        let mut statement = self.conn.prepare(
+            "SELECT payload_json FROM engine_falsification_measurements
+             WHERE novelty_identity != ?1",
+        )?;
+        let rows = statement.query_map([observation.novelty_identity.as_str()], |row| {
+            row.get::<_, String>(0)
+        })?;
+        for row in rows {
+            let payload = row?;
+            let prior: FalsificationMeasurement = serde_json::from_str(&payload)?;
+            if prior.observation.repeat_of.is_none()
+                && prior.observation.domain == observation.domain
+                && prior.observation.family == observation.family
+                && prior.observation.cohort != observation.cohort
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     fn validate(&self, value: &FalsificationMeasurementInput) -> Result<(), EngineError> {

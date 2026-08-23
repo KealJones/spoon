@@ -1,4 +1,4 @@
-# EKG implementation handoff
+# Spoon implementation handoff
 
 Last updated: 2026-08-22 (full workspace gate + Section 38 boundary audit)
 

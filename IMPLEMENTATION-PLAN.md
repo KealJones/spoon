@@ -1,8 +1,11 @@
-# EKG Implementation Plan
+# Spoon Implementation Plan
 
-This is the phased implementation plan for building EKG (Executable Knowledge
-Graph) as described in WHAT-IS-EKG-v3.md. It maps the conceptual architecture
-to concrete engineering work.
+This is the phased implementation plan for building Spoon's executable
+knowledge engine as described in the historical `WHAT-IS-EKG-v3.md` design
+document. It maps that architecture to concrete engineering work.
+
+The public product name is Spoon. Internal crate/package identifiers retain the
+`ekg-*`, `@ekg/*`, and `EKG_*` compatibility names until a separate migration.
 
 ## Decisions Made
 
@@ -67,7 +70,7 @@ quality/cost policy, not a guarantee of app-specific credit consumption.
 ## Repository Structure
 
 ```
-ekg/
+  spoon/
   crates/
     ekg-core/          # data model: concepts, relationships, contracts,
                        # mutability classes, confidence, scope, evidence
@@ -83,11 +86,11 @@ ekg/
     ekg-server/        # JSON-RPC server exposing the engine
 
   packages/
-    @ekg/cli/          # TUI + REPL for interacting with EKG
+    @ekg/cli/          # TUI + REPL for interacting with Spoon
     @ekg/teacher/      # teacher abstraction + provider adapters
     @ekg/inspector/    # web dashboard: graph viewer, episode browser,
                        # metrics dashboard (section 38)
-    @ekg/sdk/          # TypeScript client for ekg-server
+    @ekg/sdk/          # TypeScript client for the ekg-server compatibility API
 
   tests/
     kitchen/           # the running example from the doc, as integration tests
@@ -274,7 +277,7 @@ interface TeacherProposal {
 Provider adapters:
 - **ClaudeTeacher**: spawns `claude -p`, sends structured prompts, parses
   JSON output. Uses system prompt that instructs Claude to output proposals
-  in EKG's schema, not just answers (section 30: extract the lesson, not
+  in Spoon's schema, not just answers (section 30: extract the lesson, not
   the answer)
 - **OpenAITeacher**: standard HTTP API calls
 - **OllamaTeacher**: local models, cheap, good for high-volume self-supervision
@@ -354,7 +357,7 @@ Metacognition: simple escalation ladder (section 17)
   3. ASK - teacher
   4. ABSTAIN - say so
 
-**Deliverable**: Give EKG a task, it attempts to solve it (badly), and
+**Deliverable**: Give Spoon a task, it attempts to solve it (badly), and
 records the full episode. The kitchen test should partially work.
 
 ### P1 Exit Criteria
@@ -656,7 +659,7 @@ Value ranking:
 
 ### P5.3 - Capability Acquisition (section 32)
 
-Give EKG a minimal native substrate from which it can acquire richer tools:
+Give Spoon a minimal native substrate from which it can acquire richer tools:
 
 - Native primitives are fixed, typed, and policy-enforced: scoped network
   request, scoped file read/write, observation, and sandboxed execution.
@@ -714,8 +717,8 @@ catastrophic failures live here.
 
 ### P5 Exit Criteria
 
-- EKG directs its own learning within goal boundaries
-- EKG can discover an authorized interface and synthesize a typed, contracted,
+- Spoon directs its own learning within goal boundaries
+- Spoon can discover an authorized interface and synthesize a typed, contracted,
   sandbox-tested capability from the native primitives
 - Exported bundles reconstruct the same dependency DAG and tests on a clean
   instance; deterministic re-export has the same content identity
@@ -748,7 +751,7 @@ catastrophic failures live here.
     teacher's structured proposal summarized in plain language;
   - validation status, rejected/provisional/verified checks, and the exact
     reason a proposal was accepted, retried, or discarded;
-  - what EKG learned (new concept/procedure/contract/test), what it deliberately
+  - what Spoon learned (new concept/procedure/contract/test), what it deliberately
     did not learn, and the provenance episode that supports each change;
   - execution steps, contract checks, observed result, evaluation tier,
     confidence/surprise, cost, and the reason for any abstention;
@@ -777,7 +780,7 @@ The twelve metrics, tracked continuously:
 9. **Teacher ablation**: disconnect teacher, re-run task history
 10. **Grounding drift**: fraction of beliefs traced to external evidence
 11. **Abstraction survival**: promoted abstractions still in use later
-12. **Calibration**: when EKG says .9, is it right ~90%?
+12. **Calibration**: when Spoon says .9, is it right ~90%?
 
 Anti-gaming rules (section 38):
 - Held-out task families for transfer measurement

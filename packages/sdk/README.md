@@ -1,6 +1,6 @@
-# `@ekg/sdk`
+# Spoon SDK (`@ekg/sdk`)
 
-`@ekg/sdk` is the typed TypeScript client for EKG’s newline-delimited
+`@ekg/sdk` is Spoon’s typed TypeScript client for its newline-delimited
 JSON-RPC server. It covers graph and procedure operations, cycles, episodes,
 teacher handoff, capabilities, goals, curiosity, consolidation, and metrics.
 
@@ -11,7 +11,7 @@ import { EkgClient, StdioTransport } from "@ekg/sdk";
 
 const transport = StdioTransport.spawn("target/debug/ekg-server");
 const client = new EkgClient(transport, {
-  adminToken: process.env.EKG_ADMIN_TOKEN,
+  adminToken: process.env.EKG_ADMIN_TOKEN, // legacy environment name
 });
 
 try {

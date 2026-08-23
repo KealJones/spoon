@@ -110,12 +110,12 @@ export function createConfiguredTeacher(
       return new HumanTeacher();
     case "openai":
       if (!model) {
-        throw new Error("EKG_TEACHER_MODEL is required for the OpenAI teacher");
+        throw new Error("EKG_TEACHER_MODEL is required for the OpenAI teacher (legacy variable name)");
       }
       return new OpenAITeacher({ model });
     default:
       throw new Error(
-        `Unknown EKG_TEACHER '${provider}'; expected claude, codex, openai, ollama, or human`,
+        `Unknown Spoon teacher '${provider}'; expected claude, codex, openai, ollama, or human (configured with legacy EKG_TEACHER)`,
       );
   }
 }

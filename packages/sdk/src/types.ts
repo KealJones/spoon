@@ -277,6 +277,7 @@ export interface Section38TelemetrySnapshot {
   clarifications: number;
   teacherOffViolationsRejected: number;
   duplicateMeasurementsRejected: number;
+  cohortLeakageRejected: number;
   metrics: Section38Metric[];
 }
 

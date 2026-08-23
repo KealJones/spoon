@@ -1,6 +1,6 @@
-# `@ekg/inspector`
+# Spoon Inspector (`@ekg/inspector`)
 
-The inspector is a local, read-only web dashboard for the EKG server. It shows
+The inspector is a local, read-only web dashboard for the Spoon server. It shows
 knowledge, procedures, episodes, flywheel telemetry, and the twelve Section 38
 metric slots with honest measured/partial/uninstrumented status.
 
