@@ -1,7 +1,8 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use ekg_capability::{
-    CapabilityBundle, CapabilityStore, ImportedCapability, LocalValidation, Permission,
+    CapabilityBundle, CapabilityInvocation, CapabilityInvocationAdapter, CapabilityProcedure,
+    CapabilityStore, ImportedCapability, LocalValidation, Permission, PrimitivePolicy,
 };
 use ekg_core::{
     Concept, ConceptId, ContractCheckResult, EkgError, Episode, EpisodeCost, EpisodeId,
@@ -56,6 +57,14 @@ pub enum EngineError {
         #[source]
         source: EkgError,
     },
+    /// Capability invocations are persisted even when authorization, schema,
+    /// policy, or an injected adapter rejects them. The episode id is the
+    /// immutable evidence handle for the failed attempt.
+    #[error("capability invocation failed in episode {episode_id}: {reason}")]
+    CapabilityInvocationFailed {
+        episode_id: EpisodeId,
+        reason: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -70,6 +79,18 @@ pub struct ReplayOutcome {
     pub value: Value,
     pub trace: ExecTrace,
     pub source_episode: EpisodeId,
+}
+
+/// The immediate result of one locally authorized capability call.
+///
+/// `invocation.output` is intentionally available to the immediate caller,
+/// but the durable `episode` stores only its digest and structural summary.
+/// This keeps credentials or sensitive transport payloads out of EKG's
+/// long-lived cognitive record while retaining auditable provenance.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CapabilityExecutionOutcome {
+    pub invocation: CapabilityInvocation,
+    pub episode: Episode,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -406,6 +427,233 @@ impl Engine {
             .map_err(|error| {
                 EngineError::InvalidInput(format!("capability authorization: {error}"))
             })
+    }
+
+    /// Invoke one exact, locally revalidated capability procedure through an
+    /// injected host adapter.
+    ///
+    /// The Engine never chooses an ambient network, filesystem, or process
+    /// implementation here: the caller supplies both the narrow primitive
+    /// policy and the adapter that owns the effect boundary. `CapabilityStore`
+    /// resolves the stored procedure and re-checks its status and every grant
+    /// on every invocation, including immediately after a revocation.
+    ///
+    /// The returned invocation contains the immediate typed output. The
+    /// durable episode deliberately contains only output/input digests and a
+    /// structural summary, plus the capability receipt, declared effects,
+    /// permissions, and resource usage. If authorization or execution fails,
+    /// an immutable failure episode is persisted before this method returns
+    /// [`EngineError::CapabilityInvocationFailed`].
+    pub fn invoke_capability<A: CapabilityInvocationAdapter>(
+        &self,
+        content_id: &str,
+        procedure_id: &str,
+        input: &serde_json::Value,
+        expected_output: Option<&serde_json::Value>,
+        policy: &PrimitivePolicy,
+        adapter: &mut A,
+    ) -> Result<CapabilityExecutionOutcome, EngineError> {
+        // Reconstruction is authority-free. It lets a rejected invocation
+        // retain the exact declared procedure shape when the durable store can
+        // still read it, without ever treating that shape as executable.
+        let procedure = self
+            .reconstruct_capability(content_id)
+            .ok()
+            .and_then(|capability| {
+                capability
+                    .procedures
+                    .into_iter()
+                    .find(|procedure| procedure.id == procedure_id)
+            });
+        let input_digest = json_digest(input);
+        let policy_digest = json_digest(policy);
+
+        match self
+            .capabilities
+            .invoke(content_id, procedure_id, input, policy, adapter)
+        {
+            Ok(invocation) => {
+                let output_digest = invocation.output_digest.clone();
+                let mut episode = self.capability_invocation_episode(
+                    content_id,
+                    procedure_id,
+                    procedure.as_ref(),
+                    &input_digest,
+                    &policy_digest,
+                );
+                let expected_digest = expected_output.map(json_digest);
+                episode.prediction = expected_digest.clone().map(Value::Text);
+                episode.action = Some(format!(
+                    "capability:{}:{}:invoked",
+                    content_id, procedure_id
+                ));
+                episode.observed_result = Some(redacted_capability_output(
+                    &output_digest,
+                    &invocation.output,
+                ));
+                episode.evaluation = Some(match expected_output {
+                    Some(expected) => Evaluation {
+                        tier: VerifiabilityTier::Hard,
+                        success: expected == &invocation.output,
+                        details: format!(
+                            "deterministic capability output comparison (expected {}, observed {})",
+                            expected_digest.unwrap_or_else(|| "sha256:unavailable".into()),
+                            output_digest
+                        ),
+                        surprise: Some(if expected == &invocation.output {
+                            0.0
+                        } else {
+                            1.0
+                        }),
+                    },
+                    None => Evaluation {
+                        tier: VerifiabilityTier::Deferred,
+                        success: true,
+                        details: format!(
+                            "capability adapter completed; output retained only as {} and needs independent verification",
+                            output_digest
+                        ),
+                        surprise: None,
+                    },
+                });
+                episode.reasoning_trace.steps.push(TraceStep {
+                    description: "invoke locally authorized capability procedure".into(),
+                    procedure_used: None,
+                    contract_check: Some(ContractCheckResult {
+                        all_requires_met: true,
+                        all_promises_met: episode.succeeded(),
+                        no_failure_conditions_met: true,
+                        violations: Vec::new(),
+                    }),
+                    input: Some(Value::Text(input_digest.clone())),
+                    output: Some(Value::Text(output_digest.clone())),
+                    rung: EscalationRung::Run,
+                    status: TraceStepStatus::Succeeded,
+                });
+                episode.execution_trace = Some(serde_json::json!({
+                    "kind": "capability_invocation_v1",
+                    "contentId": content_id,
+                    "procedureId": procedure_id,
+                    "inputDigest": input_digest,
+                    "outputDigest": output_digest,
+                    "redacted": true,
+                    "receipt": &invocation.receipt,
+                    "usage": invocation.usage,
+                }));
+                episode.teacher_interaction = Some(serde_json::json!({
+                    "kind": "capability_invocation",
+                    "contentId": content_id,
+                    "procedure": capability_procedure_summary(procedure.as_ref(), procedure_id),
+                    "declaredEffects": procedure.as_ref().map(|item| &item.effects),
+                    "declaredPermissions": procedure.as_ref().map(|item| &item.permissions),
+                    "policyDigest": policy_digest,
+                    "inputDigest": input_digest,
+                    "output": redacted_json_output(&output_digest, &invocation.output),
+                    "receipt": &invocation.receipt,
+                    "usage": invocation.usage,
+                }));
+                episode.cost = EpisodeCost {
+                    rung_reached: EscalationRung::Run,
+                    steps_taken: 1,
+                    budget_spent: invocation.usage.steps as f64,
+                };
+                self.persist_engine_episode(&episode)?;
+                Ok(CapabilityExecutionOutcome {
+                    invocation,
+                    episode,
+                })
+            }
+            Err(error) => {
+                let mut episode = self.capability_invocation_episode(
+                    content_id,
+                    procedure_id,
+                    procedure.as_ref(),
+                    &input_digest,
+                    &policy_digest,
+                );
+                episode.action = Some(format!("capability:{}:{}:failed", content_id, procedure_id));
+                let failure_digest = text_digest(&error.to_string());
+                episode.evaluation = Some(Evaluation {
+                    tier: VerifiabilityTier::Hard,
+                    success: false,
+                    details: format!("capability invocation rejected ({failure_digest})"),
+                    surprise: None,
+                });
+                episode.reasoning_trace.steps.push(TraceStep {
+                    description: "capability authorization or adapter invocation rejected".into(),
+                    procedure_used: None,
+                    contract_check: Some(ContractCheckResult {
+                        all_requires_met: false,
+                        all_promises_met: false,
+                        no_failure_conditions_met: false,
+                        violations: vec![failure_digest.clone()],
+                    }),
+                    input: Some(Value::Text(input_digest.clone())),
+                    output: None,
+                    rung: EscalationRung::Run,
+                    status: TraceStepStatus::Failed {
+                        error: failure_digest.clone(),
+                    },
+                });
+                episode.execution_trace = Some(serde_json::json!({
+                    "kind": "capability_invocation_v1",
+                    "contentId": content_id,
+                    "procedureId": procedure_id,
+                    "inputDigest": input_digest,
+                    "policyDigest": policy_digest,
+                    "failureDigest": failure_digest,
+                    "redacted": true,
+                }));
+                episode.teacher_interaction = Some(serde_json::json!({
+                    "kind": "capability_invocation",
+                    "contentId": content_id,
+                    "procedure": capability_procedure_summary(procedure.as_ref(), procedure_id),
+                    "declaredEffects": procedure.as_ref().map(|item| &item.effects),
+                    "declaredPermissions": procedure.as_ref().map(|item| &item.permissions),
+                    "policyDigest": policy_digest,
+                    "inputDigest": input_digest,
+                    "failure": { "redacted": true, "digest": failure_digest },
+                }));
+                episode.cost = EpisodeCost {
+                    rung_reached: EscalationRung::Run,
+                    steps_taken: 1,
+                    budget_spent: 0.0,
+                };
+                self.persist_engine_episode(&episode)?;
+                Err(EngineError::CapabilityInvocationFailed {
+                    episode_id: episode.id,
+                    reason: error.to_string(),
+                })
+            }
+        }
+    }
+
+    fn capability_invocation_episode(
+        &self,
+        content_id: &str,
+        procedure_id: &str,
+        procedure: Option<&CapabilityProcedure>,
+        input_digest: &str,
+        policy_digest: &str,
+    ) -> Episode {
+        let mut episode =
+            Episode::new(format!("capability invocation {content_id}/{procedure_id}"));
+        episode.context.environment = BTreeMap::from([
+            ("capabilityContentId".into(), Value::Text(content_id.into())),
+            (
+                "capabilityProcedureId".into(),
+                Value::Text(procedure_id.into()),
+            ),
+            ("inputDigest".into(), Value::Text(input_digest.into())),
+            ("policyDigest".into(), Value::Text(policy_digest.into())),
+        ]);
+        if let Some(procedure) = procedure {
+            episode.context.environment.insert(
+                "capabilityPrimitive".into(),
+                Value::Text(format!("{:?}", procedure.primitive)),
+            );
+        }
+        episode
     }
 
     pub fn create_goal(
@@ -1914,6 +2162,73 @@ fn scope_digest(scope: &BTreeMap<String, Value>) -> String {
     digest.update(b"ekg:observed-fact-environment:v1\0");
     digest.update(bytes);
     format!("sha256:{:x}", digest.finalize())
+}
+
+/// Return a stable audit digest without retaining caller input or policy
+/// material in an episode. `serde_json::Map` uses key order in this workspace,
+/// so equivalent typed request values have a reproducible digest.
+fn json_digest(value: &impl Serialize) -> String {
+    let bytes = serde_json::to_vec(value).unwrap_or_default();
+    let mut digest = Sha256::new();
+    digest.update(b"ekg:capability-invocation:v1\0");
+    digest.update(bytes);
+    format!("sha256:{:x}", digest.finalize())
+}
+
+fn text_digest(value: &str) -> String {
+    let mut digest = Sha256::new();
+    digest.update(b"ekg:capability-invocation-error:v1\0");
+    digest.update(value.as_bytes());
+    format!("sha256:{:x}", digest.finalize())
+}
+
+fn capability_procedure_summary(
+    procedure: Option<&CapabilityProcedure>,
+    procedure_id: &str,
+) -> serde_json::Value {
+    match procedure {
+        Some(procedure) => serde_json::json!({
+            "id": procedure.id,
+            "name": procedure.name,
+            "version": procedure.version,
+            "primitive": procedure.primitive,
+            "bounds": procedure.bounds,
+        }),
+        None => serde_json::json!({
+            "id": procedure_id,
+            "available": false,
+        }),
+    }
+}
+
+fn redacted_json_output(digest: &str, value: &serde_json::Value) -> serde_json::Value {
+    serde_json::json!({
+        "redacted": true,
+        "digest": digest,
+        "shape": json_shape(value),
+    })
+}
+
+fn redacted_capability_output(digest: &str, value: &serde_json::Value) -> Value {
+    Value::Map(BTreeMap::from([
+        ("redacted".into(), Value::Bool(true)),
+        ("digest".into(), Value::Text(digest.into())),
+        ("shape".into(), Value::Text(json_shape(value))),
+    ]))
+}
+
+fn json_shape(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::Null => "null".into(),
+        serde_json::Value::Bool(_) => "boolean".into(),
+        serde_json::Value::Number(_) => "number".into(),
+        serde_json::Value::String(_) => "string".into(),
+        serde_json::Value::Array(items) => format!("array({})", items.len()),
+        // Field names can themselves be sensitive (for example, a response
+        // may expose an account identifier or secret-shaped key), so durable
+        // redaction keeps only the object arity.
+        serde_json::Value::Object(fields) => format!("object({})", fields.len()),
+    }
 }
 
 fn authenticated_observation_verifier(episode: &Episode) -> Option<&str> {

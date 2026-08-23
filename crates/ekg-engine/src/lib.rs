@@ -27,12 +27,13 @@ pub use cycle::{
     TeacherProposalWire, TeacherRequestWire,
 };
 pub use ekg_capability::{
-    CapabilityBundle, CapabilityError, CapabilityProcedure, CapabilityStatus, CapabilityStore,
-    CapabilityTest, Dependency, DiscoveredOperation, Effect, ImportedCapability,
+    AdapterExecution, AuthorizedPrimitiveInvocation, CapabilityBundle, CapabilityError,
+    CapabilityInvocation, CapabilityInvocationAdapter, CapabilityProcedure, CapabilityStatus,
+    CapabilityStore, CapabilityTest, Dependency, DiscoveredOperation, Effect, ImportedCapability,
     InterfaceDescription, InvocationReceipt, LocalValidation, NativePrimitive,
     NativePrimitiveExecutor, Permission, PrimitiveExecution, PrimitivePolicy, PrimitiveRequest,
-    Provenance, ResourceBounds, bundle_content_id, discover_interface, export_bundle,
-    import_bundle, run_sandbox_tests,
+    Provenance, ResourceBounds, ResourceUsage, bundle_content_id, discover_interface,
+    export_bundle, import_bundle, run_sandbox_tests,
 };
 pub use ekg_graph::{
     ActivatedConcept, ActivationHop, ActivationSeed, ActivationSpreadQuery, ActivationSpreadResult,
@@ -46,7 +47,8 @@ pub use ekg_intuition::{
     RepresentationModel, SemanticRecallEvaluation, SupervisionTask,
 };
 pub use engine::{
-    Engine, EngineError, ExecutionOutcome, MetricsSnapshot, Phase6EvidenceMetrics, ReplayOutcome,
+    CapabilityExecutionOutcome, Engine, EngineError, ExecutionOutcome, MetricsSnapshot,
+    Phase6EvidenceMetrics, ReplayOutcome,
 };
 pub use goals::{
     CuriosityGap, GapKind, Goal, GoalDerivationRecord, GoalKind, GoalLearningRecord,
