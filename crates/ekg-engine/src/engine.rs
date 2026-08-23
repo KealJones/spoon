@@ -1085,6 +1085,9 @@ impl Engine {
                 "retirement successor {successor_skill} is not a managed skill"
             ))
         })?;
+        let retired = self.skills.get(skill_id)?.ok_or_else(|| {
+            EngineError::InvalidInput(format!("unknown managed skill {skill_id}"))
+        })?;
         if successor.lifecycle != crate::SkillLifecycle::Promoted {
             return Err(EngineError::InvalidInput(
                 "retirement requires a promoted successor with live verification".into(),
@@ -1093,6 +1096,17 @@ impl Engine {
         if successor.candidate.failure_critic {
             return Err(EngineError::InvalidInput(
                 "a failure critic cannot be the successor of an executable skill".into(),
+            ));
+        }
+        if !retired
+            .candidate
+            .source_episode_ids
+            .iter()
+            .all(|episode_id| successor.candidate.source_episode_ids.contains(episode_id))
+        {
+            return Err(EngineError::InvalidInput(
+                "retirement requires successor evidence covering every retired source episode"
+                    .into(),
             ));
         }
         let record = ekg_adapt::retire_skill(skill_id, successor_skill, reason);
