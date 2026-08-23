@@ -196,6 +196,61 @@ fn reusable_count_occurrences_lesson(
     })
 }
 
+fn reusable_count_letter_lesson(text: &str, letter: &str) -> serde_json::Value {
+    json!({
+        "proposalKind": "reusable_lesson",
+        "interpretations": [],
+        "lesson": {
+            "primitiveSet": "pure_expr_v2",
+            "concepts": [{
+                "key": "count-letter",
+                "name": "COUNT LETTER",
+                "description": "Count a requested letter in Unicode text without case sensitivity"
+            }],
+            "relationships": [],
+            "procedures": [{
+                "key": "count-letter-procedure",
+                "name": "COUNT LETTER",
+                "concept": { "kind": "new_concept", "key": "count-letter" },
+                "parameters": [
+                    { "name": "text", "description": "text to inspect" },
+                    { "name": "letter", "description": "letter to count" }
+                ],
+                "body": {
+                    "kind": "intrinsic", "version": 1, "op": "length",
+                    "args": [{
+                        "kind": "filter",
+                        "collection": {
+                            "kind": "intrinsic", "version": 1, "op": "text_split",
+                            "args": [
+                                { "kind": "intrinsic", "version": 1, "op": "text_lowercase", "args": [{ "kind": "parameter", "name": "text" }] },
+                                { "kind": "literal", "value": "" }
+                            ]
+                        },
+                        "var": "grapheme",
+                        "predicate": {
+                            "kind": "binary", "op": "equal",
+                            "left": { "kind": "parameter", "name": "grapheme" },
+                            "right": { "kind": "intrinsic", "version": 1, "op": "text_lowercase", "args": [{ "kind": "parameter", "name": "letter" }] }
+                        }
+                    }]
+                },
+                "contract": { "requires": [], "promises": [], "failsWhen": [] }
+            }],
+            "invocation": {
+                "procedureKey": "count-letter-procedure",
+                "inputs": [
+                    { "name": "text", "value": text },
+                    { "name": "letter", "value": letter }
+                ]
+            }
+        },
+        "procedure": null,
+        "answer": 3,
+        "abstainReason": null
+    })
+}
+
 fn reusable_json_path_lesson() -> serde_json::Value {
     json!({
         "proposalKind": "reusable_lesson",
@@ -518,6 +573,34 @@ fn pure_expr_v2_authors_new_v1_intrinsics_through_the_schema_and_compiler() {
         panic!("expanded intrinsic should compile and execute");
     };
     assert_eq!(outcome.answer, Some(Value::Int(2)));
+}
+
+#[test]
+fn rich_count_letter_lesson_reuses_explicit_quoted_text_with_teacher_disabled() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    let cycle_id = begin_teacher_cycle(&mut engine, "count \"R\" in \"strawberry\"");
+    let CycleProgress::Completed(learned) = engine
+        .resume_cycle(
+            cycle_id,
+            proposal(
+                "count \"R\" in \"strawberry\"",
+                reusable_count_letter_lesson("strawberry", "R"),
+            ),
+        )
+        .unwrap()
+    else {
+        panic!("generic rich letter-count lesson should execute");
+    };
+    assert_eq!(learned.answer, Some(Value::Int(3)));
+
+    let CycleProgress::Completed(reused) = engine
+        .begin_cycle(cycle_input("count \"r\" in \"raspberry\"", false))
+        .unwrap()
+    else {
+        panic!("Teacher-OFF reuse must terminalize");
+    };
+    assert_eq!(reused.answer, Some(Value::Int(3)));
+    assert_eq!(reused.episode.cost.teacher_turns, 0);
 }
 
 #[test]
