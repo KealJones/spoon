@@ -1,6 +1,6 @@
 # Spoon implementation handoff
 
-Last updated: 2026-08-22 (strict phase-boundary audit + Spoon rename)
+Last updated: 2026-08-22 (complete Spoon namespace migration)
 
 ## Mission
 
@@ -14,6 +14,10 @@ untracked reference/archive files and the intentional whitespace-only change in
 ## Current repository state
 
 Latest substantive commits:
+
+- `2a3d25a` — rename Rust crates, TypeScript packages, binaries, environment
+  variables, SQLite identifiers, docs, tests, and tracked scratchpad paths to
+  Spoon; ignore local archives and scratchpads.
 
 - `24a1765` — derive managed-skill challenger replays from trusted source
   traces and an exact newer procedure revision.
