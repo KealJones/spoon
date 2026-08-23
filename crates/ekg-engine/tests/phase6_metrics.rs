@@ -131,5 +131,5 @@ fn phase6_snapshot_reports_only_persisted_teacher_and_skill_evidence() {
     // A successful strong observation is a regression baseline, not a claim
     // that a fresh replay has passed.
     assert_eq!(snapshot.verified_answer_count, 5);
-    assert_eq!(local_episode.succeeded(), true);
+    assert!(local_episode.succeeded());
 }
