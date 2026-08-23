@@ -1,6 +1,6 @@
 # Spoon implementation handoff
 
-Last updated: 2026-08-22 (full workspace gate + Section 38 boundary audit)
+Last updated: 2026-08-22 (strict phase-boundary audit + Spoon rename)
 
 ## Mission
 
@@ -14,6 +14,12 @@ untracked reference/archive files and the intentional whitespace-only change in
 ## Current repository state
 
 Latest substantive commits:
+
+- `24a1765` — derive managed-skill challenger replays from trusted source
+  traces and an exact newer procedure revision.
+- `a303603` — record compression known gaps, add clean-instance capability
+  round-trip evidence, and expand falsification fixtures.
+- `41fc76d` — align inspector examples with the public Spoon rename.
 
 - `d2431a1` — bind managed-skill replay evidence to source episodes and require
   promoted, live-verified retirement successors.
@@ -60,16 +66,18 @@ explicitly asks for that unrelated change. Do not stage `WHAT-IS-EKG-v3.md`,
   local artifact, not an external embedding service.
 - **P4:** repetition/single-success/failure-critic discovery now emits
   executable evidence artifacts; broad adaptation runs a durable full
-  regression suite; compression is non-destructive and preserves failures;
-  managed-skill replay evidence is source-bound; retirement requires a promoted
-  successor with live verification.
+  regression suite; compression is non-destructive, preserves failures, and
+  records explicit known gaps; the strict managed-skill challenger path derives
+  replay evidence from trusted source traces and an exact newer revision;
+  retirement requires a promoted successor with live verification and complete
+  source coverage.
 - **P5:** native network/file/observe/sandbox primitives are typed and policy
   enforced; discovery/synthesis, local validation, revocable grants, actual
-  adapter-backed invocation, bounded curiosity scheduling, and broad mutation
-  authorization are present. Bundle format v2 is deterministic,
-  content-addressed, dependency-closed, quarantine-first, locally revalidated,
-  and rejects secrets, local authority, malformed reconstruction, and
-  over-permissioned procedures atomically.
+  adapter-backed invocation, clean-instance bundle round trips, bounded
+  curiosity scheduling, and broad mutation authorization are present. Bundle
+  format v2 is deterministic, content-addressed, dependency-closed,
+  quarantine-first, locally revalidated, and rejects secrets, local authority,
+  malformed reconstruction, and over-permissioned procedures atomically.
 - **P6.1:** inspector exposes bounded graph/relationship/procedure/episode/
   contradiction/dependency/replay views and a redacted human-readable episode
   narrative; CLI `ask --explain` has parity for teacher, prediction,
@@ -84,21 +92,16 @@ explicitly asks for that unrelated change. Do not stage `WHAT-IS-EKG-v3.md`,
 Do not mark the active goal complete until direct evidence proves every plan
 exit criterion. In particular, audit whether:
 
-1. skill promotion is fully engine-derived rather than accepting any caller-
-   supplied challenger result (procedure replacement has an engine-owned
-   replay path; managed skills still need a final authority review);
-2. compression/forgetting records an explicit known-gap when information is
-   ever intentionally omitted, and retirement evidence demonstrates behavioral
-   subsumption rather than only a promoted successor;
-3. capability discovery is exercised end-to-end from an authorized interface
-   observation through typed synthesis, sandbox tests, local revalidation,
-   grant, invocation, and failure receipts;
-4. structural search-policy changes have the same slow/offline regression gate
+1. retirement evidence demonstrates behavioral subsumption rather than only a
+   promoted successor and source coverage;
+2. generalized neutral-IR sandbox execution remains bounded to approved
+   native mappings rather than foreign code;
+3. structural search-policy changes have the same slow/offline regression gate
    as broad procedure/concept changes;
-5. Section 38 fixtures cover representative held-out domain transfer,
-   teacher ablation, attribution faults, calibration, and longitudinal
-   compounding strongly enough to make a thesis-level call rather than merely
-   proving the storage/API path.
+4. Section 38 fixtures cover representative held-out domain transfer, teacher
+   ablation, attribution faults, calibration, and longitudinal compounding
+   strongly enough to make a thesis-level call rather than merely proving the
+   storage/API path.
 
 ## Next recovery steps
 
