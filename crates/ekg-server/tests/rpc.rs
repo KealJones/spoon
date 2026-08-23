@@ -889,7 +889,7 @@ fn offline_adaptation_is_admin_only_and_consumes_capability_internally() {
                 left: Box::new(Expr::Var("factor".into())),
                 right: Box::new(Expr::Literal(EkgValue::Int(0))),
             }),
-    );
+        );
     engine.admin_insert_procedure(&procedure).unwrap();
     // Broad revisions now require an independently recorded, replayable
     // baseline for every affected executable behavior. The failing contract

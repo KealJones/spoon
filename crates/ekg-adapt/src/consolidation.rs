@@ -212,11 +212,7 @@ pub fn discover_failure_critic_artifact(episode: &Episode) -> Option<DiscoveryAr
     let contract = failed_contract_evidence(section, &condition.description);
     let rationale = format!(
         "{:?}-verified failure at trace step {position}: {:?} condition {:?} was violated; preventive guard requires binding `{}`; verifier: {}",
-        evaluation.tier,
-        section,
-        condition.description,
-        guard.runtime_binding,
-        evaluation.details,
+        evaluation.tier, section, condition.description, guard.runtime_binding, evaluation.details,
     );
     Some(DiscoveryArtifact {
         kind: DiscoveryKind::FailureCritic,
@@ -318,7 +314,8 @@ fn repeated_artifact(executions: Vec<SuccessfulExecution>) -> DiscoveryArtifact 
 
 fn successful_execution(episode: &Episode) -> Option<SuccessfulExecution> {
     let evaluation = episode.evaluation.as_ref()?;
-    if !evaluation.success || !strong_tier(evaluation.tier) || evaluation.details.trim().is_empty() {
+    if !evaluation.success || !strong_tier(evaluation.tier) || evaluation.details.trim().is_empty()
+    {
         return None;
     }
     let action = episode.action.as_deref()?;
@@ -369,8 +366,14 @@ fn successful_contract_evidence(trace: &ExecTrace) -> Option<ContractEvidence> {
         if !matches!(step.status, ExecStepStatus::Succeeded) {
             return None;
         }
-        append_passed_checks(&mut evidence.verified_requires, &step.contract_checks.requires)?;
-        append_passed_checks(&mut evidence.verified_promises, &step.contract_checks.promises)?;
+        append_passed_checks(
+            &mut evidence.verified_requires,
+            &step.contract_checks.requires,
+        )?;
+        append_passed_checks(
+            &mut evidence.verified_promises,
+            &step.contract_checks.promises,
+        )?;
         append_passed_checks(
             &mut evidence.verified_non_failure_conditions,
             &step.contract_checks.fails_when,
@@ -535,9 +538,9 @@ mod tests {
     };
 
     use super::{
-        discover_failure_critic, discover_failure_critic_artifact, discover_single_success,
-        discover_single_success_artifact, discover_skill_artifacts, discover_skills,
-        plan_episode_compression, retire_skill, GuardContractSection,
+        GuardContractSection, discover_failure_critic, discover_failure_critic_artifact,
+        discover_single_success, discover_single_success_artifact, discover_skill_artifacts,
+        discover_skills, plan_episode_compression, retire_skill,
     };
 
     fn episode(action: &str, success: bool, created_at: i64) -> Episode {
@@ -663,12 +666,26 @@ mod tests {
         assert_eq!(artifacts.len(), 1);
         let artifact = &artifacts[0];
         assert_eq!(artifact.candidate.support_count, 2);
-        assert_eq!(artifact.executable.steps[0].procedure_id, procedure.to_string());
+        assert_eq!(
+            artifact.executable.steps[0].procedure_id,
+            procedure.to_string()
+        );
         assert_eq!(artifact.executable.steps[0].procedure_version, 3);
-        assert_eq!(artifact.evidence.contract.verified_requires, ["x is positive"]);
-        assert_eq!(artifact.evidence.contract.verified_promises, ["output is doubled"]);
+        assert_eq!(
+            artifact.evidence.contract.verified_requires,
+            ["x is positive"]
+        );
+        assert_eq!(
+            artifact.evidence.contract.verified_promises,
+            ["output is doubled"]
+        );
         assert_eq!(artifact.evidence.evaluation_details.len(), 2);
-        assert!(artifact.candidate.rationale.contains("independent verified executions"));
+        assert!(
+            artifact
+                .candidate
+                .rationale
+                .contains("independent verified executions")
+        );
         assert_eq!(artifact.executable.action, "procedure:common@3");
     }
 
@@ -742,12 +759,17 @@ mod tests {
         );
         let artifact = discover_single_success_artifact(&success).unwrap();
         assert_eq!(artifact.evidence.trace_step_count, 1);
-        assert_eq!(artifact.evidence.contract.verified_requires, ["input is finite"]);
-        assert!(artifact
-            .candidate
-            .rationale
-            .contains("checked"));
-        assert!(artifact.candidate.rationale.contains(&procedure.to_string()));
+        assert_eq!(
+            artifact.evidence.contract.verified_requires,
+            ["input is finite"]
+        );
+        assert!(artifact.candidate.rationale.contains("checked"));
+        assert!(
+            artifact
+                .candidate
+                .rationale
+                .contains(&procedure.to_string())
+        );
     }
 
     #[test]
@@ -781,7 +803,12 @@ mod tests {
             Evaluator::new().eval(&guard.compile(), &mut env).unwrap(),
             Value::Bool(false)
         );
-        assert!(discover_failure_critic(&failed).unwrap().rationale.contains("violated"));
+        assert!(
+            discover_failure_critic(&failed)
+                .unwrap()
+                .rationale
+                .contains("violated")
+        );
     }
 
     #[test]

@@ -2456,7 +2456,10 @@ mod tests {
         assert_eq!(fetched_first.id, first.id);
         assert_eq!(fetched_first.kind, first.kind);
         assert_eq!(store.list_relationship_versions(first.id).unwrap().len(), 1);
-        assert_eq!(store.get_relationship(second.id).unwrap().unwrap().id, second.id);
+        assert_eq!(
+            store.get_relationship(second.id).unwrap().unwrap().id,
+            second.id
+        );
     }
 
     #[test]

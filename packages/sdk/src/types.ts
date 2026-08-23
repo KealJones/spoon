@@ -74,6 +74,76 @@ export type CapabilityPermission =
   | { kind: "observe_target"; target: string }
   | { kind: "sandbox_profile"; profile: string };
 
+export type CapabilityEffect =
+  | "network"
+  | "file_read"
+  | "file_write"
+  | "observation"
+  | "sandboxed_execution";
+
+export type ProvenanceIdentityKind = "author" | "discoverer";
+
+export interface ProvenanceIdentity {
+  kind: ProvenanceIdentityKind;
+  scheme: string;
+  identifier: string;
+}
+
+export type PortableEvidenceKind = "validation_episode" | "evidence";
+
+export interface PortableEvidenceReference {
+  kind: PortableEvidenceKind;
+  identifier: string;
+  digest: string;
+}
+
+export interface CapabilityProvenance {
+  source: string;
+  discoveredAt: number;
+  interfaceFingerprint: string;
+  identities: ProvenanceIdentity[];
+  validationEpisodes: string[];
+  evidenceReferences: PortableEvidenceReference[];
+}
+
+export interface CapabilityDependencyReference {
+  name: string;
+  version: string;
+  contentHash: string;
+}
+
+export interface CapabilityDependency extends CapabilityDependencyReference {
+  dependencies: CapabilityDependencyReference[];
+}
+
+export type NeutralProcedureKind = "native_primitive";
+
+export interface NeutralProcedureMetadata {
+  kind: NeutralProcedureKind;
+  irVersion: number;
+  fixtureFormat: string;
+}
+
+export interface ReconstructionStep {
+  sequence: number;
+  operation: string;
+  artifactDigest?: string | null;
+}
+
+export interface ReconstructionRecipe {
+  kind: string;
+  recipeVersion: number;
+  compatibility: string[];
+  steps: ReconstructionStep[];
+}
+
+export interface CapabilityTest {
+  name: string;
+  input: JsonValue;
+  expectedOutput: JsonValue;
+  fixtureOutput: JsonValue;
+}
+
 export interface DiscoveredOperation {
   name: string;
   inputSchema: JsonValue;
@@ -388,18 +458,18 @@ export interface CapabilityBundle {
   name: string;
   version: string;
   contentId: string;
-  procedures: JsonValue[];
-  dependencies: JsonValue[];
-  provenance: JsonValue;
-  reconstruction: JsonValue;
+  procedures: CapabilityProcedure[];
+  dependencies: CapabilityDependency[];
+  provenance: CapabilityProvenance;
+  reconstruction: ReconstructionRecipe;
 }
 
 export interface ReconstructedCapability {
   contentId: string;
   name: string;
-  dependencyOrder: JsonValue[];
+  dependencyOrder: CapabilityDependency[];
   procedures: CapabilityProcedure[];
-  reconstruction: JsonValue;
+  reconstruction: ReconstructionRecipe;
 }
 
 export interface CapabilityProcedure {
@@ -410,12 +480,13 @@ export interface CapabilityProcedure {
   inputSchema: JsonValue;
   outputSchema: JsonValue;
   contract: JsonValue;
+  neutralMetadata: NeutralProcedureMetadata;
   permissions: CapabilityPermission[];
-  effects: string[];
+  effects: CapabilityEffect[];
   bounds: { maxBytes: number; maxSteps: number; maxMillis: number };
-  dependencies: JsonValue[];
-  tests: JsonValue[];
-  provenance: JsonValue;
+  dependencies: CapabilityDependencyReference[];
+  tests: CapabilityTest[];
+  provenance: CapabilityProvenance;
 }
 
 export interface FailureAnalysisInput {
