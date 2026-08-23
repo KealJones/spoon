@@ -1,9 +1,0 @@
-   Compiling spoon-engine v0.1.0 (/Users/kealjones/Git/Personal/spoon/crates/spoon-engine)
-error[E0599]: no variant named `ExecutionFailed` found for enum `EngineError`
-   --> crates/spoon-engine/tests/seed_cycle.rs:134:22
-    |
-134 |     let EngineError::ExecutionFailed { episode_id, .. } = error else {
-    |                      ^^^^^^^^^^^^^^^ variant not found in `EngineError`
-
-For more information about this error, try `rustc --explain E0599`.
-error: could not compile `spoon-engine` (test "seed_cycle") due to 1 previous error

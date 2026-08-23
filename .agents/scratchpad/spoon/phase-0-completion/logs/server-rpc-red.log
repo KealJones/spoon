@@ -1,9 +1,0 @@
-   Compiling spoon-server v0.1.0 (/Users/kealjones/Git/Personal/spoon/crates/spoon-server)
-error[E0432]: unresolved import `spoon_server::RpcServer`
- --> crates/spoon-server/tests/rpc.rs:1:5
-  |
-1 | use spoon_server::RpcServer;
-  |     ^^^^^^^^^^^^^^^^^^^^^ no `RpcServer` in the root
-
-For more information about this error, try `rustc --explain E0432`.
-error: could not compile `spoon-server` (test "rpc") due to 1 previous error

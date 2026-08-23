@@ -12,7 +12,7 @@ dist/
 
 # Local agent scratchpads and archived reference material. These are useful
 # during development but are not part of the Spoon source distribution.
-/.agents/scratchpad/spoon/
+/.agents/scratchpad/
 /WHAT-IS-EKG-v3.md
 /ekg-benchmark-suite.zip
 /benchmark-report.json

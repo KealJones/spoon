@@ -1,6 +1,0 @@
-$ pnpm -r --if-present typecheck
-Scope: 2 of 3 workspace projects
-packages/sdk typecheck$ tsc -p tsconfig.json --noEmit
-packages/sdk typecheck: Done
-packages/cli typecheck$ tsc -p tsconfig.json --noEmit
-packages/cli typecheck: Done

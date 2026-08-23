@@ -4,7 +4,113 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { SpoonClient, StdioTransport } from "../src/index.js";
+import {
+  SpoonClient,
+  StdioTransport,
+  type CycleInput,
+  type TeacherProposalWire,
+} from "../src/index.js";
+
+const defaultCycleInput = (
+  situation: string,
+  teacherAllowed: boolean,
+): CycleInput => ({
+  situation,
+  environment: {},
+  assumptions: [],
+  budget: {
+    maxExecSteps: 1_000,
+    maxContextItems: 32,
+    maxTeacherTurns: 1,
+  },
+  teacherAllowed,
+});
+
+const quotedLetterCountLesson = (situation: string): TeacherProposalWire => ({
+  content: {
+    proposalKind: "reusable_lesson",
+    interpretations: [],
+    lesson: {
+      primitiveSet: "pure_expr_v2",
+      concepts: [
+        {
+          key: "count-letter-in-text",
+          name: "COUNT LETTER IN TEXT",
+          description:
+            "Count case-insensitive occurrences of one letter in quoted text",
+        },
+      ],
+      relationships: [],
+      procedures: [
+        {
+          key: "count-letter-in-text-procedure",
+          name: "COUNT LETTER IN TEXT",
+          concept: { kind: "new_concept", key: "count-letter-in-text" },
+          parameters: [
+            { name: "text", description: "text to inspect" },
+            { name: "letter", description: "letter to count" },
+          ],
+          body: {
+            kind: "intrinsic",
+            version: 1,
+            op: "length",
+            args: [
+              {
+                kind: "filter",
+                collection: {
+                  kind: "intrinsic",
+                  version: 1,
+                  op: "text_split",
+                  args: [
+                    {
+                      kind: "intrinsic",
+                      version: 1,
+                      op: "text_lowercase",
+                      args: [{ kind: "parameter", name: "text" }],
+                    },
+                    { kind: "literal", value: "" },
+                  ],
+                },
+                var: "character",
+                predicate: {
+                  kind: "binary",
+                  op: "equal",
+                  left: { kind: "parameter", name: "character" },
+                  right: {
+                    kind: "intrinsic",
+                    version: 1,
+                    op: "text_lowercase",
+                    args: [{ kind: "parameter", name: "letter" }],
+                  },
+                },
+              },
+            ],
+          },
+          contract: { requires: [], promises: [], failsWhen: [] },
+        },
+      ],
+      invocation: {
+        procedureKey: "count-letter-in-text-procedure",
+        inputs: [
+          { name: "text", value: "strawberry" },
+          { name: "letter", value: "r" },
+        ],
+      },
+    },
+    procedure: null,
+    answer: 3,
+    abstainReason: null,
+  },
+  source: "human:test-quoted-letter-count",
+  status: "unverified",
+  provenance: {
+    provider: "human",
+    teacher: "human:test-quoted-letter-count",
+    requestId: "quoted-letter-count-1",
+    generatedAt: "2026-08-23T00:00:00.000Z",
+    situation,
+  },
+});
 
 test(
   "SDK completes the DOUBLE kitchen cycle through the Rust stdio server",
@@ -180,6 +286,52 @@ test(
         JSON.stringify(rendered).includes("private-letter-count"),
         false,
       );
+    } finally {
+      client.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "SDK adopts a quoted-text letter-count lesson and reuses it with Teacher-OFF",
+  { timeout: 30_000 },
+  async () => {
+    const directory = await mkdtemp(
+      path.join(os.tmpdir(), "spoon-quoted-letter-count-"),
+    );
+    const acquisition = 'how many "r" letters are in "strawberry"?';
+    const transport = StdioTransport.spawn(
+      "cargo",
+      ["run", "--quiet", "-p", "spoon-server"],
+      { env: { ...process.env, SPOON_DB: path.join(directory, "spoon.db") } },
+    );
+    const client = new SpoonClient(transport);
+
+    try {
+      const started = await client.beginCycle(
+        defaultCycleInput(acquisition, true),
+      );
+      assert.equal(started.status, "need_teacher");
+
+      if (started.status !== "need_teacher") {
+        assert.fail("acquisition must request a Teacher proposal");
+      }
+
+      const adopted = await client.resumeCycle(
+        started.cycleId,
+        quotedLetterCountLesson(acquisition),
+      );
+      assert.equal(adopted.status, "completed");
+      assert.equal(adopted.disposition, "provisional");
+      assert.equal(adopted.answer, 3);
+
+      const retained = await client.beginCycle(
+        defaultCycleInput('count "r" in "raspberry"', false),
+      );
+      assert.equal(retained.status, "completed");
+      assert.equal(retained.disposition, "provisional");
+      assert.equal(retained.answer, 3);
     } finally {
       client.close();
       await rm(directory, { recursive: true, force: true });

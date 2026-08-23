@@ -1,9 +1,0 @@
-   Compiling spoon-engine v0.1.0 (/Users/kealjones/Git/Personal/spoon/crates/spoon-engine)
-error[E0432]: unresolved import `spoon_engine::Engine`
- --> crates/spoon-engine/tests/seed_cycle.rs:4:5
-  |
-4 | use spoon_engine::Engine;
-  |     ^^^^^^^^^^^^^^^^^^ no `Engine` in the root
-
-For more information about this error, try `rustc --explain E0432`.
-error: could not compile `spoon-engine` (test "seed_cycle") due to 1 previous error
