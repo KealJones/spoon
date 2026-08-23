@@ -1331,12 +1331,7 @@ impl CapabilityStore {
              ON CONFLICT(content_id) DO NOTHING",
             params![bundle.content_id, bundle.name, json, unix_time()],
         )?;
-        Ok(ImportedCapability {
-            content_id: bundle.content_id,
-            name: bundle.name,
-            status: CapabilityStatus::Quarantined,
-            locally_validated: false,
-        })
+        self.imported_status(&bundle.content_id)
     }
 
     /// Import and locally revalidate in one durable state transition. Parsing,
@@ -1367,10 +1362,18 @@ impl CapabilityStore {
             CapabilityStatus::Rejected => "rejected",
             _ => unreachable!("atomic import only produces terminal local validation states"),
         };
+        // A pre-existing quarantined or rejected copy must transition with the
+        // same atomic upsert. Returning the proposed state without updating
+        // that row would let callers believe local validation succeeded while
+        // the durable authority still said "quarantined". Conversely, a
+        // failed fresh revalidation must immediately revoke a formerly active
+        // status for the same portable content identity.
         self.conn.execute(
             "INSERT INTO capability_bundles(content_id, name, status, bundle_json, locally_validated, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-             ON CONFLICT(content_id) DO NOTHING",
+             ON CONFLICT(content_id) DO UPDATE SET
+                status = excluded.status,
+                locally_validated = excluded.locally_validated",
             params![
                 bundle.content_id,
                 bundle.name,
@@ -1380,12 +1383,7 @@ impl CapabilityStore {
                 unix_time()
             ],
         )?;
-        Ok(ImportedCapability {
-            content_id: bundle.content_id,
-            name: bundle.name,
-            status,
-            locally_validated,
-        })
+        self.imported_status(&bundle.content_id)
     }
 
     /// Reconstruct the neutral procedure graph from the stored canonical
@@ -1404,6 +1402,39 @@ impl CapabilityStore {
             .optional()?
             .ok_or_else(|| CapabilityError::Invalid("capability not found".into()))?;
         reconstruct_bundle(&serde_json::from_str(&json)?)
+    }
+
+    fn imported_status(&self, content_id: &str) -> Result<ImportedCapability, CapabilityError> {
+        self.conn
+            .query_row(
+                "SELECT content_id, name, status, locally_validated
+                 FROM capability_bundles WHERE content_id = ?1",
+                params![content_id],
+                |row| {
+                    let status: String = row.get(2)?;
+                    let status = match status.as_str() {
+                        "quarantined" => CapabilityStatus::Quarantined,
+                        "provisional" => CapabilityStatus::Provisional,
+                        "active" => CapabilityStatus::Active,
+                        "rejected" => CapabilityStatus::Rejected,
+                        _ => {
+                            return Err(rusqlite::Error::FromSqlConversionFailure(
+                                2,
+                                rusqlite::types::Type::Text,
+                                format!("unknown stored capability status {status}").into(),
+                            ));
+                        }
+                    };
+                    Ok(ImportedCapability {
+                        content_id: row.get(0)?,
+                        name: row.get(1)?,
+                        status,
+                        locally_validated: row.get::<_, i64>(3)? != 0,
+                    })
+                },
+            )
+            .optional()?
+            .ok_or_else(|| CapabilityError::Invalid("capability import was not persisted".into()))
     }
 
     pub fn export(&self, content_id: &str) -> Result<Vec<u8>, CapabilityError> {
@@ -1918,6 +1949,78 @@ mod tests {
             Err(CapabilityError::NotRevalidated)
         ));
         assert!(store.reconstruct(&result.content_id).is_ok());
+    }
+
+    #[test]
+    fn atomic_import_revalidation_updates_an_existing_quarantined_bundle() {
+        let bundle = discover_interface(&interface()).unwrap();
+        let bytes = export_bundle(&bundle).unwrap();
+        let store = CapabilityStore::in_memory().unwrap();
+        let quarantined = store.import(&bytes).unwrap();
+        assert_eq!(quarantined.status, CapabilityStatus::Quarantined);
+
+        let revalidated = store
+            .import_and_revalidate(
+                &bytes,
+                &LocalValidation {
+                    passed: true,
+                    validation_episodes: vec!["local-fixture-check".into()],
+                    environment_digest: "sha256:local-environment".into(),
+                },
+            )
+            .unwrap();
+        assert_eq!(revalidated.status, CapabilityStatus::Provisional);
+        assert!(revalidated.locally_validated);
+
+        // A repeated import reports the durable state rather than pretending
+        // the already revalidated capability was newly quarantined.
+        assert_eq!(store.import(&bytes).unwrap(), revalidated);
+        store
+            .grant(
+                &revalidated.content_id,
+                &bundle.procedures[0].permissions[0],
+            )
+            .unwrap();
+        store
+            .require_procedure_permissions(&revalidated.content_id, &bundle.procedures[0].id)
+            .unwrap();
+    }
+
+    #[test]
+    fn failed_atomic_revalidation_revokes_an_existing_provisional_status() {
+        let bundle = discover_interface(&interface()).unwrap();
+        let bytes = export_bundle(&bundle).unwrap();
+        let store = CapabilityStore::in_memory().unwrap();
+        let validated = store
+            .import_and_revalidate(
+                &bytes,
+                &LocalValidation {
+                    passed: true,
+                    validation_episodes: vec!["local-fixture-check".into()],
+                    environment_digest: "sha256:local-environment".into(),
+                },
+            )
+            .unwrap();
+        store
+            .grant(&validated.content_id, &bundle.procedures[0].permissions[0])
+            .unwrap();
+
+        let rejected = store
+            .import_and_revalidate(
+                &bytes,
+                &LocalValidation {
+                    passed: false,
+                    validation_episodes: Vec::new(),
+                    environment_digest: String::new(),
+                },
+            )
+            .unwrap();
+        assert_eq!(rejected.status, CapabilityStatus::Rejected);
+        assert!(!rejected.locally_validated);
+        assert!(matches!(
+            store.require_procedure_permissions(&rejected.content_id, &bundle.procedures[0].id),
+            Err(CapabilityError::NotRevalidated)
+        ));
     }
 
     #[test]
