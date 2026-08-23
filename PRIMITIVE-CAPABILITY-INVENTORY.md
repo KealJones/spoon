@@ -36,7 +36,7 @@ capability adapters without changing the evaluator.
 
 | Date | Claim audited | Highest contiguous proof | Result |
 | --- | --- | --- | --- |
-| 2026-08-23 | Pure intrinsic text/JSON/path slice | Declared | RED tests exist; evaluator was not yet exhaustive or compilable. Keep unchecked until the public evaluator path passes. |
+| 2026-08-23 | Pure intrinsic text/JSON/path slice | Public/integrated/adversarial local proof | Bounded tokenizer, JSON Pointer strict/optional reads and immutable set/delete, null-only coalesce, structural find-index, and `map_from_entries` execute through core/evaluator/Teacher rich lessons; focused evaluator/engine tests and a real Rust-stdio SDK Teacher-OFF retention test pass. Broader language semantics and the remaining inventory are still incomplete. |
 | 2026-08-23 | File read/write are usable through the app | Unit-executed | Real scoped helper logic and adversarial tests exist; no server/SDK/learned-procedure invocation path. Downgraded to partial. |
 | 2026-08-23 | Sandboxed execution is usable through the app | Unit-executed fixture | Policy and deterministic fixture run; implementation explicitly spawns no process and registers no real sandbox adapter. Partial only. |
 | 2026-08-23 | Capability grants and invocation are integrated | Unit/direct API | Durable grants and injected-adapter engine tests exist; no public invocation transport or cognitive-cycle selection. Downgraded to partial. |
@@ -81,8 +81,10 @@ weakest supported conclusion.
   not yet part of lesson admission.
 - [~] A versioned bounded `pure_expr_v2` Teacher/admission grammar supports pure
   control flow, collection forms, versioned intrinsics, and request-local
-  exact-version pure dependency aliases. Engine tests plus one real Codex CLI
-  teach/Teacher-OFF reuse smoke pass; broad provider/public-SDK proof is missing.
+  exact-version pure dependency aliases. Engine tests, one real Codex CLI
+  teach/Teacher-OFF reuse smoke, and a real Rust-stdio SDK quote-bound rich
+  letter-count retention test pass. The quote binder is ordered explicit syntax,
+  not a general semantic parser; broad provider/public-SDK proof remains missing.
 - [x] Legacy `pure_rpn_v1` scalar lesson compiler.
 - [ ] Structured recoverable exceptions, try/result matching, assertions, and explicit
   failure construction in learned procedures.
@@ -102,8 +104,11 @@ weakest supported conclusion.
   grapheme substring execute; reverse-index and richer span semantics remain missing.
 - [~] Bounded source spans and tokenizer retain UTF-8 byte offsets in the core
   language substrate; scalar/grapheme offsets and normalization provenance are missing.
-- [~] Deterministic word/number/whitespace/punctuation/symbol tokenizer with byte
-  spans is core-only; it is not yet a procedure-accessible intrinsic.
+- [x] Deterministic word/number/whitespace/punctuation/symbol tokenizer is a
+  bounded `text_tokenize` procedure intrinsic. It returns exact UTF-8 source
+  text plus `startByte`/`endByte` spans in neutral token maps; a real Rust-stdio
+  SDK lesson counts held-out word tokens with Teacher OFF. It is lexical only,
+  not intent inference or parsing.
 - [ ] Bounded, non-backtracking regular expressions with match/capture values.
 - [ ] Glob/pattern matching with explicit syntax and limits.
 - [ ] Similarity/edit distance and phonetic transforms as bounded pure operations.
@@ -117,14 +122,16 @@ tracked in section 1.
 ## 3. Collections and objects — native pure
 
 - [x] List construction and immutable list values.
-- [~] Map values and literal maps exist; computed map/object construction is missing.
+- [~] Map values and literal maps exist; bounded computed object construction via
+  `map_from_entries` now executes, while richer map comprehensions remain missing.
 - [x] List index and map field access.
 - [x] List map, filter, and reduce with lexical iteration scopes and step charging.
 - [x] Generic grapheme/list/map length.
 - [x] Deterministic map keys, values, entries, copy set/delete, and right-biased merge execute.
-- [ ] Strict get versus optional get with missing distinct from present null.
+- [x] Strict get versus optional get distinguishes missing from present null;
+  optional access converts absence only and preserves malformed/type errors.
 - [~] Immutable copy set, delete, and shallow right-biased merge execute; deep merge is missing.
-- [~] List contains and equality-count execute; find/find-index, any/all/none, and partition are missing.
+- [~] List contains and equality-count execute; bounded structural find-index now executes, while predicate find, any/all/none, and partition remain missing.
 - [~] Slice, reverse, and bounded end-exclusive range generation execute; take/drop, chunks/windows remain missing.
 - [x] Stable deterministic total-order sort executes.
 - [~] Stable unique/deduplicate executes; set union/intersection/difference are missing.
@@ -135,19 +142,26 @@ tracked in section 1.
 
 ## 4. JSON, paths, schemas, and data formats — native pure
 
-- [~] JSON is now procedure-executable through manually constructed intrinsic
-  expressions, but the Teacher lesson grammar cannot author it yet.
+- [~] JSON is procedure-executable through the rich Teacher lesson grammar for
+  parse/stringify and bounded path operations; schema validation, patch/update,
+  and broader format support remain missing.
 - [x] Bounded JSON parse into neutral values with signed-integer and depth/byte checks.
 - [x] Deterministic JSON stringify from neutral values with non-finite/depth/output checks.
 - [x] Dot/bracket property paths: `user.profile.name`, `items[0].id`, and quoted keys.
 - [x] Strict and optional path access with typed malformed/type/missing outcomes;
   optional access converts absence only.
-- [ ] JSON Pointer and pointer escaping.
-- [ ] Immutable set/delete/update by path.
+- [x] Bounded JSON Pointer reads, including root access, arrays, `~0`/`~1`
+  escaping, strict/optional missing behavior, and malformed/type denial, are
+  procedure-executable and covered through a real Rust-stdio SDK lesson.
+- [~] Immutable JSON Pointer set/delete updates execute with root replacement,
+  escaped keys, array replacement/removal, explicit missing/type errors, and
+  input preservation; broader dot/bracket updates and patch formats remain.
 - [ ] JSON Patch and Merge Patch as bounded pure transforms.
 - [~] Capability schemas support a JSON-schema subset at admission/invocation.
 - [ ] Procedure-accessible schema validation with structured violations.
-- [~] Type name and bounded parse-int/parse-float/parse-bool/to-text conversions execute; predicates and coalesce are missing.
+- [~] Type name and bounded parse-int/parse-float/parse-bool/to-text conversions
+  execute; variadic null-only `coalesce` is now procedure-executable, while
+  richer predicates remain missing.
 - [ ] Canonical deterministic encoding and hashing exposed to procedures.
 - [ ] Base16, Base32, Base64, URL encoding, and UTF-8 encode/decode.
 - [ ] CSV/TSV parse/stringify with dialect metadata.

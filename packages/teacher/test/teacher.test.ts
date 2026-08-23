@@ -21,7 +21,7 @@ import {
   type TeacherRequest,
 } from "../src/index.js";
 
-test("teacher protocol exposes bounded pure reusable lessons and observation guidance", () => {
+test("teacher protocol teaches complete bounded reusable lessons", () => {
   assert.equal(REUSABLE_LESSON_PROTOCOL.primitiveSet, "pure_expr_v2");
   assert.ok(REUSABLE_LESSON_PROTOCOL.expressionKinds.includes("binary"));
   assert.ok(
@@ -36,6 +36,24 @@ test("teacher protocol exposes bounded pure reusable lessons and observation gui
   assert.match(prompt, /procedureKey/);
   assert.match(prompt, /trusted sensor primitive/i);
   assert.match(prompt, /never invent ids, timestamps, lifecycle/i);
+  assert.ok(
+    REUSABLE_LESSON_PROTOCOL.teachingFacets.includes(
+      "language and terminology",
+    ),
+  );
+  assert.ok(
+    REUSABLE_LESSON_PROTOCOL.teachingFacets.includes(
+      "user intent and requested outcome",
+    ),
+  );
+  assert.match(prompt, /Teaching checklist/);
+  assert.match(prompt, /Language: identify the introduced terms/i);
+  assert.match(prompt, /Meaning: state the definition/i);
+  assert.match(prompt, /Intent: identify what the user wants/i);
+  assert.match(prompt, /most complete safe structured lesson/i);
+  assert.match(prompt, /defeasible_general/);
+  assert.match(prompt, /lesson:<procedure-key>/);
+  assert.match(prompt, /one to four focused procedures/i);
 });
 
 const schema: ProposalSchema = {
@@ -224,7 +242,10 @@ test("Claude adapter uses print-mode structured output and returns unverified co
     invocation?.args[systemPromptIndex + 1] ?? "",
     /never automatically accepted/i,
   );
-  assert.match(invocation?.args.at(-1) ?? "", /extract the reusable lesson/i);
+  assert.match(
+    invocation?.args.at(-1) ?? "",
+    /Teaching checklist.*Language: identify/s,
+  );
   assert.deepEqual(result.content, {
     lesson: "Multiply by two",
     confidence: 0.91,

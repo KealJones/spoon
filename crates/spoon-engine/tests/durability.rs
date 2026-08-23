@@ -113,6 +113,7 @@ fn failed_attempt_and_teacher_continuation_are_durable_together() {
         let progress = engine
             .begin_cycle(CycleInput {
                 situation: "break 7".into(),
+                working_directory: None,
                 environment: BTreeMap::new(),
                 assumptions: Vec::new(),
                 budget: CycleBudget {

@@ -1,5 +1,7 @@
 //! Orchestration and cognition-cycle services.
 
+#![recursion_limit = "512"]
+
 pub mod adaptation;
 mod compression;
 pub mod credit;

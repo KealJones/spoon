@@ -2721,7 +2721,7 @@ pub(crate) fn is_current_executable(lifecycle: Lifecycle) -> bool {
     )
 }
 
-fn collect_exact_calls(expression: &Expr, calls: &mut HashSet<(ProcedureId, u32)>) {
+pub(crate) fn collect_exact_calls(expression: &Expr, calls: &mut HashSet<(ProcedureId, u32)>) {
     match expression {
         Expr::Literal(_) | Expr::Var(_) => {}
         Expr::BinOp { left, right, .. } => {

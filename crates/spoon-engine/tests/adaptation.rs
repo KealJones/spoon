@@ -870,6 +870,7 @@ fn offline_capability_is_denied_while_a_teacher_cycle_is_pending() {
     let progress = engine
         .begin_cycle(CycleInput {
             situation: "unknown thing".into(),
+            working_directory: None,
             environment: BTreeMap::new(),
             assumptions: Vec::new(),
             teacher_allowed: true,
@@ -908,6 +909,7 @@ fn maintenance_lease_and_active_cycles_exclude_each_other_across_engines() {
     let CycleProgress::NeedTeacher { .. } = reasoning
         .begin_cycle(CycleInput {
             situation: "cross-process unknown".into(),
+            working_directory: None,
             environment: BTreeMap::new(),
             assumptions: Vec::new(),
             teacher_allowed: true,
@@ -949,6 +951,7 @@ fn maintenance_lease_and_active_cycles_exclude_each_other_across_engines() {
         reasoning
             .begin_cycle(CycleInput {
                 situation: "blocked by maintenance".into(),
+                working_directory: None,
                 environment: BTreeMap::new(),
                 assumptions: Vec::new(),
                 teacher_allowed: false,
@@ -1325,6 +1328,7 @@ fn assumption_corrections_are_durable_for_future_context_assembly() {
     let progress = reopened
         .begin_cycle(CycleInput {
             situation: "future corrected context".into(),
+            working_directory: None,
             environment: BTreeMap::from([("oven-temperature-c".into(), Value::Int(180))]),
             assumptions: vec![
                 spoon_core::Assumption {
@@ -1390,6 +1394,7 @@ fn assumption_corrections_are_durable_for_future_context_assembly() {
     let observed = reopened
         .begin_cycle(CycleInput {
             situation: "fresh observed context".into(),
+            working_directory: None,
             environment: BTreeMap::new(),
             assumptions: vec![spoon_core::Assumption {
                 description: "oven-temperature-c".into(),
@@ -1474,6 +1479,7 @@ fn contradiction_reads_are_engine_owned_and_episode_backed() {
     let CycleProgress::Completed(outcome) = engine
         .begin_cycle(CycleInput {
             situation: "pancake rise".into(),
+            working_directory: None,
             environment: BTreeMap::new(),
             assumptions: Vec::new(),
             teacher_allowed: false,
@@ -1557,6 +1563,7 @@ fn engine_contradiction_refinement_persists_and_clears_inherited_uncertainty() {
     let CycleProgress::Completed(inherited) = engine
         .begin_cycle(CycleInput {
             situation: "recipe plan".into(),
+            working_directory: None,
             environment: BTreeMap::new(),
             assumptions: Vec::new(),
             teacher_allowed: false,
@@ -1604,6 +1611,7 @@ fn engine_contradiction_refinement_persists_and_clears_inherited_uncertainty() {
     let CycleProgress::Completed(matched) = engine
         .begin_cycle(CycleInput {
             situation: "pancake rise at scale two".into(),
+            working_directory: None,
             environment: BTreeMap::from([
                 ("scale-factor".into(), Value::Int(2)),
                 ("oven-profile".into(), Value::Text("high".into())),
@@ -1634,6 +1642,7 @@ fn engine_contradiction_refinement_persists_and_clears_inherited_uncertainty() {
     let CycleProgress::Completed(unseen_scope) = engine
         .begin_cycle(CycleInput {
             situation: "pancake rise at scale three".into(),
+            working_directory: None,
             environment: BTreeMap::from([
                 ("scale-factor".into(), Value::Int(3)),
                 ("oven-profile".into(), Value::Text("high".into())),

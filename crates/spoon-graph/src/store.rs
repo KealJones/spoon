@@ -24,7 +24,7 @@ pub struct KnowledgeStore {
 
 const MAX_KNOWLEDGE_BUNDLE_CONCEPTS: usize = 8;
 const MAX_KNOWLEDGE_BUNDLE_RELATIONSHIPS: usize = 16;
-const MAX_KNOWLEDGE_BUNDLE_PROCEDURES: usize = 1;
+const MAX_KNOWLEDGE_BUNDLE_PROCEDURES: usize = 4;
 
 /// Maximum number of relationships returned by the bounded read collection.
 ///
@@ -220,10 +220,11 @@ impl KnowledgeStore {
         if concepts.is_empty()
             || concepts.len() > MAX_KNOWLEDGE_BUNDLE_CONCEPTS
             || relationships.len() > MAX_KNOWLEDGE_BUNDLE_RELATIONSHIPS
-            || procedures.len() != MAX_KNOWLEDGE_BUNDLE_PROCEDURES
+            || procedures.is_empty()
+            || procedures.len() > MAX_KNOWLEDGE_BUNDLE_PROCEDURES
         {
             return Err(GraphError::InvalidKnowledgeBundle(
-                "bundle must contain 1..=8 concepts, 0..=16 relationships, and exactly one procedure"
+                "bundle must contain 1..=8 concepts, 0..=16 relationships, and 1..=4 procedures"
                     .into(),
             ));
         }
@@ -270,10 +271,15 @@ impl KnowledgeStore {
         let mut concept_names = HashSet::new();
         for concept in concepts {
             if concept.lifecycle != Lifecycle::Provisional
-                || concept.mutability != MutabilityClass::Procedural
+                || !matches!(
+                    concept.mutability,
+                    MutabilityClass::Definitional
+                        | MutabilityClass::DefeasibleGeneral
+                        | MutabilityClass::Procedural
+                )
             {
                 return Err(GraphError::InvalidKnowledgeBundle(
-                    "new concepts must be engine-owned Provisional Procedural knowledge".into(),
+                    "new concepts must be Provisional definitional, defeasible-general, or procedural knowledge".into(),
                 ));
             }
             if concept.name.trim().is_empty()
@@ -308,12 +314,14 @@ impl KnowledgeStore {
             .iter()
             .map(|procedure| procedure.id)
             .collect::<HashSet<_>>();
+        let mut procedure_names = HashSet::new();
         for procedure in procedures {
             if procedure.lifecycle != Lifecycle::Provisional
                 || procedure.version != 1
                 || !procedure.test_cases.is_empty()
                 || procedure.name.trim().is_empty()
                 || procedure.name.chars().count() > 256
+                || !procedure_names.insert(procedure.name.to_lowercase())
             {
                 return Err(GraphError::InvalidKnowledgeBundle(
                     "procedures must be fresh bounded Provisional version-1 drafts without caller test cases"
@@ -340,6 +348,8 @@ impl KnowledgeStore {
 
             let mut calls = HashSet::new();
             Self::collect_expression_calls(&procedure.body, &mut calls);
+            let mut exact_calls = HashSet::new();
+            Self::collect_exact_expression_calls(&procedure.body, &mut exact_calls);
             for condition in procedure
                 .contract
                 .requires
@@ -349,13 +359,17 @@ impl KnowledgeStore {
             {
                 if let Some(check) = &condition.check {
                     Self::collect_expression_calls(check, &mut calls);
+                    Self::collect_exact_expression_calls(check, &mut exact_calls);
                 }
             }
             for call in calls {
                 if procedure_ids.contains(&call) {
-                    return Err(GraphError::InvalidKnowledgeBundle(
-                        "lesson procedures may call only pre-existing executable procedures".into(),
-                    ));
+                    if !exact_calls.iter().any(|(id, _)| *id == call) {
+                        return Err(GraphError::InvalidKnowledgeBundle(
+                            "lesson-internal procedure calls must pin version one exactly".into(),
+                        ));
+                    }
+                    continue;
                 }
                 let lifecycle = tx
                     .query_row(
@@ -377,20 +391,15 @@ impl KnowledgeStore {
                     )));
                 }
             }
-            let mut exact_calls = HashSet::new();
-            Self::collect_exact_expression_calls(&procedure.body, &mut exact_calls);
-            for condition in procedure
-                .contract
-                .requires
-                .iter()
-                .chain(&procedure.contract.promises)
-                .chain(&procedure.contract.fails_when)
-            {
-                if let Some(check) = &condition.check {
-                    Self::collect_exact_expression_calls(check, &mut exact_calls);
-                }
-            }
             for (call, expected_version) in exact_calls {
+                if procedure_ids.contains(&call) {
+                    if expected_version != 1 {
+                        return Err(GraphError::InvalidKnowledgeBundle(
+                            "lesson-internal procedure calls must pin version one".into(),
+                        ));
+                    }
+                    continue;
+                }
                 let (actual_version, lifecycle) = tx
                     .query_row(
                         "SELECT version, lifecycle FROM procedures WHERE id = ?1",
@@ -413,6 +422,11 @@ impl KnowledgeStore {
                     )));
                 }
             }
+        }
+        if !Self::bundle_procedures_are_acyclic(procedures) {
+            return Err(GraphError::InvalidKnowledgeBundle(
+                "lesson procedures may not form a dependency cycle".into(),
+            ));
         }
 
         let mut relationship_ids = HashSet::new();
@@ -556,6 +570,66 @@ impl KnowledgeStore {
             ));
         }
         Ok(())
+    }
+
+    fn bundle_procedures_are_acyclic(procedures: &[Procedure]) -> bool {
+        let ids = procedures
+            .iter()
+            .map(|procedure| procedure.id)
+            .collect::<HashSet<_>>();
+        let mut dependencies =
+            std::collections::HashMap::<ProcedureId, HashSet<ProcedureId>>::new();
+        for procedure in procedures {
+            let mut calls = HashSet::new();
+            Self::collect_exact_expression_calls(&procedure.body, &mut calls);
+            for condition in procedure
+                .contract
+                .requires
+                .iter()
+                .chain(&procedure.contract.promises)
+                .chain(&procedure.contract.fails_when)
+            {
+                if let Some(check) = &condition.check {
+                    Self::collect_exact_expression_calls(check, &mut calls);
+                }
+            }
+            dependencies.insert(
+                procedure.id,
+                calls
+                    .into_iter()
+                    .filter_map(|(id, _)| ids.contains(&id).then_some(id))
+                    .collect(),
+            );
+        }
+
+        fn visit(
+            current: ProcedureId,
+            dependencies: &std::collections::HashMap<ProcedureId, HashSet<ProcedureId>>,
+            visiting: &mut HashSet<ProcedureId>,
+            visited: &mut HashSet<ProcedureId>,
+        ) -> bool {
+            if visited.contains(&current) {
+                return true;
+            }
+            if !visiting.insert(current) {
+                return false;
+            }
+            let valid = dependencies.get(&current).is_none_or(|items| {
+                items
+                    .iter()
+                    .all(|item| visit(*item, dependencies, visiting, visited))
+            });
+            visiting.remove(&current);
+            if valid {
+                visited.insert(current);
+            }
+            valid
+        }
+
+        let mut visiting = HashSet::new();
+        let mut visited = HashSet::new();
+        ids.into_iter()
+            .all(|id| visit(id, &dependencies, &mut visiting, &mut visited))
     }
 
     fn collect_expression_calls(expression: &Expr, calls: &mut HashSet<ProcedureId>) {

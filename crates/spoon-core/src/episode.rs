@@ -106,6 +106,10 @@ impl Session {
 pub struct Episode {
     pub id: EpisodeId,
     pub situation: String,
+    /// The local directory in which this episode was initiated, when supplied
+    /// by the caller. This is provenance, not transferable capability authority.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub working_directory: Option<String>,
     #[serde(default)]
     pub session_id: Option<SessionId>,
     #[serde(default)]
@@ -144,6 +148,7 @@ impl Episode {
         Self {
             id: EpisodeId::new(),
             situation: situation.into(),
+            working_directory: None,
             session_id: None,
             session_visibility: SessionVisibility::Global,
             turn_index: None,

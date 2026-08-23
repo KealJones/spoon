@@ -29,6 +29,7 @@ const MAX_TEACHER_CONTEXT_NODES: usize = 8_192;
 const MAX_TEACHER_CONTEXT_CHARS: usize = 262_144;
 const MAX_LESSON_CONCEPTS: usize = 8;
 const MAX_LESSON_RELATIONSHIPS: usize = 16;
+const MAX_LESSON_PROCEDURES: usize = 4;
 const MAX_LESSON_PARAMETERS: usize = 16;
 const MAX_LESSON_CONDITIONS: usize = 16;
 const MAX_LESSON_INSTRUCTIONS: usize = 64;
@@ -75,6 +76,8 @@ pub enum RecallMode {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CycleInput {
     pub situation: String,
+    #[serde(default)]
+    pub working_directory: Option<String>,
     pub environment: BTreeMap<String, Value>,
     pub assumptions: Vec<Assumption>,
     pub budget: CycleBudget,
@@ -225,6 +228,30 @@ struct ConceptDraft {
     key: String,
     name: String,
     description: String,
+    #[serde(default)]
+    mutability: LessonConceptMutability,
+}
+
+/// A teacher may introduce an explicit definition or a defeasible general
+/// claim alongside executable knowledge. It cannot mint particulars,
+/// normative goals, or core machinery through a reusable lesson.
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, Default)]
+#[serde(rename_all = "snake_case")]
+enum LessonConceptMutability {
+    Definitional,
+    DefeasibleGeneral,
+    #[default]
+    Procedural,
+}
+
+impl From<LessonConceptMutability> for MutabilityClass {
+    fn from(value: LessonConceptMutability) -> Self {
+        match value {
+            LessonConceptMutability::Definitional => Self::Definitional,
+            LessonConceptMutability::DefeasibleGeneral => Self::DefeasibleGeneral,
+            LessonConceptMutability::Procedural => Self::Procedural,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -399,6 +426,7 @@ enum IntrinsicOpDraft {
     TextByteLength,
     TextScalarLength,
     TextGraphemeLength,
+    TextTokenize,
     TextSplit,
     TextJoin,
     TextTrim,
@@ -409,6 +437,7 @@ enum IntrinsicOpDraft {
     TextEndsWith,
     TextReplace,
     CollectionContains,
+    CollectionFindIndex,
     CountEqual,
     MapKeys,
     MapValues,
@@ -416,6 +445,11 @@ enum IntrinsicOpDraft {
     JsonStringify,
     PathGet,
     PathGetOptional,
+    JsonPointerGet,
+    JsonPointerGetOptional,
+    JsonPointerSet,
+    JsonPointerDelete,
+    Coalesce,
     TextNormalizeNfc,
     TextNormalizeNfd,
     TextNormalizeNfkc,
@@ -428,6 +462,7 @@ enum IntrinsicOpDraft {
     TextRepeat,
     TextConcatMany,
     MapEntries,
+    MapFromEntries,
     MapSet,
     MapDelete,
     MapMerge,
@@ -494,6 +529,7 @@ struct CompiledLesson {
     concepts: Vec<Concept>,
     relationships: Vec<Relationship>,
     procedures: Vec<Procedure>,
+    invocation_procedure: Procedure,
     interpretation: ResolvedInterpretation,
     invocation_inputs: BTreeMap<String, Value>,
 }
@@ -786,7 +822,7 @@ impl Engine {
                             Vec::new(),
                         );
                     }
-                    let procedure = lesson.procedures[0].clone();
+                    let procedure = lesson.invocation_procedure.clone();
                     let inputs = lesson.invocation_inputs.clone();
                     return self.execute_cycle_procedure(
                         cycle_id,
@@ -1249,9 +1285,12 @@ impl Engine {
         if draft.concepts.is_empty() || draft.concepts.len() > MAX_LESSON_CONCEPTS {
             return Err(lesson_error("lesson must introduce 1..=8 concepts"));
         }
-        if draft.relationships.len() > MAX_LESSON_RELATIONSHIPS || draft.procedures.len() != 1 {
+        if draft.relationships.len() > MAX_LESSON_RELATIONSHIPS
+            || draft.procedures.is_empty()
+            || draft.procedures.len() > MAX_LESSON_PROCEDURES
+        {
             return Err(lesson_error(
-                "lesson must contain 0..=16 relationships and exactly one procedure",
+                "lesson must contain 0..=16 relationships and 1..=4 procedures",
             ));
         }
 
@@ -1294,7 +1333,7 @@ impl Engine {
                     "a new concept may not overwrite or reactivate an existing concept",
                 ));
             }
-            let mut concept = Concept::new(&concept_draft.name, MutabilityClass::Procedural)
+            let mut concept = Concept::new(&concept_draft.name, concept_draft.mutability.into())
                 .with_description(&concept_draft.description);
             concept.id = ConceptId(deterministic_lesson_uuid(
                 &canonical,
@@ -1343,110 +1382,144 @@ impl Engine {
             relationships.push(relationship);
         }
 
-        let procedure_draft = &draft.procedures[0];
-        validate_lesson_token(&procedure_draft.key, "procedure key", MAX_LESSON_KEY_CHARS)?;
-        validate_lesson_token(
-            &procedure_draft.name,
-            "procedure name",
-            MAX_LESSON_NAME_CHARS,
-        )?;
-        if self
-            .graph
-            .list_procedures()?
-            .iter()
-            .any(|procedure| procedure.name.eq_ignore_ascii_case(&procedure_draft.name))
-        {
-            return Err(lesson_error(
-                "a learned procedure may not overwrite or reactivate existing knowledge",
-            ));
-        }
-        if procedure_draft.parameters.is_empty()
-            || procedure_draft.parameters.len() > MAX_LESSON_PARAMETERS
-        {
-            return Err(lesson_error(
-                "a reusable procedure must declare 1..=16 parameters",
-            ));
-        }
-        let mut parameter_names = HashSet::new();
-        let mut parameters = Vec::with_capacity(procedure_draft.parameters.len());
-        for parameter_draft in &procedure_draft.parameters {
-            validate_lesson_token(
-                &parameter_draft.name,
-                "parameter name",
-                MAX_LESSON_KEY_CHARS,
-            )?;
-            if parameter_draft.description.chars().count() > MAX_TEACHER_TEXT_CHARS
-                || !parameter_names.insert(parameter_draft.name.clone())
-            {
-                return Err(lesson_error("parameter names must be unique and bounded"));
-            }
-            parameters.push(Param {
-                name: parameter_draft.name.clone(),
-                description: Some(parameter_draft.description.clone()),
-            });
-        }
-        let dependencies = dependency_allowlist
+        let external_dependencies = dependency_allowlist
             .iter()
             .map(|dependency| (dependency.alias.clone(), dependency.clone()))
             .collect::<HashMap<_, _>>();
-        if dependencies.len() != dependency_allowlist.len()
-            || dependencies.len() > MAX_LESSON_DEPENDENCIES
+        if external_dependencies.len() != dependency_allowlist.len()
+            || external_dependencies.len() > MAX_LESSON_DEPENDENCIES
         {
             return Err(lesson_error("invalid engine dependency allow-list"));
         }
-        let (body, used_parameters, mut used_dependencies) = compile_lesson_body(
-            &draft.primitive_set,
-            &procedure_draft.body,
-            &parameter_names,
-            false,
-            &dependencies,
-        )?;
-        if parameter_names != used_parameters {
-            return Err(lesson_error(
-                "a reusable procedure body must use every declared parameter",
-            ));
+        let existing_procedure_names = self
+            .graph
+            .list_procedures()?
+            .into_iter()
+            .map(|procedure| procedure.name.to_lowercase())
+            .collect::<HashSet<_>>();
+        let mut procedure_keys = HashSet::new();
+        let mut procedure_names = HashSet::new();
+        let mut lesson_dependencies = HashMap::new();
+        for procedure_draft in &draft.procedures {
+            validate_lesson_token(&procedure_draft.key, "procedure key", MAX_LESSON_KEY_CHARS)?;
+            validate_lesson_token(
+                &procedure_draft.name,
+                "procedure name",
+                MAX_LESSON_NAME_CHARS,
+            )?;
+            if !procedure_keys.insert(procedure_draft.key.clone())
+                || !procedure_names.insert(procedure_draft.name.to_lowercase())
+                || existing_procedure_names.contains(&procedure_draft.name.to_lowercase())
+            {
+                return Err(lesson_error(
+                    "lesson procedure keys/names must be unique and may not overwrite existing knowledge",
+                ));
+            }
+            lesson_dependencies.insert(
+                format!("lesson:{}", procedure_draft.key),
+                TeacherDependency {
+                    alias: format!("lesson:{}", procedure_draft.key),
+                    procedure: spoon_core::ProcedureId(deterministic_lesson_uuid(
+                        &canonical,
+                        "procedure",
+                        &procedure_draft.key,
+                    )),
+                    version: 1,
+                },
+            );
         }
-        let (contract, contract_dependencies) = compile_lesson_contract(
-            &draft.primitive_set,
-            &procedure_draft.contract,
-            &parameter_names,
-            &dependencies,
-        )?;
-        used_dependencies.extend(contract_dependencies);
-        self.validate_used_teacher_dependencies(&dependencies, &used_dependencies)?;
-        let attached = self.resolve_lesson_concept(
-            &procedure_draft.concept,
-            &concept_keys,
-            &mut referenced_new_concepts,
-        )?;
-        if !matches!(
-            procedure_draft.concept,
-            ConceptReferenceDraft::NewConcept { .. }
-        ) {
-            return Err(lesson_error(
-                "a bootstrap lesson procedure must bind its newly introduced concept",
-            ));
-        }
-        let mut procedure = Procedure::new(&procedure_draft.name, parameters, body)
-            .with_contract(contract)
-            .with_concept(attached.id);
-        procedure.id = spoon_core::ProcedureId(deterministic_lesson_uuid(
-            &canonical,
-            "procedure",
-            &procedure_draft.key,
-        ));
-        procedure.lifecycle = Lifecycle::Provisional;
+        let mut dependencies = external_dependencies.clone();
+        dependencies.extend(lesson_dependencies.clone());
 
-        if referenced_new_concepts.len() != concepts.len() {
+        let mut procedures = Vec::with_capacity(draft.procedures.len());
+        let mut procedures_by_key = HashMap::new();
+        for procedure_draft in &draft.procedures {
+            if procedure_draft.parameters.is_empty()
+                || procedure_draft.parameters.len() > MAX_LESSON_PARAMETERS
+            {
+                return Err(lesson_error(
+                    "a reusable procedure must declare 1..=16 parameters",
+                ));
+            }
+            let mut parameter_names = HashSet::new();
+            let mut parameters = Vec::with_capacity(procedure_draft.parameters.len());
+            for parameter_draft in &procedure_draft.parameters {
+                validate_lesson_token(
+                    &parameter_draft.name,
+                    "parameter name",
+                    MAX_LESSON_KEY_CHARS,
+                )?;
+                if parameter_draft.description.chars().count() > MAX_TEACHER_TEXT_CHARS
+                    || !parameter_names.insert(parameter_draft.name.clone())
+                {
+                    return Err(lesson_error("parameter names must be unique and bounded"));
+                }
+                parameters.push(Param {
+                    name: parameter_draft.name.clone(),
+                    description: Some(parameter_draft.description.clone()),
+                });
+            }
+            let (body, used_parameters, mut used_dependencies) = compile_lesson_body(
+                &draft.primitive_set,
+                &procedure_draft.body,
+                &parameter_names,
+                false,
+                &dependencies,
+            )?;
+            if parameter_names != used_parameters {
+                return Err(lesson_error(
+                    "a reusable procedure body must use every declared parameter",
+                ));
+            }
+            let (contract, contract_dependencies) = compile_lesson_contract(
+                &draft.primitive_set,
+                &procedure_draft.contract,
+                &parameter_names,
+                &dependencies,
+            )?;
+            used_dependencies.extend(contract_dependencies);
+            let used_external_dependencies = used_dependencies
+                .iter()
+                .filter(|alias| external_dependencies.contains_key(*alias))
+                .cloned()
+                .collect::<HashSet<_>>();
+            self.validate_used_teacher_dependencies(
+                &external_dependencies,
+                &used_external_dependencies,
+            )?;
+            let attached = self.resolve_lesson_concept(
+                &procedure_draft.concept,
+                &concept_keys,
+                &mut referenced_new_concepts,
+            )?;
+            if !matches!(
+                procedure_draft.concept,
+                ConceptReferenceDraft::NewConcept { .. }
+            ) {
+                return Err(lesson_error(
+                    "a bootstrap lesson procedure must bind its newly introduced concept",
+                ));
+            }
+            let mut procedure = Procedure::new(&procedure_draft.name, parameters, body)
+                .with_contract(contract)
+                .with_concept(attached.id);
+            procedure.id = lesson_dependencies
+                .get(&format!("lesson:{}", procedure_draft.key))
+                .expect("lesson procedure aliases were built above")
+                .procedure;
+            procedure.lifecycle = Lifecycle::Provisional;
+            procedures_by_key.insert(procedure_draft.key.clone(), procedure.clone());
+            procedures.push(procedure);
+        }
+        if !lesson_procedures_are_acyclic(&procedures) {
             return Err(lesson_error(
-                "every introduced concept must be used by the lesson",
+                "lesson procedures may not form a dependency cycle",
             ));
         }
-        if draft.invocation.procedure_key != procedure_draft.key {
-            return Err(lesson_error(
-                "invocation must target the proposed procedure",
-            ));
-        }
+        let procedure = procedures_by_key
+            .get(&draft.invocation.procedure_key)
+            .cloned()
+            .ok_or_else(|| lesson_error("invocation must target a proposed procedure"))?;
         let mut invocation_inputs = BTreeMap::new();
         for input in &draft.invocation.inputs {
             if draft.primitive_set == "pure_rpn_v1" && !lesson_scalar(&input.value) {
@@ -1468,6 +1541,11 @@ impl Engine {
             complete_inputs(&procedure, &BTreeMap::new(), &invocation_inputs, &[]).ok_or_else(
                 || lesson_error("invocation must supply every declared parameter exactly once"),
             )?;
+        let attached = concepts
+            .iter()
+            .find(|concept| Some(concept.id) == procedure.concept)
+            .cloned()
+            .ok_or_else(|| lesson_error("invocation procedure must attach to a lesson concept"))?;
         let interpretation = ResolvedInterpretation {
             concept: attached,
             weight: 1.0,
@@ -1478,7 +1556,8 @@ impl Engine {
             allows_structured_values: draft.primitive_set == "pure_expr_v2",
             concepts,
             relationships,
-            procedures: vec![procedure],
+            procedures,
+            invocation_procedure: procedure,
             interpretation,
             invocation_inputs,
         })
@@ -1802,7 +1881,7 @@ impl Engine {
             situation: input.situation.clone(),
             context,
             specific_question: Some(
-                "For deterministic generalizable tasks, return one safe reusable_lesson in pure_expr_v2 (preferred; pure_rpn_v1 remains accepted) and its example answer. For external observations without a trusted primitive, return external_observation with no lesson. Otherwise answer or explicitly abstain."
+                "For deterministic generalizable tasks, return one safe reusable_lesson in pure_expr_v2 (preferred; pure_rpn_v1 remains accepted) with one to four focused procedures and an example answer from its selected invocation. Use lesson:<procedure-key> only for acyclic composition within the lesson. Preserve supported definitions or qualified general facts as concepts. For external observations without a trusted primitive, return external_observation with no lesson. Otherwise answer or explicitly abstain."
                     .into(),
             ),
             desired_output: proposal_schema(),
@@ -1825,9 +1904,16 @@ impl Engine {
         let (prior_reasoning, prior_execution_trace, prior_steps_used, prior_trace_len) =
             prior_failure_material(teacher_interaction.as_ref());
         let args = bind_inputs(procedure, &inputs, None)?;
-        let mut evaluator = self
-            .evaluator_for_procedure(procedure)?
-            .with_budget(input.budget.max_exec_steps.min(self.max_steps));
+        let mut evaluator = match &knowledge_to_learn {
+            Some(KnowledgeToLearn::Lesson(_)) => self.current_evaluator()?,
+            _ => self.evaluator_for_procedure(procedure)?,
+        }
+        .with_budget(input.budget.max_exec_steps.min(self.max_steps));
+        if let Some(KnowledgeToLearn::Lesson(lesson)) = &knowledge_to_learn {
+            for lesson_procedure in &lesson.procedures {
+                evaluator.register_procedure(lesson_procedure.clone());
+            }
+        }
         evaluator.register_procedure(procedure.clone());
         let attempt = evaluator.exec_procedure_captured(&procedure.id, args);
         let steps_used = evaluator.budget().steps_used;
@@ -2171,6 +2257,7 @@ impl Engine {
         interpretations: &[ResolvedInterpretation],
     ) -> Result<Episode, EngineError> {
         let mut episode = Episode::new(&input.situation);
+        episode.working_directory = input.working_directory.clone();
         let session_id = input
             .session_id
             .as_deref()
@@ -2737,6 +2824,7 @@ fn compile_intrinsic_op(op: IntrinsicOpDraft) -> IntrinsicOp {
         IntrinsicOpDraft::TextByteLength => IntrinsicOp::TextByteLength,
         IntrinsicOpDraft::TextScalarLength => IntrinsicOp::TextScalarLength,
         IntrinsicOpDraft::TextGraphemeLength => IntrinsicOp::TextGraphemeLength,
+        IntrinsicOpDraft::TextTokenize => IntrinsicOp::TextTokenize,
         IntrinsicOpDraft::TextSplit => IntrinsicOp::TextSplit,
         IntrinsicOpDraft::TextJoin => IntrinsicOp::TextJoin,
         IntrinsicOpDraft::TextTrim => IntrinsicOp::TextTrim,
@@ -2747,6 +2835,7 @@ fn compile_intrinsic_op(op: IntrinsicOpDraft) -> IntrinsicOp {
         IntrinsicOpDraft::TextEndsWith => IntrinsicOp::TextEndsWith,
         IntrinsicOpDraft::TextReplace => IntrinsicOp::TextReplace,
         IntrinsicOpDraft::CollectionContains => IntrinsicOp::CollectionContains,
+        IntrinsicOpDraft::CollectionFindIndex => IntrinsicOp::CollectionFindIndex,
         IntrinsicOpDraft::CountEqual => IntrinsicOp::CountEqual,
         IntrinsicOpDraft::MapKeys => IntrinsicOp::MapKeys,
         IntrinsicOpDraft::MapValues => IntrinsicOp::MapValues,
@@ -2754,6 +2843,11 @@ fn compile_intrinsic_op(op: IntrinsicOpDraft) -> IntrinsicOp {
         IntrinsicOpDraft::JsonStringify => IntrinsicOp::JsonStringify,
         IntrinsicOpDraft::PathGet => IntrinsicOp::PathGet,
         IntrinsicOpDraft::PathGetOptional => IntrinsicOp::PathGetOptional,
+        IntrinsicOpDraft::JsonPointerGet => IntrinsicOp::JsonPointerGet,
+        IntrinsicOpDraft::JsonPointerGetOptional => IntrinsicOp::JsonPointerGetOptional,
+        IntrinsicOpDraft::JsonPointerSet => IntrinsicOp::JsonPointerSet,
+        IntrinsicOpDraft::JsonPointerDelete => IntrinsicOp::JsonPointerDelete,
+        IntrinsicOpDraft::Coalesce => IntrinsicOp::Coalesce,
         IntrinsicOpDraft::TextNormalizeNfc => IntrinsicOp::TextNormalizeNfc,
         IntrinsicOpDraft::TextNormalizeNfd => IntrinsicOp::TextNormalizeNfd,
         IntrinsicOpDraft::TextNormalizeNfkc => IntrinsicOp::TextNormalizeNfkc,
@@ -2766,6 +2860,7 @@ fn compile_intrinsic_op(op: IntrinsicOpDraft) -> IntrinsicOp {
         IntrinsicOpDraft::TextRepeat => IntrinsicOp::TextRepeat,
         IntrinsicOpDraft::TextConcatMany => IntrinsicOp::TextConcatMany,
         IntrinsicOpDraft::MapEntries => IntrinsicOp::MapEntries,
+        IntrinsicOpDraft::MapFromEntries => IntrinsicOp::MapFromEntries,
         IntrinsicOpDraft::MapSet => IntrinsicOp::MapSet,
         IntrinsicOpDraft::MapDelete => IntrinsicOp::MapDelete,
         IntrinsicOpDraft::MapMerge => IntrinsicOp::MapMerge,
@@ -2887,6 +2982,65 @@ fn push_unary(stack: &mut Vec<Expr>, op: UnOp) -> Result<(), EngineError> {
 
 fn lesson_error(message: impl Into<String>) -> EngineError {
     EngineError::InvalidInput(format!("unsafe reusable lesson: {}", message.into()))
+}
+
+fn lesson_procedures_are_acyclic(procedures: &[Procedure]) -> bool {
+    let ids = procedures
+        .iter()
+        .map(|procedure| procedure.id)
+        .collect::<HashSet<_>>();
+    let mut dependencies = HashMap::<ProcedureId, HashSet<ProcedureId>>::new();
+    for procedure in procedures {
+        let mut calls = HashSet::new();
+        crate::engine::collect_exact_calls(&procedure.body, &mut calls);
+        for condition in procedure
+            .contract
+            .requires
+            .iter()
+            .chain(&procedure.contract.promises)
+            .chain(&procedure.contract.fails_when)
+        {
+            if let Some(check) = &condition.check {
+                crate::engine::collect_exact_calls(check, &mut calls);
+            }
+        }
+        dependencies.insert(
+            procedure.id,
+            calls
+                .into_iter()
+                .filter_map(|(id, _)| ids.contains(&id).then_some(id))
+                .collect(),
+        );
+    }
+
+    fn visit(
+        current: ProcedureId,
+        dependencies: &HashMap<ProcedureId, HashSet<ProcedureId>>,
+        visiting: &mut HashSet<ProcedureId>,
+        visited: &mut HashSet<ProcedureId>,
+    ) -> bool {
+        if visited.contains(&current) {
+            return true;
+        }
+        if !visiting.insert(current) {
+            return false;
+        }
+        let valid = dependencies.get(&current).is_none_or(|items| {
+            items
+                .iter()
+                .all(|item| visit(*item, dependencies, visiting, visited))
+        });
+        visiting.remove(&current);
+        if valid {
+            visited.insert(current);
+        }
+        valid
+    }
+
+    let mut visiting = HashSet::new();
+    let mut visited = HashSet::new();
+    ids.into_iter()
+        .all(|id| visit(id, &dependencies, &mut visiting, &mut visited))
 }
 
 fn validate_lesson_token(value: &str, label: &str, maximum: usize) -> Result<(), EngineError> {
@@ -3078,23 +3232,76 @@ fn uniquely_resolved(items: &[ResolvedInterpretation]) -> Option<&ResolvedInterp
 }
 
 fn extract_literals(situation: &str) -> Vec<Value> {
-    situation
-        .split(|character: char| {
-            character.is_whitespace() || matches!(character, ',' | '?' | '!' | '(' | ')' | '=')
-        })
-        .filter_map(|token| {
-            let clean = token.trim_matches(|character: char| matches!(character, '.' | ':' | ';'));
-            if clean.eq_ignore_ascii_case("true") {
-                Some(Value::Bool(true))
-            } else if clean.eq_ignore_ascii_case("false") {
-                Some(Value::Bool(false))
-            } else if let Ok(value) = clean.parse::<i64>() {
-                Some(Value::Int(value))
-            } else {
-                clean.parse::<f64>().ok().map(Value::Float)
-            }
-        })
-        .collect()
+    let mut literals = Vec::new();
+    let mut unquoted = String::new();
+    let mut characters = situation.chars();
+
+    while let Some(character) = characters.next() {
+        if matches!(character, '"' | '\'') {
+            let Some(text) = scan_quoted_literal(&mut characters, character) else {
+                // Do not partially bind a malformed request. In particular,
+                // an unmatched quote must not let preceding scalar text shift
+                // parameter positions for a learned procedure.
+                return Vec::new();
+            };
+            literals.extend(extract_scalar_literals(&unquoted));
+            unquoted.clear();
+            literals.push(Value::Text(text));
+        } else {
+            unquoted.push(character);
+        }
+    }
+    literals.extend(extract_scalar_literals(&unquoted));
+    literals
+}
+
+fn extract_scalar_literals(text: &str) -> Vec<Value> {
+    text.split(|character: char| {
+        character.is_whitespace() || matches!(character, ',' | '?' | '!' | '(' | ')' | '=')
+    })
+    .filter_map(|token| {
+        let clean = token.trim_matches(|character: char| matches!(character, '.' | ':' | ';'));
+        if clean.eq_ignore_ascii_case("true") {
+            Some(Value::Bool(true))
+        } else if clean.eq_ignore_ascii_case("false") {
+            Some(Value::Bool(false))
+        } else if let Ok(value) = clean.parse::<i64>() {
+            Some(Value::Int(value))
+        } else {
+            clean.parse::<f64>().ok().map(Value::Float)
+        }
+    })
+    .collect()
+}
+
+/// Read a deliberately narrow JSON-like string literal from a user situation.
+///
+/// This is an explicit input-binding syntax, not a natural-language parser.
+/// The outer cycle already bounds the full situation, while this scanner rejects
+/// unterminated and unknown escape sequences before any procedure can run.
+fn scan_quoted_literal(characters: &mut std::str::Chars<'_>, quote: char) -> Option<String> {
+    let mut text = String::new();
+    let mut text_chars = 0usize;
+    while let Some(character) = characters.next() {
+        match character {
+            character if character == quote => return Some(text),
+            '\\' => match characters.next()? {
+                '"' => text.push('"'),
+                '\'' => text.push('\''),
+                '\\' => text.push('\\'),
+                'n' => text.push('\n'),
+                'r' => text.push('\r'),
+                't' => text.push('\t'),
+                _ => return None,
+            },
+            character => text.push(character),
+        }
+        text_chars += 1;
+        if text_chars > spoon_reason::MAX_CONTEXT_TEXT_CHARS {
+            return None;
+        }
+    }
+    None
 }
 
 fn complete_inputs(
@@ -3269,8 +3476,9 @@ fn proposal_schema() -> JsonValue {
                         "key": { "type": "string" },
                         "name": { "type": "string" },
                         "description": { "type": "string" },
+                        "mutability": { "type": "string", "enum": ["definitional", "defeasible_general", "procedural"] },
                     },
-                    "required": ["key", "name", "description"],
+                    "required": ["key", "name", "description", "mutability"],
                 },
             },
             "relationships": {
@@ -3291,7 +3499,7 @@ fn proposal_schema() -> JsonValue {
             "procedures": {
                 "type": "array",
                 "minItems": 1,
-                "maxItems": 1,
+                "maxItems": MAX_LESSON_PROCEDURES,
                 "items": {
                     "type": "object",
                     "additionalProperties": false,
@@ -3420,9 +3628,9 @@ fn expr_lesson_schema() -> JsonValue {
         "type": "object", "additionalProperties": false,
         "properties": {
             "primitiveSet": { "type": "string", "const": "pure_expr_v2" },
-            "concepts": { "type": "array", "minItems": 1, "maxItems": MAX_LESSON_CONCEPTS, "items": { "type": "object", "additionalProperties": false, "properties": { "key": { "type": "string" }, "name": { "type": "string" }, "description": { "type": "string" } }, "required": ["key", "name", "description"] } },
+            "concepts": { "type": "array", "minItems": 1, "maxItems": MAX_LESSON_CONCEPTS, "items": { "type": "object", "additionalProperties": false, "properties": { "key": { "type": "string" }, "name": { "type": "string" }, "description": { "type": "string" }, "mutability": { "type": "string", "enum": ["definitional", "defeasible_general", "procedural"] } }, "required": ["key", "name", "description", "mutability"] } },
             "relationships": { "type": "array", "maxItems": MAX_LESSON_RELATIONSHIPS, "items": { "type": "object", "additionalProperties": false, "properties": { "source": concept_reference.clone(), "target": concept_reference, "kind": { "type": "string" }, "strength": { "type": "number", "minimum": 0, "maximum": 1 } }, "required": ["source", "target", "kind", "strength"] } },
-            "procedures": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "type": "object", "additionalProperties": false, "properties": { "key": { "type": "string" }, "name": { "type": "string" }, "concept": concept_reference, "parameters": { "type": "array", "minItems": 1, "maxItems": MAX_LESSON_PARAMETERS, "items": { "type": "object", "additionalProperties": false, "properties": { "name": { "type": "string" }, "description": { "type": "string" } }, "required": ["name", "description"] } }, "body": expression, "contract": { "type": "object", "additionalProperties": false, "properties": { "requires": { "type": "array", "maxItems": MAX_LESSON_CONDITIONS, "items": condition.clone() }, "promises": { "type": "array", "maxItems": MAX_LESSON_CONDITIONS, "items": condition.clone() }, "failsWhen": { "type": "array", "maxItems": MAX_LESSON_CONDITIONS, "items": condition } }, "required": ["requires", "promises", "failsWhen"] } }, "required": ["key", "name", "concept", "parameters", "body", "contract"] } },
+            "procedures": { "type": "array", "minItems": 1, "maxItems": MAX_LESSON_PROCEDURES, "items": { "type": "object", "additionalProperties": false, "properties": { "key": { "type": "string" }, "name": { "type": "string" }, "concept": concept_reference, "parameters": { "type": "array", "minItems": 1, "maxItems": MAX_LESSON_PARAMETERS, "items": { "type": "object", "additionalProperties": false, "properties": { "name": { "type": "string" }, "description": { "type": "string" } }, "required": ["name", "description"] } }, "body": expression, "contract": { "type": "object", "additionalProperties": false, "properties": { "requires": { "type": "array", "maxItems": MAX_LESSON_CONDITIONS, "items": condition.clone() }, "promises": { "type": "array", "maxItems": MAX_LESSON_CONDITIONS, "items": condition.clone() }, "failsWhen": { "type": "array", "maxItems": MAX_LESSON_CONDITIONS, "items": condition } }, "required": ["requires", "promises", "failsWhen"] } }, "required": ["key", "name", "concept", "parameters", "body", "contract"] } },
             "invocation": { "type": "object", "additionalProperties": false, "properties": { "procedureKey": { "type": "string" }, "inputs": { "type": "array", "maxItems": MAX_LESSON_PARAMETERS, "items": { "type": "object", "additionalProperties": false, "properties": { "name": { "type": "string" }, "value": structured_value }, "required": ["name", "value"] } } }, "required": ["procedureKey", "inputs"] }
         },
         "required": ["primitiveSet", "concepts", "relationships", "procedures", "invocation"]
@@ -3468,7 +3676,7 @@ fn expr_definition_schema(value: JsonValue) -> JsonValue {
                     { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "filter" }, "collection": expression.clone(), "var": { "type": "string" }, "predicate": expression.clone() }, "required": ["kind", "collection", "var", "predicate"] },
                     { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "reduce" }, "collection": expression.clone(), "init": expression.clone(), "acc": { "type": "string" }, "var": { "type": "string" }, "body": expression.clone() }, "required": ["kind", "collection", "init", "acc", "var", "body"] },
                     { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "dependency" }, "alias": { "type": "string" }, "args": { "type": "array", "maxItems": MAX_LESSON_EXPR_CHILDREN, "items": expression.clone() } }, "required": ["kind", "alias", "args"] },
-                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "intrinsic" }, "version": { "type": "integer", "const": 1 }, "op": { "type": "string", "enum": ["length", "text_byte_length", "text_scalar_length", "text_grapheme_length", "text_split", "text_join", "text_trim", "text_lowercase", "text_uppercase", "text_contains", "text_starts_with", "text_ends_with", "text_replace", "collection_contains", "count_equal", "map_keys", "map_values", "json_parse", "json_stringify", "path_get", "path_get_optional", "text_normalize_nfc", "text_normalize_nfd", "text_normalize_nfkc", "text_normalize_nfkd", "text_trim_start", "text_trim_end", "text_grapheme_substring", "text_index_of", "text_count", "text_repeat", "text_concat_many", "map_entries", "map_set", "map_delete", "map_merge", "collection_slice", "collection_reverse", "collection_sort", "collection_unique", "collection_flatten", "collection_zip", "range", "type_name", "parse_int", "parse_float", "parse_bool", "to_text", "numeric_abs", "numeric_sign", "numeric_min", "numeric_max", "numeric_clamp", "numeric_floor", "numeric_ceil", "numeric_round", "numeric_truncate", "numeric_pow_int", "numeric_pow_float", "integer_quotient", "integer_remainder"] }, "args": { "type": "array", "maxItems": MAX_LESSON_EXPR_CHILDREN, "items": expression } }, "required": ["kind", "version", "op", "args"] }
+                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "intrinsic" }, "version": { "type": "integer", "const": 1 }, "op": { "type": "string", "enum": ["length", "text_byte_length", "text_scalar_length", "text_grapheme_length", "text_tokenize", "text_split", "text_join", "text_trim", "text_lowercase", "text_uppercase", "text_contains", "text_starts_with", "text_ends_with", "text_replace", "collection_contains", "collection_find_index", "count_equal", "map_keys", "map_values", "json_parse", "json_stringify", "path_get", "path_get_optional", "json_pointer_get", "json_pointer_get_optional", "json_pointer_set", "json_pointer_delete", "coalesce", "text_normalize_nfc", "text_normalize_nfd", "text_normalize_nfkc", "text_normalize_nfkd", "text_trim_start", "text_trim_end", "text_grapheme_substring", "text_index_of", "text_count", "text_repeat", "text_concat_many", "map_entries", "map_from_entries", "map_set", "map_delete", "map_merge", "collection_slice", "collection_reverse", "collection_sort", "collection_unique", "collection_flatten", "collection_zip", "range", "type_name", "parse_int", "parse_float", "parse_bool", "to_text", "numeric_abs", "numeric_sign", "numeric_min", "numeric_max", "numeric_clamp", "numeric_floor", "numeric_ceil", "numeric_round", "numeric_truncate", "numeric_pow_int", "numeric_pow_float", "integer_quotient", "integer_remainder"] }, "args": { "type": "array", "maxItems": MAX_LESSON_EXPR_CHILDREN, "items": expression } }, "required": ["kind", "version", "op", "args"] }
         ]
     })
 }
@@ -3547,14 +3755,14 @@ fn authoring_protocol() -> JsonValue {
             "negate", "not"
         ],
         "teacherProvides": [
-            "concept name and description", "relationship claim", "procedure parameters",
+            "concept name, description, and mutability", "relationship claim", "procedure parameters",
             "pure expression body", "executable contract checks", "example invocation and answer"
         ],
         "engineProvides": [
-            "ids", "mutability", "lifecycle", "version", "confidence", "timestamps", "test cases"
+            "ids", "lifecycle", "version", "confidence", "timestamps", "test cases"
         ],
         "constraints": [
-            "pure_expr_v2 supports bounded neutral values, recursive expressions, intrinsic version 1, and only the request's advertised pure dependency aliases",
+            "pure_expr_v2 supports bounded neutral values, recursive expressions, intrinsic version 1, advertised pure dependency aliases, and acyclic lesson:<procedure-key> aliases for sibling procedures",
             "body must use every declared parameter",
             "no generic calls, dependency ids/versions, effects, sensors, clocks, network, files, randomness, or opaque code; dependency aliases are engine-resolved and exact-version pinned",
             "external observations without a trusted sensor remain provisional answers and must not include a lesson"

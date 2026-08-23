@@ -876,6 +876,7 @@ export interface CycleBudget {
 
 export interface CycleInput {
   situation: string;
+  workingDirectory?: string;
   environment: Record<string, JsonValue>;
   assumptions: CycleAssumption[];
   budget: CycleBudget;

@@ -1,8 +1,9 @@
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use spoon_core::{
-    BinOp, Condition, Expr, IntrinsicOp, Procedure, ProcedureId, SpoonError, UnOp, Value,
+    BinOp, Condition, Expr, IntrinsicOp, LanguageError, LanguageLimits, Procedure, ProcedureId,
+    SpoonError, TokenKind, UnOp, Value, tokenize_with_limits,
 };
 use unicode_normalization::UnicodeNormalization;
 use unicode_segmentation::UnicodeSegmentation;
@@ -320,7 +321,12 @@ impl Evaluator {
         }
 
         let expected = intrinsic_arity(op);
-        if args.len() != expected {
+        let arity_ok = if op == IntrinsicOp::Coalesce {
+            args.len() >= expected
+        } else {
+            args.len() == expected
+        };
+        if !arity_ok {
             return Err(SpoonError::ArityMismatch {
                 name: intrinsic_name(op).to_string(),
                 expected,
@@ -652,6 +658,8 @@ const MAX_PATH_BYTES: usize = 16_384;
 const MAX_PATH_SEGMENTS: usize = 256;
 const MAX_INTRINSIC_TEXT_BYTES: usize = 1_048_576;
 const MAX_INTRINSIC_ITEMS: usize = 100_000;
+const MAX_TOKENIZE_INPUT_BYTES: usize = 64 * 1024;
+const MAX_TOKENIZE_ITEMS: usize = 4_096;
 const INTRINSIC_WORK_CHUNK: usize = 64;
 
 fn intrinsic_name(op: IntrinsicOp) -> &'static str {
@@ -660,6 +668,7 @@ fn intrinsic_name(op: IntrinsicOp) -> &'static str {
         IntrinsicOp::TextByteLength => "text_byte_length",
         IntrinsicOp::TextScalarLength => "text_scalar_length",
         IntrinsicOp::TextGraphemeLength => "text_grapheme_length",
+        IntrinsicOp::TextTokenize => "text_tokenize",
         IntrinsicOp::TextSplit => "text_split",
         IntrinsicOp::TextJoin => "text_join",
         IntrinsicOp::TextTrim => "text_trim",
@@ -670,6 +679,7 @@ fn intrinsic_name(op: IntrinsicOp) -> &'static str {
         IntrinsicOp::TextEndsWith => "text_ends_with",
         IntrinsicOp::TextReplace => "text_replace",
         IntrinsicOp::CollectionContains => "collection_contains",
+        IntrinsicOp::CollectionFindIndex => "collection_find_index",
         IntrinsicOp::CountEqual => "count_equal",
         IntrinsicOp::MapKeys => "map_keys",
         IntrinsicOp::MapValues => "map_values",
@@ -677,6 +687,11 @@ fn intrinsic_name(op: IntrinsicOp) -> &'static str {
         IntrinsicOp::JsonStringify => "json_stringify",
         IntrinsicOp::PathGet => "path_get",
         IntrinsicOp::PathGetOptional => "path_get_optional",
+        IntrinsicOp::JsonPointerGet => "json_pointer_get",
+        IntrinsicOp::JsonPointerGetOptional => "json_pointer_get_optional",
+        IntrinsicOp::JsonPointerSet => "json_pointer_set",
+        IntrinsicOp::JsonPointerDelete => "json_pointer_delete",
+        IntrinsicOp::Coalesce => "coalesce",
         IntrinsicOp::TextNormalizeNfc => "text_normalize_nfc",
         IntrinsicOp::TextNormalizeNfd => "text_normalize_nfd",
         IntrinsicOp::TextNormalizeNfkc => "text_normalize_nfkc",
@@ -689,6 +704,7 @@ fn intrinsic_name(op: IntrinsicOp) -> &'static str {
         IntrinsicOp::TextRepeat => "text_repeat",
         IntrinsicOp::TextConcatMany => "text_concat_many",
         IntrinsicOp::MapEntries => "map_entries",
+        IntrinsicOp::MapFromEntries => "map_from_entries",
         IntrinsicOp::MapSet => "map_set",
         IntrinsicOp::MapDelete => "map_delete",
         IntrinsicOp::MapMerge => "map_merge",
@@ -728,9 +744,14 @@ fn intrinsic_arity(op: IntrinsicOp) -> usize {
         | IntrinsicOp::TextStartsWith
         | IntrinsicOp::TextEndsWith
         | IntrinsicOp::CollectionContains
+        | IntrinsicOp::CollectionFindIndex
         | IntrinsicOp::CountEqual
         | IntrinsicOp::PathGet
         | IntrinsicOp::PathGetOptional
+        | IntrinsicOp::JsonPointerGet
+        | IntrinsicOp::JsonPointerGetOptional
+        | IntrinsicOp::JsonPointerDelete
+        | IntrinsicOp::Coalesce
         | IntrinsicOp::TextIndexOf
         | IntrinsicOp::TextCount
         | IntrinsicOp::TextRepeat
@@ -742,11 +763,13 @@ fn intrinsic_arity(op: IntrinsicOp) -> usize {
         | IntrinsicOp::MapSet
         | IntrinsicOp::CollectionSlice
         | IntrinsicOp::Range
+        | IntrinsicOp::JsonPointerSet
         | IntrinsicOp::NumericClamp => 3,
         IntrinsicOp::Length
         | IntrinsicOp::TextByteLength
         | IntrinsicOp::TextScalarLength
         | IntrinsicOp::TextGraphemeLength
+        | IntrinsicOp::TextTokenize
         | IntrinsicOp::TextTrim
         | IntrinsicOp::TextLowercase
         | IntrinsicOp::TextUppercase
@@ -754,6 +777,7 @@ fn intrinsic_arity(op: IntrinsicOp) -> usize {
         | IntrinsicOp::MapValues
         | IntrinsicOp::JsonParse
         | IntrinsicOp::JsonStringify
+        | IntrinsicOp::MapFromEntries
         | IntrinsicOp::TextNormalizeNfc
         | IntrinsicOp::TextNormalizeNfd
         | IntrinsicOp::TextNormalizeNfkc
@@ -819,6 +843,7 @@ impl Evaluator {
                 self.charge_text(&text)?;
                 Ok(Value::Int(text.graphemes(true).count() as i64))
             }
+            IntrinsicOp::TextTokenize => self.text_tokenize(text_arg(only_arg(args))?),
             IntrinsicOp::TextSplit => {
                 let [text, delimiter] = two_args(args);
                 let text = text_arg(text)?;
@@ -994,6 +1019,30 @@ impl Evaluator {
                 };
                 Ok(Value::List(values))
             }
+            IntrinsicOp::MapFromEntries => {
+                let entries = list_arg(only_arg(args))?;
+                self.charge_items(entries.len())?;
+                let mut map = BTreeMap::new();
+                for entry in entries {
+                    let pair = list_arg(entry)?;
+                    if pair.len() != 2 {
+                        return Err(SpoonError::ArityMismatch {
+                            name: intrinsic_name(op).into(),
+                            expected: 2,
+                            got: pair.len(),
+                        });
+                    }
+                    let mut pair = pair.into_iter();
+                    let key = text_arg(pair.next().expect("pair length checked"))?;
+                    self.charge_text(&key)?;
+                    let value = pair.next().expect("pair length checked");
+                    if !map.contains_key(&key) {
+                        self.ensure_items("map_from_entries output items", map.len() + 1)?;
+                    }
+                    map.insert(key, value);
+                }
+                Ok(Value::Map(map))
+            }
             IntrinsicOp::MapSet => {
                 let [map, key, value] = three_args(args);
                 let mut map = map_arg(map)?;
@@ -1038,6 +1087,13 @@ impl Evaluator {
                 let end = start.saturating_add(length).min(items.len());
                 self.ensure_items("collection_slice output items", end - start)?;
                 Ok(Value::List(items[start..end].to_vec()))
+            }
+            IntrinsicOp::CollectionFindIndex => {
+                let [items, sought] = two_args(args);
+                let items = list_arg(items)?;
+                self.charge_items(items.len())?;
+                let index = items.iter().position(|item| *item == sought);
+                Ok(Value::Int(index.map(|value| value as i64).unwrap_or(-1)))
             }
             IntrinsicOp::CollectionReverse => {
                 let mut items = list_arg(only_arg(args))?;
@@ -1183,17 +1239,95 @@ impl Evaluator {
             }
             IntrinsicOp::JsonParse => self.parse_json(text_arg(only_arg(args))?),
             IntrinsicOp::JsonStringify => self.stringify_json(only_arg(args)),
-            IntrinsicOp::PathGet | IntrinsicOp::PathGetOptional => {
+            IntrinsicOp::JsonPointerSet => {
+                let [value, pointer, replacement] = three_args(args);
+                self.set_json_pointer(value, text_arg(pointer)?, replacement)
+            }
+            IntrinsicOp::JsonPointerDelete => {
+                let [value, pointer] = two_args(args);
+                self.delete_json_pointer(value, text_arg(pointer)?)
+            }
+            IntrinsicOp::PathGet
+            | IntrinsicOp::PathGetOptional
+            | IntrinsicOp::JsonPointerGet
+            | IntrinsicOp::JsonPointerGetOptional => {
                 let optional = op == IntrinsicOp::PathGetOptional;
                 let [value, path] = two_args(args);
-                self.get_path(value, text_arg(path)?, optional)
+                if matches!(
+                    op,
+                    IntrinsicOp::JsonPointerGet | IntrinsicOp::JsonPointerGetOptional
+                ) {
+                    self.get_json_pointer(
+                        value,
+                        text_arg(path)?,
+                        op == IntrinsicOp::JsonPointerGetOptional,
+                    )
+                } else {
+                    self.get_path(value, text_arg(path)?, optional)
+                }
             }
+            IntrinsicOp::Coalesce => Ok(args
+                .into_iter()
+                .find(|value| *value != Value::Null)
+                .unwrap_or(Value::Null)),
         }
     }
 
     fn charge_text(&mut self, text: &str) -> Result<(), SpoonError> {
         self.ensure_text("text input bytes", text.len())?;
         self.charge_intrinsic_work(text.len())
+    }
+
+    fn text_tokenize(&mut self, text: String) -> Result<Value, SpoonError> {
+        self.ensure_text("text_tokenize input bytes", text.len())?;
+        if text.len() > MAX_TOKENIZE_INPUT_BYTES {
+            return Err(SpoonError::IntrinsicLimitExceeded {
+                operation: "text_tokenize input bytes".into(),
+                limit: MAX_TOKENIZE_INPUT_BYTES,
+            });
+        }
+        self.charge_intrinsic_work(text.len())?;
+        let limits = LanguageLimits {
+            max_input_bytes: MAX_TOKENIZE_INPUT_BYTES,
+            max_tokens: MAX_TOKENIZE_ITEMS,
+            ..LanguageLimits::default()
+        };
+        let stream = tokenize_with_limits(&text, &limits).map_err(|error| match error {
+            LanguageError::LimitExceeded { limit, .. } => SpoonError::IntrinsicLimitExceeded {
+                operation: "text_tokenize".into(),
+                limit,
+            },
+            LanguageError::Invalid(message) => {
+                SpoonError::Other(format!("text_tokenize: {message}"))
+            }
+        })?;
+        self.ensure_items("text_tokenize output items", stream.tokens.len())?;
+        self.charge_items(stream.tokens.len())?;
+        let tokens = stream
+            .tokens
+            .iter()
+            .map(|token| {
+                let kind = match token.kind {
+                    TokenKind::Word => "word",
+                    TokenKind::Number => "number",
+                    TokenKind::Whitespace => "whitespace",
+                    TokenKind::Punctuation => "punctuation",
+                    TokenKind::Symbol => "symbol",
+                };
+                let token_text = stream
+                    .slice(&token.span)
+                    .expect("validated token stream must slice its own spans");
+                Value::Map(BTreeMap::from([
+                    ("kind".into(), Value::Text(kind.into())),
+                    ("text".into(), Value::Text(token_text.into())),
+                    ("startByte".into(), Value::Int(token.span.start_byte as i64)),
+                    ("endByte".into(), Value::Int(token.span.end_byte as i64)),
+                ]))
+            })
+            .collect::<Vec<_>>();
+        let value = Value::List(tokens);
+        self.ensure_intrinsic_output("text_tokenize", &value)?;
+        Ok(value)
     }
     fn charge_items(&mut self, items: usize) -> Result<(), SpoonError> {
         self.ensure_items("collection input items", items)?;
@@ -1763,6 +1897,52 @@ impl Evaluator {
     ) -> Result<Value, SpoonError> {
         self.charge_text(&path)?;
         let segments = parse_path(&path)?;
+        self.resolve_path(value, segments, optional, false)
+    }
+
+    fn get_json_pointer(
+        &mut self,
+        value: Value,
+        pointer: String,
+        optional: bool,
+    ) -> Result<Value, SpoonError> {
+        self.charge_text(&pointer)?;
+        let segments = parse_json_pointer(&pointer)?;
+        self.resolve_path(value, segments, optional, true)
+    }
+
+    fn set_json_pointer(
+        &mut self,
+        value: Value,
+        pointer: String,
+        replacement: Value,
+    ) -> Result<Value, SpoonError> {
+        self.charge_text(&pointer)?;
+        let segments = parse_json_pointer(&pointer)?;
+        self.charge_items(segments.len())?;
+        if segments.is_empty() {
+            return Ok(replacement);
+        }
+        update_json_pointer(self, value, &segments, replacement, false)
+    }
+
+    fn delete_json_pointer(&mut self, value: Value, pointer: String) -> Result<Value, SpoonError> {
+        self.charge_text(&pointer)?;
+        let segments = parse_json_pointer(&pointer)?;
+        self.charge_items(segments.len())?;
+        if segments.is_empty() {
+            return Ok(Value::Null);
+        }
+        update_json_pointer(self, value, &segments, Value::Null, true)
+    }
+
+    fn resolve_path(
+        &mut self,
+        value: Value,
+        segments: Vec<PathSegment>,
+        optional: bool,
+        pointer_mode: bool,
+    ) -> Result<Value, SpoonError> {
         self.charge_items(segments.len())?;
         let mut current = value;
         for segment in segments {
@@ -1786,6 +1966,16 @@ impl Evaluator {
                         length: items.len(),
                     }),
                 },
+                (Value::List(items), PathSegment::Key(key)) if pointer_mode => {
+                    let index = parse_pointer_index(&key)?;
+                    items
+                        .get(index)
+                        .cloned()
+                        .ok_or(SpoonError::IndexOutOfBounds {
+                            index: index as i64,
+                            length: items.len(),
+                        })
+                }
                 (Value::Map(_), PathSegment::Index(_)) => Err(SpoonError::TypeError {
                     expected: "list for a bracket index path segment".into(),
                     got: "map".into(),
@@ -1808,6 +1998,138 @@ impl Evaluator {
         }
         Ok(current)
     }
+}
+
+fn update_json_pointer(
+    evaluator: &mut Evaluator,
+    value: Value,
+    segments: &[PathSegment],
+    replacement: Value,
+    delete: bool,
+) -> Result<Value, SpoonError> {
+    let segment = segments
+        .first()
+        .ok_or_else(|| SpoonError::Other("JSON Pointer update requires a target".into()))?;
+    let last = segments.len() == 1;
+    match (value, segment) {
+        (Value::Map(mut entries), PathSegment::Key(key)) => {
+            evaluator.charge_items(entries.len())?;
+            if last {
+                if delete {
+                    entries
+                        .remove(key)
+                        .ok_or_else(|| SpoonError::FieldNotFound(key.clone()))?;
+                } else {
+                    if !entries.contains_key(key) {
+                        evaluator
+                            .ensure_items("json_pointer_set output items", entries.len() + 1)?;
+                    }
+                    entries.insert(key.clone(), replacement);
+                }
+                return Ok(Value::Map(entries));
+            }
+            let child = entries
+                .remove(key)
+                .ok_or_else(|| SpoonError::FieldNotFound(key.clone()))?;
+            let updated =
+                update_json_pointer(evaluator, child, &segments[1..], replacement, delete)?;
+            entries.insert(key.clone(), updated);
+            Ok(Value::Map(entries))
+        }
+        (Value::List(mut items), PathSegment::Key(key)) => {
+            let index = parse_pointer_index(key)?;
+            evaluator.charge_items(items.len())?;
+            if index >= items.len() {
+                return Err(SpoonError::IndexOutOfBounds {
+                    index: index as i64,
+                    length: items.len(),
+                });
+            }
+            if last {
+                if delete {
+                    items.remove(index);
+                } else {
+                    items[index] = replacement;
+                }
+                return Ok(Value::List(items));
+            }
+            let child = items.remove(index);
+            let updated =
+                update_json_pointer(evaluator, child, &segments[1..], replacement, delete)?;
+            items.insert(index, updated);
+            Ok(Value::List(items))
+        }
+        (Value::Map(_), PathSegment::Index(_)) => Err(SpoonError::TypeError {
+            expected: "map key path segment".into(),
+            got: "index".into(),
+        }),
+        (Value::List(_), PathSegment::Index(_)) => Err(SpoonError::TypeError {
+            expected: "JSON Pointer key segment".into(),
+            got: "index".into(),
+        }),
+        (other, _) => Err(SpoonError::type_error("map or list", &other)),
+    }
+}
+
+fn parse_json_pointer(pointer: &str) -> Result<Vec<PathSegment>, SpoonError> {
+    if pointer.len() > MAX_PATH_BYTES {
+        return Err(SpoonError::IntrinsicLimitExceeded {
+            operation: "json pointer bytes".into(),
+            limit: MAX_PATH_BYTES,
+        });
+    }
+    if pointer.is_empty() {
+        return Ok(Vec::new());
+    }
+    if !pointer.starts_with('/') {
+        return Err(invalid_path(
+            pointer,
+            "JSON Pointer must be empty or start with '/'",
+        ));
+    }
+
+    let mut segments = Vec::new();
+    for raw in pointer[1..].split('/') {
+        if segments.len() >= MAX_PATH_SEGMENTS {
+            return Err(SpoonError::IntrinsicLimitExceeded {
+                operation: "json pointer segments".into(),
+                limit: MAX_PATH_SEGMENTS,
+            });
+        }
+        let mut decoded = String::with_capacity(raw.len());
+        let mut chars = raw.chars();
+        while let Some(character) = chars.next() {
+            if character == '~' {
+                match chars.next() {
+                    Some('0') => decoded.push('~'),
+                    Some('1') => decoded.push('/'),
+                    _ => return Err(invalid_path(pointer, "invalid JSON Pointer escape")),
+                }
+            } else {
+                decoded.push(character);
+            }
+        }
+        segments.push(PathSegment::Key(decoded));
+    }
+    Ok(segments)
+}
+
+fn parse_pointer_index(segment: &str) -> Result<usize, SpoonError> {
+    if segment.is_empty() || segment == "-" {
+        return Err(SpoonError::type_error(
+            "array index",
+            &Value::Text(segment.into()),
+        ));
+    }
+    if segment.len() > 1 && segment.starts_with('0') {
+        return Err(SpoonError::type_error(
+            "canonical array index",
+            &Value::Text(segment.into()),
+        ));
+    }
+    segment
+        .parse::<usize>()
+        .map_err(|_| SpoonError::type_error("array index", &Value::Text(segment.into())))
 }
 
 fn parse_path(path: &str) -> Result<Vec<PathSegment>, SpoonError> {
@@ -2119,6 +2441,45 @@ mod tests {
     }
 
     #[test]
+    fn text_tokenize_preserves_utf8_byte_spans_and_token_kinds() {
+        let expression = intrinsic(IntrinsicOp::TextTokenize, vec![lit_text("é 42!©")]);
+
+        let result = Evaluator::new().eval(&expression, &mut Env::new()).unwrap();
+
+        let token = |kind: &str, text: &str, start_byte, end_byte| {
+            Value::Map(std::collections::BTreeMap::from([
+                ("kind".into(), Value::Text(kind.into())),
+                ("text".into(), Value::Text(text.into())),
+                ("startByte".into(), Value::Int(start_byte)),
+                ("endByte".into(), Value::Int(end_byte)),
+            ]))
+        };
+        assert_eq!(
+            result,
+            Value::List(vec![
+                token("word", "é", 0, 2),
+                token("whitespace", " ", 2, 3),
+                token("number", "42", 3, 5),
+                token("punctuation", "!", 5, 6),
+                token("symbol", "©", 6, 8),
+            ])
+        );
+    }
+
+    #[test]
+    fn text_tokenize_enforces_its_stricter_token_limit() {
+        let expression = intrinsic(
+            IntrinsicOp::TextTokenize,
+            vec![lit_text(&"!".repeat(4_097))],
+        );
+
+        assert!(matches!(
+            Evaluator::new().eval(&expression, &mut Env::new()),
+            Err(SpoonError::IntrinsicLimitExceeded { limit: 4_096, .. })
+        ));
+    }
+
+    #[test]
     fn json_parse_and_paths_support_dot_index_and_quoted_keys() {
         let parsed = intrinsic(
             IntrinsicOp::JsonParse,
@@ -2337,6 +2698,254 @@ mod tests {
     }
 
     #[test]
+    fn collection_find_index_returns_first_structural_match() {
+        let sought = Value::Map(std::collections::BTreeMap::from([
+            ("kind".into(), Value::Text("answer".into())),
+            ("value".into(), Value::Int(42)),
+        ]));
+        let collection = Expr::ListExpr(vec![
+            Expr::Literal(Value::Map(std::collections::BTreeMap::from([(
+                "kind".into(),
+                Value::Text("question".into()),
+            )]))),
+            Expr::Literal(sought.clone()),
+            Expr::Literal(sought.clone()),
+        ]);
+        let expression = intrinsic(
+            IntrinsicOp::CollectionFindIndex,
+            vec![collection, Expr::Literal(sought)],
+        );
+
+        assert_eq!(
+            Evaluator::new().eval(&expression, &mut Env::new()).unwrap(),
+            Value::Int(1)
+        );
+    }
+
+    #[test]
+    fn collection_find_index_returns_minus_one_when_absent() {
+        let expression = intrinsic(
+            IntrinsicOp::CollectionFindIndex,
+            vec![
+                Expr::ListExpr(vec![lit_int(1), lit_int(2), lit_int(3)]),
+                lit_int(9),
+            ],
+        );
+
+        assert_eq!(
+            Evaluator::new().eval(&expression, &mut Env::new()).unwrap(),
+            Value::Int(-1)
+        );
+    }
+
+    #[test]
+    fn collection_find_index_matches_null_maps_and_nested_lists_structurally() {
+        let nested = Value::List(vec![
+            Value::Null,
+            Value::Map(std::collections::BTreeMap::from([(
+                "ok".into(),
+                Value::Bool(true),
+            )])),
+        ]);
+        let expression = intrinsic(
+            IntrinsicOp::CollectionFindIndex,
+            vec![
+                Expr::ListExpr(vec![
+                    Expr::Literal(Value::Null),
+                    Expr::Literal(Value::List(vec![Value::Null])),
+                    Expr::Literal(nested.clone()),
+                ]),
+                Expr::Literal(nested),
+            ],
+        );
+
+        assert_eq!(
+            Evaluator::new().eval(&expression, &mut Env::new()).unwrap(),
+            Value::Int(2)
+        );
+    }
+
+    #[test]
+    fn collection_find_index_rejects_wrong_types_and_arities() {
+        let wrong_type = intrinsic(
+            IntrinsicOp::CollectionFindIndex,
+            vec![lit_text("not a list"), lit_int(1)],
+        );
+        assert!(matches!(
+            Evaluator::new().eval(&wrong_type, &mut Env::new()),
+            Err(SpoonError::TypeError { .. })
+        ));
+
+        for args in [
+            vec![lit_int(1)],
+            vec![],
+            vec![lit_int(1), lit_int(2), lit_int(3)],
+        ] {
+            let expression = intrinsic(IntrinsicOp::CollectionFindIndex, args);
+            assert!(matches!(
+                Evaluator::new().eval(&expression, &mut Env::new()),
+                Err(SpoonError::ArityMismatch { .. })
+            ));
+        }
+    }
+
+    #[test]
+    fn collection_find_index_charges_linear_work_against_budget() {
+        let expression = intrinsic(
+            IntrinsicOp::CollectionFindIndex,
+            vec![
+                Expr::ListExpr(vec![lit_int(1), lit_int(2), lit_int(3), lit_int(4)]),
+                lit_int(9),
+            ],
+        );
+
+        assert!(matches!(
+            Evaluator::new()
+                .with_budget(4)
+                .eval(&expression, &mut Env::new()),
+            Err(SpoonError::BudgetExceeded)
+        ));
+    }
+
+    #[test]
+    fn map_from_entries_accepts_empty_input_and_builds_a_deterministic_map() {
+        let entry =
+            |key: &str, value: Value| Value::List(vec![Value::Text(key.to_string()), value]);
+        let entries = Value::List(vec![
+            entry("z", Value::Int(26)),
+            entry("a", Value::List(vec![Value::Bool(true), Value::Null])),
+        ]);
+
+        let empty = intrinsic(
+            IntrinsicOp::MapFromEntries,
+            vec![Expr::Literal(Value::List(Vec::new()))],
+        );
+        let populated = intrinsic(IntrinsicOp::MapFromEntries, vec![Expr::Literal(entries)]);
+
+        assert_eq!(
+            Evaluator::new().eval(&empty, &mut Env::new()).unwrap(),
+            Value::Map(BTreeMap::new())
+        );
+        assert_eq!(
+            Evaluator::new().eval(&populated, &mut Env::new()).unwrap(),
+            Value::Map(BTreeMap::from([
+                (
+                    "a".into(),
+                    Value::List(vec![Value::Bool(true), Value::Null])
+                ),
+                ("z".into(), Value::Int(26)),
+            ]))
+        );
+    }
+
+    #[test]
+    fn map_from_entries_uses_last_value_for_duplicate_keys() {
+        let entries = Value::List(vec![
+            Value::List(vec![Value::Text("answer".into()), Value::Int(7)]),
+            Value::List(vec![Value::Text("answer".into()), Value::Int(42)]),
+            Value::List(vec![Value::Text("other".into()), Value::Bool(true)]),
+        ]);
+        let expression = intrinsic(IntrinsicOp::MapFromEntries, vec![Expr::Literal(entries)]);
+
+        assert_eq!(
+            Evaluator::new().eval(&expression, &mut Env::new()).unwrap(),
+            Value::Map(BTreeMap::from([
+                ("answer".into(), Value::Int(42)),
+                ("other".into(), Value::Bool(true)),
+            ]))
+        );
+    }
+
+    #[test]
+    fn map_from_entries_rejects_malformed_entries_types_and_arities() {
+        let wrong_collection = intrinsic(IntrinsicOp::MapFromEntries, vec![lit_text("not a list")]);
+        assert!(matches!(
+            Evaluator::new().eval(&wrong_collection, &mut Env::new()),
+            Err(SpoonError::TypeError { .. })
+        ));
+
+        let wrong_entry_type = intrinsic(
+            IntrinsicOp::MapFromEntries,
+            vec![Expr::Literal(Value::List(vec![Value::Int(1)]))],
+        );
+        assert!(matches!(
+            Evaluator::new().eval(&wrong_entry_type, &mut Env::new()),
+            Err(SpoonError::TypeError { .. })
+        ));
+
+        for pair in [
+            Value::List(vec![Value::Text("key".into())]),
+            Value::List(vec![
+                Value::Text("key".into()),
+                Value::Int(1),
+                Value::Int(2),
+            ]),
+        ] {
+            let malformed_pair = intrinsic(
+                IntrinsicOp::MapFromEntries,
+                vec![Expr::Literal(Value::List(vec![pair]))],
+            );
+            assert!(matches!(
+                Evaluator::new().eval(&malformed_pair, &mut Env::new()),
+                Err(SpoonError::ArityMismatch { .. })
+            ));
+        }
+
+        let wrong_key_type = intrinsic(
+            IntrinsicOp::MapFromEntries,
+            vec![Expr::Literal(Value::List(vec![Value::List(vec![
+                Value::Int(1),
+                Value::Bool(true),
+            ])]))],
+        );
+        assert!(matches!(
+            Evaluator::new().eval(&wrong_key_type, &mut Env::new()),
+            Err(SpoonError::TypeError { .. })
+        ));
+
+        for args in [
+            Vec::new(),
+            vec![Expr::Literal(Value::List(Vec::new())), lit_int(1)],
+        ] {
+            let wrong_arity = intrinsic(IntrinsicOp::MapFromEntries, args);
+            assert!(matches!(
+                Evaluator::new().eval(&wrong_arity, &mut Env::new()),
+                Err(SpoonError::ArityMismatch { .. })
+            ));
+        }
+    }
+
+    #[test]
+    fn map_from_entries_charges_work_and_enforces_output_item_limits() {
+        let entries = Value::List(
+            (0..=100_000)
+                .map(|index| {
+                    Value::List(vec![Value::Text(format!("key-{index}")), Value::Int(index)])
+                })
+                .collect(),
+        );
+        let expression = intrinsic(IntrinsicOp::MapFromEntries, vec![Expr::Literal(entries)]);
+
+        assert!(matches!(
+            Evaluator::new().eval(&expression, &mut Env::new()),
+            Err(SpoonError::IntrinsicLimitExceeded { .. })
+        ));
+
+        let small = Value::List(vec![
+            Value::List(vec![Value::Text("a".into()), Value::Int(1)]),
+            Value::List(vec![Value::Text("b".into()), Value::Int(2)]),
+            Value::List(vec![Value::Text("c".into()), Value::Int(3)]),
+        ]);
+        let expression = intrinsic(IntrinsicOp::MapFromEntries, vec![Expr::Literal(small)]);
+        assert!(matches!(
+            Evaluator::new()
+                .with_budget(2)
+                .eval(&expression, &mut Env::new()),
+            Err(SpoonError::BudgetExceeded)
+        ));
+    }
+
+    #[test]
     fn optional_path_does_not_hide_type_errors() {
         let expression = intrinsic(
             IntrinsicOp::PathGetOptional,
@@ -2345,6 +2954,391 @@ mod tests {
         assert!(matches!(
             Evaluator::new().eval(&expression, &mut Env::new()),
             Err(SpoonError::TypeError { .. })
+        ));
+    }
+
+    #[test]
+    fn json_pointer_get_supports_root_arrays_and_rfc6901_escaped_keys() {
+        let document = Value::Map(std::collections::BTreeMap::from([
+            (
+                "a/b".into(),
+                Value::Map(std::collections::BTreeMap::from([(
+                    "m~n".into(),
+                    Value::Text("escaped".into()),
+                )])),
+            ),
+            (
+                "items".into(),
+                Value::List(vec![
+                    Value::Map(std::collections::BTreeMap::from([(
+                        "name".into(),
+                        Value::Text("first".into()),
+                    )])),
+                    Value::Map(std::collections::BTreeMap::from([(
+                        "name".into(),
+                        Value::Text("second".into()),
+                    )])),
+                ]),
+            ),
+        ]));
+
+        let cases = [
+            ("", document.clone()),
+            ("/a~1b/m~0n", Value::Text("escaped".into())),
+            ("/items/0/name", Value::Text("first".into())),
+            ("/items/1/name", Value::Text("second".into())),
+        ];
+
+        for (pointer, expected) in cases {
+            let expression = intrinsic(
+                IntrinsicOp::JsonPointerGet,
+                vec![Expr::Literal(document.clone()), lit_text(pointer)],
+            );
+            let result = Evaluator::new().eval(&expression, &mut Env::new()).unwrap();
+            assert_eq!(result, expected, "pointer {pointer:?}");
+        }
+    }
+
+    #[test]
+    fn json_pointer_optional_distinguishes_present_null_from_missing() {
+        let document = Value::Map(std::collections::BTreeMap::from([(
+            "present".into(),
+            Value::Null,
+        )]));
+        let strict_present = intrinsic(
+            IntrinsicOp::JsonPointerGet,
+            vec![Expr::Literal(document.clone()), lit_text("/present")],
+        );
+        let optional_present = intrinsic(
+            IntrinsicOp::JsonPointerGetOptional,
+            vec![Expr::Literal(document.clone()), lit_text("/present")],
+        );
+        let optional_missing = intrinsic(
+            IntrinsicOp::JsonPointerGetOptional,
+            vec![Expr::Literal(document.clone()), lit_text("/missing")],
+        );
+        let strict_missing = intrinsic(
+            IntrinsicOp::JsonPointerGet,
+            vec![Expr::Literal(document), lit_text("/missing")],
+        );
+
+        for expression in [strict_present, optional_present, optional_missing] {
+            assert_eq!(
+                Evaluator::new().eval(&expression, &mut Env::new()).unwrap(),
+                Value::Null
+            );
+        }
+        assert!(matches!(
+            Evaluator::new().eval(&strict_missing, &mut Env::new()),
+            Err(SpoonError::FieldNotFound(_))
+        ));
+    }
+
+    #[test]
+    fn json_pointer_rejects_malformed_pointers_and_type_mismatches() {
+        let document = Value::Map(std::collections::BTreeMap::from([
+            ("items".into(), Value::List(vec![Value::Int(1)])),
+            ("scalar".into(), Value::Int(7)),
+        ]));
+        let malformed = ["items", "/bad~2", "/trailing~"];
+        for pointer in malformed {
+            let expression = intrinsic(
+                IntrinsicOp::JsonPointerGetOptional,
+                vec![Expr::Literal(document.clone()), lit_text(pointer)],
+            );
+            assert!(
+                matches!(
+                    Evaluator::new().eval(&expression, &mut Env::new()),
+                    Err(SpoonError::InvalidPath { .. })
+                ),
+                "pointer {pointer:?}"
+            );
+        }
+
+        let list_with_non_numeric_index = intrinsic(
+            IntrinsicOp::JsonPointerGetOptional,
+            vec![Expr::Literal(document.clone()), lit_text("/items/name")],
+        );
+        let scalar_as_container = intrinsic(
+            IntrinsicOp::JsonPointerGetOptional,
+            vec![Expr::Literal(document), lit_text("/scalar/value")],
+        );
+        assert!(matches!(
+            Evaluator::new().eval(&list_with_non_numeric_index, &mut Env::new()),
+            Err(SpoonError::TypeError { .. })
+        ));
+        assert!(matches!(
+            Evaluator::new().eval(&scalar_as_container, &mut Env::new()),
+            Err(SpoonError::TypeError { .. })
+        ));
+    }
+
+    #[test]
+    fn json_pointer_set_replaces_root_nested_values_and_escaped_keys_immutably() {
+        let document = Value::Map(std::collections::BTreeMap::from([
+            (
+                "a/b".into(),
+                Value::Map(std::collections::BTreeMap::from([(
+                    "m~n".into(),
+                    Value::Text("before".into()),
+                )])),
+            ),
+            (
+                "items".into(),
+                Value::List(vec![Value::Int(1), Value::Int(2)]),
+            ),
+        ]));
+        let original = document.clone();
+
+        let nested = intrinsic(
+            IntrinsicOp::JsonPointerSet,
+            vec![
+                Expr::Literal(document.clone()),
+                lit_text("/a~1b/m~0n"),
+                lit_text("after"),
+            ],
+        );
+        let nested_result = Evaluator::new().eval(&nested, &mut Env::new()).unwrap();
+        assert_eq!(
+            nested_result,
+            Value::Map(std::collections::BTreeMap::from([
+                (
+                    "a/b".into(),
+                    Value::Map(std::collections::BTreeMap::from([(
+                        "m~n".into(),
+                        Value::Text("after".into()),
+                    )])),
+                ),
+                (
+                    "items".into(),
+                    Value::List(vec![Value::Int(1), Value::Int(2)])
+                ),
+            ]))
+        );
+        assert_eq!(document, original, "set must not mutate its input value");
+
+        let root = intrinsic(
+            IntrinsicOp::JsonPointerSet,
+            vec![Expr::Literal(document), lit_text(""), lit_int(42)],
+        );
+        assert_eq!(
+            Evaluator::new().eval(&root, &mut Env::new()).unwrap(),
+            Value::Int(42)
+        );
+    }
+
+    #[test]
+    fn json_pointer_set_replaces_array_elements() {
+        let document = Value::List(vec![Value::Int(1), Value::Int(2), Value::Int(3)]);
+        let expression = intrinsic(
+            IntrinsicOp::JsonPointerSet,
+            vec![Expr::Literal(document.clone()), lit_text("/1"), lit_int(20)],
+        );
+
+        assert_eq!(
+            Evaluator::new().eval(&expression, &mut Env::new()).unwrap(),
+            Value::List(vec![Value::Int(1), Value::Int(20), Value::Int(3)])
+        );
+        assert_eq!(
+            document,
+            Value::List(vec![Value::Int(1), Value::Int(2), Value::Int(3)])
+        );
+    }
+
+    #[test]
+    fn json_pointer_delete_removes_root_map_fields_and_array_elements_immutably() {
+        let document = Value::Map(std::collections::BTreeMap::from([
+            ("keep".into(), Value::Bool(true)),
+            ("remove".into(), Value::Int(7)),
+            (
+                "items".into(),
+                Value::List(vec![Value::Text("a".into()), Value::Text("b".into())]),
+            ),
+        ]));
+        let original = document.clone();
+
+        let remove_field = intrinsic(
+            IntrinsicOp::JsonPointerDelete,
+            vec![Expr::Literal(document.clone()), lit_text("/remove")],
+        );
+        assert_eq!(
+            Evaluator::new()
+                .eval(&remove_field, &mut Env::new())
+                .unwrap(),
+            Value::Map(std::collections::BTreeMap::from([
+                ("keep".into(), Value::Bool(true)),
+                (
+                    "items".into(),
+                    Value::List(vec![Value::Text("a".into()), Value::Text("b".into())]),
+                ),
+            ]))
+        );
+        assert_eq!(document, original, "delete must not mutate its input value");
+
+        let remove_item = intrinsic(
+            IntrinsicOp::JsonPointerDelete,
+            vec![Expr::Literal(document.clone()), lit_text("/items/0")],
+        );
+        assert_eq!(
+            Evaluator::new()
+                .eval(&remove_item, &mut Env::new())
+                .unwrap(),
+            Value::Map(std::collections::BTreeMap::from([
+                ("keep".into(), Value::Bool(true)),
+                ("remove".into(), Value::Int(7)),
+                ("items".into(), Value::List(vec![Value::Text("b".into())]),),
+            ]))
+        );
+
+        let delete_root = intrinsic(
+            IntrinsicOp::JsonPointerDelete,
+            vec![Expr::Literal(document), lit_text("")],
+        );
+        assert_eq!(
+            Evaluator::new()
+                .eval(&delete_root, &mut Env::new())
+                .unwrap(),
+            Value::Null
+        );
+    }
+
+    #[test]
+    fn json_pointer_update_rejects_missing_type_and_malformed_targets() {
+        let document = Value::Map(std::collections::BTreeMap::from([
+            ("items".into(), Value::List(vec![Value::Int(1)])),
+            ("scalar".into(), Value::Int(7)),
+        ]));
+
+        let new_set = intrinsic(
+            IntrinsicOp::JsonPointerSet,
+            vec![
+                Expr::Literal(document.clone()),
+                lit_text("/missing"),
+                lit_int(1),
+            ],
+        );
+        let missing_delete = intrinsic(
+            IntrinsicOp::JsonPointerDelete,
+            vec![Expr::Literal(document.clone()), lit_text("/missing")],
+        );
+        let wrong_type_set = intrinsic(
+            IntrinsicOp::JsonPointerSet,
+            vec![
+                Expr::Literal(document.clone()),
+                lit_text("/items/name"),
+                lit_int(1),
+            ],
+        );
+        let wrong_type_delete = intrinsic(
+            IntrinsicOp::JsonPointerDelete,
+            vec![Expr::Literal(document.clone()), lit_text("/scalar/value")],
+        );
+        let malformed = intrinsic(
+            IntrinsicOp::JsonPointerSet,
+            vec![Expr::Literal(document), lit_text("/bad~2"), lit_int(1)],
+        );
+
+        assert_eq!(
+            Evaluator::new().eval(&new_set, &mut Env::new()).unwrap(),
+            Value::Map(std::collections::BTreeMap::from([
+                ("items".into(), Value::List(vec![Value::Int(1)])),
+                ("missing".into(), Value::Int(1)),
+                ("scalar".into(), Value::Int(7)),
+            ]))
+        );
+        assert!(matches!(
+            Evaluator::new().eval(&missing_delete, &mut Env::new()),
+            Err(SpoonError::FieldNotFound(_))
+        ));
+        assert!(matches!(
+            Evaluator::new().eval(&wrong_type_set, &mut Env::new()),
+            Err(SpoonError::TypeError { .. })
+        ));
+        assert!(matches!(
+            Evaluator::new().eval(&wrong_type_delete, &mut Env::new()),
+            Err(SpoonError::TypeError { .. })
+        ));
+        assert!(matches!(
+            Evaluator::new().eval(&malformed, &mut Env::new()),
+            Err(SpoonError::InvalidPath { .. })
+        ));
+    }
+
+    #[test]
+    fn json_pointer_update_enforces_intrinsic_arities() {
+        for args in [
+            vec![lit_int(1), lit_text("/value")],
+            vec![lit_int(1), lit_text("/value"), lit_int(2), lit_int(3)],
+        ] {
+            let expression = intrinsic(IntrinsicOp::JsonPointerSet, args);
+            assert!(matches!(
+                Evaluator::new().eval(&expression, &mut Env::new()),
+                Err(SpoonError::ArityMismatch { .. })
+            ));
+        }
+
+        for args in [
+            vec![lit_int(1)],
+            vec![lit_int(1), lit_text("/value"), lit_int(2)],
+        ] {
+            let expression = intrinsic(IntrinsicOp::JsonPointerDelete, args);
+            assert!(matches!(
+                Evaluator::new().eval(&expression, &mut Env::new()),
+                Err(SpoonError::ArityMismatch { .. })
+            ));
+        }
+    }
+
+    #[test]
+    fn coalesce_returns_first_non_null_without_treating_values_as_falsey() {
+        let cases = [
+            (Value::Bool(false), Value::Bool(false)),
+            (Value::Int(0), Value::Int(0)),
+            (Value::Text(String::new()), Value::Text(String::new())),
+            (Value::List(Vec::new()), Value::List(Vec::new())),
+            (
+                Value::Map(std::collections::BTreeMap::new()),
+                Value::Map(std::collections::BTreeMap::new()),
+            ),
+        ];
+
+        for (first, expected) in cases {
+            let expression = intrinsic(
+                IntrinsicOp::Coalesce,
+                vec![Expr::Literal(Value::Null), Expr::Literal(first)],
+            );
+            let result = Evaluator::new().eval(&expression, &mut Env::new()).unwrap();
+            assert_eq!(result, expected);
+        }
+    }
+
+    #[test]
+    fn coalesce_skips_nulls_and_returns_null_when_all_values_are_null() {
+        let expression = intrinsic(
+            IntrinsicOp::Coalesce,
+            vec![Expr::Literal(Value::Null), lit_text("fallback")],
+        );
+        assert_eq!(
+            Evaluator::new().eval(&expression, &mut Env::new()).unwrap(),
+            Value::Text("fallback".into())
+        );
+
+        let all_null = intrinsic(
+            IntrinsicOp::Coalesce,
+            vec![Expr::Literal(Value::Null), Expr::Literal(Value::Null)],
+        );
+        assert_eq!(
+            Evaluator::new().eval(&all_null, &mut Env::new()).unwrap(),
+            Value::Null
+        );
+    }
+
+    #[test]
+    fn coalesce_rejects_empty_argument_lists() {
+        let expression = intrinsic(IntrinsicOp::Coalesce, vec![]);
+        assert!(matches!(
+            Evaluator::new().eval(&expression, &mut Env::new()),
+            Err(SpoonError::ArityMismatch { .. })
         ));
     }
 

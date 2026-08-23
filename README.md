@@ -8,12 +8,6 @@ Spoon is a local, inspectable executable knowledge engine. It records episodes,
 evaluates results, learns reusable procedures, and keeps teacher advice
 provisional until local checks establish trust.
 
-Spoon uses the same name across its Rust crates, TypeScript packages, binaries,
-and environment variables.
-
-This namespace migration is intentionally breaking: use `spoon-*`, `@spoon/*`,
-`SPOON_*`, and `spoon-server` in new integrations.
-
 ## Quick start
 
 Requirements: Rust/Cargo, Node.js 24+, and pnpm.

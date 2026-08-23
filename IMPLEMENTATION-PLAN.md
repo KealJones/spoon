@@ -339,8 +339,9 @@ token/span operations, a small intent/dialogue ontology, deterministic grammar,
 and validation fixtures. Vocabulary, paraphrases, domain language, repair
 strategies, and stylistic preferences should grow as ordinary knowledge.
 
-**Initial bounded slice (implemented, bounded public rendering only):** UTF-8 token streams preserve
-byte offsets; serializable intent frames/slots/scope/ambiguity and dialogue moves
+**Initial bounded slice (implemented, bounded lexical and rendering paths):** UTF-8 token streams preserve
+byte offsets and are exposed to `pure_expr_v2` as bounded `text_tokenize`
+records (`kind`, exact source text, `startByte`, `endByte`); serializable intent frames/slots/scope/ambiguity and dialogue moves
 carry neutral structure; response plans carry evidence-backed claims, provenance,
 uncertainty, tone, and a formatting variant. The no-model renderer preserves
 claim text verbatim, omits explicitly unsupported claims, rejects claims without
@@ -350,7 +351,9 @@ overrides, redacts raw provenance, and labels caller evidence references
 unverified rather than elevating them. This is deliberately not semantic
 interpretation, server-side evidence verification, or natural-language
 generation. Its current proof is five focused `spoon-core` tests plus server and
-real-stdio SDK tests for bounds, omission, redaction, and rejection.
+real-stdio SDK tests for bounds, omission, redaction, rejection, and a
+Teacher-OFF tokenized word-count procedure. Tokenization remains lexical only;
+it does not infer intent, entities, or syntax trees.
 
 **Deliverable**: Spoon learns a general letter-count intent and procedure,
 handles paraphrases with Teacher OFF, asks when literal versus canonical
@@ -703,6 +706,16 @@ All teacher output goes through the validation pipeline (section 30):
 ```
 proposal -> validate -> verified | rejected | provisional
 ```
+
+Teacher prompts must seek the full reusable lesson supported by the evidence:
+language and terminology, definitions and meaning, user intent, inputs and
+outputs, relationships, constraints, examples, and explicit uncertainty—not
+only an answer. A reusable lesson may carry bounded definitional or
+defeasible-general concepts alongside one to four focused procedural concepts.
+Procedures may compose through acyclic, engine-resolved `lesson:<procedure-key>`
+dependencies; the invocation names the selected final procedure. Every item is
+still Provisional on admission, and unsupported facts, ambient assumptions, or
+capabilities must be omitted rather than invented.
 
 Source reliability is tracked per teacher over time.
 
@@ -1594,9 +1607,12 @@ surfaces.
 
 Carry the resolved policy through the same public path a user exercises:
 CLI -> SDK -> JSON-RPC server -> `CycleInput` -> context assembly -> episode
-recording. The server records the effective non-secret recall policy and config
-fingerprint in episode provenance so an explanation can say why a memory was
-or was not eligible.
+recording. The server records the effective non-secret recall policy, config
+fingerprint, and optional caller-supplied working-directory path in episode
+provenance so an explanation can say why a memory was or was not eligible and
+which local repository context was active. The path is metadata only: it never
+grants filesystem authority, transfers with capability bundles, or substitutes
+for an explicit scoped host permission.
 
 Public commands and flags:
 

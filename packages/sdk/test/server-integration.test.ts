@@ -47,8 +47,8 @@ const quotedLetterCountLesson = (situation: string): TeacherProposalWire => ({
           name: "COUNT LETTER IN TEXT",
           concept: { kind: "new_concept", key: "count-letter-in-text" },
           parameters: [
-            { name: "text", description: "text to inspect" },
             { name: "letter", description: "letter to count" },
+            { name: "text", description: "text to inspect" },
           ],
           body: {
             kind: "intrinsic",
@@ -92,8 +92,8 @@ const quotedLetterCountLesson = (situation: string): TeacherProposalWire => ({
       invocation: {
         procedureKey: "count-letter-in-text-procedure",
         inputs: [
-          { name: "text", value: "strawberry" },
           { name: "letter", value: "r" },
+          { name: "text", value: "strawberry" },
         ],
       },
     },
@@ -107,6 +107,160 @@ const quotedLetterCountLesson = (situation: string): TeacherProposalWire => ({
     provider: "human",
     teacher: "human:test-quoted-letter-count",
     requestId: "quoted-letter-count-1",
+    generatedAt: "2026-08-23T00:00:00.000Z",
+    situation,
+  },
+});
+
+const tokenizedWordCountLesson = (
+  situation: string,
+  text: string,
+): TeacherProposalWire => ({
+  content: {
+    proposalKind: "reusable_lesson",
+    interpretations: [],
+    lesson: {
+      primitiveSet: "pure_expr_v2",
+      concepts: [
+        {
+          key: "count-tokenized-words",
+          name: "COUNT TOKENIZED WORDS",
+          description:
+            "Count word tokens in quoted text using the bounded tokenizer",
+        },
+      ],
+      relationships: [],
+      procedures: [
+        {
+          key: "count-tokenized-words-procedure",
+          name: "COUNT TOKENIZED WORDS",
+          concept: {
+            kind: "new_concept",
+            key: "count-tokenized-words",
+          },
+          parameters: [{ name: "text", description: "text to tokenize" }],
+          body: {
+            kind: "intrinsic",
+            version: 1,
+            op: "length",
+            args: [
+              {
+                kind: "filter",
+                collection: {
+                  kind: "intrinsic",
+                  version: 1,
+                  op: "text_tokenize",
+                  args: [{ kind: "parameter", name: "text" }],
+                },
+                var: "token",
+                predicate: {
+                  kind: "binary",
+                  op: "equal",
+                  left: {
+                    kind: "field",
+                    object: { kind: "parameter", name: "token" },
+                    field: "kind",
+                  },
+                  right: { kind: "literal", value: "word" },
+                },
+              },
+            ],
+          },
+          contract: { requires: [], promises: [], failsWhen: [] },
+        },
+      ],
+      invocation: {
+        procedureKey: "count-tokenized-words-procedure",
+        inputs: [{ name: "text", value: text }],
+      },
+    },
+    procedure: null,
+    answer: 3,
+    abstainReason: null,
+  },
+  source: "human:test-tokenized-word-count",
+  status: "unverified",
+  provenance: {
+    provider: "human",
+    teacher: "human:test-tokenized-word-count",
+    requestId: "tokenized-word-count-1",
+    generatedAt: "2026-08-23T00:00:00.000Z",
+    situation,
+  },
+});
+
+const jsonPointerDefaultLesson = (
+  situation: string,
+  document: string,
+): TeacherProposalWire => ({
+  content: {
+    proposalKind: "reusable_lesson",
+    interpretations: [],
+    lesson: {
+      primitiveSet: "pure_expr_v2",
+      concepts: [
+        {
+          key: "json-pointer-default",
+          name: "JSON POINTER DEFAULT",
+          description:
+            "Read an optional JSON Pointer and return a bounded default when the field is absent",
+        },
+      ],
+      relationships: [],
+      procedures: [
+        {
+          key: "json-pointer-default-procedure",
+          name: "JSON POINTER DEFAULT",
+          concept: {
+            kind: "new_concept",
+            key: "json-pointer-default",
+          },
+          parameters: [
+            {
+              name: "document",
+              description: "JSON document text to inspect",
+            },
+          ],
+          body: {
+            kind: "intrinsic",
+            version: 1,
+            op: "coalesce",
+            args: [
+              {
+                kind: "intrinsic",
+                version: 1,
+                op: "json_pointer_get_optional",
+                args: [
+                  {
+                    kind: "intrinsic",
+                    version: 1,
+                    op: "json_parse",
+                    args: [{ kind: "parameter", name: "document" }],
+                  },
+                  { kind: "literal", value: "/answer" },
+                ],
+              },
+              { kind: "literal", value: "unknown" },
+            ],
+          },
+          contract: { requires: [], promises: [], failsWhen: [] },
+        },
+      ],
+      invocation: {
+        procedureKey: "json-pointer-default-procedure",
+        inputs: [{ name: "document", value: document }],
+      },
+    },
+    procedure: null,
+    answer: "unknown",
+    abstainReason: null,
+  },
+  source: "human:test-json-pointer-default",
+  status: "unverified",
+  provenance: {
+    provider: "human",
+    teacher: "human:test-json-pointer-default",
+    requestId: "json-pointer-default-1",
     generatedAt: "2026-08-23T00:00:00.000Z",
     situation,
   },
@@ -332,6 +486,102 @@ test(
       assert.equal(retained.status, "completed");
       assert.equal(retained.disposition, "provisional");
       assert.equal(retained.answer, 3);
+    } finally {
+      client.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "SDK adopts and reuses a tokenized word-count lesson through Rust stdio",
+  { timeout: 30_000 },
+  async () => {
+    const directory = await mkdtemp(
+      path.join(os.tmpdir(), "spoon-tokenized-word-count-"),
+    );
+    const acquisition = 'how many words are in "Alpha beta, gamma!"?';
+    const transport = StdioTransport.spawn(
+      "cargo",
+      ["run", "--quiet", "-p", "spoon-server"],
+      { env: { ...process.env, SPOON_DB: path.join(directory, "spoon.db") } },
+    );
+    const client = new SpoonClient(transport);
+
+    try {
+      const started = await client.beginCycle(
+        defaultCycleInput(acquisition, true),
+      );
+      assert.equal(started.status, "need_teacher");
+
+      if (started.status !== "need_teacher") {
+        assert.fail("acquisition must request a Teacher proposal");
+      }
+
+      const adopted = await client.resumeCycle(
+        started.cycleId,
+        tokenizedWordCountLesson(acquisition, "Alpha beta, gamma!"),
+      );
+      assert.equal(adopted.status, "completed");
+      assert.equal(adopted.disposition, "provisional");
+      assert.equal(adopted.answer, 3);
+
+      const retained = await client.beginCycle(
+        defaultCycleInput('how many words are in "solo   two\tTHREE."?', false),
+      );
+      assert.equal(retained.status, "completed");
+      assert.equal(retained.disposition, "provisional");
+      assert.equal(retained.answer, 3);
+    } finally {
+      client.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "SDK adopts a JSON Pointer default lesson and reuses it with Teacher-OFF",
+  { timeout: 30_000 },
+  async () => {
+    const directory = await mkdtemp(
+      path.join(os.tmpdir(), "spoon-json-pointer-default-"),
+    );
+    const acquisition =
+      'read the answer field from JSON \'{"name":"Spoon"}\', defaulting to unknown if absent';
+    const transport = StdioTransport.spawn(
+      "cargo",
+      ["run", "--quiet", "-p", "spoon-server"],
+      { env: { ...process.env, SPOON_DB: path.join(directory, "spoon.db") } },
+    );
+    const client = new SpoonClient(transport);
+
+    try {
+      const started = await client.beginCycle(
+        defaultCycleInput(acquisition, true),
+      );
+      assert.equal(started.status, "need_teacher");
+
+      if (started.status !== "need_teacher") {
+        assert.fail("acquisition must request a Teacher proposal");
+      }
+
+      const adopted = await client.resumeCycle(
+        started.cycleId,
+        jsonPointerDefaultLesson(acquisition, '{"name":"Spoon"}'),
+      );
+      assert.equal(adopted.status, "completed");
+      assert.equal(adopted.disposition, "provisional");
+      assert.equal(adopted.answer, "unknown");
+
+      const retained = await client.beginCycle(
+        defaultCycleInput(
+          'read the answer field from JSON \'{"name":"EKG"}\', defaulting to unknown if absent',
+          false,
+        ),
+      );
+      assert.equal(retained.status, "completed");
+      assert.equal(retained.disposition, "provisional");
+      assert.equal(retained.answer, "unknown");
     } finally {
       client.close();
       await rm(directory, { recursive: true, force: true });

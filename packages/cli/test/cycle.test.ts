@@ -306,6 +306,7 @@ class ReusableLessonTeacher implements Pick<
               key: "double",
               name: "DOUBLE",
               description: "Multiply any numeric input by two",
+              mutability: "procedural",
             },
           ],
           relationships: [],

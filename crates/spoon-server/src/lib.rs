@@ -2391,6 +2391,8 @@ struct CycleBudgetParams {
 struct BeginCycleParams {
     situation: String,
     #[serde(default)]
+    working_directory: Option<String>,
+    #[serde(default)]
     environment: BTreeMap<String, SpoonValue>,
     #[serde(default)]
     assumptions: Vec<Assumption>,
@@ -2408,6 +2410,7 @@ impl BeginCycleParams {
     fn into_cycle_input(self) -> CycleInput {
         CycleInput {
             situation: self.situation,
+            working_directory: self.working_directory,
             environment: self.environment,
             assumptions: self.assumptions,
             budget: CycleBudget {

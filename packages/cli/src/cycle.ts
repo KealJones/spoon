@@ -42,6 +42,7 @@ export async function runCycle(
   const maxTeacherTurns = options.maxTeacherTurns ?? 2;
   let progress = await client.beginCycle({
     situation,
+    workingDirectory: process.cwd(),
     environment: {},
     assumptions: [],
     budget: {

@@ -10,6 +10,7 @@ use spoon_exec::{ExecStepStatus, ExecTrace};
 fn cycle_input(situation: &str, teacher_allowed: bool) -> CycleInput {
     CycleInput {
         situation: situation.into(),
+        working_directory: None,
         environment: BTreeMap::new(),
         assumptions: Vec::new(),
         budget: CycleBudget {
@@ -22,6 +23,30 @@ fn cycle_input(situation: &str, teacher_allowed: bool) -> CycleInput {
         recall_mode: Default::default(),
         permission_mode: None,
     }
+}
+
+#[test]
+fn cycle_persists_working_directory_provenance_on_episode() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    let mut input = cycle_input("working directory provenance", false);
+    input.working_directory = Some("/workspace/example-repo".into());
+
+    let CycleProgress::Completed(outcome) = engine.begin_cycle(input).unwrap() else {
+        panic!("bounded no-teacher cycle should complete");
+    };
+    assert_eq!(
+        outcome.episode.working_directory.as_deref(),
+        Some("/workspace/example-repo")
+    );
+    assert_eq!(
+        engine
+            .episodes()
+            .get(outcome.episode.id)
+            .unwrap()
+            .working_directory
+            .as_deref(),
+        Some("/workspace/example-repo")
+    );
 }
 
 fn seed_double(engine: &Engine) -> (Concept, Procedure) {
@@ -213,8 +238,8 @@ fn reusable_count_letter_lesson(text: &str, letter: &str) -> serde_json::Value {
                 "name": "COUNT LETTER",
                 "concept": { "kind": "new_concept", "key": "count-letter" },
                 "parameters": [
-                    { "name": "text", "description": "text to inspect" },
-                    { "name": "letter", "description": "letter to count" }
+                    { "name": "letter", "description": "letter to count" },
+                    { "name": "text", "description": "text to inspect" }
                 ],
                 "body": {
                     "kind": "intrinsic", "version": 1, "op": "length",
@@ -240,8 +265,8 @@ fn reusable_count_letter_lesson(text: &str, letter: &str) -> serde_json::Value {
             "invocation": {
                 "procedureKey": "count-letter-procedure",
                 "inputs": [
-                    { "name": "text", "value": text },
-                    { "name": "letter", "value": letter }
+                    { "name": "letter", "value": letter },
+                    { "name": "text", "value": text }
                 ]
             }
         },
@@ -351,6 +376,97 @@ fn reusable_dependency_lesson(alias: &str, value: i64) -> serde_json::Value {
         "answer": value * 4,
         "abstainReason": null
     })
+}
+
+#[test]
+fn reusable_lesson_admits_general_facts_and_composable_sibling_procedures() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    let situation = "increment 3 and then double the result";
+    let cycle_id = begin_teacher_cycle(&mut engine, situation);
+    let lesson = json!({
+        "proposalKind": "reusable_lesson",
+        "interpretations": [],
+        "lesson": {
+            "primitiveSet": "pure_expr_v2",
+            "concepts": [
+                {
+                    "key": "successor-fact",
+                    "name": "SUCCESSOR",
+                    "description": "The successor of an integer is the next integer, one greater than it.",
+                    "mutability": "definitional"
+                },
+                {
+                    "key": "increment",
+                    "name": "INCREMENT",
+                    "description": "Add one to a numeric input.",
+                    "mutability": "procedural"
+                },
+                {
+                    "key": "double-after-increment",
+                    "name": "DOUBLE AFTER INCREMENT",
+                    "description": "Increment a numeric input and double that intermediate result.",
+                    "mutability": "procedural"
+                }
+            ],
+            "relationships": [],
+            "procedures": [
+                {
+                    "key": "increment-procedure",
+                    "name": "INCREMENT",
+                    "concept": { "kind": "new_concept", "key": "increment" },
+                    "parameters": [{ "name": "x", "description": "numeric input" }],
+                    "body": {
+                        "kind": "binary", "op": "add",
+                        "left": { "kind": "parameter", "name": "x" },
+                        "right": { "kind": "literal", "value": 1 }
+                    },
+                    "contract": { "requires": [], "promises": [], "failsWhen": [] }
+                },
+                {
+                    "key": "double-after-increment-procedure",
+                    "name": "DOUBLE AFTER INCREMENT",
+                    "concept": { "kind": "new_concept", "key": "double-after-increment" },
+                    "parameters": [{ "name": "x", "description": "numeric input" }],
+                    "body": {
+                        "kind": "binary", "op": "multiply",
+                        "left": {
+                            "kind": "dependency",
+                            "alias": "lesson:increment-procedure",
+                            "args": [{ "kind": "parameter", "name": "x" }]
+                        },
+                        "right": { "kind": "literal", "value": 2 }
+                    },
+                    "contract": { "requires": [], "promises": [], "failsWhen": [] }
+                }
+            ],
+            "invocation": {
+                "procedureKey": "double-after-increment-procedure",
+                "inputs": [{ "name": "x", "value": 3 }]
+            }
+        },
+        "procedure": null,
+        "answer": 8,
+        "abstainReason": null
+    });
+
+    let CycleProgress::Completed(outcome) = engine
+        .resume_cycle(cycle_id, proposal(situation, lesson))
+        .unwrap()
+    else {
+        panic!("composable lesson should execute");
+    };
+    assert_eq!(outcome.answer, Some(Value::Int(8)));
+    assert_eq!(engine.graph().list_concepts().unwrap().len(), 3);
+    assert_eq!(engine.graph().list_procedures().unwrap().len(), 2);
+    assert!(
+        engine
+            .graph()
+            .list_concepts()
+            .unwrap()
+            .iter()
+            .any(|concept| concept.name == "SUCCESSOR"
+                && concept.mutability == MutabilityClass::Definitional)
+    );
 }
 
 #[test]
@@ -576,6 +692,89 @@ fn pure_expr_v2_authors_new_v1_intrinsics_through_the_schema_and_compiler() {
 }
 
 #[test]
+fn pure_expr_v2_collection_find_index_compiles_through_schema_and_compiler() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    let cycle_id = begin_teacher_cycle(&mut engine, "find the matching value");
+    let mut lesson =
+        reusable_count_occurrences_lesson(json!(["first", "needle", "needle"]), json!("needle"));
+    lesson["lesson"]["procedures"][0]["body"] = json!({
+        "kind": "intrinsic",
+        "version": 1,
+        "op": "collection_find_index",
+        "args": [
+            { "kind": "parameter", "name": "items" },
+            { "kind": "parameter", "name": "needle" }
+        ]
+    });
+    lesson["answer"] = json!(1);
+
+    let CycleProgress::Completed(outcome) = engine
+        .resume_cycle(cycle_id, proposal("find the matching value", lesson))
+        .unwrap()
+    else {
+        panic!("collection_find_index lesson should compile and execute");
+    };
+    assert_eq!(outcome.answer, Some(Value::Int(1)));
+}
+
+#[test]
+fn pure_expr_v2_map_from_entries_compiles_dynamic_objects() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    let cycle_id = begin_teacher_cycle(&mut engine, "build an object from entries");
+    let mut lesson = reusable_count_occurrences_lesson(
+        json!([["name", "Spoon"], ["count", 3], ["name", "EKG"]]),
+        json!("unused"),
+    );
+    lesson["lesson"]["procedures"][0]["body"] = json!({
+        "kind": "intrinsic",
+        "version": 1,
+        "op": "map_from_entries",
+        "args": [{ "kind": "parameter", "name": "items" }]
+    });
+    lesson["answer"] = json!({ "name": "EKG", "count": 3 });
+
+    let CycleProgress::Completed(outcome) = engine
+        .resume_cycle(cycle_id, proposal("build an object from entries", lesson))
+        .unwrap()
+    else {
+        panic!("map_from_entries lesson should compile and execute");
+    };
+    assert_eq!(
+        outcome.answer,
+        Some(serde_json::from_value(json!({ "name": "EKG", "count": 3 })).unwrap())
+    );
+}
+
+#[test]
+fn pure_expr_v2_json_pointer_set_compiles_immutable_updates() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    let cycle_id = begin_teacher_cycle(&mut engine, "update a JSON field");
+    let mut lesson = reusable_count_occurrences_lesson(json!({ "answer": 7 }), json!("unused"));
+    lesson["lesson"]["procedures"][0]["body"] = json!({
+        "kind": "intrinsic",
+        "version": 1,
+        "op": "json_pointer_set",
+        "args": [
+            { "kind": "parameter", "name": "items" },
+            { "kind": "literal", "value": "/answer" },
+            { "kind": "literal", "value": 42 }
+        ]
+    });
+    lesson["answer"] = json!({ "answer": 42 });
+
+    let CycleProgress::Completed(outcome) = engine
+        .resume_cycle(cycle_id, proposal("update a JSON field", lesson))
+        .unwrap()
+    else {
+        panic!("json_pointer_set lesson should compile and execute");
+    };
+    assert_eq!(
+        outcome.answer,
+        Some(serde_json::from_value(json!({ "answer": 42 })).unwrap())
+    );
+}
+
+#[test]
 fn rich_count_letter_lesson_reuses_explicit_quoted_text_with_teacher_disabled() {
     let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
     let cycle_id = begin_teacher_cycle(&mut engine, "count \"R\" in \"strawberry\"");
@@ -600,7 +799,54 @@ fn rich_count_letter_lesson_reuses_explicit_quoted_text_with_teacher_disabled() 
         panic!("Teacher-OFF reuse must terminalize");
     };
     assert_eq!(reused.answer, Some(Value::Int(3)));
-    assert_eq!(reused.episode.cost.teacher_turns, 0);
+    assert!(reused.episode.teacher_interaction.is_none());
+}
+
+#[test]
+fn quoted_text_binding_is_escape_aware_and_malformed_requests_do_not_rebind() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    let cycle_id = begin_teacher_cycle(&mut engine, "count \"R\" in \"strawberry\"");
+    engine
+        .resume_cycle(
+            cycle_id,
+            proposal(
+                "count \"R\" in \"strawberry\"",
+                reusable_count_letter_lesson("strawberry", "R"),
+            ),
+        )
+        .unwrap();
+    let procedures_before = engine.graph().list_procedures().unwrap().len();
+
+    let CycleProgress::Completed(escaped) = engine
+        .begin_cycle(cycle_input("count \"\\\"\" in \"a\\\"b\\\"\"", false))
+        .unwrap()
+    else {
+        panic!("escaped quoted values should remain explicit local inputs");
+    };
+    assert_eq!(escaped.answer, Some(Value::Int(2)));
+
+    let CycleProgress::Completed(malformed) = engine
+        .begin_cycle(cycle_input("count \"r in raspberry", false))
+        .unwrap()
+    else {
+        panic!("Teacher-OFF malformed input must terminalize safely");
+    };
+    assert_eq!(malformed.disposition, CycleDisposition::Abstained);
+    assert_eq!(malformed.answer, None);
+    assert!(malformed.episode.teacher_interaction.is_none());
+    assert_eq!(
+        engine.graph().list_procedures().unwrap().len(),
+        procedures_before
+    );
+}
+
+#[test]
+fn oversized_quoted_text_is_rejected_before_cycle_state_changes() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    let oversized = format!("count \"r\" in \"{}\"", "x".repeat(65_537));
+    assert!(engine.begin_cycle(cycle_input(&oversized, false)).is_err());
+    assert_eq!(engine.graph().list_procedures().unwrap().len(), 0);
+    assert_eq!(engine.episodes().count().unwrap(), 0);
 }
 
 #[test]
