@@ -48,7 +48,7 @@ test("Codex CLI teacher runs ephemerally in an isolated read-only directory", as
   assert.ok(invocation?.args.includes("--output-schema"));
   assert.ok(invocation?.args.includes("--output-last-message"));
   assert.ok(invocation?.args.includes("gpt-test"));
-  assert.ok(invocation?.cwd?.includes("ekg-codex-teacher-"));
+  assert.ok(invocation?.cwd?.includes("spoon-codex-teacher-"));
   assert.deepEqual(proposal.content, { answer: 14 });
   assert.equal(proposal.source, "codex:gpt-test");
   assert.equal(proposal.provenance.provider, "codex");

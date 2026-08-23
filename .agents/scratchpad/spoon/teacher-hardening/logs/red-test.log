@@ -1,0 +1,142 @@
+$ tsx --test test/*.test.ts
+✔ validation rejects schema-invalid output and records provenance (3.075208ms)
+✔ validation stays provisional without independent verification (0.134875ms)
+✔ validators can verify or reject a schema-valid proposal (0.145833ms)
+✔ reliability is tracked independently per source with a conservative prior (0.073125ms)
+✔ Claude adapter uses print-mode structured output and returns unverified content (0.330208ms)
+✔ OpenAI adapter sends Responses API strict structured-output request (9.902333ms)
+✔ Ollama adapter uses non-streaming generate with JSON schema (0.483042ms)
+✔ human adapter accepts injected structured input and never self-verifies (0.142208ms)
+✔ provider failures and malformed outputs are explicit (0.429375ms)
+✖ validation binds the proposal envelope and provenance to the request (0.745417ms)
+✖ validation requires exact optional-question provenance binding (0.157666ms)
+✖ teacher-created validation pipelines share the teacher reliability state (0.130791ms)
+✖ JSON schema equality is structural and object key order independent (0.306667ms)
+✖ required schema properties must be own properties (0.098083ms)
+✖ transport and prompt rejections retain provider attribution (3.913375ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 9
+ℹ fail 6
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 194.248125
+
+✖ failing tests:
+
+test at test/teacher.test.ts:344:1
+✖ validation binds the proposal envelope and provenance to the request (0.745417ms)
+  AssertionError [ERR_ASSERTION]: runtime status
+  + actual - expected
+  
+  + 'verified'
+  - 'rejected'
+  
+      at TestContext.<anonymous> (/Users/kealjones/Git/Personal/spoon/packages/teacher/test/teacher.test.ts:413:12)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'verified',
+    expected: 'rejected',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/teacher.test.ts:420:1
+✖ validation requires exact optional-question provenance binding (0.157666ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'provisional'
+  - 'rejected'
+  
+      at TestContext.<anonymous> (/Users/kealjones/Git/Personal/spoon/packages/teacher/test/teacher.test.ts:428:10)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'provisional',
+    expected: 'rejected',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/teacher.test.ts:432:1
+✖ teacher-created validation pipelines share the teacher reliability state (0.130791ms)
+  TypeError: teacher.validationPipeline is not a function
+      at TestContext.<anonymous> (/Users/kealjones/Git/Personal/spoon/packages/teacher/test/teacher.test.ts:440:28)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7)
+
+test at test/teacher.test.ts:465:1
+✖ JSON schema equality is structural and object key order independent (0.306667ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + [
+  +   '$ must equal the constant value'
+  + ]
+  - []
+  
+      at TestContext.<anonymous> (/Users/kealjones/Git/Personal/spoon/packages/teacher/test/teacher.test.ts:466:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ '$ must equal the constant value' ],
+    expected: [],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at test/teacher.test.ts:492:1
+✖ required schema properties must be own properties (0.098083ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /\$\.lesson is required/. Input:
+  
+  ''
+  
+      at TestContext.<anonymous> (/Users/kealjones/Git/Personal/spoon/packages/teacher/test/teacher.test.ts:499:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '',
+    expected: /\$\.lesson is required/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at test/teacher.test.ts:505:1
+✖ transport and prompt rejections retain provider attribution (3.913375ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok(error instanceof TeacherError)
+  
+      at Object.<anonymous> (/Users/kealjones/Git/Personal/spoon/packages/teacher/test/teacher.test.ts:537:16)
+      at expectedException (node:assert:578:17)
+      at expectsError (node:assert:703:21)
+      at strict.rejects (node:assert:769:3)
+      at async TestContext.<anonymous> (/Users/kealjones/Git/Personal/spoon/packages/teacher/test/teacher.test.ts:534:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+/Users/kealjones/Git/Personal/spoon/packages/teacher:
+[ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL] @spoon/teacher@0.1.0 test: `tsx --test test/*.test.ts`
+Exit status 1
+[WARN]  Local package.json exists, but node_modules missing, did you mean to install?

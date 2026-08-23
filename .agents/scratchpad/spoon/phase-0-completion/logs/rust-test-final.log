@@ -1,0 +1,191 @@
+   Compiling spoon-core v0.1.0 (/Users/kealjones/Git/Personal/spoon/crates/spoon-core)
+   Compiling spoon-graph v0.1.0 (/Users/kealjones/Git/Personal/spoon/crates/spoon-graph)
+   Compiling spoon-episode v0.1.0 (/Users/kealjones/Git/Personal/spoon/crates/spoon-episode)
+   Compiling spoon-exec v0.1.0 (/Users/kealjones/Git/Personal/spoon/crates/spoon-exec)
+   Compiling spoon-engine v0.1.0 (/Users/kealjones/Git/Personal/spoon/crates/spoon-engine)
+   Compiling spoon-server v0.1.0 (/Users/kealjones/Git/Personal/spoon/crates/spoon-server)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.17s
+     Running unittests src/lib.rs (target/debug/deps/spoon_core-19ed098d2438817e)
+
+running 1 test
+test evidence::tests::evidence_roundtrip_preserves_provenance_and_episode_link ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/spoon_engine-f6a6332a39201b44)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/evaluation.rs (target/debug/deps/evaluation-e82958ae90d60a76)
+
+running 11 tests
+test decomposition_records_explicit_checkable_proposals_for_review ... ok
+test deterministic_mismatch_is_a_hard_failure_with_surprise ... ok
+test decomposition_rejects_empty_or_uncheckable_input ... ok
+test deterministic_comparison_is_type_strict ... ok
+test deterministic_equality_is_a_hard_success_without_surprise ... ok
+test inverse_and_round_trip_helpers_check_recovery ... ok
+test duplicate_or_missing_methods_do_not_pretend_to_be_independent ... ok
+test surprise_is_a_bounded_change_signal ... ok
+test tier_three_distinguishes_pending_from_human_verdicts ... ok
+test disagreement_fails_consensus ... ok
+test distinct_independent_methods_can_establish_consensus ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/seed_cycle.rs (target/debug/deps/seed_cycle-dfe8bc741766d113)
+
+running 6 tests
+test execution_rejects_missing_and_extra_named_inputs ... ok
+test execution_records_and_evaluates_a_complete_episode ... ok
+test failed_execution_records_the_episode_and_partial_trace ... ok
+test execution_episode_is_indexed_by_the_procedure_concept ... ok
+test failed_execution_without_prediction_has_no_surprise_signal ... ok
+test replay_uses_pinned_versions_and_named_substitutions ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (target/debug/deps/spoon_episode-ac169ed88f2b67c2)
+
+running 15 tests
+test store::tests::list_recent ... ok
+test store::tests::insert_and_retrieve ... ok
+test store::tests::count ... ok
+test store::tests::insert_rolls_back_episode_when_concept_indexing_fails ... ok
+test store::tests::list_failures ... ok
+test store::tests::rung_distribution_propagates_sqlite_row_errors ... ok
+test store::tests::not_found ... ok
+test store::tests::episode_collection_reads_propagate_malformed_json ... ok
+test store::tests::episode_collection_reads_propagate_sqlite_row_errors ... ok
+test store::tests::query_filters_by_time_outcome_and_rung ... ok
+test store::tests::find_by_concept ... ok
+test store::tests::query_filters_by_concept_and_limit ... ok
+test store::tests::update_episode ... ok
+test store::tests::update_rebuilds_concept_index ... ok
+test store::tests::update_rolls_back_episode_and_concept_index_when_rebuild_fails ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running unittests src/lib.rs (target/debug/deps/spoon_exec-d18b2aeda4af8805)
+
+running 32 tests
+test eval::tests::arithmetic_mul ... ok
+test eval::tests::budget_exceeded ... ok
+test eval::tests::conditionals ... ok
+test eval::tests::arithmetic_float_promotion ... ok
+test eval::tests::arithmetic_add ... ok
+test eval::tests::arity_mismatch_errors ... ok
+test eval::tests::captured_requirement_failure_retains_the_failed_call_and_check ... ok
+test eval::tests::contract_checks_are_enforced_and_recorded_in_the_trace ... ok
+test eval::tests::captured_promise_failure_retains_the_candidate_output ... ok
+test eval::tests::captured_body_error_records_failed_nested_and_parent_calls ... ok
+test eval::tests::division_by_zero ... ok
+test eval::tests::captured_fails_when_failure_retains_the_failed_call_and_check ... ok
+test eval::tests::explicit_step_status_distinguishes_successful_null_from_failure ... ok
+test eval::tests::failed_promise_is_reported_after_the_body ... ok
+test eval::tests::failed_requirement_stops_execution_before_the_body ... ok
+test eval::tests::integer_overflow_is_an_execution_error_instead_of_wrapping ... ok
+test eval::tests::list_filter ... ok
+test eval::tests::list_map ... ok
+test eval::tests::list_reduce ... ok
+test eval::tests::negating_the_minimum_integer_returns_overflow_without_panicking ... ok
+test eval::tests::nested_procedure_calls ... ok
+test eval::tests::procedure_call ... ok
+test eval::tests::replay_rejects_a_trace_when_any_procedure_version_changed ... ok
+test eval::tests::replay_rejects_a_changed_nested_procedure_before_execution ... ok
+test eval::tests::replay_replaces_top_level_arguments_deterministically ... ok
+test eval::tests::trace_captures_procedure_calls ... ok
+test eval::tests::trace_pins_the_exact_procedure_version ... ok
+test eval::tests::triggered_fails_when_stops_execution_before_the_body ... ok
+test eval::tests::type_error_on_mismatched_add ... ok
+test eval::tests::undefined_procedure_errors ... ok
+test eval::tests::undefined_variable_errors ... ok
+test eval::tests::variables_let_binding ... ok
+
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/spoon_graph-3a46ce00c9480cae)
+
+running 20 tests
+test store::tests::concept_by_name_lookup ... ok
+test store::tests::get_dependents_finds_sources ... ok
+test store::tests::concepts_can_be_filtered_by_mutability_class ... ok
+test store::tests::inserting_a_procedure_records_version_one ... ok
+test store::tests::create_relationship_between_concepts ... ok
+test store::tests::list_concepts_returns_all ... ok
+test store::tests::create_and_retrieve_concept ... ok
+test store::tests::delete_concept_removes_an_unreferenced_concept ... ok
+test store::tests::delete_concept_rejects_relationship_and_procedure_dependencies ... ok
+test store::tests::concept_dependency_report_includes_concepts_and_attached_procedures ... ok
+test store::tests::delete_relationship_removes_it ... ok
+test store::tests::delete_procedure_preserves_immutable_history ... ok
+test store::tests::update_concept_roundtrip ... ok
+test store::tests::procedure_crud_with_contract ... ok
+test store::tests::traverse_with_zero_hops_returns_nothing ... ok
+test store::tests::procedure_and_contract_versions_are_listed_in_version_order ... ok
+test store::tests::update_relationship_roundtrip ... ok
+test store::tests::procedure_dependency_report_finds_nested_callers ... ok
+test store::tests::traverse_multi_hop ... ok
+test store::tests::procedure_updates_preserve_earlier_procedure_and_contract_snapshots ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running unittests src/lib.rs (target/debug/deps/spoon_server-f6679477226a1683)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/spoon_server-e100683f51ebea32)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/rpc.rs (target/debug/deps/rpc-f49561a94d5cd1ad)
+
+running 3 tests
+test malformed_json_and_unknown_methods_return_json_rpc_errors ... ok
+test concepts_can_be_created_and_listed ... ok
+test kitchen_cycle_executes_records_and_replays_double ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Doc-tests spoon_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests spoon_engine
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests spoon_episode
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests spoon_exec
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests spoon_graph
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests spoon_server
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

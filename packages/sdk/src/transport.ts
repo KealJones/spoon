@@ -114,7 +114,7 @@ export class StdioTransport extends StreamTransport {
   }
 
   static spawn(
-    command = "target/debug/ekg-server",
+    command = "target/debug/spoon-server",
     args: string[] = [],
   ): StdioTransport {
     const child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"] });

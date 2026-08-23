@@ -1,0 +1,114 @@
+Diff in /Users/kealjones/Git/Personal/spoon/crates/spoon-reason/src/context.rs:150:
+         mut config: ContextConfig,
+     ) -> Result<Self, ContextError> {
+         validate_limits(&config.limits)?;
+-        config.relationship_kinds.retain(|kind| !kind.trim().is_empty());
++        config
++            .relationship_kinds
++            .retain(|kind| !kind.trim().is_empty());
+         config.relationship_kinds.sort();
+         config.relationship_kinds.dedup();
+         Ok(Self {
+Diff in /Users/kealjones/Git/Personal/spoon/crates/spoon-reason/src/context.rs:279:
+ 
+         let mut frontier = entities
+             .iter()
+-            .map(|concept| (*concept, 0_u32, seed_relevance.get(concept).copied().unwrap_or(0.5)))
++            .map(|concept| {
++                (
++                    *concept,
++                    0_u32,
++                    seed_relevance.get(concept).copied().unwrap_or(0.5),
++                )
++            })
+             .collect::<VecDeque<_>>();
+         let mut visited_concepts = entities.iter().copied().collect::<HashSet<_>>();
+         let mut visited_relationships = HashSet::<RelationshipId>::new();
+Diff in /Users/kealjones/Git/Personal/spoon/crates/spoon-reason/src/context.rs:375:
+                         limits.max_environment_entries,
+                     )
+                 }),
+-                succeeded: episode.evaluation.as_ref().map(|evaluation| evaluation.success),
++                succeeded: episode
++                    .evaluation
++                    .as_ref()
++                    .map(|evaluation| evaluation.success),
+                 created_at: episode.created_at,
+             })
+             .collect())
+Diff in /Users/kealjones/Git/Personal/spoon/crates/spoon-reason/src/lib.rs:4:
+ mod interpretation;
+ 
+ pub use context::{
+-    ContextAssembler, ContextConfig, ContextError, ContextLimits, ContextRequest,
+-    KnowledgeContext, RecentEpisode, RelevantRelationship, RemainingBudget,
++    ContextAssembler, ContextConfig, ContextError, ContextLimits, ContextRequest, KnowledgeContext,
++    RecentEpisode, RelevantRelationship, RemainingBudget,
+ };
+ pub use interpretation::{
+     DEFAULT_WEIGHT_TOLERANCE, InterpretationCandidate, InterpretationError, InterpretationSet,
+Diff in /Users/kealjones/Git/Personal/spoon/crates/spoon-reason/tests/context.rs:97:
+     assert_eq!(context.interpretations, input.interpretation.candidates());
+     assert_eq!(context.entities, vec![active.id, number.id]);
+     assert_eq!(context.relevant_knowledge.len(), 1);
+-    assert_eq!(context.relevant_knowledge[0].relationship.kind, "operates-on");
++    assert_eq!(
++        context.relevant_knowledge[0].relationship.kind,
++        "operates-on"
++    );
+     assert_eq!(context.relevant_knowledge[0].adjacent_concept.id, number.id);
+     assert_eq!(context.relevant_knowledge[0].hops, 1);
+     assert_eq!(context.recent_episodes.len(), 1);
+Diff in /Users/kealjones/Git/Personal/spoon/crates/spoon-reason/tests/context.rs:104:
+     assert_eq!(context.recent_episodes[0].episode_id, recent.id);
+-    assert_eq!(context.recent_episodes[0].action.as_deref(), Some("run DOUBLE"));
+-    assert_eq!(context.recent_episodes[0].observed_result, Some(Value::Int(8)));
++    assert_eq!(
++        context.recent_episodes[0].action.as_deref(),
++        Some("run DOUBLE")
++    );
++    assert_eq!(
++        context.recent_episodes[0].observed_result,
++        Some(Value::Int(8))
++    );
+     assert_eq!(context.recent_episodes[0].succeeded, Some(true));
+     assert_eq!(context.assumptions.len(), 1);
+     assert_eq!(
+Diff in /Users/kealjones/Git/Personal/spoon/crates/spoon-reason/tests/context.rs:149:
+     let context = assembler.assemble(&request(active.id)).unwrap();
+ 
+     assert_eq!(context.relevant_knowledge.len(), 1);
+-    assert_eq!(context.relevant_knowledge[0].adjacent_concept.id, incoming.id);
+-    assert_eq!(context.relevant_knowledge[0].relationship.source, incoming.id);
++    assert_eq!(
++        context.relevant_knowledge[0].adjacent_concept.id,
++        incoming.id
++    );
++    assert_eq!(
++        context.relevant_knowledge[0].relationship.source,
++        incoming.id
++    );
+     assert_eq!(context.relevant_knowledge[0].relationship.target, active.id);
+ }
+ 
+Diff in /Users/kealjones/Git/Personal/spoon/crates/spoon-reason/tests/interpretation.rs:37:
+ fn unresolved_ambiguity_is_valid_and_marks_no_candidate_chosen() {
+     let first = ConceptId::new();
+     let unknown = ConceptId::new();
+-    let interpreted = InterpretationSet::try_new(
+-        vec![candidate(first, 0.5), candidate(unknown, 0.5)],
+-        None,
+-    )
+-    .unwrap();
++    let interpreted =
++        InterpretationSet::try_new(vec![candidate(first, 0.5), candidate(unknown, 0.5)], None)
++            .unwrap();
+ 
+     assert_eq!(interpreted.chosen(), None);
+     assert!(
+Diff in /Users/kealjones/Git/Personal/spoon/crates/spoon-reason/tests/interpretation.rs:111:
+         Err(InterpretationError::InvalidTolerance(_))
+     ));
+ }
+-
+ 

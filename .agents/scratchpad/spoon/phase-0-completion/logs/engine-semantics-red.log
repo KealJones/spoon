@@ -1,0 +1,31 @@
+   Compiling spoon-episode v0.1.0 (/Users/kealjones/Git/Personal/spoon/crates/spoon-episode)
+   Compiling spoon-engine v0.1.0 (/Users/kealjones/Git/Personal/spoon/crates/spoon-engine)
+error[E0432]: unresolved import `spoon_core::TraceStepStatus`
+ --> crates/spoon-engine/tests/seed_cycle.rs:5:5
+  |
+5 |     TraceStepStatus,
+  |     ^^^^^^^^^^^^^^^ no `TraceStepStatus` in the root
+
+error[E0609]: no field `all_promises_met` on type `&ContractCheckResult`
+   --> crates/spoon-engine/tests/seed_cycle.rs:147:61
+    |
+147 |     assert!(reasoning_step.contract_check.as_ref().unwrap().all_promises_met);
+    |                                                             ^^^^^^^^^^^^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+147 -     assert!(reasoning_step.contract_check.as_ref().unwrap().all_promises_met);
+147 +     assert!(reasoning_step.contract_check.as_ref().unwrap().all_requires_met);
+    |
+
+error[E0609]: no field `status` on type `&TraceStep`
+   --> crates/spoon-engine/tests/seed_cycle.rs:149:37
+    |
+149 |     assert!(matches!(reasoning_step.status, TraceStepStatus::Failed { .. }));
+    |                                     ^^^^^^ unknown field
+    |
+    = note: available fields are: `description`, `procedure_used`, `contract_check`, `input`, `output`, `rung`
+
+Some errors have detailed explanations: E0432, E0609.
+For more information about an error, try `rustc --explain E0432`.
+error: could not compile `spoon-engine` (test "seed_cycle") due to 3 previous errors

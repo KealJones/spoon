@@ -1,4 +1,4 @@
-import type { JsonValue } from "@ekg/sdk";
+import type { JsonValue } from "@spoon/sdk";
 
 export type Command =
   | { kind: "concept.add"; name: string }
@@ -174,11 +174,12 @@ export function parseCommand(args: string[]): Command {
     const trailingQuiet = rest.at(-1) === "--quiet" || rest.at(-1) === "-q";
     const quiet = leadingQuiet || trailingQuiet;
     const explain = leadingExplain || trailingExplain;
-    const question = leadingQuiet || leadingExplain
-      ? rest
-      : trailingQuiet || trailingExplain
-        ? [action, ...rest.slice(0, -1)]
-        : [action, ...rest];
+    const question =
+      leadingQuiet || leadingExplain
+        ? rest
+        : trailingQuiet || trailingExplain
+          ? [action, ...rest.slice(0, -1)]
+          : [action, ...rest];
     if (question.length === 0) throw new Error(usage);
     return { kind: "cycle.run", situation: question.join(" "), quiet, explain };
   }

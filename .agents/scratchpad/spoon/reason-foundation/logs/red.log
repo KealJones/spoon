@@ -1,0 +1,30 @@
+   Compiling spoon-reason v0.1.0 (/Users/kealjones/Git/Personal/spoon/crates/spoon-reason)
+error[E0432]: unresolved imports `spoon_reason::InterpretationCandidate`, `spoon_reason::InterpretationError`, `spoon_reason::InterpretationSet`
+ --> crates/spoon-reason/tests/interpretation.rs:2:18
+  |
+2 | use spoon_reason::{InterpretationCandidate, InterpretationError, InterpretationSet};
+  |                  ^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^ no `InterpretationSet` in the root
+  |                  |                        |
+  |                  |                        no `InterpretationError` in the root
+  |                  no `InterpretationCandidate` in the root
+
+error[E0432]: unresolved imports `spoon_reason::ContextAssembler`, `spoon_reason::ContextConfig`, `spoon_reason::ContextError`, `spoon_reason::ContextLimits`, `spoon_reason::ContextRequest`, `spoon_reason::InterpretationCandidate`, `spoon_reason::InterpretationSet`, `spoon_reason::RemainingBudget`
+  --> crates/spoon-reason/tests/context.rs:10:5
+   |
+10 |     ContextAssembler, ContextConfig, ContextError, ContextLimits, ContextRequest,
+   |     ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^ no `ContextRequest` in the root
+   |     |                 |              |             |
+   |     |                 |              |             no `ContextLimits` in the root
+   |     |                 |              no `ContextError` in the root
+   |     |                 no `ContextConfig` in the root
+   |     no `ContextAssembler` in the root
+11 |     InterpretationCandidate, InterpretationSet, RemainingBudget,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^ no `RemainingBudget` in the root
+   |     |                        |
+   |     |                        no `InterpretationSet` in the root
+   |     no `InterpretationCandidate` in the root
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `spoon-reason` (test "interpretation") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `spoon-reason` (test "context") due to 1 previous error

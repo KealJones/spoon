@@ -1,0 +1,13 @@
+   Compiling spoon-engine v0.1.0 (/Users/kealjones/Git/Personal/spoon/crates/spoon-engine)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.57s
+     Running tests/seed_cycle.rs (target/debug/deps/seed_cycle-dfe8bc741766d113)
+
+running 5 tests
+test execution_rejects_missing_and_extra_named_inputs ... ok
+test execution_records_and_evaluates_a_complete_episode ... ok
+test failed_execution_records_the_episode_and_partial_trace ... ok
+test execution_episode_is_indexed_by_the_procedure_concept ... ok
+test replay_uses_pinned_versions_and_named_substitutions ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

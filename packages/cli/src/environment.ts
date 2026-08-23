@@ -10,7 +10,7 @@ export function loadProjectEnvironment(path = ".env"): void {
 }
 
 export function adminTokenFromEnvironment(): string | undefined {
-  const token = process.env.EKG_ADMIN_TOKEN?.trim();
+  const token = process.env.SPOON_ADMIN_TOKEN?.trim();
   return token || undefined;
 }
 

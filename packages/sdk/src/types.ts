@@ -63,7 +63,7 @@ export interface EpisodeFeedback extends FeedbackInput {
   createdAt: number;
 }
 
-export interface EkgClientOptions {
+export interface SpoonClientOptions {
   adminToken?: string;
 }
 

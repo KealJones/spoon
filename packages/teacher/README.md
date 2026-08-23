@@ -1,4 +1,4 @@
-# Spoon Teacher Protocol (`@ekg/teacher`)
+# Spoon Teacher Protocol (`@spoon/teacher`)
 
 This package defines the teacher protocol and provider adapters used when Spoon
 cannot resolve a situation locally. Teacher output is structured, provenance-
@@ -13,15 +13,15 @@ evaluation establishes evidence.
 - `OllamaTeacher` — uses a local Ollama model.
 - `HumanTeacher` — accepts a human-supplied proposal.
 
-The CLI selects a provider with `EKG_TEACHER` and a model with
-`EKG_TEACHER_MODEL`. Provider failures and malformed proposals are explicit;
+The CLI selects a provider with `SPOON_TEACHER` and a model with
+`SPOON_TEACHER_MODEL`. Provider failures and malformed proposals are explicit;
 the package never marks a teacher response as independently verified by
 itself.
 
 ## Library use
 
 ```ts
-import { OpenAITeacher } from "@ekg/teacher";
+import { OpenAITeacher } from "@spoon/teacher";
 
 const teacher = new OpenAITeacher({ model: "gpt-4.1-mini" });
 const proposal = await teacher.propose({
@@ -38,7 +38,7 @@ validation, reliability tracking, and bounded teacher turns stay consistent.
 ## Development
 
 ```bash
-pnpm --filter @ekg/teacher test
-pnpm --filter @ekg/teacher typecheck
-pnpm --filter @ekg/teacher build
+pnpm --filter @spoon/teacher test
+pnpm --filter @spoon/teacher typecheck
+pnpm --filter @spoon/teacher build
 ```

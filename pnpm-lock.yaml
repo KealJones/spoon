@@ -25,16 +25,16 @@ importers:
 
   packages/cli:
     dependencies:
-      "@ekg/sdk":
+      "@spoon/sdk":
         specifier: workspace:*
         version: link:../sdk
-      "@ekg/teacher":
+      "@spoon/teacher":
         specifier: workspace:*
         version: link:../teacher
 
   packages/inspector:
     dependencies:
-      "@ekg/sdk":
+      "@spoon/sdk":
         specifier: workspace:*
         version: link:../sdk
 

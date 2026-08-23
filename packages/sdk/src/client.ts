@@ -22,7 +22,7 @@ import type {
   DiscoveredOperation,
   EpisodeFilter,
   EpisodeFeedback,
-  EkgClientOptions,
+  SpoonClientOptions,
   FeedbackInput,
   FailureAnalysisInput,
   FalsificationMeasurement,
@@ -55,10 +55,10 @@ import type {
   TeacherProposalWire,
 } from "./types.js";
 
-export class EkgClient {
+export class SpoonClient {
   constructor(
     private readonly transport: RpcTransport,
-    private readonly options: EkgClientOptions = {},
+    private readonly options: SpoonClientOptions = {},
   ) {}
 
   createConcept<T = unknown>(concept: ConceptInput): Promise<T> {
@@ -300,7 +300,9 @@ export class EkgClient {
     );
   }
 
-  discoverCapability(description: InterfaceDescription): Promise<CapabilityBundle> {
+  discoverCapability(
+    description: InterfaceDescription,
+  ): Promise<CapabilityBundle> {
     return this.transport.request<CapabilityBundle>(
       "capability.discover",
       description,
@@ -383,8 +385,13 @@ export class EkgClient {
     return this.transport.request<MetricsSnapshot>("metrics.snapshot", {});
   }
 
-  createFalsificationRun(input: FalsificationRunInput): Promise<FalsificationRun> {
-    return this.transport.request<FalsificationRun>("telemetry.createRun", input);
+  createFalsificationRun(
+    input: FalsificationRunInput,
+  ): Promise<FalsificationRun> {
+    return this.transport.request<FalsificationRun>(
+      "telemetry.createRun",
+      input,
+    );
   }
 
   recordFalsificationMeasurement(
@@ -480,7 +487,10 @@ export class EkgClient {
   }
 
   listLearningGoalRecords(): Promise<GoalLearningRecord[]> {
-    return this.transport.request<GoalLearningRecord[]>("goal.learningRecords", {});
+    return this.transport.request<GoalLearningRecord[]>(
+      "goal.learningRecords",
+      {},
+    );
   }
 
   createInstrumentalGoal(
@@ -496,11 +506,17 @@ export class EkgClient {
   }
 
   listGoalDerivationRecords(): Promise<GoalDerivationRecord[]> {
-    return this.transport.request<GoalDerivationRecord[]>("goal.derivationRecords", {});
+    return this.transport.request<GoalDerivationRecord[]>(
+      "goal.derivationRecords",
+      {},
+    );
   }
 
   recordCuriosityGap(gap: CuriosityGap): Promise<{ recorded: boolean }> {
-    return this.transport.request<{ recorded: boolean }>("curiosity.record", gap);
+    return this.transport.request<{ recorded: boolean }>(
+      "curiosity.record",
+      gap,
+    );
   }
 
   rankCuriosityGaps(limit = 32): Promise<CuriosityGap[]> {
@@ -527,7 +543,9 @@ export class EkgClient {
     );
   }
 
-  listEpisodeCompressionRecords(limit = 128): Promise<EpisodeCompressionRecord[]> {
+  listEpisodeCompressionRecords(
+    limit = 128,
+  ): Promise<EpisodeCompressionRecord[]> {
     return this.transport.request<EpisodeCompressionRecord[]>(
       "consolidation.compressedList",
       { limit },
@@ -560,7 +578,10 @@ export class EkgClient {
   }
 
   rankActiveManagedSkills(query: string, limit = 128): Promise<ManagedSkill[]> {
-    return this.transport.request<ManagedSkill[]>("consolidation.rankActive", { query, limit });
+    return this.transport.request<ManagedSkill[]>("consolidation.rankActive", {
+      query,
+      limit,
+    });
   }
 
   executeBestManagedSkill<T = unknown>(
@@ -569,7 +590,9 @@ export class EkgClient {
     prediction?: JsonValue,
   ): Promise<T> {
     return this.transport.request<T>("consolidation.executeBest", {
-      query, inputs, ...(prediction === undefined ? {} : { prediction }),
+      query,
+      inputs,
+      ...(prediction === undefined ? {} : { prediction }),
     });
   }
 

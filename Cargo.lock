@@ -81,150 +81,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ekg-adapt"
-version = "0.1.0"
-dependencies = [
- "ekg-core",
- "ekg-credit",
- "ekg-episode",
- "ekg-exec",
- "ekg-graph",
- "rusqlite",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "ekg-capability"
-version = "0.1.0"
-dependencies = [
- "rusqlite",
- "serde",
- "serde_json",
- "sha2",
- "thiserror",
- "uuid",
-]
-
-[[package]]
-name = "ekg-core"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror",
- "uuid",
-]
-
-[[package]]
-name = "ekg-credit"
-version = "0.1.0"
-dependencies = [
- "ekg-core",
- "ekg-episode",
- "ekg-exec",
- "ekg-graph",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "ekg-engine"
-version = "0.1.0"
-dependencies = [
- "ekg-adapt",
- "ekg-capability",
- "ekg-core",
- "ekg-credit",
- "ekg-episode",
- "ekg-exec",
- "ekg-graph",
- "ekg-intuition",
- "ekg-reason",
- "rusqlite",
- "serde",
- "serde_json",
- "sha2",
- "thiserror",
- "uuid",
-]
-
-[[package]]
-name = "ekg-episode"
-version = "0.1.0"
-dependencies = [
- "ekg-core",
- "ekg-exec",
- "rusqlite",
- "serde",
- "serde_json",
- "thiserror",
- "uuid",
-]
-
-[[package]]
-name = "ekg-exec"
-version = "0.1.0"
-dependencies = [
- "ekg-core",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "ekg-graph"
-version = "0.1.0"
-dependencies = [
- "ekg-core",
- "rusqlite",
- "serde",
- "serde_json",
- "thiserror",
- "uuid",
-]
-
-[[package]]
-name = "ekg-intuition"
-version = "0.1.0"
-dependencies = [
- "ekg-core",
- "rusqlite",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "ekg-reason"
-version = "0.1.0"
-dependencies = [
- "ekg-core",
- "ekg-episode",
- "ekg-graph",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "ekg-server"
-version = "0.1.0"
-dependencies = [
- "ekg-adapt",
- "ekg-core",
- "ekg-engine",
- "ekg-episode",
- "ekg-graph",
- "serde",
- "serde_json",
- "thiserror",
- "uuid",
-]
-
-[[package]]
 name = "fallible-iterator"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -478,6 +334,150 @@ name = "smallvec"
 version = "1.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
+
+[[package]]
+name = "spoon-adapt"
+version = "0.1.0"
+dependencies = [
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "spoon-core",
+ "spoon-credit",
+ "spoon-episode",
+ "spoon-exec",
+ "spoon-graph",
+ "thiserror",
+]
+
+[[package]]
+name = "spoon-capability"
+version = "0.1.0"
+dependencies = [
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "uuid",
+]
+
+[[package]]
+name = "spoon-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+ "uuid",
+]
+
+[[package]]
+name = "spoon-credit"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "spoon-core",
+ "spoon-episode",
+ "spoon-exec",
+ "spoon-graph",
+ "thiserror",
+]
+
+[[package]]
+name = "spoon-engine"
+version = "0.1.0"
+dependencies = [
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2",
+ "spoon-adapt",
+ "spoon-capability",
+ "spoon-core",
+ "spoon-credit",
+ "spoon-episode",
+ "spoon-exec",
+ "spoon-graph",
+ "spoon-intuition",
+ "spoon-reason",
+ "thiserror",
+ "uuid",
+]
+
+[[package]]
+name = "spoon-episode"
+version = "0.1.0"
+dependencies = [
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "spoon-core",
+ "spoon-exec",
+ "thiserror",
+ "uuid",
+]
+
+[[package]]
+name = "spoon-exec"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "spoon-core",
+ "thiserror",
+]
+
+[[package]]
+name = "spoon-graph"
+version = "0.1.0"
+dependencies = [
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "spoon-core",
+ "thiserror",
+ "uuid",
+]
+
+[[package]]
+name = "spoon-intuition"
+version = "0.1.0"
+dependencies = [
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "spoon-core",
+ "thiserror",
+]
+
+[[package]]
+name = "spoon-reason"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "spoon-core",
+ "spoon-episode",
+ "spoon-graph",
+ "thiserror",
+]
+
+[[package]]
+name = "spoon-server"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "spoon-adapt",
+ "spoon-core",
+ "spoon-engine",
+ "spoon-episode",
+ "spoon-graph",
+ "thiserror",
+ "uuid",
+]
 
 [[package]]
 name = "syn"

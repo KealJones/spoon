@@ -1,9 +1,0 @@
-   Compiling ekg-server v0.1.0 (/Users/kealjones/Git/Personal/ekg/crates/ekg-server)
-error[E0432]: unresolved import `ekg_server::RpcServer`
- --> crates/ekg-server/tests/rpc.rs:1:5
-  |
-1 | use ekg_server::RpcServer;
-  |     ^^^^^^^^^^^^^^^^^^^^^ no `RpcServer` in the root
-
-For more information about this error, try `rustc --explain E0432`.
-error: could not compile `ekg-server` (test "rpc") due to 1 previous error

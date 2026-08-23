@@ -10,9 +10,9 @@ import {
 } from "../src/environment.js";
 
 test("loads a local env file without overwriting the shell", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "ekg-env-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "spoon-env-"));
   const file = path.join(directory, ".env");
-  const key = "EKG_ENV_LOAD_TEST";
+  const key = "SPOON_ENV_LOAD_TEST";
   const previous = process.env[key];
   try {
     await writeFile(file, `${key}=from-file\n`);
@@ -28,21 +28,21 @@ test("loads a local env file without overwriting the shell", async () => {
 
 test("a missing local env file is optional", () => {
   assert.doesNotThrow(() =>
-    loadProjectEnvironment("/tmp/ekg-missing-environment-file"),
+    loadProjectEnvironment("/tmp/spoon-missing-environment-file"),
   );
 });
 
 test("reads a non-empty admin token from the environment", () => {
-  const previous = process.env.EKG_ADMIN_TOKEN;
+  const previous = process.env.SPOON_ADMIN_TOKEN;
   try {
-    delete process.env.EKG_ADMIN_TOKEN;
+    delete process.env.SPOON_ADMIN_TOKEN;
     assert.equal(adminTokenFromEnvironment(), undefined);
-    process.env.EKG_ADMIN_TOKEN = "  ";
+    process.env.SPOON_ADMIN_TOKEN = "  ";
     assert.equal(adminTokenFromEnvironment(), undefined);
-    process.env.EKG_ADMIN_TOKEN = "bootstrap-secret";
+    process.env.SPOON_ADMIN_TOKEN = "bootstrap-secret";
     assert.equal(adminTokenFromEnvironment(), "bootstrap-secret");
   } finally {
-    if (previous === undefined) delete process.env.EKG_ADMIN_TOKEN;
-    else process.env.EKG_ADMIN_TOKEN = previous;
+    if (previous === undefined) delete process.env.SPOON_ADMIN_TOKEN;
+    else process.env.SPOON_ADMIN_TOKEN = previous;
   }
 });

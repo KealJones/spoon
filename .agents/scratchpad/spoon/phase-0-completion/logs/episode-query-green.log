@@ -1,0 +1,23 @@
+   Compiling spoon-episode v0.1.0 (/Users/kealjones/Git/Personal/spoon/crates/spoon-episode)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.58s
+     Running unittests src/lib.rs (target/debug/deps/spoon_episode-ac169ed88f2b67c2)
+
+running 9 tests
+test store::tests::count ... ok
+test store::tests::not_found ... ok
+test store::tests::query_filters_by_time_outcome_and_rung ... ok
+test store::tests::list_recent ... ok
+test store::tests::list_failures ... ok
+test store::tests::insert_and_retrieve ... ok
+test store::tests::find_by_concept ... ok
+test store::tests::update_episode ... ok
+test store::tests::query_filters_by_concept_and_limit ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Doc-tests spoon_episode
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

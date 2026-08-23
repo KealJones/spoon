@@ -1,0 +1,25 @@
+   Compiling spoon-episode v0.1.0 (/Users/kealjones/Git/Personal/spoon/crates/spoon-episode)
+   Compiling spoon-engine v0.1.0 (/Users/kealjones/Git/Personal/spoon/crates/spoon-engine)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.88s
+     Running tests/seed_cycle.rs (target/debug/deps/seed_cycle-dfe8bc741766d113)
+
+running 1 test
+test execution_episode_is_indexed_by_the_procedure_concept ... FAILED
+
+failures:
+
+---- execution_episode_is_indexed_by_the_procedure_concept stdout ----
+
+thread 'execution_episode_is_indexed_by_the_procedure_concept' (1660998) panicked at crates/spoon-engine/tests/seed_cycle.rs:121:5:
+assertion `left == right` failed
+  left: 0
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    execution_episode_is_indexed_by_the_procedure_concept
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p spoon-engine --test seed_cycle`

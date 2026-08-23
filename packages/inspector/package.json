@@ -1,5 +1,5 @@
 {
-  "name": "@ekg/inspector",
+  "name": "@spoon/inspector",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,6 +12,6 @@
     "depcheck": "depcheck"
   },
   "dependencies": {
-    "@ekg/sdk": "workspace:*"
+    "@spoon/sdk": "workspace:*"
   }
 }

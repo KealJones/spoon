@@ -1,0 +1,13 @@
+[package]
+name = "spoon-credit"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+spoon-core.workspace = true
+spoon-episode.workspace = true
+spoon-exec.workspace = true
+spoon-graph.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

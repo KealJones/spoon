@@ -1,0 +1,21 @@
+[package]
+name = "spoon-engine"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+spoon-core.workspace = true
+spoon-graph.workspace = true
+spoon-intuition.workspace = true
+spoon-capability.workspace = true
+spoon-exec.workspace = true
+spoon-episode.workspace = true
+spoon-reason.workspace = true
+spoon-credit.workspace = true
+spoon-adapt.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+thiserror.workspace = true
+uuid.workspace = true

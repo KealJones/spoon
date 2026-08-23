@@ -1,0 +1,52 @@
+$ pnpm -r --if-present test
+Scope: 2 of 3 workspace projects
+packages/sdk test$ tsx --test test/*.test.ts
+packages/sdk test: ✖ client maps graph, execution, episode, and replay calls to RPC methods (1.801083ms)
+packages/sdk test: ✔ SDK completes the DOUBLE kitchen cycle through the Rust stdio server (417.442542ms)
+packages/sdk test: ✔ stream transport correlates newline-delimited responses (1.2505ms)
+packages/sdk test: ✔ stream transport rejects structured JSON-RPC errors (0.336333ms)
+packages/sdk test: ℹ tests 4
+packages/sdk test: ℹ suites 0
+packages/sdk test: ℹ pass 3
+packages/sdk test: ℹ fail 1
+packages/sdk test: ℹ cancelled 0
+packages/sdk test: ℹ skipped 0
+packages/sdk test: ℹ todo 0
+packages/sdk test: ℹ duration_ms 587.70575
+packages/sdk test: ✖ failing tests:
+packages/sdk test: test at test/client.test.ts:15:1
+packages/sdk test: ✖ client maps graph, execution, episode, and replay calls to RPC methods (1.801083ms)
+packages/sdk test:   AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+packages/sdk test:   + actual - expected
+packages/sdk test:   ... Skipped lines
+packages/sdk test:   
+packages/sdk test:     [
+packages/sdk test:       {
+packages/sdk test:         method: 'concept.create',
+packages/sdk test:         params: {
+packages/sdk test:           name: 'double'
+packages/sdk test:   ...
+packages/sdk test:           },
+packages/sdk test:   +       prediction: undefined,
+packages/sdk test:           procedureId: 'proc-1'
+packages/sdk test:         }
+packages/sdk test:       },
+packages/sdk test:       {
+packages/sdk test:         method: 'episode.list',
+packages/sdk test:   
+packages/sdk test:       at TestContext.<anonymous> (/Users/kealjones/Git/Personal/spoon/packages/sdk/test/client.test.ts:24:10)
+packages/sdk test:       at async Test.run (node:internal/test_runner/test:1208:7)
+packages/sdk test:       at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+packages/sdk test:     generatedMessage: true,
+packages/sdk test:     code: 'ERR_ASSERTION',
+packages/sdk test:     actual: [ { method: 'concept.create', params: [Object] }, { method: 'procedure.execute', params: [Object] }, { method: 'episode.list', params: [Object] }, { method: 'episode.replay', params: [Object] } ],
+packages/sdk test:     expected: [ { method: 'concept.create', params: [Object] }, { method: 'procedure.execute', params: [Object] }, { method: 'episode.list', params: [Object] }, { method: 'episode.replay', params: [Object] } ],
+packages/sdk test:     operator: 'deepStrictEqual',
+packages/sdk test:     diff: 'simple'
+packages/sdk test:   }
+packages/sdk test: Failed
+/Users/kealjones/Git/Personal/spoon/packages/sdk:
+[ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL] @spoon/sdk@0.1.0 test: `tsx --test test/*.test.ts`
+Exit status 1
+[WARN]  Local package.json exists, but node_modules missing, did you mean to install?
+[ELIFECYCLE] Test failed. See above for more details.

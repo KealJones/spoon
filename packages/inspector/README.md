@@ -1,4 +1,4 @@
-# Spoon Inspector (`@ekg/inspector`)
+# Spoon Inspector (`@spoon/inspector`)
 
 The inspector is a local, read-only web dashboard for the Spoon server. It shows
 knowledge, procedures, episodes, flywheel telemetry, and the twelve Section 38
@@ -9,9 +9,9 @@ metric slots with honest measured/partial/uninstrumented status.
 From the repository root:
 
 ```bash
-cargo build -p ekg-server
-EKG_DB=/tmp/ekg-playground.sqlite \
-  pnpm --filter @ekg/inspector dev
+cargo build -p spoon-server
+SPOON_DB=/tmp/spoon-playground.sqlite \
+  pnpm --filter @spoon/inspector dev
 ```
 
 Open <http://127.0.0.1:4317>. Stop the process with Ctrl-C.
@@ -26,9 +26,9 @@ environment values.
 ## Package checks
 
 ```bash
-pnpm --filter @ekg/inspector test
-pnpm --filter @ekg/inspector typecheck
-pnpm --filter @ekg/inspector build
+pnpm --filter @spoon/inspector test
+pnpm --filter @spoon/inspector typecheck
+pnpm --filter @spoon/inspector build
 ```
 
 The dashboard does not mutate the graph, episodes, capabilities, or goals.

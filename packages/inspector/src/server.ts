@@ -1,7 +1,7 @@
 import { createServer, type Server, type ServerResponse } from "node:http";
 import { fileURLToPath } from "node:url";
 
-import { EkgClient, StdioTransport, type JsonValue } from "@ekg/sdk";
+import { SpoonClient, StdioTransport, type JsonValue } from "@spoon/sdk";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -657,15 +657,15 @@ $('refresh').addEventListener('click',refresh);$('episode-filter').addEventListe
 </script></body></html>`;
 
 function start(): void {
-  const port = Number.parseInt(process.env.EKG_INSPECTOR_PORT ?? "4317", 10);
+  const port = Number.parseInt(process.env.SPOON_INSPECTOR_PORT ?? "4317", 10);
   const transport = StdioTransport.spawn(
-    process.env.EKG_SERVER ??
+    process.env.SPOON_SERVER ??
       fileURLToPath(
-        new URL("../../../target/debug/ekg-server", import.meta.url),
+        new URL("../../../target/debug/spoon-server", import.meta.url),
       ),
   );
-  const client = new EkgClient(transport, {
-    adminToken: process.env.EKG_ADMIN_TOKEN,
+  const client = new SpoonClient(transport, {
+    adminToken: process.env.SPOON_ADMIN_TOKEN,
   });
   const server = createInspectorServer(client);
   server.listen(port, "127.0.0.1", () =>

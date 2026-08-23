@@ -4,24 +4,24 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { EkgClient, StdioTransport } from "../src/index.js";
+import { SpoonClient, StdioTransport } from "../src/index.js";
 
 test(
   "SDK completes the DOUBLE kitchen cycle through the Rust stdio server",
   { timeout: 30_000 },
   async () => {
-    const directory = await mkdtemp(path.join(os.tmpdir(), "ekg-kitchen-"));
-    const previousDatabase = process.env.EKG_DB;
-    const previousAdminToken = process.env.EKG_ADMIN_TOKEN;
-    process.env.EKG_DB = path.join(directory, "ekg.db");
-    process.env.EKG_ADMIN_TOKEN = "sdk-integration-admin";
+    const directory = await mkdtemp(path.join(os.tmpdir(), "spoon-kitchen-"));
+    const previousDatabase = process.env.SPOON_DB;
+    const previousAdminToken = process.env.SPOON_ADMIN_TOKEN;
+    process.env.SPOON_DB = path.join(directory, "spoon.db");
+    process.env.SPOON_ADMIN_TOKEN = "sdk-integration-admin";
     const transport = StdioTransport.spawn("cargo", [
       "run",
       "--quiet",
       "-p",
-      "ekg-server",
+      "spoon-server",
     ]);
-    const client = new EkgClient(transport, {
+    const client = new SpoonClient(transport, {
       adminToken: "sdk-integration-admin",
     });
 
@@ -116,10 +116,11 @@ test(
       assert.equal(replayed.value, 18);
     } finally {
       client.close();
-      if (previousDatabase === undefined) delete process.env.EKG_DB;
-      else process.env.EKG_DB = previousDatabase;
-      if (previousAdminToken === undefined) delete process.env.EKG_ADMIN_TOKEN;
-      else process.env.EKG_ADMIN_TOKEN = previousAdminToken;
+      if (previousDatabase === undefined) delete process.env.SPOON_DB;
+      else process.env.SPOON_DB = previousDatabase;
+      if (previousAdminToken === undefined)
+        delete process.env.SPOON_ADMIN_TOKEN;
+      else process.env.SPOON_ADMIN_TOKEN = previousAdminToken;
       await rm(directory, { recursive: true, force: true });
     }
   },

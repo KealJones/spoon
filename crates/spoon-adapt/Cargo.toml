@@ -1,0 +1,15 @@
+[package]
+name = "spoon-adapt"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+spoon-core.workspace = true
+spoon-credit.workspace = true
+spoon-episode.workspace = true
+spoon-exec.workspace = true
+spoon-graph.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

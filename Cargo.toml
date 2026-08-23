@@ -1,17 +1,17 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/ekg-core",
-    "crates/ekg-graph",
-    "crates/ekg-exec",
-    "crates/ekg-episode",
-    "crates/ekg-reason",
-    "crates/ekg-credit",
-    "crates/ekg-adapt",
-    "crates/ekg-intuition",
-    "crates/ekg-capability",
-    "crates/ekg-engine",
-    "crates/ekg-server",
+    "crates/spoon-core",
+    "crates/spoon-graph",
+    "crates/spoon-exec",
+    "crates/spoon-episode",
+    "crates/spoon-reason",
+    "crates/spoon-credit",
+    "crates/spoon-adapt",
+    "crates/spoon-intuition",
+    "crates/spoon-capability",
+    "crates/spoon-engine",
+    "crates/spoon-server",
 ]
 
 [workspace.package]
@@ -20,16 +20,16 @@ edition = "2024"
 license = "MIT"
 
 [workspace.dependencies]
-ekg-core = { path = "crates/ekg-core" }
-ekg-graph = { path = "crates/ekg-graph" }
-ekg-exec = { path = "crates/ekg-exec" }
-ekg-episode = { path = "crates/ekg-episode" }
-ekg-reason = { path = "crates/ekg-reason" }
-ekg-credit = { path = "crates/ekg-credit" }
-ekg-adapt = { path = "crates/ekg-adapt" }
-ekg-intuition = { path = "crates/ekg-intuition" }
-ekg-capability = { path = "crates/ekg-capability" }
-ekg-engine = { path = "crates/ekg-engine" }
+spoon-core = { path = "crates/spoon-core" }
+spoon-graph = { path = "crates/spoon-graph" }
+spoon-exec = { path = "crates/spoon-exec" }
+spoon-episode = { path = "crates/spoon-episode" }
+spoon-reason = { path = "crates/spoon-reason" }
+spoon-credit = { path = "crates/spoon-credit" }
+spoon-adapt = { path = "crates/spoon-adapt" }
+spoon-intuition = { path = "crates/spoon-intuition" }
+spoon-capability = { path = "crates/spoon-capability" }
+spoon-engine = { path = "crates/spoon-engine" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

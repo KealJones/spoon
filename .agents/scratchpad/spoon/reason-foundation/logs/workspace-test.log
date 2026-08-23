@@ -1,0 +1,122 @@
+   Compiling spoon-engine v0.1.0 (/Users/kealjones/Git/Personal/spoon/crates/spoon-engine)
+error[E0432]: unresolved imports `spoon_engine::CycleBudget`, `spoon_engine::CycleDisposition`, `spoon_engine::CycleInput`, `spoon_engine::CycleProgress`, `spoon_engine::TeacherProposalWire`
+ --> crates/spoon-engine/tests/cycle.rs:8:5
+  |
+8 |     CycleBudget, CycleDisposition, CycleInput, CycleProgress, Engine, TeacherProposalWire,
+  |     ^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^^^^^  ^^^^^^^^^^^^^          ^^^^^^^^^^^^^^^^^^^ no `TeacherProposalWire` in the root
+  |     |            |                 |           |
+  |     |            |                 |           no `CycleProgress` in the root
+  |     |            |                 no `CycleInput` in the root
+  |     |            no `CycleDisposition` in the root
+  |     no `CycleBudget` in the root
+
+warning: unused import: `Contract`
+ --> crates/spoon-engine/tests/cycle.rs:4:21
+  |
+4 |     BinOp, Concept, Contract, Episode, Evaluation, Expr, MutabilityClass, Param, Procedure, Value,
+  |                     ^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0599]: no method named `begin_cycle` found for struct `Engine` in the current scope
+  --> crates/spoon-engine/tests/cycle.rs:58:10
+   |
+57 |       let progress = engine
+   |  ____________________-
+58 | |         .begin_cycle(cycle_input("what is double 7?", true))
+   | |         -^^^^^^^^^^^ method not found in `Engine`
+   | |_________|
+   |
+
+error[E0599]: no method named `begin_cycle` found for struct `Engine` in the current scope
+  --> crates/spoon-engine/tests/cycle.rs:76:10
+   |
+75 |       let progress = engine
+   |  ____________________-
+76 | |         .begin_cycle(cycle_input("explain the moon", true))
+   | |         -^^^^^^^^^^^ method not found in `Engine`
+   | |_________|
+   |
+
+error[E0599]: no method named `begin_cycle` found for struct `Engine` in the current scope
+  --> crates/spoon-engine/tests/cycle.rs:92:10
+   |
+91 |       let progress = engine
+   |  ____________________-
+92 | |         .begin_cycle(cycle_input("explain the moon", false))
+   | |         -^^^^^^^^^^^ method not found in `Engine`
+   | |_________|
+   |
+
+error[E0599]: no method named `begin_cycle` found for struct `Engine` in the current scope
+   --> crates/spoon-engine/tests/cycle.rs:110:10
+    |
+109 |       let start = engine
+    |  _________________-
+110 | |         .begin_cycle(cycle_input("please calculate it", true))
+    | |         -^^^^^^^^^^^ method not found in `Engine`
+    | |_________|
+    |
+
+error[E0599]: no method named `resume_cycle` found for struct `Engine` in the current scope
+   --> crates/spoon-engine/tests/cycle.rs:117:10
+    |
+116 |       let resumed = engine
+    |  ___________________-
+117 | |         .resume_cycle(
+    | |         -^^^^^^^^^^^^ method not found in `Engine`
+    | |_________|
+    |
+
+error[E0599]: no method named `begin_cycle` found for struct `Engine` in the current scope
+   --> crates/spoon-engine/tests/cycle.rs:142:10
+    |
+141 |       let start = engine
+    |  _________________-
+142 | |         .begin_cycle(cycle_input("what is the answer?", true))
+    | |         -^^^^^^^^^^^ method not found in `Engine`
+    | |_________|
+    |
+
+error[E0599]: no method named `resume_cycle` found for struct `Engine` in the current scope
+   --> crates/spoon-engine/tests/cycle.rs:149:10
+    |
+148 |       let resumed = engine
+    |  ___________________-
+149 | |         .resume_cycle(
+    | |         -^^^^^^^^^^^^ method not found in `Engine`
+    | |_________|
+    |
+
+error[E0599]: no method named `begin_cycle` found for struct `Engine` in the current scope
+   --> crates/spoon-engine/tests/cycle.rs:179:10
+    |
+178 |       let progress = engine
+    |  ____________________-
+179 | |         .begin_cycle(cycle_input("what is double 7?", true))
+    | |         -^^^^^^^^^^^ method not found in `Engine`
+    | |_________|
+    |
+
+error[E0599]: no method named `begin_cycle` found for struct `Engine` in the current scope
+   --> crates/spoon-engine/tests/cycle.rs:193:24
+    |
+193 |     let start = engine.begin_cycle(cycle_input("unknown", true)).unwrap();
+    |                        ^^^^^^^^^^^ method not found in `Engine`
+
+error[E0599]: no method named `resume_cycle` found for struct `Engine` in the current scope
+   --> crates/spoon-engine/tests/cycle.rs:199:12
+    |
+199 |     engine.resume_cycle(cycle_id, teacher.clone()).unwrap();
+    |            ^^^^^^^^^^^^ method not found in `Engine`
+
+error[E0599]: no method named `resume_cycle` found for struct `Engine` in the current scope
+   --> crates/spoon-engine/tests/cycle.rs:200:25
+    |
+200 |     let second = engine.resume_cycle(cycle_id, teacher);
+    |                         ^^^^^^^^^^^^ method not found in `Engine`
+
+Some errors have detailed explanations: E0432, E0599.
+For more information about an error, try `rustc --explain E0432`.
+warning: `spoon-engine` (test "cycle") generated 1 warning
+error: could not compile `spoon-engine` (test "cycle") due to 12 previous errors; 1 warning emitted

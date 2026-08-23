@@ -1,4 +1,4 @@
-# Spoon CLI (`@ekg/cli`)
+# Spoon CLI (`@spoon/cli`)
 
 The CLI is the simplest way to talk to a local Spoon server.
 
@@ -7,13 +7,13 @@ The CLI is the simplest way to talk to a local Spoon server.
 Build the Rust server once, then use `tsx` during development:
 
 ```bash
-cargo build -p ekg-server
-EKG_DB=/tmp/ekg-playground.sqlite \
+cargo build -p spoon-server
+SPOON_DB=/tmp/spoon-playground.sqlite \
   pnpm exec tsx packages/cli/src/main.ts ask --quiet "what is double 7?"
 ```
 
-Commands start the server binary from `target/debug/ekg-server` unless
-`EKG_SERVER` overrides it. `EKG_DB` selects the SQLite database.
+Commands start the server binary from `target/debug/spoon-server` unless
+`SPOON_SERVER` overrides it. `SPOON_DB` selects the SQLite database.
 
 ## Chat output modes
 
@@ -38,16 +38,16 @@ and `primitive observe clock`.
 
 ## Teacher selection
 
-The default is Claude via its local CLI. Set the legacy `EKG_TEACHER` variable to `claude`,
-`codex`, `openai`, `ollama`, or `human`; set `EKG_TEACHER_MODEL` when required.
+The default is Claude via its local CLI. Set `SPOON_TEACHER` to `claude`,
+`codex`, `openai`, `ollama`, or `human`; set `SPOON_TEACHER_MODEL` when required.
 The OpenAI adapter reads `OPENAI_API_KEY` from the process environment. Keep
 credentials outside the database and do not commit `.env` files.
 
-Admin-only mutations use the legacy `EKG_ADMIN_TOKEN` variable.
+Admin-only mutations use `SPOON_ADMIN_TOKEN`.
 
 ## Package checks
 
 ```bash
-pnpm --filter @ekg/cli test
-pnpm --filter @ekg/cli typecheck
+pnpm --filter @spoon/cli test
+pnpm --filter @spoon/cli typecheck
 ```

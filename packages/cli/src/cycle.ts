@@ -1,8 +1,8 @@
 import {
-  EkgClient,
+  SpoonClient,
   type CompletedCycleProgress,
   type TeacherRequestWire,
-} from "@ekg/sdk";
+} from "@spoon/sdk";
 import {
   ClaudeTeacher,
   CodexTeacher,
@@ -13,7 +13,7 @@ import {
   type ProposalSchema,
   type Teacher,
   type TeacherRequest,
-} from "@ekg/teacher";
+} from "@spoon/teacher";
 
 export type TeacherClient = Pick<Teacher, "propose" | "validationPipeline">;
 
@@ -24,7 +24,7 @@ export interface CycleRunOptions {
 }
 
 export async function runCycle(
-  client: EkgClient,
+  client: SpoonClient,
   situation: string,
   teacher?: TeacherClient,
   options: CycleRunOptions = {},
@@ -94,15 +94,15 @@ export async function runCycle(
 export function createConfiguredTeacher(
   environment: NodeJS.ProcessEnv = process.env,
 ): TeacherClient {
-  const provider = environment.EKG_TEACHER?.toLowerCase() ?? "claude";
-  const model = environment.EKG_TEACHER_MODEL;
+  const provider = environment.SPOON_TEACHER?.toLowerCase() ?? "claude";
+  const model = environment.SPOON_TEACHER_MODEL;
   switch (provider) {
     case "claude":
       return new ClaudeTeacher({ model });
     case "codex":
       return new CodexTeacher({
         model,
-        command: environment.EKG_CODEX_COMMAND,
+        command: environment.SPOON_CODEX_COMMAND,
       });
     case "ollama":
       return new OllamaTeacher({ model });
@@ -110,12 +110,14 @@ export function createConfiguredTeacher(
       return new HumanTeacher();
     case "openai":
       if (!model) {
-        throw new Error("EKG_TEACHER_MODEL is required for the OpenAI teacher (legacy variable name)");
+        throw new Error(
+          "SPOON_TEACHER_MODEL is required for the OpenAI teacher",
+        );
       }
       return new OpenAITeacher({ model });
     default:
       throw new Error(
-        `Unknown Spoon teacher '${provider}'; expected claude, codex, openai, ollama, or human (configured with legacy EKG_TEACHER)`,
+        `Unknown Spoon teacher '${provider}'; expected claude, codex, openai, ollama, or human (configured with SPOON_TEACHER)`,
       );
   }
 }

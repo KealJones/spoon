@@ -1,0 +1,8 @@
+    Checking spoon-core v0.1.0 (/Users/kealjones/Git/Personal/spoon/crates/spoon-core)
+    Checking spoon-graph v0.1.0 (/Users/kealjones/Git/Personal/spoon/crates/spoon-graph)
+    Checking spoon-episode v0.1.0 (/Users/kealjones/Git/Personal/spoon/crates/spoon-episode)
+    Checking spoon-exec v0.1.0 (/Users/kealjones/Git/Personal/spoon/crates/spoon-exec)
+    Checking spoon-reason v0.1.0 (/Users/kealjones/Git/Personal/spoon/crates/spoon-reason)
+    Checking spoon-engine v0.1.0 (/Users/kealjones/Git/Personal/spoon/crates/spoon-engine)
+    Checking spoon-server v0.1.0 (/Users/kealjones/Git/Personal/spoon/crates/spoon-server)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.67s

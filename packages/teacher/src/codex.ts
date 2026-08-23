@@ -57,7 +57,7 @@ export class CodexTeacher implements Teacher {
 
   async propose(request: TeacherRequest): Promise<TeacherProposal> {
     const directory = await mkdtemp(
-      path.join(os.tmpdir(), "ekg-codex-teacher-"),
+      path.join(os.tmpdir(), "spoon-codex-teacher-"),
     );
     const schemaPath = path.join(directory, "proposal.schema.json");
     const outputPath = path.join(directory, "proposal.json");

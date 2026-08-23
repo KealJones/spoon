@@ -91,7 +91,7 @@ export class OpenAITeacher implements Teacher {
             text: {
               format: {
                 type: "json_schema",
-                name: "ekg_teacher_proposal",
+                name: "spoon_teacher_proposal",
                 strict: true,
                 schema: request.desiredOutput,
               },

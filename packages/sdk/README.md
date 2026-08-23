@@ -1,17 +1,17 @@
-# Spoon SDK (`@ekg/sdk`)
+# Spoon SDK (`@spoon/sdk`)
 
-`@ekg/sdk` is Spoon’s typed TypeScript client for its newline-delimited
+`@spoon/sdk` is Spoon’s typed TypeScript client for its newline-delimited
 JSON-RPC server. It covers graph and procedure operations, cycles, episodes,
 teacher handoff, capabilities, goals, curiosity, consolidation, and metrics.
 
 ## Example
 
 ```ts
-import { EkgClient, StdioTransport } from "@ekg/sdk";
+import { SpoonClient, StdioTransport } from "@spoon/sdk";
 
-const transport = StdioTransport.spawn("target/debug/ekg-server");
-const client = new EkgClient(transport, {
-  adminToken: process.env.EKG_ADMIN_TOKEN, // legacy environment name
+const transport = StdioTransport.spawn("target/debug/spoon-server");
+const client = new SpoonClient(transport, {
+  adminToken: process.env.SPOON_ADMIN_TOKEN,
 });
 
 try {
@@ -30,9 +30,9 @@ revalidation and grants.
 ## Development
 
 ```bash
-pnpm --filter @ekg/sdk test
-pnpm --filter @ekg/sdk typecheck
-pnpm --filter @ekg/sdk build
+pnpm --filter @spoon/sdk test
+pnpm --filter @spoon/sdk typecheck
+pnpm --filter @spoon/sdk build
 ```
 
 The package is currently workspace-private and is consumed directly from its

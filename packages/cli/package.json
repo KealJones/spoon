@@ -1,11 +1,10 @@
 {
-  "name": "@ekg/cli",
+  "name": "@spoon/cli",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "bin": {
-    "spoon": "./src/main.ts",
-    "ekg": "./src/main.ts"
+    "spoon": "./src/main.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -14,7 +13,7 @@
     "depcheck": "depcheck"
   },
   "dependencies": {
-    "@ekg/sdk": "workspace:*",
-    "@ekg/teacher": "workspace:*"
+    "@spoon/sdk": "workspace:*",
+    "@spoon/teacher": "workspace:*"
   }
 }

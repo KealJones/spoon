@@ -1,11 +1,11 @@
 # Spoon Implementation Plan
 
 This is the phased implementation plan for building Spoon's executable
-knowledge engine as described in the historical `WHAT-IS-EKG-v3.md` design
-document. It maps that architecture to concrete engineering work.
+knowledge engine as described in the historical design document retained in the
+local archive. It maps that architecture to concrete engineering work.
 
-The public product name is Spoon. Internal crate/package identifiers retain the
-`ekg-*`, `@ekg/*`, and `EKG_*` compatibility names until a separate migration.
+The public product and all current crate, package, binary, and environment
+identifiers are named Spoon.
 
 ## Decisions Made
 
@@ -45,7 +45,7 @@ safety-critical design.
 **Delegation protocol.** Luna may keep several independent cheap tasks moving,
 but it should use at most one Terra or Sol task per shared mutable area at a
 time. Before any handoff it records: exact files owned, invariant being proved,
-commands to run, and the next recovery point in `.agents/scratchpad/ekg/HANDOFF.md`.
+commands to run, and the next recovery point in `.agents/scratchpad/spoon/HANDOFF.md`.
 The coordinator integrates changes and reruns the affected tests; a subagent's
 claim of success is never final evidence on its own.
 
@@ -72,25 +72,25 @@ quality/cost policy, not a guarantee of app-specific credit consumption.
 ```
   spoon/
   crates/
-    ekg-core/          # data model: concepts, relationships, contracts,
+    spoon-core/          # data model: concepts, relationships, contracts,
                        # mutability classes, confidence, scope, evidence
-    ekg-graph/         # persistent knowledge graph (SQLite-backed)
-    ekg-exec/          # procedure execution engine
-    ekg-episode/       # episode recording, storage, replay
-    ekg-credit/        # credit assignment: contracts, replay, statistics
-    ekg-reason/        # reasoning engine: contract-guided composition
-    ekg-adapt/         # adaptation + knowledge reconciliation
-    ekg-capability/    # native primitives, interface discovery, capability
+    spoon-graph/         # persistent knowledge graph (SQLite-backed)
+    spoon-exec/          # procedure execution engine
+    spoon-episode/       # episode recording, storage, replay
+    spoon-credit/        # credit assignment: contracts, replay, statistics
+    spoon-reason/        # reasoning engine: contract-guided composition
+    spoon-adapt/         # adaptation + knowledge reconciliation
+    spoon-capability/    # native primitives, interface discovery, capability
                        # validation, portable bundle import/export
-    ekg-engine/        # orchestrator: the full cycle from section 11
-    ekg-server/        # JSON-RPC server exposing the engine
+    spoon-engine/        # orchestrator: the full cycle from section 11
+    spoon-server/        # JSON-RPC server exposing the engine
 
   packages/
-    @ekg/cli/          # TUI + REPL for interacting with Spoon
-    @ekg/teacher/      # teacher abstraction + provider adapters
-    @ekg/inspector/    # web dashboard: graph viewer, episode browser,
+    @spoon/cli/          # TUI + REPL for interacting with Spoon
+    @spoon/teacher/      # teacher abstraction + provider adapters
+    @spoon/inspector/    # web dashboard: graph viewer, episode browser,
                        # metrics dashboard (section 38)
-    @ekg/sdk/          # TypeScript client for the ekg-server compatibility API
+    @spoon/sdk/          # TypeScript client for the spoon-server compatibility API
 
   tests/
     kitchen/           # the running example from the doc, as integration tests
@@ -108,7 +108,7 @@ quality/cost policy, not a guarantee of app-specific credit consumption.
 can be graded until evaluation exists, nothing can be credited until episodes
 are recorded.
 
-### P0.1 - Core Data Model (`ekg-core`)
+### P0.1 - Core Data Model (`spoon-core`)
 
 The foundational types everything else builds on.
 
@@ -153,7 +153,7 @@ Evidence
 **Deliverable**: A Rust crate with these types, serialization (serde), and
 a small set of primitive operations (arithmetic, comparison, string ops).
 
-### P0.2 - Knowledge Graph (`ekg-graph`)
+### P0.2 - Knowledge Graph (`spoon-graph`)
 
 Persistent storage for concepts, relationships, and procedures.
 
@@ -170,7 +170,7 @@ later phases when episodes exist to train on.
 **Deliverable**: A graph you can populate, query, and traverse. Inspectable
 via `sqlite3` directly if needed.
 
-### P0.3 - Execution Engine (`ekg-exec`)
+### P0.3 - Execution Engine (`spoon-exec`)
 
 Run procedures and produce results.
 
@@ -190,7 +190,7 @@ The procedure representation should be:
 **Deliverable**: Can define `DOUBLE(x) = x * 2`, execute it, capture the
 trace, verify the contract.
 
-### P0.4 - Episode Recording (`ekg-episode`)
+### P0.4 - Episode Recording (`spoon-episode`)
 
 The raw material of every learning mechanism downstream.
 
@@ -204,7 +204,7 @@ The raw material of every learning mechanism downstream.
 **Deliverable**: Episodes are recorded during execution, stored, queryable,
 and the trace is replayable.
 
-### P0.5 - Evaluation (`ekg-core` or `ekg-engine`)
+### P0.5 - Evaluation (`spoon-core` or `spoon-engine`)
 
 The grading machinery. Without this, nothing learned can be judged.
 
@@ -222,14 +222,14 @@ evaluation with surprise signal.
 
 ### P0.6 - Server + Basic CLI
 
-- `ekg-server`: JSON-RPC over stdio, exposes graph CRUD, procedure
+- `spoon-server`: JSON-RPC over stdio, exposes graph CRUD, procedure
   execution, episode query
-- `@ekg/cli`: minimal CLI that connects to the server, lets you:
+- `@spoon/cli`: minimal CLI that connects to the server, lets you:
   - Define concepts and relationships manually
   - Define and execute procedures
   - Inspect the graph
   - View episodes
-- `@ekg/sdk`: TypeScript client wrapping the JSON-RPC protocol
+- `@spoon/sdk`: TypeScript client wrapping the JSON-RPC protocol
 
 **Deliverable**: A running system you can interact with. Dumb, but
 functional. "Stage 0" from section 33 is complete.
@@ -252,7 +252,7 @@ functional. "Stage 0" from section 33 is complete.
 **Goal**: Understand input well enough to act, leaning heavily on a teacher.
 Expect high teacher dependence - this is correct, not failure.
 
-### P1.1 - Teacher Abstraction (`@ekg/teacher`)
+### P1.1 - Teacher Abstraction (`@spoon/teacher`)
 
 ```typescript
 interface Teacher {
@@ -738,7 +738,7 @@ catastrophic failures live here.
 **Maps to**: Section 38
 **Goal**: Make the flywheel measurable and the system inspectable.
 
-### P6.1 - Web Inspector (`@ekg/inspector`)
+### P6.1 - Web Inspector (`@spoon/inspector`)
 
 - Knowledge graph visualization (concepts, relationships, procedures)
 - Episode browser (search, filter, replay)

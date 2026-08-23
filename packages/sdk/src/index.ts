@@ -1,4 +1,4 @@
-export { EkgClient } from "./client.js";
+export { SpoonClient } from "./client.js";
 export { JsonRpcError, StdioTransport, StreamTransport } from "./transport.js";
 export type {
   AdaptationEvidenceRef,
@@ -48,7 +48,7 @@ export type {
   DemonstratedFeature,
   EpisodeFilter,
   EpisodeFeedback,
-  EkgClientOptions,
+  SpoonClientOptions,
   FalsificationMeasurement,
   FalsificationMeasurementInput,
   FalsificationRun,

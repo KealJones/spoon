@@ -54,7 +54,7 @@ const request: TeacherRequest = {
     relationships: [],
     procedures: [],
   },
-    specificQuestion: "What reusable lesson should Spoon learn?",
+  specificQuestion: "What reusable lesson should Spoon learn?",
   desiredOutput: schema,
 };
 
@@ -279,7 +279,7 @@ test("OpenAI adapter sends Responses API strict structured-output request", asyn
   assert.deepEqual(body.text, {
     format: {
       type: "json_schema",
-      name: "ekg_teacher_proposal",
+      name: "spoon_teacher_proposal",
       strict: true,
       schema,
     },

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { EkgClient, type RpcTransport } from "../src/index.js";
+import { SpoonClient, type RpcTransport } from "../src/index.js";
 
 class RecordingTransport implements RpcTransport {
   calls: Array<{ method: string; params: unknown }> = [];
@@ -14,7 +14,7 @@ class RecordingTransport implements RpcTransport {
 
 test("client maps every concept RPC method with exact params", async () => {
   const transport = new RecordingTransport();
-  const client = new EkgClient(transport);
+  const client = new SpoonClient(transport);
   const updatedConcept = {
     id: "concept-1",
     name: "DOUBLE",
@@ -53,7 +53,7 @@ test("client maps every concept RPC method with exact params", async () => {
 
 test("client maps every relationship and traversal RPC method with exact params", async () => {
   const transport = new RecordingTransport();
-  const client = new EkgClient(transport);
+  const client = new SpoonClient(transport);
   const createdRelationship = {
     source: "concept-1",
     target: "concept-2",
@@ -94,7 +94,7 @@ test("client maps every relationship and traversal RPC method with exact params"
 
 test("client maps every procedure RPC method with exact params", async () => {
   const transport = new RecordingTransport();
-  const client = new EkgClient(transport);
+  const client = new SpoonClient(transport);
   const createdProcedure = {
     name: "DOUBLE",
     params: [{ name: "x", description: null }],
@@ -136,7 +136,7 @@ test("client maps every procedure RPC method with exact params", async () => {
 
 test("client maps every episode RPC method with exact params", async () => {
   const transport = new RecordingTransport();
-  const client = new EkgClient(transport);
+  const client = new SpoonClient(transport);
 
   await client.getEpisode("episode-1");
   await client.listEpisodes({
@@ -202,7 +202,7 @@ test("client maps every episode RPC method with exact params", async () => {
 
 test("client maps durable credit reads and explicit retry keys", async () => {
   const transport = new RecordingTransport();
-  const client = new EkgClient(transport);
+  const client = new SpoonClient(transport);
   const analysis = {
     episodeId: "episode-1",
     candidates: [],
@@ -226,7 +226,7 @@ test("client maps durable credit reads and explicit retry keys", async () => {
 
 test("client maps capability discovery, quarantine, validation, and local grants", async () => {
   const transport = new RecordingTransport();
-  const client = new EkgClient(transport, { adminToken: "admin" });
+  const client = new SpoonClient(transport, { adminToken: "admin" });
   const description = {
     source: "weather-api",
     fingerprint: "weather-v1",
@@ -292,7 +292,7 @@ test("client maps capability discovery, quarantine, validation, and local grants
 
 test("client maps native primitive observation", async () => {
   const transport = new RecordingTransport();
-  const client = new EkgClient(transport);
+  const client = new SpoonClient(transport);
   await client.observePrimitive("clock");
   assert.deepEqual(transport.calls, [
     { method: "primitive.observe", params: { target: "clock" } },
@@ -301,7 +301,7 @@ test("client maps native primitive observation", async () => {
 
 test("client maps cycle begin, resume, and abort with exact camelCase params", async () => {
   const transport = new RecordingTransport();
-  const client = new EkgClient(transport);
+  const client = new SpoonClient(transport);
   const proposal = {
     content: { interpretations: [], answer: 42 },
     source: "human:test",
@@ -357,7 +357,7 @@ test("client maps cycle begin, resume, and abort with exact camelCase params", a
 
 test("client maps adaptation plan, get, apply, and receipt RPCs with exact params", async () => {
   const transport = new RecordingTransport();
-  const client = new EkgClient(transport);
+  const client = new SpoonClient(transport);
   const planInput = {
     idempotencyKey: "flat-pancake-plan-1",
     analysis: {
@@ -407,7 +407,7 @@ test("client maps adaptation plan, get, apply, and receipt RPCs with exact param
 
 test("client maps contradiction RPCs with exact params", async () => {
   const transport = new RecordingTransport();
-  const client = new EkgClient(transport);
+  const client = new SpoonClient(transport);
 
   await client.listContradictions();
   await client.getContradiction(7);
@@ -457,7 +457,7 @@ test("client maps contradiction RPCs with exact params", async () => {
 
 test("admin-enabled client injects auth only into privileged mutation calls", async () => {
   const transport = new RecordingTransport();
-  const client = new EkgClient(transport, { adminToken: "bootstrap-secret" });
+  const client = new SpoonClient(transport, { adminToken: "bootstrap-secret" });
 
   await client.createConcept({ name: "ADMIN_ONLY" });
   await client.listConcepts();
@@ -551,7 +551,7 @@ test("admin-enabled client injects auth only into privileged mutation calls", as
 
 test("feedback sends raw observation without caller-selected trust fields", async () => {
   const transport = new RecordingTransport();
-  const client = new EkgClient(transport);
+  const client = new SpoonClient(transport);
 
   await client.recordFeedback({
     episodeId: "episode-1",

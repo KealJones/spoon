@@ -50,30 +50,39 @@ test("parses a natural-language cycle request", () => {
 });
 
 test("parses quiet natural-language cycle requests", () => {
-  assert.deepEqual(parseCommand(["ask", "--quiet", "what", "is", "double", "7?"]), {
-    kind: "cycle.run",
-    situation: "what is double 7?",
-    quiet: true,
-    explain: false,
-  });
+  assert.deepEqual(
+    parseCommand(["ask", "--quiet", "what", "is", "double", "7?"]),
+    {
+      kind: "cycle.run",
+      situation: "what is double 7?",
+      quiet: true,
+      explain: false,
+    },
+  );
   assert.deepEqual(parseCommand(["ask", "-q", "what", "time", "is", "it?"]), {
     kind: "cycle.run",
     situation: "what time is it?",
     quiet: true,
     explain: false,
   });
-  assert.deepEqual(parseCommand(["ask", "what", "is", "double", "7?", "--quiet"]), {
-    kind: "cycle.run",
-    situation: "what is double 7?",
-    quiet: true,
-    explain: false,
-  });
-  assert.deepEqual(parseCommand(["ask", "--explain", "what", "is", "double", "7?"]), {
-    kind: "cycle.run",
-    situation: "what is double 7?",
-    quiet: false,
-    explain: true,
-  });
+  assert.deepEqual(
+    parseCommand(["ask", "what", "is", "double", "7?", "--quiet"]),
+    {
+      kind: "cycle.run",
+      situation: "what is double 7?",
+      quiet: true,
+      explain: false,
+    },
+  );
+  assert.deepEqual(
+    parseCommand(["ask", "--explain", "what", "is", "double", "7?"]),
+    {
+      kind: "cycle.run",
+      situation: "what is double 7?",
+      quiet: false,
+      explain: true,
+    },
+  );
 });
 
 test("parses the explicit failure adaptation workflow", () => {

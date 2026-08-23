@@ -1,7 +1,7 @@
 # Section 38 falsification harness
 
 These bounded fixtures drive the durable telemetry tests in
-`crates/ekg-engine/tests/falsification_telemetry.rs`. They are intentionally a
+`crates/spoon-engine/tests/falsification_telemetry.rs`. They are intentionally a
 representative schema/harness corpus, not a benchmark result or evidence that
 Spoon has passed the twelve Section 38 metrics. The cases include successful
 acquisition, held-out transfer from distinct families, teacher ablation,

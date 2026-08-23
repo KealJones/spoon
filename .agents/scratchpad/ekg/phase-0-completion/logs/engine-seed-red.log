@@ -1,9 +1,0 @@
-   Compiling ekg-engine v0.1.0 (/Users/kealjones/Git/Personal/ekg/crates/ekg-engine)
-error[E0432]: unresolved import `ekg_engine::Engine`
- --> crates/ekg-engine/tests/seed_cycle.rs:4:5
-  |
-4 | use ekg_engine::Engine;
-  |     ^^^^^^^^^^^^^^^^^^ no `Engine` in the root
-
-For more information about this error, try `rustc --explain E0432`.
-error: could not compile `ekg-engine` (test "seed_cycle") due to 1 previous error

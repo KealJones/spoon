@@ -7,3 +7,9 @@ node_modules/
 dist/
 .env
 .DS_Store
+
+# Local agent scratchpads and archived reference material. These are useful
+# during development but are not part of the Spoon source distribution.
+/.agents/scratchpad/spoon/
+/WHAT-IS-EKG-v3.md
+/ekg-benchmark-suite.zip

@@ -5,11 +5,11 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  EkgClient,
+  SpoonClient,
   StdioTransport,
   type CycleProgress,
   type RpcTransport,
-} from "@ekg/sdk";
+} from "@spoon/sdk";
 import {
   CodexTeacher,
   ProposalValidationPipeline,
@@ -17,7 +17,7 @@ import {
   type Teacher,
   type TeacherProposal,
   type TeacherRequest,
-} from "@ekg/teacher";
+} from "@spoon/teacher";
 
 import { createConfiguredTeacher, runCycle } from "../src/cycle.js";
 
@@ -163,7 +163,7 @@ function completed(): CycleProgress {
 
 test("automatic teacher handoff happens once and a learned repeat stays local", async () => {
   const transport = new LearningCycleTransport();
-  const client = new EkgClient(transport);
+  const client = new SpoonClient(transport);
   const teacher = new FakeTeacher();
 
   assert.equal(
@@ -184,7 +184,11 @@ test("provider failures abort the pending cycle instead of abandoning it", async
   const transport = new AbortCycleTransport();
   const teacher = new FailingTeacher();
 
-  const outcome = await runCycle(new EkgClient(transport), "unknown", teacher);
+  const outcome = await runCycle(
+    new SpoonClient(transport),
+    "unknown",
+    teacher,
+  );
 
   assert.equal(outcome.disposition, "abstained");
   assert.equal(teacher.calls, 1);
@@ -203,7 +207,7 @@ test("a malformed lesson can consume one bounded retry and then complete", async
   const teacher = new FakeTeacher();
 
   const outcome = await runCycle(
-    new EkgClient(transport),
+    new SpoonClient(transport),
     "what is double 7?",
     teacher,
     { maxTeacherTurns: 2 },
@@ -219,7 +223,7 @@ test("a malformed lesson can consume one bounded retry and then complete", async
 });
 
 test("Codex CLI can be selected without an API key or explicit model", () => {
-  const teacher = createConfiguredTeacher({ EKG_TEACHER: "codex" });
+  const teacher = createConfiguredTeacher({ SPOON_TEACHER: "codex" });
   assert.ok(teacher instanceof CodexTeacher);
 });
 
@@ -228,14 +232,14 @@ test(
   { timeout: 30_000 },
   async () => {
     const directory = await mkdtemp(
-      path.join(os.tmpdir(), "ekg-teacher-cycle-"),
+      path.join(os.tmpdir(), "spoon-teacher-cycle-"),
     );
-    const previousDatabase = process.env.EKG_DB;
-    const previousAdminToken = process.env.EKG_ADMIN_TOKEN;
-    process.env.EKG_DB = path.join(directory, "ekg.db");
-    process.env.EKG_ADMIN_TOKEN = "cli-integration-admin";
-    const client = new EkgClient(
-      StdioTransport.spawn("cargo", ["run", "--quiet", "-p", "ekg-server"]),
+    const previousDatabase = process.env.SPOON_DB;
+    const previousAdminToken = process.env.SPOON_ADMIN_TOKEN;
+    process.env.SPOON_DB = path.join(directory, "spoon.db");
+    process.env.SPOON_ADMIN_TOKEN = "cli-integration-admin";
+    const client = new SpoonClient(
+      StdioTransport.spawn("cargo", ["run", "--quiet", "-p", "spoon-server"]),
       { adminToken: "cli-integration-admin" },
     );
 
@@ -253,10 +257,11 @@ test(
       assert.equal(teacher.validationCalls, 1);
     } finally {
       client.close();
-      if (previousDatabase === undefined) delete process.env.EKG_DB;
-      else process.env.EKG_DB = previousDatabase;
-      if (previousAdminToken === undefined) delete process.env.EKG_ADMIN_TOKEN;
-      else process.env.EKG_ADMIN_TOKEN = previousAdminToken;
+      if (previousDatabase === undefined) delete process.env.SPOON_DB;
+      else process.env.SPOON_DB = previousDatabase;
+      if (previousAdminToken === undefined)
+        delete process.env.SPOON_ADMIN_TOKEN;
+      else process.env.SPOON_ADMIN_TOKEN = previousAdminToken;
       await rm(directory, { recursive: true, force: true });
     }
   },
