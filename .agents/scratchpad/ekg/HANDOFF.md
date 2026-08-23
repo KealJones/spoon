@@ -1,6 +1,6 @@
 # EKG implementation handoff
 
-Last updated: 2026-08-22 (bounded representation training, goal derivation boundaries)
+Last updated: 2026-08-22 (capability reconstruction, Phase 6 evidence, and teacher explanation)
 
 This is the durable restart point for completing every phase in
 `IMPLEMENTATION-PLAN.md`. Update it whenever ownership, verification state, or
@@ -75,6 +75,15 @@ The latest committed increments are:
 - `c1aa4a3` — metrics snapshots/RPC now expose durable strong-answer baseline
   coverage (`verifiedAnswerCount`), explicitly distinguished from successful
   follow-up reruns.
+- `35d67ae`, `71d8978` — bounded local co-occurrence semantic recall,
+  cross-query held-out coverage evidence, and semantic recall RPC/SDK access.
+- `ef2e588`, `71fef29`, `c630b00`, `62ff569` — durable managed-skill experience
+  counters, query ranking, best-skill execution, migration decoding, and tests.
+- `37ef0c3`, `c6db8c1` — dependency-DAG capability reconstruction, atomic
+  import/revalidation, Engine/RPC/SDK reconstruction access, and trust-bound
+  local evidence checks.
+- `2e968b6`, `4c5f6d5` — persisted Phase 6 evidence aggregates and complete
+  SDK metric typing for intuition/teacher/skill evidence.
 
 The first usable chat command is now:
 
@@ -84,6 +93,11 @@ EKG_DB=/tmp/ekg-playground.sqlite pnpm exec tsx packages/cli/src/main.ts ask --q
 
 For the bounded human-readable episode summary (teacher use, proposal,
 validation, learning/reuse, evaluation, and cost), use `ask --explain`.
+The explanation now unwraps nested teacher proposals: it reports the actual
+provider/model and source, distinguishes the user-facing answer from the
+prediction, and labels a teacher-only external observation as provisional when
+no trusted local observation ran. That path explicitly reports that no
+reusable lesson or procedure was learned in that case.
 
 The dashboard can be opened with:
 
@@ -106,9 +120,10 @@ can execute through a stable trusted source procedure.
 
 Capability limitations are explicit: network transport remains adapter-injected,
 sandbox execution is currently a bounded fixture boundary rather than arbitrary
-neutral-IR execution, and the bundle still needs a full dependency-DAG
-reconstruction runner. Engine-side local validation is now trust-receipt-bound;
-the low-level capability store remains usable for isolated bundle tests.
+neutral-IR execution. Dependency-DAG reconstruction, clean-instance bundle
+round-trip, and atomic import/revalidation are now implemented. Engine-side
+local validation is trust-receipt-bound; the low-level capability store remains
+usable for isolated bundle tests.
 
 Representation training is intentionally a bounded term-weight artifact and
 does not yet replace the deterministic lexical/hash retrieval index with a
@@ -117,7 +132,7 @@ procedure, but there is not yet a learned skill-ranking policy or generalized
 neutral skill procedure representation. These are open implementation gaps, not
 claims of completion.
 
-Latest full gates (2026-08-22): workspace Rust tests/all targets, strict
+Latest full gates before the current explanation-only patch (2026-08-22): workspace Rust tests/all targets, strict
 workspace Clippy, TypeScript tests, package builds, typecheck, depcheck, and
 diff checks pass. The only intentional tracked worktree modification is the
 pre-existing whitespace-only change in `crates/ekg-engine/src/runtime.rs`;

@@ -12,10 +12,10 @@ exit criterion is finished.
 | P0 Seed | Complete | Core, graph, execution, episode, evaluation, server/CLI, and full tests are present. |
 | P1 Teacher | Complete | Teacher abstraction, bounded continuation cycle, validation/provenance, CLI, and provider adapters are present. |
 | P2 Credit + adaptation | Complete with recorded audit caveat | Contract/statistical/replay attribution, narrow adaptation, reconciliation, contradictions, durable sagas, and trust receipts are implemented. See `phase2-final-audit.md` for the independent-audit limitation. |
-| P3 Intuition | Substantially implemented, not strict-complete | Recall, ranking, held-out ranking evidence, trusted retrieval, grounding/self-supervision, and bounded representation artifacts exist. Retrieval is still deterministic lexical/hash-based; no semantic embedding model or cross-query generalization evidence exists. |
-| P4 Consolidation | Substantially implemented, not strict-complete | Repetition/single-success/failure-critic discovery, replay/shadow/live promotion, retirement, compression records, verified-answer regression history, and promoted-skill execution exist. Learned skill ranking/generalized neutral skill IR and continuous compounding/transfer/survival metrics remain. |
-| P5 Curiosity/capabilities/self-modification | Foundation implemented, not strict-complete | Curiosity, goal lineage, immutable standing goals, native primitives, typed discovery, quarantine bundles, local trust/revalidation, revocable grants, and admin/offline adaptation exist. Full neutral-IR dependency-DAG reconstruction, generalized sandbox execution, and complete structural self-modification scheduling/rollback remain. |
-| P6 Inspector/metrics | Inspector complete; metrics partial | Local dashboard, redacted narratives, raw drill-down, CLI explainability, rung distribution, and durable verified-answer baseline coverage exist. Grounding remains a partial signal; follow-up regression, compounding, transfer, weaning, attribution, ablation, survival, and calibration slots remain uninstrumented. |
+| P3 Intuition | Substantially implemented, not strict-complete | Recall now has bounded deterministic co-occurrence semantic expansion, ranking, held-out ranking and cross-query recall evidence, trusted retrieval, grounding/self-supervision, and bounded representation artifacts. It is still not a learned language/embedding model; evaluation measures candidate coverage, not truth or ranking quality. |
+| P4 Consolidation | Substantially implemented, not strict-complete | Repetition/single-success/failure-critic discovery, replay/shadow/live promotion, retirement, non-destructive compression, verified-answer regression history, promoted-skill execution, and durable query/experience ranking exist. Generalized neutral skill IR and continuous compounding/transfer/survival metrics remain. |
+| P5 Curiosity/capabilities/self-modification | Strong foundation, not strict-complete | Curiosity, goal lineage, immutable standing goals, native primitives, typed discovery, quarantine bundles, dependency-DAG reconstruction, atomic import/revalidation, local trust, revocable grants, and admin/offline adaptation exist. Generalized sandbox execution and complete structural self-modification scheduling/rollback remain. |
+| P6 Inspector/metrics | Inspector complete; metrics partial but materially expanded | Local dashboard, redacted narratives, raw drill-down, CLI explainability, rung distribution, verified-answer baselines, teacher-assisted/free counts, replay regression/transfer evidence, promoted-skill survival/use evidence, grounding, ranking, and semantic recall metrics exist. Held-out compounding, per-domain weaning, teacher ablation, attribution, trace compression, and calibration still need dedicated anti-gaming harnesses. |
 
 ## Verification
 
@@ -35,11 +35,9 @@ files and agent scratchpads are not part of the implementation commits.
 
 ## Next highest-value work
 
-1. Replace or augment the deterministic recall index with a bounded local
-   semantic representation and cross-query held-out evaluation.
+1. Replace or augment the deterministic recall index with a learned local
+   semantic representation and stronger cross-query held-out evaluation.
 2. Add a learned/ranked skill policy and generalized neutral procedure IR,
    while preserving the promoted-skill execution gate.
-3. Implement full capability bundle reconstruction (dependency DAG, neutral IR,
-   fixtures, and clean-instance round trip) with local execution isolation.
-4. Instrument the remaining Section 38 metrics with held-out anti-gaming
+3. Instrument the remaining Section 38 metrics with held-out anti-gaming
    fixtures rather than changing dashboard labels optimistically.
