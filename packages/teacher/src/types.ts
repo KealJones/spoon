@@ -71,7 +71,7 @@ export interface ProviderPromptOptions {
 }
 
 export type ProviderKind =
-  "claude" | "codex" | "cli" | "openai" | "ollama" | "human";
+  "claude" | "codex" | "cursor" | "cli" | "openai" | "ollama" | "human";
 
 export interface ProposalProvenance {
   provider: ProviderKind;

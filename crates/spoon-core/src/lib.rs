@@ -6,6 +6,7 @@ pub mod evidence;
 pub mod expr;
 pub mod language;
 pub mod procedure;
+pub mod spoonlang;
 pub mod relationship;
 pub mod value;
 
@@ -21,11 +22,13 @@ pub use error::SpoonError;
 pub use evidence::{Confidence, Evidence, ScopeCondition, Source, SourceKind, VerifiabilityTier};
 pub use expr::{BinOp, Expr, IntrinsicOp, UnOp};
 pub use language::{
-    DialogueAct, DialogueMove, EvidenceReference, GroundedClaim, IntentFrame, IntentScope,
-    IntentSlot, LanguageError, LanguageLimits, NormalizationForm, PlannedClaim, RenderVariant,
-    RenderedResponse, ResponsePlan, ResponseRenderer, ResponseTone, TextDocument, TextSpan, Token,
-    TokenKind, TokenStream, Uncertainty, UncertaintyLevel, tokenize, tokenize_with_limits,
+    DEFAULT_MAX_INTENT_CANDIDATES, DEFAULT_MAX_SLOTS, DialogueAct, DialogueMove, EvidenceReference,
+    GroundedClaim, IntentDisposition, IntentFrame, IntentFrameProposal, IntentFrameSet,
+    IntentScope, IntentSlot, IntentSlotProposal, InterpretationProposal, LanguageError,
+    LanguageLimits, NormalizationForm, PlannedClaim, RenderVariant, RenderedResponse, ResponsePlan,
+    ResponseRenderer, ResponseTone, TextDocument, TextSpan, Token, TokenKind, TokenRange,
+    TokenStream, Uncertainty, UncertaintyLevel, tokenize, tokenize_with_limits,
 };
-pub use procedure::{Param, Procedure, ProcedureId, TestCase};
+pub use procedure::{CapabilityDependency, Param, ParamType, Procedure, ProcedureId, TestCase};
 pub use relationship::{Relationship, RelationshipId};
 pub use value::Value;

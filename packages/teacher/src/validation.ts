@@ -116,7 +116,14 @@ export class ProposalValidationPipeline {
   }
 }
 
-const PROVIDERS = new Set(["claude", "codex", "openai", "ollama", "human"]);
+const PROVIDERS = new Set([
+  "claude",
+  "codex",
+  "cursor",
+  "openai",
+  "ollama",
+  "human",
+]);
 
 function validateProposalEnvelope(
   proposal: TeacherProposal,

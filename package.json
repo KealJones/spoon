@@ -8,7 +8,9 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "format": "prettier --write \"packages/**/*.{ts,json}\" \"*.{json,yaml}\"",
     "depcheck": "pnpm -r --if-present depcheck",
-    "spoon": "tsx packages/cli/src/main.ts"
+    "spoon": "tsx packages/cli/src/main.ts",
+    "serve": "cargo run -p spoon-server -- --http --port 4318",
+    "inspect": "pnpm --filter @spoon/inspector dev"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

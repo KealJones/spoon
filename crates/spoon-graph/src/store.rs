@@ -180,6 +180,7 @@ impl KnowledgeStore {
     /// schema exists.
     pub fn new(path: &str) -> Result<Self> {
         let conn = Connection::open(path)?;
+        conn.pragma_update(None, "journal_mode", "WAL")?;
         schema::init(&conn)?;
         Ok(Self { conn })
     }
@@ -635,6 +636,7 @@ impl KnowledgeStore {
     fn collect_expression_calls(expression: &Expr, calls: &mut HashSet<ProcedureId>) {
         match expression {
             Expr::Literal(_) | Expr::Var(_) => {}
+            Expr::CapabilityCall { input, .. } => Self::collect_expression_calls(input, calls),
             Expr::BinOp { left, right, .. } => {
                 Self::collect_expression_calls(left, calls);
                 Self::collect_expression_calls(right, calls);
@@ -703,6 +705,9 @@ impl KnowledgeStore {
     fn collect_exact_expression_calls(expression: &Expr, calls: &mut HashSet<(ProcedureId, u32)>) {
         match expression {
             Expr::Literal(_) | Expr::Var(_) => {}
+            Expr::CapabilityCall { input, .. } => {
+                Self::collect_exact_expression_calls(input, calls)
+            }
             Expr::BinOp { left, right, .. } => {
                 Self::collect_exact_expression_calls(left, calls);
                 Self::collect_exact_expression_calls(right, calls);

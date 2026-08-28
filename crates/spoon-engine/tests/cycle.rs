@@ -1,9 +1,14 @@
 use std::collections::BTreeMap;
 
 use serde_json::json;
-use spoon_core::{BinOp, Concept, Expr, MutabilityClass, Param, Procedure, Value};
+use spoon_core::{
+    BinOp, Concept, Episode, EscalationRung, Evaluation, Expr, IntentDisposition,
+    IntentFrameProposal, IntentScope, IntentSlotProposal, InterpretationProposal, IntrinsicOp,
+    MutabilityClass, Param, ParamType, Procedure, TokenRange, Value, VerifiabilityTier,
+};
 use spoon_engine::{
-    CycleBudget, CycleDisposition, CycleInput, CycleProgress, Engine, TeacherProposalWire,
+    CycleBudget, CycleDisposition, CycleInput, CycleProgress, Engine, IntentProposalWire,
+    TeacherProposalWire,
 };
 use spoon_exec::{ExecStepStatus, ExecTrace};
 
@@ -19,10 +24,609 @@ fn cycle_input(situation: &str, teacher_allowed: bool) -> CycleInput {
             max_teacher_turns: 1,
         },
         teacher_allowed,
+        interpreter_allowed: false,
         session_id: None,
         recall_mode: Default::default(),
         permission_mode: None,
     }
+}
+
+#[test]
+fn system_capability_query_reports_engine_owned_boundaries() {
+    let mut engine = Engine::in_memory_with_admin("system-capability-admin").unwrap();
+    let progress = engine
+        .begin_cycle(cycle_input("what capabilities do you have?", false))
+        .unwrap();
+    let CycleProgress::Completed(outcome) = progress else {
+        panic!("self-description should complete without an interpreter or teacher");
+    };
+    assert_eq!(outcome.disposition, CycleDisposition::Verified);
+    assert!(matches!(
+        outcome.answer,
+        Some(Value::Text(ref answer)) if answer.contains("network requests")
+    ));
+    assert_eq!(
+        outcome.episode.action.as_deref(),
+        Some("system:self-capability-query")
+    );
+}
+
+#[test]
+fn system_capability_query_does_not_claim_web_search() {
+    let mut engine = Engine::in_memory_with_admin("system-web-admin").unwrap();
+    let progress = engine
+        .begin_cycle(cycle_input(
+            "do you have the capability to search the web?",
+            false,
+        ))
+        .unwrap();
+    let CycleProgress::Completed(outcome) = progress else {
+        panic!("web capability self-query should complete deterministically");
+    };
+    assert!(matches!(
+        outcome.answer,
+        Some(Value::Text(ref answer)) if answer.contains("Web search is unavailable")
+    ));
+}
+
+#[test]
+fn explicit_teaching_request_can_mention_capabilities_without_self_answering() {
+    let mut engine = Engine::in_memory_with_admin("teach-capability-admin").unwrap();
+    let progress = engine
+        .begin_cycle(cycle_input(
+            "The user explicitly requested that Spoon teach and install a reusable procedure.\nTeaching request:\nuse network request capability to check spelling",
+            true,
+        ))
+        .unwrap();
+    assert!(matches!(progress, CycleProgress::NeedTeacher { .. }));
+}
+
+#[test]
+fn interpreter_selects_a_request_local_candidate_and_executes_with_teacher_off() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    seed_double(&engine);
+    let mut input = cycle_input("please make 7 twice as large", false);
+    input.interpreter_allowed = true;
+
+    let CycleProgress::NeedIntent {
+        cycle_id, request, ..
+    } = engine.begin_cycle(input).unwrap()
+    else {
+        panic!("a known but lexically unresolved procedure should request interpretation");
+    };
+    assert_eq!(request.situation, "please make 7 twice as large");
+    assert_eq!(request.context["candidates"][0]["alias"], "candidate_0");
+    let context_json = serde_json::to_string(&request.context).unwrap();
+    for concept in engine.graph().list_concepts().unwrap() {
+        assert!(!context_json.contains(&concept.id.to_string()));
+    }
+    for procedure in engine.graph().list_procedures().unwrap() {
+        assert!(!context_json.contains(&procedure.id.to_string()));
+    }
+
+    let proposal = InterpretationProposal {
+        candidates: vec![IntentFrameProposal {
+            name: "candidate_0".into(),
+            confidence: 0.98,
+            scope: IntentScope::CurrentTurn,
+            source_tokens: vec![TokenRange::new(0, 11)],
+            slots: vec![IntentSlotProposal {
+                name: "x".into(),
+                confidence: 0.99,
+                source_tokens: vec![TokenRange::new(4, 5)],
+                inferred_value: None,
+            }],
+            ambiguities: Vec::new(),
+        }],
+        selected: Some(0),
+        disposition: IntentDisposition::Execute,
+    };
+    let progress = engine
+        .resume_intent(
+            cycle_id,
+            IntentProposalWire {
+                content: proposal,
+                source: "ollama:qwen2.5:0.5b".into(),
+                status: "unverified".into(),
+                provenance: json!({ "provider": "ollama", "model": "qwen2.5:0.5b" }),
+                raw_content: None,
+            },
+        )
+        .unwrap();
+    let CycleProgress::Completed(outcome) = progress else {
+        panic!("the grounded intent should complete");
+    };
+    assert_eq!(outcome.disposition, CycleDisposition::Verified);
+    assert_eq!(outcome.answer, Some(Value::Int(14)));
+    assert_eq!(outcome.procedure_ir.as_ref().unwrap()["name"], "DOUBLE");
+    assert_eq!(outcome.episode.cost.rung_reached as u8, 2);
+    assert_eq!(
+        outcome.episode.teacher_interaction.as_ref().unwrap()["languageInterpreter"]["source"],
+        "ollama:qwen2.5:0.5b"
+    );
+}
+
+#[test]
+fn unsupported_interpreter_selection_cannot_execute_from_a_shared_literal() {
+    let mut engine = Engine::in_memory_with_admin("interpreter-support-admin").unwrap();
+    seed_text_count(&engine);
+    let mut input = cycle_input("Spell strawberry", false);
+    input.interpreter_allowed = true;
+    let CycleProgress::NeedIntent {
+        cycle_id, request, ..
+    } = engine.begin_cycle(input).unwrap()
+    else {
+        panic!("the interpreter should receive the known procedure catalog");
+    };
+    let literals = request.context["literalCandidates"].as_array().unwrap();
+    let spell = literals
+        .iter()
+        .find(|literal| literal["text"] == "Spell")
+        .unwrap()["tokenRange"]
+        .clone();
+    let strawberry = literals
+        .iter()
+        .find(|literal| literal["text"] == "strawberry")
+        .unwrap()["tokenRange"]
+        .clone();
+    let proposal = InterpretationProposal {
+        candidates: vec![IntentFrameProposal {
+            name: "candidate_0".into(),
+            confidence: 1.0,
+            scope: IntentScope::CurrentTurn,
+            source_tokens: vec![TokenRange::new(0, 1)],
+            slots: vec![
+                IntentSlotProposal {
+                    name: "text".into(),
+                    confidence: 1.0,
+                    source_tokens: vec![serde_json::from_value(strawberry).unwrap()],
+                    inferred_value: None,
+                },
+                IntentSlotProposal {
+                    name: "target".into(),
+                    confidence: 1.0,
+                    source_tokens: vec![serde_json::from_value(spell).unwrap()],
+                    inferred_value: None,
+                },
+            ],
+            ambiguities: Vec::new(),
+        }],
+        selected: Some(0),
+        disposition: IntentDisposition::Execute,
+    };
+    let CycleProgress::Completed(outcome) = engine
+        .resume_intent(
+            cycle_id,
+            IntentProposalWire {
+                content: proposal,
+                source: "ollama:test".into(),
+                status: "unverified".into(),
+                provenance: json!({ "provider": "ollama", "model": "test" }),
+                raw_content: Some(json!({ "modelOutput": "count strawberry" })),
+            },
+        )
+        .expect("a rejected interpreter proposal should cleanly abstain when the teacher is off")
+    else {
+        panic!("spelling must not execute a text-occurrence procedure");
+    };
+    let interpreter = &outcome.episode.teacher_interaction.as_ref().unwrap()["languageInterpreter"];
+    assert!(
+        interpreter["rejection"]
+            .as_str()
+            .unwrap()
+            .contains("language support")
+    );
+    assert_eq!(
+        interpreter["rejectedProposal"]["content"]["disposition"],
+        "execute"
+    );
+    assert_eq!(
+        interpreter["rejectedProposal"]["rawContent"]["modelOutput"],
+        "count strawberry"
+    );
+}
+
+#[test]
+fn interpreter_catalog_strips_illustrative_values_from_routing_descriptions() {
+    let mut engine = Engine::in_memory_with_admin("routing-description-admin").unwrap();
+    let concept = Concept::new("TEXT_OCCURRENCE_COUNT", MutabilityClass::Definitional)
+        .with_description(
+            "Count a requested character in supplied text. For example, count r in Strawberry.",
+        );
+    engine.admin_insert_concept(&concept).unwrap();
+    let procedure = Procedure::new(
+        "COUNT_EXACT_OCCURRENCES",
+        vec![Param::named("text"), Param::named("target")],
+        Expr::Intrinsic {
+            version: 1,
+            op: IntrinsicOp::TextCount,
+            args: vec![Expr::Var("text".into()), Expr::Var("target".into())],
+        },
+    )
+    .with_concept(concept.id);
+    engine.admin_insert_procedure(&procedure).unwrap();
+
+    let mut input = cycle_input("Spell strawberry", false);
+    input.interpreter_allowed = true;
+    let CycleProgress::NeedIntent { request, .. } = engine.begin_cycle(input).unwrap() else {
+        panic!("the interpreter should receive the known procedure catalog");
+    };
+    let rendered_catalog = serde_json::to_string(&request.context["candidates"]).unwrap();
+    assert!(!rendered_catalog.to_ascii_lowercase().contains("strawberry"));
+    assert!(
+        engine
+            .graph()
+            .get_concept(concept.id)
+            .unwrap()
+            .unwrap()
+            .description
+            .unwrap()
+            .contains("Strawberry")
+    );
+}
+
+#[test]
+fn explicit_incorrectness_bypasses_the_interpreter_and_invokes_the_teacher() {
+    let mut engine = Engine::in_memory_with_admin("incorrectness-teacher-admin").unwrap();
+    let (_, procedure) = seed_text_count(&engine);
+    let mut prior = Episode::new("Spell strawberry");
+    prior.action = Some(format!("procedure:{}@{}", procedure.id, procedure.version));
+    prior.observed_result = Some(Value::Int(0));
+    prior.evaluation = Some(Evaluation {
+        tier: VerifiabilityTier::Deferred,
+        success: true,
+        details: "procedure ran but was semantically wrong".into(),
+        surprise: None,
+    });
+    engine.admin_insert_episode(&prior).unwrap();
+
+    let mut input = cycle_input("incorrect", true);
+    input.interpreter_allowed = true;
+    let CycleProgress::NeedTeacher { request, .. } = engine.begin_cycle(input).unwrap() else {
+        panic!("an explicit correctness claim should be reviewed by the Teacher");
+    };
+    assert!(
+        request
+            .specific_question
+            .as_deref()
+            .unwrap()
+            .contains("incorrect")
+    );
+    assert!(
+        request.context["recentEpisodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|episode| episode["situation"] == "Spell strawberry")
+    );
+}
+
+#[test]
+fn explicit_incorrectness_marks_the_latest_episode_as_the_correction_target() {
+    let mut engine = Engine::in_memory_with_admin("correction-target-admin").unwrap();
+    let mut older = Episode::new("What is the capital of South Dakota?");
+    older.created_at = 1_700_000_000;
+    older.observed_result = Some(Value::Text("Pierre".into()));
+    engine.admin_insert_episode(&older).unwrap();
+    let mut latest = Episode::new("Spell strawberry");
+    latest.created_at = 1_700_000_001;
+    latest.observed_result = Some(Value::Text("0".into()));
+    engine.admin_insert_episode(&latest).unwrap();
+
+    let CycleProgress::NeedTeacher { request, .. } = engine
+        .begin_cycle(cycle_input("wrong", true))
+        .expect("a correction should request a Teacher review")
+    else {
+        panic!("a correction must not route through ordinary procedure selection");
+    };
+    assert_eq!(
+        request.context["correctionTarget"]["situation"],
+        "Spell strawberry"
+    );
+}
+
+#[test]
+fn interpreter_hybrid_search_ranks_a_semantic_procedure_before_truncation() {
+    let mut engine = Engine::in_memory_with_admin("hybrid-routing-admin").unwrap();
+    let unrelated = Concept::new("AAA_COLOR", MutabilityClass::Definitional)
+        .with_description("Return a display color for a named theme");
+    engine.admin_insert_concept(&unrelated).unwrap();
+    let unrelated_procedure = Procedure::new(
+        "AAA_COLOR",
+        vec![Param::named("theme")],
+        Expr::Literal(Value::Text("blue".into())),
+    )
+    .with_concept(unrelated.id);
+    engine.admin_insert_procedure(&unrelated_procedure).unwrap();
+
+    let counter = Concept::new("TEXT_OCCURRENCE_COUNT", MutabilityClass::Definitional)
+        .with_description("Count how often a letter, character, or substring occurs in text");
+    engine.admin_insert_concept(&counter).unwrap();
+    let counter_procedure = Procedure::new(
+        "COUNT_EXACT_OCCURRENCES",
+        vec![Param::named("text"), Param::named("target")],
+        Expr::Intrinsic {
+            version: 1,
+            op: IntrinsicOp::TextCount,
+            args: vec![Expr::Var("text".into()), Expr::Var("target".into())],
+        },
+    )
+    .with_concept(counter.id);
+    engine.admin_insert_procedure(&counter_procedure).unwrap();
+
+    let mut input = cycle_input("How often does the letter r occur in Strawberry?", false);
+    input.interpreter_allowed = true;
+    input.budget.max_context_items = 1;
+    let CycleProgress::NeedIntent { request, .. } = engine.begin_cycle(input).unwrap() else {
+        panic!("the interpreter should receive the best matching procedure");
+    };
+
+    let candidates = request.context["candidates"].as_array().unwrap();
+    assert_eq!(candidates.len(), 1);
+    assert_eq!(candidates[0]["name"], json!(counter.name));
+    assert_eq!(
+        candidates[0]["procedure"]["name"],
+        json!(counter_procedure.name)
+    );
+    assert_eq!(request.context["retrieval"]["strategy"], "hybrid");
+}
+
+#[test]
+fn interpreter_context_exposes_typed_real_catalog_boundaries() {
+    let mut engine = Engine::in_memory_with_admin("typed-catalog-admin").unwrap();
+    seed_text_count(&engine);
+    let mut input = cycle_input("count r in Strawberry", false);
+    input.interpreter_allowed = true;
+
+    let CycleProgress::NeedIntent { request, .. } = engine.begin_cycle(input).unwrap() else {
+        panic!("the interpreter should receive the typed routing catalog");
+    };
+
+    let catalog = &request.context["catalog"];
+    let procedures = catalog["procedures"].as_array().unwrap();
+    assert_eq!(procedures.len(), 1);
+    assert_eq!(procedures[0]["kind"], "procedure");
+    assert_eq!(procedures[0]["directlySelectable"], true);
+    assert_eq!(procedures[0]["alias"], "candidate_0");
+    assert!(
+        procedures[0]["usesPrimitives"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("text_count"))
+    );
+
+    let primitives = catalog["primitives"].as_array().unwrap();
+    assert!(primitives.iter().any(|entry| {
+        entry["name"] == "text_count"
+            && entry["kind"] == "primitive"
+            && entry["directlySelectable"] == false
+    }));
+    let capabilities = catalog["capabilities"].as_array().unwrap();
+    assert!(capabilities.iter().any(|entry| {
+        entry["name"] == "file_read"
+            && entry["kind"] == "capability"
+            && entry["directlySelectable"] == false
+    }));
+}
+
+#[test]
+fn interpreter_schema_scopes_slots_to_each_candidate_and_selected_to_the_frame() {
+    let mut engine = Engine::in_memory_with_admin("candidate-schema-admin").unwrap();
+    seed_double(&engine);
+    seed_text_count(&engine);
+    let mut input = cycle_input("count r in Strawberry", false);
+    input.interpreter_allowed = true;
+
+    let CycleProgress::NeedIntent { request, .. } = engine.begin_cycle(input).unwrap() else {
+        panic!("the interpreter should receive candidate-specific output constraints");
+    };
+    let variants = request.desired_output["properties"]["candidates"]["items"]["oneOf"]
+        .as_array()
+        .expect("candidate output should be a tagged union");
+    assert_eq!(variants.len(), 2);
+    for variant in variants {
+        let aliases = variant["properties"]["name"]["enum"].as_array().unwrap();
+        assert_eq!(aliases.len(), 1);
+        let slot_variants = variant["properties"]["slots"]["items"]["oneOf"]
+            .as_array()
+            .unwrap();
+        let names = slot_variants
+            .iter()
+            .map(|slot| slot["properties"]["name"]["enum"][0].as_str().unwrap())
+            .collect::<Vec<_>>();
+        for slot in slot_variants {
+            let name = slot["properties"]["name"]["enum"][0].as_str().unwrap();
+            let first_range = &slot["properties"]["sourceTokens"]["items"]["enum"][0];
+            if name == "text" {
+                assert_eq!(first_range, &json!({ "startToken": 6, "endToken": 7 }));
+            } else if name == "target" {
+                assert_eq!(first_range, &json!({ "startToken": 2, "endToken": 3 }));
+            }
+        }
+        let candidate = request.context["candidates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|candidate| candidate["alias"] == aliases[0])
+            .unwrap();
+        let expected = candidate["procedure"]["slots"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|slot| slot["name"].as_str().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(names, expected);
+    }
+    assert_eq!(
+        request.desired_output["properties"]["selected"]["maximum"],
+        0
+    );
+}
+
+#[test]
+fn interpreter_schema_allows_bare_and_quoted_text_slot_spans() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    seed_double(&engine);
+    let mut input = cycle_input("How many \"r\"s are there in Strawberry?", false);
+    input.interpreter_allowed = true;
+
+    let CycleProgress::NeedIntent { request, .. } = engine.begin_cycle(input).unwrap() else {
+        panic!("an enabled interpreter should receive executable candidates");
+    };
+    let literals = request.context["literalCandidates"]
+        .as_array()
+        .expect("literal candidates should be present");
+    assert!(
+        literals
+            .iter()
+            .any(|candidate| candidate["text"] == json!("\"r\""))
+    );
+    assert!(
+        literals
+            .iter()
+            .any(|candidate| candidate["text"] == json!("Strawberry"))
+    );
+
+    let permitted_ranges = &request.desired_output["properties"]["candidates"]["items"]["oneOf"][0]
+        ["properties"]["slots"]["items"]["oneOf"][0]["properties"]["sourceTokens"]["items"]["enum"];
+    assert!(
+        permitted_ranges
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|range| range == &json!({ "startToken": 4, "endToken": 7 }))
+    );
+    assert!(
+        permitted_ranges
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|range| range == &json!({ "startToken": 15, "endToken": 16 }))
+    );
+    assert_eq!(
+        request.desired_output["properties"]["candidates"]["items"]["oneOf"][0]["properties"]["slots"]
+            ["items"]["oneOf"][0]["properties"]["sourceTokens"]["items"]["enum"][0],
+        json!({ "startToken": 15, "endToken": 16 })
+    );
+    assert_eq!(
+        request.desired_output["properties"]["candidates"]["maxItems"],
+        1
+    );
+    assert_eq!(
+        request.desired_output["properties"]["candidates"]["items"]["oneOf"][0]["properties"]["slots"]
+            ["maxItems"],
+        1
+    );
+}
+
+#[test]
+fn reconsideration_context_reuses_the_last_successful_procedure() {
+    let mut engine = Engine::in_memory_with_admin("reconsideration-admin").unwrap();
+    let (concept, procedure) = seed_text_count(&engine);
+    let mut prior = Episode::new("How many \"r\"s are in Strawberry?");
+    prior.action = Some(format!("procedure:{}@{}", procedure.id, procedure.version));
+    prior.observed_result = Some(Value::Int(3));
+    prior.evaluation = Some(Evaluation {
+        tier: VerifiabilityTier::Hard,
+        success: true,
+        details: "procedure succeeded".into(),
+        surprise: None,
+    });
+    prior.cost.rung_reached = EscalationRung::Run;
+    prior.execution_trace = Some(json!({
+        "steps": [{
+            "procedure_called": procedure.id.to_string(),
+            "input": ["Strawberry", "r"]
+        }]
+    }));
+    engine.admin_insert_episode(&prior).unwrap();
+
+    let mut input = cycle_input("Are you sure about that last one?", false);
+    input.interpreter_allowed = true;
+    let CycleProgress::NeedIntent { request, .. } = engine.begin_cycle(input).unwrap() else {
+        panic!("a conversational correction should request interpretation");
+    };
+
+    assert_eq!(
+        request.context["reconsideration"]["candidateProcedure"],
+        json!(procedure.id)
+    );
+    assert_eq!(
+        request.context["reconsideration"]["previousInputs"],
+        json!(["Strawberry", "r"])
+    );
+    assert_eq!(request.context["priorTurns"][0]["answer"], json!(3));
+    assert_eq!(
+        request.context["priorTurns"][0]["actionKind"],
+        json!("procedure")
+    );
+    let candidates = request.context["candidates"].as_array().unwrap();
+    assert_eq!(candidates.len(), 1);
+    assert_eq!(candidates[0]["name"], json!(concept.name));
+    assert_eq!(candidates[0]["procedure"]["name"], json!(procedure.name));
+}
+
+#[test]
+fn interpreter_abstention_preserves_the_existing_teacher_fallback() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    seed_double(&engine);
+    let mut input = cycle_input("make this bigger somehow", true);
+    input.interpreter_allowed = true;
+
+    let CycleProgress::NeedIntent { cycle_id, .. } = engine.begin_cycle(input).unwrap() else {
+        panic!("interpreter should be attempted before the teacher");
+    };
+    let progress = engine
+        .resume_intent(
+            cycle_id,
+            IntentProposalWire {
+                content: InterpretationProposal {
+                    candidates: Vec::new(),
+                    selected: None,
+                    disposition: IntentDisposition::Abstain,
+                },
+                source: "ollama:qwen2.5:0.5b".into(),
+                status: "unverified".into(),
+                provenance: json!({ "provider": "ollama", "model": "qwen2.5:0.5b" }),
+                raw_content: None,
+            },
+        )
+        .unwrap();
+    assert!(matches!(progress, CycleProgress::NeedTeacher { .. }));
+}
+
+#[test]
+fn rejected_interpreter_proposals_are_persisted_for_diagnostics() {
+    let mut engine = Engine::in_memory_with_admin("interpreter-diagnostic-admin").unwrap();
+    seed_double(&engine);
+    let mut input = cycle_input("please make 7 twice as large", false);
+    input.interpreter_allowed = true;
+    let CycleProgress::NeedIntent { cycle_id, .. } = engine.begin_cycle(input).unwrap() else {
+        panic!("the interpreter should be requested before a diagnostic skip");
+    };
+
+    let rejected = json!({
+        "content": {
+            "disposition": "execute",
+            "selected": 0,
+            "candidates": [{ "name": "candidate_0", "ambiguities": ["uncertain"] }]
+        },
+        "rawContent": { "disposition": "execute", "selected": 0 }
+    });
+    let CycleProgress::Completed(outcome) = engine
+        .skip_intent_with_diagnostic(
+            cycle_id,
+            "invalid language structure",
+            Some(rejected.clone()),
+        )
+        .unwrap()
+    else {
+        panic!("a teacher-off diagnostic skip should complete the episode");
+    };
+    assert_eq!(
+        outcome.episode.teacher_interaction.as_ref().unwrap()["languageInterpreter"]["rejectedProposal"],
+        rejected
+    );
 }
 
 #[test]
@@ -54,7 +658,7 @@ fn seed_double(engine: &Engine) -> (Concept, Procedure) {
     engine.admin_insert_concept(&concept).unwrap();
     let procedure = Procedure::new(
         "DOUBLE",
-        vec![Param::named("x")],
+        vec![Param::typed("x", ParamType::Number)],
         Expr::BinOp {
             op: BinOp::Mul,
             left: Box::new(Expr::Var("x".into())),
@@ -64,6 +668,67 @@ fn seed_double(engine: &Engine) -> (Concept, Procedure) {
     .with_concept(concept.id);
     engine.admin_insert_procedure(&procedure).unwrap();
     (concept, procedure)
+}
+
+fn seed_text_count(engine: &Engine) -> (Concept, Procedure) {
+    let concept = Concept::new("TEXT", MutabilityClass::Definitional);
+    engine.admin_insert_concept(&concept).unwrap();
+    let procedure = Procedure::new(
+        "COUNT_EXACT_OCCURRENCES",
+        vec![
+            Param::typed("text", ParamType::Text),
+            Param::typed("target", ParamType::Text),
+        ],
+        Expr::Intrinsic {
+            version: 1,
+            op: IntrinsicOp::TextCount,
+            args: vec![Expr::Var("text".into()), Expr::Var("target".into())],
+        },
+    )
+    .with_concept(concept.id);
+    engine.admin_insert_procedure(&procedure).unwrap();
+    (concept, procedure)
+}
+
+#[test]
+fn recall_context_keeps_an_older_pumpkin_size_alongside_recent_weight() {
+    let mut engine = Engine::in_memory_with_admin("recall-age-admin").unwrap();
+    let now = 1_800_000_000_i64;
+    let mut old_size = Episode::new("The pumpkin's size was 12 inches");
+    old_size.created_at = now - 35 * 24 * 60 * 60;
+    old_size.observed_result = Some(Value::Text("12 inches".into()));
+    old_size.evaluation = Some(Evaluation {
+        tier: VerifiabilityTier::Hard,
+        success: true,
+        details: "size recorded".into(),
+        surprise: None,
+    });
+    let mut recent_weight = Episode::new("The same pumpkin weighed 8 pounds");
+    recent_weight.created_at = now - 2 * 24 * 60 * 60;
+    recent_weight.observed_result = Some(Value::Text("8 pounds".into()));
+    recent_weight.evaluation = Some(Evaluation {
+        tier: VerifiabilityTier::Hard,
+        success: true,
+        details: "weight recorded".into(),
+        surprise: None,
+    });
+    engine.admin_insert_episode(&old_size).unwrap();
+    engine.admin_insert_episode(&recent_weight).unwrap();
+
+    let mut input = cycle_input("What was the pumpkin's previous known size?", false);
+    input.recall_mode = spoon_engine::RecallMode::Global;
+    let CycleProgress::Completed(outcome) = engine.begin_cycle(input).unwrap() else {
+        panic!("a bounded recall query should complete without a teacher");
+    };
+    let recalled = &outcome.episode.context.recent_episodes;
+    assert!(recalled.iter().any(|episode| {
+        episode.situation.contains("size")
+            && episode.observed_result == Some(Value::Text("12 inches".into()))
+    }));
+    assert!(recalled.iter().any(|episode| {
+        episode.situation.contains("weighed")
+            && episode.observed_result == Some(Value::Text("8 pounds".into()))
+    }));
 }
 
 #[test]
@@ -137,7 +802,7 @@ fn reusable_double_lesson(value: i64) -> serde_json::Value {
                 "key": "double-procedure",
                 "name": "DOUBLE",
                 "concept": { "kind": "new_concept", "key": "double" },
-                "parameters": [{ "name": "x", "description": "numeric input" }],
+                "parameters": [{ "name": "x", "description": "numeric input", "valueType": "number" }],
                 "body": {
                     "instructions": [
                         { "op": "load_parameter", "name": "x" },
@@ -193,8 +858,8 @@ fn reusable_count_occurrences_lesson(
                 "name": "COUNT OCCURRENCES",
                 "concept": { "kind": "new_concept", "key": "count-occurrences" },
                 "parameters": [
-                    { "name": "items", "description": "values to inspect" },
-                    { "name": "needle", "description": "value to count" }
+                    { "name": "items", "description": "values to inspect", "valueType": "list" },
+                    { "name": "needle", "description": "value to count", "valueType": "any" }
                 ],
                 "body": {
                     "kind": "intrinsic",
@@ -238,8 +903,8 @@ fn reusable_count_letter_lesson(text: &str, letter: &str) -> serde_json::Value {
                 "name": "COUNT LETTER",
                 "concept": { "kind": "new_concept", "key": "count-letter" },
                 "parameters": [
-                    { "name": "letter", "description": "letter to count" },
-                    { "name": "text", "description": "text to inspect" }
+                    { "name": "letter", "description": "letter to count", "valueType": "text" },
+                    { "name": "text", "description": "text to inspect", "valueType": "text" }
                 ],
                 "body": {
                     "kind": "intrinsic", "version": 1, "op": "length",
@@ -293,8 +958,8 @@ fn reusable_json_path_lesson() -> serde_json::Value {
                 "name": "JSON PATH",
                 "concept": { "kind": "new_concept", "key": "json-path" },
                 "parameters": [
-                    { "name": "document", "description": "JSON text" },
-                    { "name": "path", "description": "path to read" }
+                    { "name": "document", "description": "JSON text", "valueType": "text" },
+                    { "name": "path", "description": "path to read", "valueType": "text" }
                 ],
                 "body": {
                     "kind": "intrinsic", "version": 1, "op": "path_get",
@@ -363,7 +1028,7 @@ fn reusable_dependency_lesson(alias: &str, value: i64) -> serde_json::Value {
                 "key": "quadruple-procedure",
                 "name": "QUADRUPLE",
                 "concept": { "kind": "new_concept", "key": "quadruple" },
-                "parameters": [{ "name": "x", "description": "numeric input" }],
+                "parameters": [{ "name": "x", "description": "numeric input", "valueType": "number" }],
                 "body": call(call(json!({ "kind": "parameter", "name": "x" }))),
                 "contract": { "requires": [], "promises": [], "failsWhen": [] }
             }],
@@ -414,7 +1079,7 @@ fn reusable_lesson_admits_general_facts_and_composable_sibling_procedures() {
                     "key": "increment-procedure",
                     "name": "INCREMENT",
                     "concept": { "kind": "new_concept", "key": "increment" },
-                    "parameters": [{ "name": "x", "description": "numeric input" }],
+                    "parameters": [{ "name": "x", "description": "numeric input", "valueType": "number" }],
                     "body": {
                         "kind": "binary", "op": "add",
                         "left": { "kind": "parameter", "name": "x" },
@@ -426,7 +1091,7 @@ fn reusable_lesson_admits_general_facts_and_composable_sibling_procedures() {
                     "key": "double-after-increment-procedure",
                     "name": "DOUBLE AFTER INCREMENT",
                     "concept": { "kind": "new_concept", "key": "double-after-increment" },
-                    "parameters": [{ "name": "x", "description": "numeric input" }],
+                    "parameters": [{ "name": "x", "description": "numeric input", "valueType": "number" }],
                     "body": {
                         "kind": "binary", "op": "multiply",
                         "left": {
@@ -681,6 +1346,7 @@ fn pure_expr_v2_authors_new_v1_intrinsics_through_the_schema_and_compiler() {
             { "kind": "parameter", "name": "needle" }
         ]
     });
+    lesson["lesson"]["procedures"][0]["parameters"][0]["valueType"] = json!("text");
     lesson["answer"] = json!(2);
     let CycleProgress::Completed(outcome) = engine
         .resume_cycle(cycle_id, proposal("find a text position", lesson))
@@ -855,7 +1521,7 @@ fn pure_expr_v2_numeric_intrinsic_is_teacher_authorable_and_reusable() {
     let cycle_id = begin_teacher_cycle(&mut engine, "absolute value");
     let mut lesson = reusable_count_occurrences_lesson(json!([-9]), json!(-9));
     lesson["lesson"]["procedures"][0]["parameters"] = json!([
-        { "name": "x", "description": "numeric input" }
+        { "name": "x", "description": "numeric input", "valueType": "number" }
     ]);
     lesson["lesson"]["procedures"][0]["body"] = json!({
         "kind": "intrinsic", "version": 1, "op": "numeric_abs",
@@ -912,14 +1578,15 @@ fn empty_graph_teacher_lesson_bootstraps_generic_double_then_runs_locally() {
     else {
         panic!("empty graph must ask");
     };
-    assert!(request.desired_output["properties"]["lesson"].is_object());
-    assert_eq!(
-        request.desired_output["properties"]["procedure"]["type"],
-        "null"
-    );
+    assert!(request.desired_output["properties"]["source"].is_object());
+    assert!(request.desired_output["properties"].get("lesson").is_none());
     assert_eq!(
         request.context["authoringProtocol"]["primitiveSet"],
         "pure_expr_v2"
+    );
+    assert_eq!(
+        request.context["authoringProtocol"]["surfaceLanguage"],
+        "spoonlang"
     );
 
     let learned = engine
@@ -953,6 +1620,71 @@ fn empty_graph_teacher_lesson_bootstraps_generic_double_then_runs_locally() {
     assert_eq!(local.answer, Some(Value::Int(18)));
     assert_eq!(local.episode.cost.rung_reached as u8, 2);
     assert_eq!(engine.graph().list_procedures().unwrap().len(), 1);
+}
+
+#[test]
+fn empty_graph_spoonlang_percent_lesson_compiles_and_runs() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    let start = engine
+        .begin_cycle(cycle_input("what is fifty percent of one hundred?", true))
+        .unwrap();
+    let CycleProgress::NeedTeacher { cycle_id, .. } = start else {
+        panic!("empty graph must ask");
+    };
+
+    let learned = engine
+        .resume_cycle(
+            cycle_id,
+            proposal(
+                "what is fifty percent of one hundred?",
+                json!({
+                    "source": "kind reusable_lesson\nconcept percent: defeasible_general\n  \"A proportion of a quantity, expressed as parts per hundred\"\nproc percent_of(percent: number, of: number)\n  name \"PERCENT OF\"\n  (percent * of) / 100\nexample percent_of(50, 100) => 50\n",
+                    "interpretations": []
+                }),
+            ),
+        )
+        .unwrap();
+    let CycleProgress::Completed(learned) = learned else {
+        panic!("valid spoonlang lesson should execute and complete: {learned:?}");
+    };
+    assert_eq!(learned.answer, Some(Value::Int(50)));
+    assert_eq!(learned.disposition, CycleDisposition::Provisional);
+    let procedures = engine.graph().list_procedures().unwrap();
+    assert_eq!(procedures.len(), 1);
+    assert_eq!(procedures[0].name, "PERCENT OF");
+}
+
+#[test]
+fn invalid_spoonlang_source_retries_when_teacher_budget_remains() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    let mut input = cycle_input("how many eyes do humans have?", true);
+    input.budget.max_teacher_turns = 2;
+    let start = engine.begin_cycle(input).unwrap();
+    let CycleProgress::NeedTeacher { cycle_id, .. } = start else {
+        panic!("empty graph must ask");
+    };
+
+    let retry = engine
+        .resume_cycle(
+            cycle_id,
+            proposal(
+                "how many eyes do humans have?",
+                json!({
+                    "source": "{kind:'intrinsic',op:'percent_of'}",
+                    "interpretations": [{ "concept": "percent_of", "weight": 0.9, "extra": true }],
+                    "garbage": true
+                }),
+            ),
+        )
+        .unwrap();
+    let CycleProgress::NeedTeacher { request, .. } = retry else {
+        panic!("invalid spoonlang with remaining budget should retry, got {retry:?}");
+    };
+    let question = request.specific_question.unwrap_or_default();
+    assert!(
+        question.contains("not valid spoonlang"),
+        "{question}"
+    );
 }
 
 #[test]
@@ -1148,6 +1880,50 @@ fn run_matches_a_linked_procedure_without_domain_special_cases() {
 }
 
 #[test]
+fn interpreter_validates_a_locally_resolvable_procedure_when_enabled() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    seed_double(&engine);
+    let mut input = cycle_input("what is double 7?", false);
+    input.interpreter_allowed = true;
+
+    let CycleProgress::NeedIntent { request, .. } = engine.begin_cycle(input).unwrap() else {
+        panic!("an enabled interpreter should validate even a local procedure match");
+    };
+    assert_eq!(request.situation, "what is double 7?");
+    assert_eq!(
+        request.context["candidates"][0]["procedure"]["name"],
+        "DOUBLE"
+    );
+}
+
+#[test]
+fn operator_delimited_literals_bind_without_required_spaces() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    let concept = Concept::new("MULTIPLY", MutabilityClass::Definitional);
+    engine.admin_insert_concept(&concept).unwrap();
+    let procedure = Procedure::new(
+        "MULTIPLY",
+        vec![Param::named("left"), Param::named("right")],
+        Expr::BinOp {
+            op: BinOp::Mul,
+            left: Box::new(Expr::Var("left".into())),
+            right: Box::new(Expr::Var("right".into())),
+        },
+    )
+    .with_concept(concept.id);
+    engine.admin_insert_procedure(&procedure).unwrap();
+
+    let CycleProgress::Completed(outcome) = engine
+        .begin_cycle(cycle_input("What is MULTIPLY 6*2?", false))
+        .unwrap()
+    else {
+        panic!("operator-delimited numeric literals should execute locally");
+    };
+    assert_eq!(outcome.disposition, CycleDisposition::Verified);
+    assert_eq!(outcome.answer, Some(Value::Int(12)));
+}
+
+#[test]
 fn local_interpretation_matches_a_safe_inflection_of_a_learned_concept() {
     let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
     let concept = Concept::new("Doubling", MutabilityClass::Procedural);
@@ -1172,6 +1948,36 @@ fn local_interpretation_matches_a_safe_inflection_of_a_learned_concept() {
     };
     assert_eq!(outcome.answer, Some(Value::Int(18)));
     assert!(outcome.episode.teacher_interaction.is_none());
+}
+
+#[test]
+fn unrelated_local_procedure_cannot_answer_an_operational_request() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    let concept = Concept::new("SPELL", MutabilityClass::Procedural);
+    engine.admin_insert_concept(&concept).unwrap();
+    let procedure = Procedure::new(
+        "Spell text with hyphen-separated uppercase characters",
+        vec![Param::named("text")],
+        Expr::Intrinsic {
+            op: IntrinsicOp::TextUppercase,
+            args: vec![Expr::Var("text".into())],
+            version: 1,
+        },
+    )
+    .with_concept(concept.id);
+    engine.admin_insert_procedure(&procedure).unwrap();
+
+    let CycleProgress::Completed(outcome) = engine
+        .begin_cycle(cycle_input(
+            "can you add full access to the project's spoon config?",
+            false,
+        ))
+        .unwrap()
+    else {
+        panic!("teacher-off operational request should complete as an abstention");
+    };
+    assert_eq!(outcome.disposition, CycleDisposition::Abstained);
+    assert_eq!(outcome.answer, None);
 }
 
 #[test]
@@ -2069,5 +2875,151 @@ fn teacher_procedure_must_match_its_claimed_answer() {
             .evaluation
             .as_ref()
             .is_some_and(|evaluation| !evaluation.success)
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Candidate Laboratory (P0F.4) - procedure composition
+// ---------------------------------------------------------------------------
+
+#[test]
+fn composition_chains_two_known_procedures_teacher_off() {
+    let mut engine = Engine::in_memory_with_admin("compose-admin").unwrap();
+
+    // Seed GLORP(x) = x + 5
+    let glorp_concept = Concept::new("GLORP", MutabilityClass::Procedural)
+        .with_description("Add five to a numeric input");
+    engine.admin_insert_concept(&glorp_concept).unwrap();
+    let glorp = Procedure::new(
+        "GLORP",
+        vec![Param::typed("x", ParamType::Number)],
+        Expr::BinOp {
+            op: BinOp::Add,
+            left: Box::new(Expr::Var("x".into())),
+            right: Box::new(Expr::Literal(Value::Int(5))),
+        },
+    )
+    .with_concept(glorp_concept.id);
+    engine.admin_insert_procedure(&glorp).unwrap();
+
+    // Seed SNIP(x) = x / 2
+    let snip_concept = Concept::new("SNIP", MutabilityClass::Procedural)
+        .with_description("Divide a numeric input by two");
+    engine.admin_insert_concept(&snip_concept).unwrap();
+    let snip = Procedure::new(
+        "SNIP",
+        vec![Param::typed("x", ParamType::Number)],
+        Expr::BinOp {
+            op: BinOp::Div,
+            left: Box::new(Expr::Var("x".into())),
+            right: Box::new(Expr::Literal(Value::Int(2))),
+        },
+    )
+    .with_concept(snip_concept.id);
+    engine.admin_insert_procedure(&snip).unwrap();
+
+    // Teacher OFF: "Glorp 7 and then snip it" should compose GLORP then SNIP
+    // GLORP(7) = 12, SNIP(12) = 6
+    let progress = engine
+        .begin_cycle(cycle_input("Glorp 7 and then snip it", false))
+        .unwrap();
+
+    let CycleProgress::Completed(outcome) = progress else {
+        panic!("composition should complete without teacher or interpreter");
+    };
+
+    assert_eq!(outcome.disposition, CycleDisposition::Provisional);
+    assert_eq!(outcome.answer, Some(Value::Int(6)));
+    assert_eq!(
+        outcome.episode.cost.rung_reached,
+        EscalationRung::Compose,
+    );
+    assert!(
+        outcome
+            .episode
+            .action
+            .as_deref()
+            .is_some_and(|a| a.starts_with("compose:")),
+    );
+
+    // The composed procedure should now be persisted in the graph
+    let all_procedures = engine.graph().list_procedures().unwrap();
+    let composed = all_procedures
+        .iter()
+        .find(|p| p.name.contains("then"))
+        .expect("composed procedure should be persisted");
+    assert_eq!(composed.lifecycle, spoon_core::Lifecycle::Provisional);
+}
+
+#[test]
+fn composition_generalizes_to_new_inputs() {
+    let mut engine = Engine::in_memory_with_admin("compose-gen-admin").unwrap();
+
+    // Seed GLORP(x) = x + 5
+    let glorp_concept = Concept::new("GLORP", MutabilityClass::Procedural)
+        .with_description("Add five to a numeric input");
+    engine.admin_insert_concept(&glorp_concept).unwrap();
+    let glorp = Procedure::new(
+        "GLORP",
+        vec![Param::typed("x", ParamType::Number)],
+        Expr::BinOp {
+            op: BinOp::Add,
+            left: Box::new(Expr::Var("x".into())),
+            right: Box::new(Expr::Literal(Value::Int(5))),
+        },
+    )
+    .with_concept(glorp_concept.id);
+    engine.admin_insert_procedure(&glorp).unwrap();
+
+    // Seed SNIP(x) = x / 2
+    let snip_concept = Concept::new("SNIP", MutabilityClass::Procedural)
+        .with_description("Divide a numeric input by two");
+    engine.admin_insert_concept(&snip_concept).unwrap();
+    let snip = Procedure::new(
+        "SNIP",
+        vec![Param::typed("x", ParamType::Number)],
+        Expr::BinOp {
+            op: BinOp::Div,
+            left: Box::new(Expr::Var("x".into())),
+            right: Box::new(Expr::Literal(Value::Int(2))),
+        },
+    )
+    .with_concept(snip_concept.id);
+    engine.admin_insert_procedure(&snip).unwrap();
+
+    // "Glorp 25 and then snip it" - straightforward
+    // GLORP(25) = 30, SNIP(30) = 15
+    let progress = engine
+        .begin_cycle(cycle_input("Glorp 25 and then snip it", false))
+        .unwrap();
+
+    let CycleProgress::Completed(outcome) = progress else {
+        panic!("composition with new input should complete");
+    };
+
+    assert_eq!(outcome.answer, Some(Value::Int(15)));
+}
+
+#[test]
+fn composition_does_not_fire_with_single_procedure() {
+    use spoon_engine::compose::attempt_composition;
+
+    // Verify at the compose module level that < 2 procedure mentions = None
+    let glorp = Procedure::new(
+        "GLORP",
+        vec![Param::typed("x", ParamType::Number)],
+        Expr::BinOp {
+            op: BinOp::Add,
+            left: Box::new(Expr::Var("x".into())),
+            right: Box::new(Expr::Literal(Value::Int(5))),
+        },
+    );
+    let procedures = vec![glorp];
+    let literals = vec![Value::Int(7)];
+
+    let result = attempt_composition("Glorp 7 and then snip it", &procedures, &literals);
+    assert!(
+        result.is_none(),
+        "composition should not fire when only one procedure is known",
     );
 }

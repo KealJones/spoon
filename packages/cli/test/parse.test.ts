@@ -49,6 +49,30 @@ test("parses a natural-language cycle request", () => {
   });
 });
 
+test("parses an explicit procedure teaching request", () => {
+  assert.deepEqual(
+    parseCommand([
+      "teach",
+      "--explain",
+      "--shut-the-fuck-up-and-do-it-bitch",
+      "--permission-mode",
+      "workspace",
+      "count",
+      "the",
+      "letters",
+      "in",
+      "text",
+    ]),
+    {
+      kind: "teach.run",
+      instruction: "count the letters in text",
+      explain: true,
+      forceHeuristic: true,
+      permissionMode: "workspace",
+    },
+  );
+});
+
 test("parses quiet natural-language cycle requests", () => {
   assert.deepEqual(
     parseCommand(["ask", "--quiet", "what", "is", "double", "7?"]),
@@ -165,6 +189,22 @@ test("parses a native primitive observation", () => {
   });
 });
 
+test("parses host-scoped web fetch provisioning", () => {
+  assert.deepEqual(
+    parseCommand(["capability", "provision-web-fetch", "www.google.com"]),
+    {
+      kind: "capability.provision-web-fetch",
+      host: "www.google.com",
+    },
+  );
+});
+
+test("parses capability inventory", () => {
+  assert.deepEqual(parseCommand(["capability", "list"]), {
+    kind: "capability.list",
+  });
+});
+
 test("parses config diagnostics and session-aware ask options", () => {
   assert.deepEqual(parseCommand(["config", "path"]), { kind: "config.path" });
   assert.deepEqual(parseCommand(["config", "show", "--sources"]), {
@@ -200,4 +240,17 @@ test("parses config diagnostics and session-aware ask options", () => {
     kind: "chat.run",
     isolated: true,
   });
+});
+
+test("parses God Mode as an execution permission mode", () => {
+  assert.deepEqual(
+    parseCommand(["ask", "--permission-mode", "god-mode", "hello"]),
+    {
+      kind: "cycle.run",
+      situation: "hello",
+      quiet: false,
+      explain: false,
+      permissionMode: "god-mode",
+    },
+  );
 });

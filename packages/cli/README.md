@@ -1,6 +1,9 @@
 # Spoon CLI (`@spoon/cli`)
 
-The CLI is the simplest way to talk to a local Spoon server.
+The CLI is the simplest way to talk to a local Spoon server over stdio.
+
+For the browser chat UI, use `pnpm serve` from the repo root instead
+(<http://127.0.0.1:4318>).
 
 ## Run it from the workspace
 
@@ -29,7 +32,31 @@ pnpm spoon ask --explain "what is double 7?"
 
 # Explicitly disable the Teacher for a retention check
 pnpm spoon ask --teacher off "what is double 7?"
+
+# Explicitly teach and install a reusable procedure
+pnpm spoon teach "given two numbers, add them"
+
+# Inspect the lesson, validation, and episode audit trail
+pnpm spoon teach --explain "extract arr[0].name from a supplied object"
+
+# Show every host boundary and imported capability Spoon can see
+pnpm spoon capability list
+
+# Register the configured web-fetch host for capability-backed teaching
+pnpm spoon capability provision-web-fetch www.google.com
 ```
+
+`teach` is an explicit authoring boundary. It uses the configured Teacher to
+draft a lesson, but the Spoon Engine remains responsible for compiling the
+real `pure_expr_v2` IR, checking typed parameters and contracts, and admitting
+the resulting procedure. A normal `ask` never becomes a teaching request just
+because the Teacher happened to return a lesson.
+
+`capability list` is discovery, not permission. It exposes imported
+capabilities and whether each native host boundary has an adapter. Provisioning
+creates a concrete, locally validated capability reference without granting
+the network permission; an effectful `teach`/`ask` run still needs the current
+permission mode to allow that particular call.
 
 ## Developmental benchmarks
 
@@ -85,6 +112,27 @@ pnpm spoon config show --sources
 pnpm spoon config validate
 ```
 
+To enable the local language interpreter without environment variables, add
+this to one of those JSON config files (normally `.spoon/config.local.json`):
+
+```json
+{
+  "version": 1,
+  "language": {
+    "interpreter": {
+      "provider": "ollama",
+      "model": "qwen2.5:1.5b"
+    }
+  }
+}
+```
+
+`cursor` runs the same `agent -p --mode ask --output-format json` CLI as the
+Cursor teacher. `baseUrl` is for Ollama only and defaults to
+`http://localhost:11434`. Environment variables (`SPOON_INTERPRETER`,
+`SPOON_INTERPRETER_MODEL`, `SPOON_CURSOR_COMMAND`, and `SPOON_OLLAMA_URL`)
+still override the file for one-off runs.
+
 The local control plane also accepts common settings requests through `ask`,
 without asking a Teacher to authorize them:
 
@@ -97,8 +145,8 @@ pnpm spoon ask --quiet "use database /tmp/spoon-test.sqlite"
 
 These write only a redacted receipt to `~/.spoon/admin-receipts.jsonl` and keep
 project-controlled permission modes from elevating themselves. `ask`,
-`workspace`, and `full-access` are also available as explicit
-`--permission-mode` values; full access still preserves mandatory denials,
+`workspace`, `full-access`, and `god-mode` are also available as explicit
+`--permission-mode` values; God Mode is an alias for full access and still preserves mandatory denials,
 declared effects, bounds, contracts, and provenance.
 
 Episodes are globally recalled by default. Use a named global session for
@@ -114,7 +162,12 @@ pnpm spoon chat --isolated --session private-test
 ## Teacher selection
 
 The default is Claude via its local CLI. Set `SPOON_TEACHER` to `claude`,
-`codex`, `openai`, `ollama`, or `human`; set `SPOON_TEACHER_MODEL` when required.
+`codex`, `cursor`, `openai`, `ollama`, or `human`; set `SPOON_TEACHER_MODEL`
+when required. `cursor` runs `agent -p --mode ask --output-format json`;
+override the binary with `SPOON_CURSOR_COMMAND` if needed.
+`ollama` uses the same local generate API as the language interpreter, inherits
+`language.interpreter.model` and `SPOON_OLLAMA_URL` when `teacher.model` is
+unset, and otherwise defaults to `qwen2.5:1.5b`.
 The OpenAI adapter reads `OPENAI_API_KEY` from the process environment. Keep
 credentials outside the database and do not commit `.env` files.
 

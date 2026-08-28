@@ -1,4 +1,7 @@
 use std::collections::BTreeMap;
+use std::io::{Read, Write};
+use std::net::TcpListener;
+use std::thread;
 
 use serde_json::{Value, json};
 use spoon_core::{
@@ -35,6 +38,7 @@ fn call(server: &mut RpcServer, id: u64, method: &str, mut params: Value) -> Val
             | "procedure.delete"
             | "capability.grant"
             | "capability.revoke"
+            | "capability.provisionWebFetch"
             | "observation.recordAuthenticated"
             | "adaptation.applyOffline"
             | "contradiction.record"
@@ -211,6 +215,110 @@ fn revalidate_and_grant(
         json!({"contentId": content_id, "permission": permission}),
     );
     (content_id, procedure_id, permission)
+}
+
+#[test]
+fn capability_invoke_reaches_bounded_web_fetch_adapter() {
+    let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    let server_thread = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut request = [0_u8; 1024];
+        let _ = stream.read(&mut request).unwrap();
+        stream
+            .write_all(
+                b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 12\r\n\r\nhello spoon!",
+            )
+            .unwrap();
+    });
+
+    let adapters = CapabilityHostAdapters::with_web_fetch(
+        vec![address.clone()],
+        ResourceBounds {
+            max_bytes: 4096,
+            max_steps: 8,
+            max_millis: 2_000,
+        },
+    )
+    .unwrap();
+    let mut server = test_server().with_capability_host_adapters(adapters);
+    let bundle = discover_interface(&spoon_engine::InterfaceDescription {
+        source: "web-fetch-test".into(),
+        fingerprint: "web-fetch-test-v1".into(),
+        operations: vec![spoon_engine::DiscoveredOperation {
+            name: "web.fetch".into(),
+            input_schema: json!({"type": "object"}),
+            output_schema: json!({"type": "object"}),
+            host: address.clone(),
+            method: "GET".into(),
+            response_fixture: json!({"status": 200}),
+        }],
+    })
+    .unwrap();
+    let (content_id, procedure_id, _) = revalidate_and_grant(&mut server, &bundle);
+    let denied = raw_call(
+        &mut server,
+        939,
+        "capability.invoke",
+        json!({
+            "contentId": content_id,
+            "procedureId": procedure_id,
+            "input": {"url": "http://example.invalid/escape"}
+        }),
+    );
+    assert_eq!(
+        denied["error"]["data"]["kind"],
+        "capability_invocation_failed"
+    );
+    let fetched = call(
+        &mut server,
+        940,
+        "capability.invoke",
+        json!({
+            "contentId": content_id,
+            "procedureId": procedure_id,
+            "input": {"url": format!("http://{address}/health")}
+        }),
+    );
+    assert_eq!(fetched["output"]["status"], 200);
+    assert_eq!(fetched["output"]["body"], "hello spoon!");
+    server_thread.join().unwrap();
+}
+
+#[test]
+fn provisioning_web_fetch_creates_a_teacher_authorable_capability_without_a_grant() {
+    let adapters = CapabilityHostAdapters::with_web_fetch(
+        vec!["www.google.com".into()],
+        ResourceBounds {
+            max_bytes: 4096,
+            max_steps: 8,
+            max_millis: 2_000,
+        },
+    )
+    .unwrap();
+    let mut server = test_server().with_capability_host_adapters(adapters);
+    let provisioned = call(
+        &mut server,
+        941,
+        "capability.provisionWebFetch",
+        json!({"host": "www.google.com"}),
+    );
+    assert_eq!(provisioned["capability"]["locallyValidated"], true);
+    assert_eq!(provisioned["permissionGranted"], false);
+    assert!(
+        provisioned["procedureId"]
+            .as_str()
+            .is_some_and(|id| id.ends_with(":web.fetch"))
+    );
+    let inventory = call(&mut server, 942, "capability.list", json!({}));
+    assert_eq!(inventory["imported"].as_array().map(Vec::len), Some(1));
+    assert!(
+        inventory["nativeBoundaries"]
+            .as_array()
+            .is_some_and(|items| items.iter().any(|item| {
+                item["kind"] == "network_request" && item["hostAdapterConfigured"] == true
+            }))
+    );
 }
 
 #[test]
@@ -626,6 +734,89 @@ fn session_lifecycle_is_public_and_preserves_isolation_metadata() {
     );
     assert_eq!(ended["state"], "ended");
     assert!(ended["endedAt"].is_number());
+}
+
+fn complete_cycle(server: &mut RpcServer, id: u64, situation: &str, session_id: &str) -> Value {
+    let started = call(
+        server,
+        id,
+        "cycle.begin",
+        json!({
+            "situation": situation,
+            "environment": {},
+            "assumptions": [],
+            "budget": {
+                "maxExecSteps": 100,
+                "maxContextItems": 16,
+                "maxTeacherTurns": 1
+            },
+            "teacherAllowed": true,
+            "sessionId": session_id,
+            "recallMode": "session"
+        }),
+    );
+    assert_eq!(started["status"], "need_teacher");
+    call(
+        server,
+        id + 1,
+        "cycle.resume",
+        json!({
+            "cycleId": started["cycleId"],
+            "proposal": {
+                "content": { "interpretations": [], "answer": situation },
+                "source": "human:test",
+                "status": "unverified",
+                "provenance": {
+                    "provider": "human",
+                    "teacher": "human:test",
+                    "requestId": format!("request-{id}"),
+                    "generatedAt": "2026-08-22T00:00:00.000Z",
+                    "situation": situation
+                }
+            }
+        }),
+    )
+}
+
+#[test]
+fn episode_list_filters_by_session() {
+    let mut server = test_server();
+    let alpha = call(
+        &mut server,
+        800,
+        "session.create",
+        json!({"name": "alpha"}),
+    );
+    let beta = call(
+        &mut server,
+        801,
+        "session.create",
+        json!({"name": "beta"}),
+    );
+    let alpha_id = alpha["id"].as_str().unwrap();
+    let beta_id = beta["id"].as_str().unwrap();
+
+    complete_cycle(&mut server, 810, "alpha question", alpha_id);
+    complete_cycle(&mut server, 820, "beta question", beta_id);
+
+    let alpha_episodes = call(
+        &mut server,
+        830,
+        "episode.list",
+        json!({"sessionId": alpha_id}),
+    );
+    let beta_episodes = call(
+        &mut server,
+        831,
+        "episode.list",
+        json!({"sessionId": beta_id}),
+    );
+    let alpha_rows = alpha_episodes.as_array().unwrap();
+    let beta_rows = beta_episodes.as_array().unwrap();
+    assert_eq!(alpha_rows.len(), 1);
+    assert_eq!(beta_rows.len(), 1);
+    assert_eq!(alpha_rows[0]["situation"], "alpha question");
+    assert_eq!(beta_rows[0]["situation"], "beta question");
 }
 
 #[test]

@@ -3,6 +3,7 @@
 #![recursion_limit = "512"]
 
 pub mod adaptation;
+pub mod compose;
 mod compression;
 pub mod credit;
 pub mod cycle;
@@ -26,8 +27,9 @@ pub use credit::{
     VersionPinnedReplayer,
 };
 pub use cycle::{
-    CycleBudget, CycleDisposition, CycleId, CycleInput, CycleOutcome, CycleProgress, RecallMode,
-    TeacherProposalWire, TeacherRequestWire,
+    CycleBudget, CycleDisposition, CycleId, CycleInput, CycleOutcome, CycleProgress,
+    IntentProposalWire, IntentRequestWire, RecallMode, TeacherProposalWire, TeacherRequestWire,
+    proposal_schema,
 };
 pub use engine::{
     CapabilityExecutionOutcome, Engine, EngineError, ExecutionOutcome, MetricsSnapshot,

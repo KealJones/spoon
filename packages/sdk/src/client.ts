@@ -58,6 +58,7 @@ import type {
   SessionVisibility,
   SemanticRecallEvaluation,
   RpcTransport,
+  IntentProposalWire,
   TeacherProposalWire,
 } from "./types.js";
 
@@ -186,16 +187,19 @@ export class SpoonClient {
     procedureId: string,
     inputs: Record<string, JsonValue>,
     prediction?: JsonValue,
+    permissionMode?: "ask" | "workspace" | "full-access" | "god-mode",
   ): Promise<T> {
     const params: {
       procedureId: string;
       inputs: Record<string, JsonValue>;
       prediction?: JsonValue;
+      permissionMode?: "ask" | "workspace" | "full-access" | "god-mode";
     } = {
       procedureId,
       inputs,
     };
     if (prediction !== undefined) params.prediction = prediction;
+    if (permissionMode !== undefined) params.permissionMode = permissionMode;
     return this.transport.request<T>("procedure.execute", params);
   }
 
@@ -313,6 +317,25 @@ export class SpoonClient {
       "capability.discover",
       description,
     );
+  }
+
+  provisionWebFetch(host: string): Promise<{
+    capability: ImportedCapability;
+    procedureId: string;
+    permissionGranted: boolean;
+    executionRequirement: string;
+  }> {
+    return this.transport.request("capability.provisionWebFetch", {
+      host,
+      adminToken: this.options.adminToken,
+    });
+  }
+
+  listCapabilities(): Promise<{
+    imported: ImportedCapability[];
+    nativeBoundaries: Array<{ kind: string; hostAdapterConfigured: boolean }>;
+  }> {
+    return this.transport.request("capability.list", {});
   }
 
   importCapability(bundle: CapabilityBundle): Promise<ImportedCapability> {
@@ -699,6 +722,28 @@ export class SpoonClient {
     return this.transport.request<CycleProgress>("cycle.resume", {
       cycleId,
       proposal,
+    });
+  }
+
+  resumeIntent(
+    cycleId: string,
+    proposal: IntentProposalWire,
+  ): Promise<CycleProgress> {
+    return this.transport.request<CycleProgress>("cycle.resumeIntent", {
+      cycleId,
+      proposal,
+    });
+  }
+
+  skipIntent(
+    cycleId: string,
+    reason: string,
+    diagnostic?: JsonValue,
+  ): Promise<CycleProgress> {
+    return this.transport.request<CycleProgress>("cycle.skipIntent", {
+      cycleId,
+      reason,
+      ...(diagnostic === undefined ? {} : { diagnostic }),
     });
   }
 

@@ -2,7 +2,7 @@ import { access, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-export type PermissionMode = "ask" | "workspace" | "full-access";
+export type PermissionMode = "ask" | "workspace" | "full-access" | "god-mode";
 export type RecallMode = "global" | "session" | "none";
 
 export interface SpoonConfig {
@@ -19,6 +19,13 @@ export interface SpoonConfig {
     mode: RecallMode;
     lookback?: string | null;
     maxEpisodes: number;
+  };
+  language: {
+    interpreter: {
+      provider: "off" | "ollama" | "cursor";
+      model?: string | null;
+      baseUrl?: string | null;
+    };
   };
   output: { mode: "quiet" | "normal" | "explain" };
 }
@@ -51,15 +58,27 @@ const DEFAULT_CONFIG: SpoonConfig = {
   teacher: { enabled: true, provider: "claude", model: null },
   capabilities: { permissionMode: "ask" },
   recall: { mode: "global", lookback: "90d", maxEpisodes: 64 },
+  language: { interpreter: { provider: "off", model: null, baseUrl: null } },
   output: { mode: "normal" },
 };
 
 const ALLOWED_KEYS: Record<string, string[]> = {
-  "": ["version", "database", "teacher", "capabilities", "recall", "output"],
+  "": [
+    "$schema",
+    "version",
+    "database",
+    "teacher",
+    "capabilities",
+    "recall",
+    "language",
+    "output",
+  ],
   database: ["path"],
   teacher: ["enabled", "provider", "model", "command"],
   capabilities: ["permissionMode"],
   recall: ["mode", "lookback", "maxEpisodes"],
+  language: ["interpreter"],
+  "language.interpreter": ["provider", "model", "baseUrl"],
   output: ["mode"],
 };
 
@@ -137,7 +156,7 @@ export function validateConfig(value: unknown, source = "config"): void {
   )
     fail(
       source,
-      "capabilities.permissionMode must be ask, workspace, or full-access",
+      "capabilities.permissionMode must be ask, workspace, full-access, or god-mode",
     );
   const recall = objectAt(value, "recall", source);
   if (recall.mode !== undefined && !isRecallMode(recall.mode))
@@ -158,6 +177,27 @@ export function validateConfig(value: unknown, source = "config"): void {
       maxEpisodes > 100_000)
   )
     fail(source, "recall.maxEpisodes must be an integer from 0 to 100000");
+  const language = objectAt(value, "language", source);
+  const interpreter = objectAt(language, "interpreter", source);
+  if (
+    interpreter.provider !== undefined &&
+    interpreter.provider !== "off" &&
+    interpreter.provider !== "ollama" &&
+    interpreter.provider !== "cursor"
+  )
+    fail(source, "language.interpreter.provider must be off, ollama, or cursor");
+  for (const key of ["model", "baseUrl"] as const) {
+    const interpreterValue = interpreter[key];
+    if (
+      interpreterValue !== undefined &&
+      interpreterValue !== null &&
+      (typeof interpreterValue !== "string" || interpreterValue.trim() === "")
+    )
+      fail(
+        source,
+        `language.interpreter.${key} must be a non-empty string or null`,
+      );
+  }
   const output = objectAt(value, "output", source);
   if (
     output.mode !== undefined &&
@@ -189,12 +229,27 @@ export function applyConfigEnvironment(
     env.SPOON_TEACHER_ENABLED = String(resolved.config.teacher.enabled);
   if (!env.SPOON_TEACHER_MODEL && resolved.config.teacher.model)
     env.SPOON_TEACHER_MODEL = resolved.config.teacher.model;
+  if (
+    !env.SPOON_TEACHER_MODEL &&
+    resolved.config.teacher.provider.toLowerCase() === "ollama" &&
+    resolved.config.language.interpreter.model
+  )
+    env.SPOON_TEACHER_MODEL = resolved.config.language.interpreter.model;
   if (!env.SPOON_PERMISSION_MODE)
     env.SPOON_PERMISSION_MODE = resolved.config.capabilities.permissionMode;
   if (!env.SPOON_RECALL_MODE)
     env.SPOON_RECALL_MODE = resolved.config.recall.mode;
   if (!env.SPOON_RECALL_MAX_EPISODES)
     env.SPOON_RECALL_MAX_EPISODES = String(resolved.config.recall.maxEpisodes);
+  if (!env.SPOON_INTERPRETER)
+    env.SPOON_INTERPRETER = resolved.config.language.interpreter.provider;
+  if (
+    !env.SPOON_INTERPRETER_MODEL &&
+    resolved.config.language.interpreter.model
+  )
+    env.SPOON_INTERPRETER_MODEL = resolved.config.language.interpreter.model;
+  if (!env.SPOON_OLLAMA_URL && resolved.config.language.interpreter.baseUrl)
+    env.SPOON_OLLAMA_URL = resolved.config.language.interpreter.baseUrl;
 }
 
 export async function writeConfigLayer(
@@ -319,6 +374,7 @@ function normalizeLayer(
   base: string,
 ): Record<string, unknown> {
   const result = structuredClone(layer);
+  delete result.$schema;
   const database = isRecord(result.database) ? result.database : undefined;
   if (
     database &&
@@ -357,6 +413,21 @@ function environmentLayer(env: NodeJS.ProcessEnv): Record<string, unknown> {
       ...(env.SPOON_RECALL_MAX_EPISODES
         ? { maxEpisodes: Number(env.SPOON_RECALL_MAX_EPISODES) }
         : {}),
+    };
+  }
+  if (
+    env.SPOON_INTERPRETER ||
+    env.SPOON_INTERPRETER_MODEL ||
+    env.SPOON_OLLAMA_URL
+  ) {
+    result.language = {
+      interpreter: {
+        ...(env.SPOON_INTERPRETER ? { provider: env.SPOON_INTERPRETER } : {}),
+        ...(env.SPOON_INTERPRETER_MODEL
+          ? { model: env.SPOON_INTERPRETER_MODEL }
+          : {}),
+        ...(env.SPOON_OLLAMA_URL ? { baseUrl: env.SPOON_OLLAMA_URL } : {}),
+      },
     };
   }
   return result;
@@ -517,7 +588,12 @@ function fail(source: string, message: string): never {
 }
 
 function isPermissionMode(value: unknown): value is PermissionMode {
-  return value === "ask" || value === "workspace" || value === "full-access";
+  return (
+    value === "ask" ||
+    value === "workspace" ||
+    value === "full-access" ||
+    value === "god-mode"
+  );
 }
 
 function isRecallMode(value: unknown): value is RecallMode {

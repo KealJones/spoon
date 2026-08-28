@@ -298,6 +298,8 @@ pub struct EpisodeStore {
 impl EpisodeStore {
     pub fn new(path: &str) -> Result<Self, SpoonError> {
         let conn = Connection::open(path).map_err(|e| SpoonError::Storage(e.to_string()))?;
+        conn.pragma_update(None, "journal_mode", "WAL")
+            .map_err(|e| SpoonError::Storage(e.to_string()))?;
         let store = Self { conn };
         store.create_schema()?;
         Ok(store)
@@ -1394,7 +1396,7 @@ impl EpisodeStore {
             .conn
             .prepare(
                 "SELECT data_json FROM episodes WHERE finalized = 1
-                 ORDER BY created_at DESC LIMIT ?1",
+                 ORDER BY created_at DESC, rowid DESC LIMIT ?1",
             )
             .map_err(|e| SpoonError::Storage(e.to_string()))?;
 
@@ -1989,7 +1991,7 @@ impl EpisodeStore {
                    AND (?6 IS NULL OR e.session_id = ?6)
                    AND (?7 IS NULL OR e.session_visibility = ?7)
                    AND (?8 = 0 OR e.session_visibility != 'isolated')
-                 ORDER BY e.created_at DESC
+                 ORDER BY e.created_at DESC, e.rowid DESC
                  LIMIT ?9",
             )
             .map_err(|e| SpoonError::Storage(e.to_string()))?;

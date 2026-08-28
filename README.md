@@ -1,90 +1,109 @@
 # Spoon
 
-> Current implementation reality: see [`STATUS.md`](STATUS.md). The
-> implementation plan describes intended scope; `STATUS.md` distinguishes
-> fully integrated behavior from partial, scaffolded, missing, and in-flight work.
+A local, inspectable executable knowledge engine. It records episodes, runs
+procedures, and keeps teacher advice provisional until local checks land.
 
-Spoon is a local, inspectable executable knowledge engine. It records episodes,
-evaluates results, learns reusable procedures, and keeps teacher advice
-provisional until local checks establish trust.
+The teacher authors **Spoonlang** (a small infix surface language). The engine
+compiles that to `pure_expr_v2` IR, admits it, and reuses it. Untagged JSON AST
+lessons still compile if you send them by hand.
 
-## Quick start
+Implementation honesty: [`STATUS.md`](STATUS.md).
 
-Requirements: Rust/Cargo, Node.js 24+, and pnpm.
+## Requirements
+
+Rust/Cargo, Node.js 24+, pnpm. For teaching from chat or `ask`, a local
+[Ollama](https://ollama.com) model. `qwen3.8:27b` follows Spoonlang. Tiny models
+copy prompt examples and miss the schema.
 
 ```bash
 pnpm install
+ollama pull qwen3.8:27b
+```
+
+## Start the HTTP server (chat UI)
+
+```bash
+SPOON_DB=./spoon.db \
+SPOON_TEACHER_MODEL=qwen3.8:27b \
+  pnpm serve
+```
+
+Open <http://127.0.0.1:4318>. Named sessions restore episode history. The pinned
+Global chat has no session and does not recall.
+
+`pnpm serve` is `cargo run -p spoon-server -- --http --port 4318`. Override the
+port with `--port` on the binary. `SPOON_TEACHER_URL` / `SPOON_OLLAMA_URL`
+default to `http://localhost:11434`. Without Ollama, unknown questions abstain.
+
+## CLI
+
+The CLI spawns the same server over stdio. Build once, then:
+
+```bash
 cargo build -p spoon-server
-SPOON_DB=/tmp/spoon-playground.sqlite \
-  pnpm spoon ask --explain "what is double 7?"
+SPOON_DB=./spoon.db \
+SPOON_TEACHER=ollama \
+SPOON_TEACHER_MODEL=qwen3.8:27b \
+  pnpm spoon ask --explain "what is twenty five percent of eighty?"
 ```
 
-For a clean answer only:
-
 ```bash
-SPOON_DB=/tmp/spoon-playground.sqlite \
-  pnpm spoon ask --quiet "what is double 7?"
-```
-
-The first run may use the configured teacher. A later run can reuse a trusted
-local procedure. `--explain` reports whether a teacher was used, what it
-proposed, validation, prediction versus observation, learning/reuse, and cost.
-
-Configuration is inherited from `~/.spoon/config.json` through project
-`.spoon/config.json` to an optional local `.spoon/config.local.json`:
-
-```bash
+pnpm spoon ask --quiet "what is double 7?"
+pnpm spoon teach --explain "extract arr[0].name from a supplied object"
+pnpm spoon chat
 pnpm spoon config show --sources
-pnpm spoon ask --quiet "turn off teacher"
-pnpm spoon ask --quiet "use full access"
+pnpm spoon capability list
 ```
 
-Global episodic recall is the default. Use `spoon chat` for a durable named
-conversation, or `--isolated` when a session must stay out of global recall.
+`teach` is the explicit authoring boundary. A normal `ask` does not become a
+teach just because the teacher returned a lesson. `--teacher off` checks
+retention.
 
-To test whether a Teacher answer became durable knowledge, use the benchmark
-runner. It performs Teacher-ON acquisition, exact Teacher-OFF retention, then
-only runs paraphrase/novel-value Teacher-OFF variants when retention passes:
+Config stacks `~/.spoon/config.json`, project `.spoon/config.json`, then
+`.spoon/config.local.json`.
+
+## Spoonlang (teacher wire)
+
+The JSON envelope is `{ "source": "<spoonlang>", "interpretations": [] }`.
+Example source:
+
+```
+kind reusable_lesson
+concept percent: defeasible_general
+  "A proportion of a quantity, expressed as parts per hundred"
+proc percent_of(percent: number, of: number)
+  name "PERCENT OF"
+  (percent * of) / 100
+example percent_of(50, 100) => 50
+```
+
+Stable facts with no inputs to transform use `kind answer_only`. Effectful work
+uses `cap("spoon.native", "web.fetch", { url: url })` with advertised ids only.
+
+## Inspector
 
 ```bash
-SPOON_DB=/tmp/spoon-benchmark.sqlite \
-  pnpm spoon benchmark run benchmarks/teacher-retention-starter.json \
-  /tmp/spoon-benchmark-report.json
-pnpm spoon benchmark report /tmp/spoon-benchmark-report.json
+cargo build -p spoon-server
+SPOON_DB=./spoon.db pnpm inspect
 ```
+
+Open <http://127.0.0.1:4317>. Read-only episode narratives.
 
 ## Packages
 
-- [`@spoon/cli`](packages/cli/README.md) — Spoon's human-facing commands and chat flow.
-- [`@spoon/sdk`](packages/sdk/README.md) — Spoon's TypeScript JSON-RPC client.
-- [`@spoon/teacher`](packages/teacher/README.md) — Claude, Codex, OpenAI, Ollama,
-  and human teacher adapters.
-- [`@spoon/inspector`](packages/inspector/README.md) — Spoon's local read-only dashboard
-  and “What happened?” episode narratives.
-- `crates/` — Rust core, graph, execution, episodes, adaptation, capabilities,
-  engine, and JSON-RPC server.
+- [`@spoon/cli`](packages/cli/README.md) — commands and stdio chat
+- [`@spoon/sdk`](packages/sdk/README.md) — TypeScript JSON-RPC client
+- [`@spoon/teacher`](packages/teacher/README.md) — Claude, Codex, Cursor, OpenAI, Ollama, human
+- [`@spoon/inspector`](packages/inspector/README.md) — dashboard
+- `crates/` — core, graph, exec, engine, HTTP/JSON-RPC server
 
-## Dashboard
-
-```bash
-cargo build -p spoon-server
-SPOON_DB=/tmp/spoon-playground.sqlite \
-  pnpm --filter @spoon/inspector dev
-```
-
-Open <http://127.0.0.1:4317>. The dashboard is read-only. Select an episode to
-see the redacted narrative; raw JSON remains available as a forensic drill-down.
-
-## Development checks
+## Checks
 
 ```bash
 cargo test --workspace --all-targets
-cargo clippy --workspace --all-targets --all-features -- -D warnings
 pnpm test
 pnpm typecheck
-pnpm build
-pnpm depcheck
 ```
 
-Spoon stores data in SQLite. Imported capabilities are quarantined, do not carry
-secrets or trust, and require local permission grants and trusted revalidation.
+Spoon stores data in SQLite. Imported capabilities are quarantined and need
+local permission grants.

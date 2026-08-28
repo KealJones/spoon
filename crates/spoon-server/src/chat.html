@@ -1,0 +1,1393 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>Spoon Chat</title>
+<style>
+:root{color-scheme:dark;--bg:#101114;--surface:#191b21;--border:#2b2e38;--text:#eceef2;--muted:#9aa0ad;--accent:#b9c6ff;--green:#6cc58b;--red:#ff9b9b;--yellow:#f2c77f;font-family:ui-sans-serif,system-ui,sans-serif}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);height:100vh;display:flex}
+.sidebar{width:260px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.sidebar-header{padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.sidebar-header h2{font-size:16px;letter-spacing:-.02em}
+.session-list{flex:1;overflow:auto;padding:8px}
+.session-item{padding:10px 12px;border-radius:8px;cursor:pointer;font-size:14px;color:var(--muted);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.session-item:hover{background:var(--border)}
+.session-item.active{background:var(--border);color:var(--text)}
+.session-item.global{color:var(--text);font-weight:500}
+.session-item .session-status{font-size:11px;opacity:.6;font-weight:400}
+.session-divider{height:1px;background:var(--border);margin:8px 4px}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.main-header{padding:12px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.main-header h3{font-size:15px;font-weight:500}
+.model-status{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.model-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:999px;padding:3px 10px;font-size:11px;color:var(--muted);white-space:nowrap}
+.model-chip .model-role{text-transform:uppercase;letter-spacing:.04em;font-size:10px}
+.model-chip strong{color:var(--text);font-weight:500}
+.model-chip.off strong{color:var(--muted);font-weight:400}
+.messages{flex:1;overflow:auto;padding:20px;display:flex;flex-direction:column;gap:12px}
+.message{max-width:85%;padding:12px 16px;border-radius:12px;font-size:14px;line-height:1.6;word-wrap:break-word;white-space:pre-wrap}
+.message.user{align-self:flex-end;background:#2a2d3a;border-bottom-right-radius:4px}
+.message.assistant{align-self:flex-start;background:var(--surface);border:1px solid var(--border);border-bottom-left-radius:4px}
+.message.system{align-self:center;color:var(--muted);font-size:13px;font-style:italic}
+.message .status-badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:4px;margin-left:8px;vertical-align:middle}
+.status-badge.queued{background:#2b2e38;color:var(--muted)}
+.status-badge.thinking{background:#1a2a3a;color:var(--accent);animation:pulse 1.5s infinite}
+.status-badge.done{background:#1a3a2a;color:var(--green)}
+.status-badge.failed{background:#3a1a1a;color:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.message .details-toggle{margin-top:8px;padding:6px 10px;background:none;border:none;font-size:12px;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:4px}
+.message .details-toggle:hover{color:var(--accent)}
+.message .details-toggle .arrow{transition:transform .15s;font-size:10px}
+.message .details-toggle .arrow.open{transform:rotate(90deg)}
+.episode-detail{margin-top:4px;padding:12px 16px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:13px;overflow:auto}
+.detail-section{margin-bottom:12px}
+.detail-section:last-child{margin-bottom:0}
+.detail-label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:4px}
+.trace-ladder{display:flex;flex-direction:column;gap:0}
+.trace-step{display:flex;align-items:stretch;gap:0}
+.trace-gutter{display:flex;flex-direction:column;align-items:center;width:20px;flex-shrink:0}
+.trace-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:6px}
+.trace-line{width:2px;flex:1;background:var(--border)}
+.trace-step:last-child .trace-line{display:none}
+.trace-body{padding:4px 0 10px 8px;min-width:0}
+.trace-rung{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.trace-desc{font-size:12px;color:var(--text);margin-top:1px}
+.rung-recall{color:#8b9cf7}.dot-recall{background:#8b9cf7}
+.rung-run{color:var(--green)}.dot-run{background:var(--green)}
+.rung-compose{color:var(--yellow)}.dot-compose{background:var(--yellow)}
+.rung-ask{color:var(--accent)}.dot-ask{background:var(--accent)}
+.rung-abstain{color:var(--red)}.dot-abstain{background:var(--red)}
+.rung-adapt{color:#c9a0ff}.dot-adapt{background:#c9a0ff}
+.rung-synthesize{color:#ff9bdb}.dot-synthesize{background:#ff9bdb}
+.detail-row{display:flex;gap:8px;margin-bottom:4px}
+.detail-key{color:var(--muted);min-width:80px;flex-shrink:0;font-size:12px}
+.detail-val{color:var(--text);font-size:12px;word-break:break-word}
+.detail-val code{font-size:11px}
+.detail-badge{display:inline-block;font-size:11px;padding:1px 6px;border-radius:3px;font-weight:500}
+.badge-verified{background:#1a3a2a;color:var(--green)}
+.badge-provisional{background:#2a2a1a;color:var(--yellow)}
+.badge-abstained{background:#3a1a1a;color:var(--red)}
+.badge-failed{background:#3a1a1a;color:var(--red)}
+.input-area{padding:16px 20px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:end}
+.input-area textarea{flex:1;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:14px;font-family:inherit;resize:none;min-height:44px;max-height:200px;line-height:1.5}
+.input-area textarea:focus{outline:none;border-color:var(--accent)}
+.input-area button{background:var(--accent);color:var(--bg);border:0;border-radius:10px;padding:10px 18px;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap;height:44px}
+.input-area button:hover{opacity:.9}
+.input-area button:disabled{opacity:.4;cursor:not-allowed}
+.controls{display:flex;gap:8px;align-items:center;padding:0 20px 8px}
+.controls label{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px;cursor:pointer}
+.controls input[type=checkbox]{accent-color:var(--accent)}
+.progress-bar{height:2px;background:var(--border);position:relative;overflow:hidden}
+.progress-bar .fill{position:absolute;left:0;top:0;height:100%;background:var(--accent);transition:width .3s}
+.btn-sm{background:var(--accent);color:var(--bg);border:0;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer}
+.btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer}
+.btn-ghost:hover{color:var(--text);border-color:var(--muted)}
+code{background:var(--border);padding:1px 4px;border-radius:3px;font-size:13px}
+.empty-state{flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px;text-align:center;padding:40px}
+@media(max-width:700px){.sidebar{display:none}.main{width:100%}}
+
+/* Builder panel */
+.builder-toggle{background:none;color:var(--muted);border:1px solid var(--border);border-radius:8px;padding:6px 14px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit}
+.builder-toggle:hover{color:var(--accent);border-color:var(--accent)}
+.builder-toggle.active{color:var(--accent);border-color:var(--accent);background:rgba(185,198,255,.08)}
+.builder-panel{display:none;border:1px solid var(--border);border-radius:12px;margin:0 20px 8px;background:var(--surface);overflow:hidden;max-height:70vh;overflow-y:auto}
+.builder-panel.open{display:block}
+.builder-panel h3{margin:0;padding:14px 16px 0;font-size:14px;font-weight:600}
+.builder-section{padding:12px 16px;border-bottom:1px solid var(--border)}
+.builder-section:last-child{border-bottom:0}
+.builder-section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.builder-section-head h4{margin:0;font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.builder-card{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px}
+.builder-card:last-child{margin-bottom:0}
+.builder-row{display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap}
+.builder-row:last-child{margin-bottom:0}
+.builder-row label{font-size:12px;color:var(--muted);min-width:70px;flex-shrink:0}
+.builder-input{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;font-family:inherit;flex:1;min-width:80px}
+.builder-input:focus{outline:none;border-color:var(--accent)}
+.builder-select{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:13px;font-family:inherit}
+.builder-select:focus{outline:none;border-color:var(--accent)}
+.btn-builder-add{background:none;color:var(--accent);border:1px dashed var(--border);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;width:100%}
+.btn-builder-add:hover{border-color:var(--accent)}
+.btn-builder-remove{background:none;color:var(--red);border:none;font-size:14px;cursor:pointer;padding:2px 6px;flex-shrink:0}
+.btn-builder-remove:hover{opacity:.7}
+
+/* Expression builder */
+.expr-slot{min-height:32px;border:1px dashed var(--border);border-radius:6px;padding:4px 8px;margin:2px 0;position:relative}
+.expr-slot.empty{display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-size:12px}
+.expr-slot.empty:hover{border-color:var(--accent);color:var(--accent)}
+.expr-node{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 8px}
+.expr-node-head{display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:12px}
+.expr-node-head .expr-kind{color:var(--accent);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.03em;background:rgba(185,198,255,.1);padding:1px 6px;border-radius:3px}
+.expr-node-children{padding-left:12px;border-left:2px solid var(--border);margin-left:4px}
+.expr-palette{display:none;position:absolute;z-index:100;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px;box-shadow:0 4px 16px rgba(0,0,0,.4);max-height:280px;overflow-y:auto;width:200px}
+.expr-palette.visible{display:block}
+.expr-palette-item{padding:5px 8px;border-radius:4px;cursor:pointer;font-size:12px;color:var(--text)}
+.expr-palette-item:hover{background:var(--border)}
+.expr-palette-item .ep-kind{color:var(--accent);font-weight:600;margin-right:4px}
+.expr-palette-search{width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;margin-bottom:4px;font-family:inherit}
+.expr-palette-search:focus{outline:none;border-color:var(--accent)}
+
+/* Builder footer */
+.builder-footer{display:flex;gap:8px;padding:12px 16px;align-items:center;border-top:1px solid var(--border)}
+.builder-footer .builder-status{flex:1;font-size:12px;color:var(--muted)}
+
+/* Preview */
+.builder-preview{max-height:200px;overflow:auto;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;margin:0 16px 12px;font-family:ui-monospace,monospace;font-size:11px;line-height:1.5;color:var(--text);white-space:pre-wrap;word-break:break-all;display:none}
+.builder-preview.open{display:block}
+</style></head><body>
+<div class="sidebar">
+  <div class="sidebar-header"><h2>Spoon</h2><button class="btn-sm" id="new-session">+ New</button></div>
+  <div class="session-list" id="session-list"></div>
+</div>
+<div class="main">
+  <div class="main-header">
+    <h3 id="session-title">Global</h3>
+    <div style="flex:1"></div>
+    <div id="model-status" class="model-status" aria-label="Language adapters"></div>
+    <span id="progress-text" style="font-size:12px;color:var(--muted)"></span>
+  </div>
+  <div class="progress-bar"><div class="fill" id="progress-fill" style="width:0"></div></div>
+  <div class="messages" id="messages">
+    <div class="empty-state">Ask the graph. This chat does not keep history.</div>
+  </div>
+  <div class="controls">
+    <label><input type="checkbox" id="concurrent-mode"> Concurrent mode</label>
+    <label><input type="checkbox" id="batch-mode"> Batch (line per message)</label>
+  </div>
+  <div class="builder-panel" id="builder-panel">
+    <h3>Teach Spoon a procedure</h3>
+    <div class="builder-section">
+      <div class="builder-section-head"><h4>Situation</h4></div>
+      <input class="builder-input" id="builder-situation" placeholder="What question or command should trigger this procedure?" style="width:100%">
+    </div>
+    <div class="builder-section">
+      <div class="builder-section-head"><h4>Concepts</h4><button class="btn-builder-add" id="add-concept" style="width:auto">+ Add</button></div>
+      <div id="builder-concepts"></div>
+    </div>
+    <div class="builder-section">
+      <div class="builder-section-head"><h4>Procedures</h4><button class="btn-builder-add" id="add-procedure" style="width:auto">+ Add</button></div>
+      <div id="builder-procedures"></div>
+    </div>
+    <div class="builder-section">
+      <div class="builder-section-head"><h4>Invocation (test input)</h4></div>
+      <div class="builder-row">
+        <label>Procedure</label>
+        <select class="builder-select" id="builder-invoke-proc"></select>
+      </div>
+      <div id="builder-invoke-inputs"></div>
+    </div>
+    <div class="builder-section" style="padding-bottom:0">
+      <div class="builder-section-head"><h4>Preview</h4><button class="btn-ghost" id="toggle-preview" style="font-size:11px">Show JSON</button></div>
+      <pre class="builder-preview" id="builder-preview"></pre>
+    </div>
+    <div class="builder-footer">
+      <span class="builder-status" id="builder-status"></span>
+      <button class="btn-ghost" id="builder-cancel">Cancel</button>
+      <button class="btn-ghost" id="builder-assist" style="border-color:var(--accent);color:var(--accent)">Teacher Assist</button>
+      <button class="btn-sm" id="builder-submit">Submit to engine</button>
+    </div>
+  </div>
+  <div class="input-area">
+    <button class="builder-toggle" id="builder-toggle-btn" title="Open visual procedure builder">Teach</button>
+    <textarea id="input" placeholder="Ask Spoon something..." rows="1"></textarea>
+    <button id="send">Send</button>
+  </div>
+</div>
+<script>
+const API = '';
+const GLOBAL_CHAT_ID = 'global';
+const SESSION_STORAGE_KEY = 'spoon.chat.session';
+let sessions = [];
+let activeSessionId = null;
+let messageQueue = [];
+let inFlight = 0;
+let totalQueued = 0;
+let totalDone = 0;
+
+async function api(path, opts) {
+  const r = await fetch(API + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+function isGlobalChat() {
+  return activeSessionId === null;
+}
+
+function roleChip(role, info) {
+  const chip = document.createElement('span');
+  const off = !info || info.adapter === 'off';
+  chip.className = 'model-chip' + (off ? ' off' : '');
+  const label = document.createElement('span');
+  label.className = 'model-role';
+  label.textContent = role;
+  const detail = document.createElement('strong');
+  detail.textContent = off ? 'off' : (info.adapter || '?') + ' · ' + (info.model || '?');
+  chip.appendChild(label);
+  chip.appendChild(detail);
+  if (info && info.baseUrl) chip.title = info.baseUrl;
+  return chip;
+}
+
+async function loadRuntime() {
+  const el = document.getElementById('model-status');
+  try {
+    const runtime = await api('/api/runtime');
+    el.replaceChildren(roleChip('teacher', runtime.teacher), roleChip('interpreter', runtime.interpreter));
+  } catch (error) {
+    el.replaceChildren(roleChip('teacher', null), roleChip('interpreter', null));
+    el.title = error.message || String(error);
+  }
+}
+
+async function loadSessions() {
+  sessions = await api('/api/sessions');
+  const saved = localStorage.getItem(SESSION_STORAGE_KEY);
+  if (saved && saved !== GLOBAL_CHAT_ID && sessions.some(s => s.id === saved)) {
+    await selectSession(saved);
+  } else {
+    await selectSession(GLOBAL_CHAT_ID);
+  }
+}
+
+function renderSessions() {
+  const el = document.getElementById('session-list');
+  const globalActive = isGlobalChat();
+  const sessionRows = sessions.map(s =>
+    '<div class="session-item' + (s.id === activeSessionId ? ' active' : '') + '" data-id="' + s.id + '">' +
+    (s.name || s.id.slice(0, 8)) +
+    ' <span class="session-status">' + s.state + '</span></div>'
+  ).join('');
+  el.innerHTML =
+    '<div class="session-item global' + (globalActive ? ' active' : '') + '" data-id="' + GLOBAL_CHAT_ID + '">' +
+    'Global <span class="session-status">no history</span></div>' +
+    (sessions.length ? '<div class="session-divider"></div>' : '') +
+    sessionRows;
+  el.querySelectorAll('.session-item').forEach(item => {
+    item.addEventListener('click', () => selectSession(item.dataset.id));
+  });
+}
+
+function clearMessages(emptyText) {
+  const el = document.getElementById('messages');
+  el.innerHTML = '<div class="empty-state">' + emptyText + '</div>';
+}
+
+function formatStoredAnswer(episode) {
+  const value = episode.observed_result ?? episode.prediction;
+  if (value !== null && value !== undefined) {
+    return typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+  }
+  if (episode.action) return episode.action;
+  return 'Completed';
+}
+
+function restoreEpisodePair(episode) {
+  addMessage('user', episode.situation);
+  const assistantDiv = addMessage('assistant', formatStoredAnswer(episode));
+  attachEpisodeDetails(assistantDiv, {
+    episode,
+    disposition: episode.evaluation?.success === false ? 'abstained' : (episode.action || 'completed'),
+    answer: episode.observed_result ?? episode.prediction,
+  });
+}
+
+async function restoreSessionEpisodes(sessionId) {
+  const episodes = await api('/api/episodes?session_id=' + encodeURIComponent(sessionId) + '&limit=200');
+  if (!Array.isArray(episodes) || episodes.length === 0) {
+    clearMessages('No messages yet. This session keeps its history.');
+    return;
+  }
+  document.getElementById('messages').innerHTML = '';
+  episodes
+    .slice()
+    .sort((a, b) => {
+      if (a.turn_index != null && b.turn_index != null) return a.turn_index - b.turn_index;
+      return (a.created_at || 0) - (b.created_at || 0);
+    })
+    .forEach(restoreEpisodePair);
+  const el = document.getElementById('messages');
+  el.scrollTop = el.scrollHeight;
+}
+
+async function selectSession(id) {
+  const global = id === GLOBAL_CHAT_ID || id == null;
+  activeSessionId = global ? null : id;
+  localStorage.setItem(SESSION_STORAGE_KEY, global ? GLOBAL_CHAT_ID : id);
+  const session = global ? null : sessions.find(s => s.id === id);
+  document.getElementById('session-title').textContent = global
+    ? 'Global'
+    : (session?.name || id.slice(0, 8));
+  renderSessions();
+  if (global) {
+    clearMessages('Ask the graph. This chat does not keep history.');
+    return;
+  }
+  try {
+    await restoreSessionEpisodes(id);
+  } catch (error) {
+    clearMessages('Could not restore this session: ' + (error.message || error));
+  }
+}
+
+async function createSession() {
+  const name = 'Chat ' + new Date().toLocaleTimeString();
+  const session = await api('/api/sessions', { method: 'POST', body: JSON.stringify({ name }) });
+  sessions.unshift(session);
+  await selectSession(session.id);
+}
+
+function addMessage(role, content, id) {
+  const el = document.getElementById('messages');
+  const empty = el.querySelector('.empty-state');
+  if (empty) empty.remove();
+  const div = document.createElement('div');
+  div.className = 'message ' + role;
+  if (id) div.dataset.msgId = id;
+  div.textContent = content;
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+  return div;
+}
+
+function updateProgress() {
+  const text = document.getElementById('progress-text');
+  const fill = document.getElementById('progress-fill');
+  if (totalQueued === 0) {
+    text.textContent = '';
+    fill.style.width = '0';
+    return;
+  }
+  text.textContent = totalDone + ' of ' + totalQueued + ' complete' + (inFlight > 0 ? ' (' + inFlight + ' in flight)' : '');
+  fill.style.width = Math.round(totalDone / totalQueued * 100) + '%';
+}
+
+async function sendMessage(text) {
+  const msgId = 'msg-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+  const userDiv = addMessage('user', text, msgId);
+
+  const badge = document.createElement('span');
+  badge.className = 'status-badge thinking';
+  badge.textContent = 'thinking...';
+  userDiv.appendChild(badge);
+
+  inFlight++;
+  updateProgress();
+
+  try {
+    const body = {
+      situation: text,
+      recall_mode: isGlobalChat() ? 'none' : 'session',
+    };
+    if (activeSessionId) body.session_id = activeSessionId;
+    const result = await api('/api/cycle', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+
+    badge.className = 'status-badge done';
+    badge.textContent = 'done';
+
+    const assistantDiv = addMessage('assistant', formatCycleAnswer(result));
+    attachEpisodeDetails(assistantDiv, result);
+  } catch (error) {
+    badge.className = 'status-badge failed';
+    badge.textContent = 'failed';
+    addMessage('assistant', 'Error: ' + (error.message || error));
+  } finally {
+    inFlight--;
+    totalDone++;
+    updateProgress();
+  }
+}
+
+function formatCycleAnswer(result) {
+  if (result.answer !== null && result.answer !== undefined) {
+    return typeof result.answer === 'string' ? result.answer : JSON.stringify(result.answer, null, 2);
+  }
+  if (result.reason) return result.reason;
+  if (result.disposition === 'abstained' || result.status === 'abstained') {
+    return 'I don\'t have enough knowledge to answer that yet.';
+  }
+  if (result.disposition === 'error' || result.status === 'error') {
+    return 'Something went wrong while processing that.';
+  }
+  return result.episode?.action || result.disposition || 'Completed';
+}
+
+function attachEpisodeDetails(assistantDiv, result) {
+  if (!result || !(result.episode || result.disposition)) return;
+  const toggle = document.createElement('button');
+  toggle.className = 'details-toggle';
+  toggle.innerHTML = '<span class="arrow">&#9654;</span> Details';
+  const detailWrap = document.createElement('div');
+  detailWrap.className = 'episode-detail';
+  detailWrap.style.display = 'none';
+  detailWrap.innerHTML = renderEpisodeDetail(result);
+  toggle.addEventListener('click', () => {
+    const open = detailWrap.style.display !== 'none';
+    detailWrap.style.display = open ? 'none' : 'block';
+    toggle.querySelector('.arrow').classList.toggle('open', !open);
+  });
+  assistantDiv.appendChild(toggle);
+  assistantDiv.appendChild(detailWrap);
+}
+
+function esc(s) { return String(s).replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
+
+function rungClass(rung) {
+  const r = (rung || '').toLowerCase().replace(/[^a-z]/g, '');
+  return ['recall','run','compose','adapt','synthesize','ask','abstain'].includes(r) ? r : 'recall';
+}
+
+function dispositionBadge(d) {
+  const cls = d === 'verified' ? 'verified' : d === 'provisional' ? 'provisional' : d === 'abstained' ? 'abstained' : 'provisional';
+  return '<span class="detail-badge badge-' + cls + '">' + esc(d) + '</span>';
+}
+
+function renderTraceLadder(steps) {
+  if (!steps || !steps.length) return '<span style="color:var(--muted)">No trace recorded</span>';
+  return '<div class="trace-ladder">' + steps.map(s => {
+    const rc = rungClass(s.rung);
+    return '<div class="trace-step">' +
+      '<div class="trace-gutter"><div class="trace-dot dot-' + rc + '"></div><div class="trace-line"></div></div>' +
+      '<div class="trace-body">' +
+        '<div class="trace-rung rung-' + rc + '">' + esc(s.rung || '?') + '</div>' +
+        '<div class="trace-desc">' + esc(s.description || '') + '</div>' +
+        (s.procedure_used ? '<div style="font-size:11px;color:var(--muted);margin-top:2px">Procedure: <code>' + esc(s.procedure_used) + '</code></div>' : '') +
+        (s.output !== null && s.output !== undefined ? '<div style="font-size:11px;color:var(--muted);margin-top:2px">Output: <code>' + esc(typeof s.output === 'object' ? JSON.stringify(s.output) : s.output) + '</code></div>' : '') +
+      '</div></div>';
+  }).join('') + '</div>';
+}
+
+function renderDetailRows(obj, skip) {
+  if (!obj || typeof obj !== 'object') return '';
+  const skipSet = new Set(skip || []);
+  return Object.entries(obj).filter(([k]) => !skipSet.has(k)).map(([k, v]) => {
+    if (v === null || v === undefined) return '';
+    const label = k.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2');
+    let val;
+    if (typeof v === 'object') {
+      val = '<code>' + esc(JSON.stringify(v)) + '</code>';
+    } else if (typeof v === 'boolean') {
+      val = v ? '<span style="color:var(--green)">yes</span>' : '<span style="color:var(--muted)">no</span>';
+    } else {
+      val = esc(String(v));
+    }
+    return '<div class="detail-row"><span class="detail-key">' + esc(label) + '</span><span class="detail-val">' + val + '</span></div>';
+  }).filter(Boolean).join('');
+}
+
+function renderEpisodeDetail(result) {
+  const ep = result.episode || {};
+  const trace = ep.reasoning_trace?.steps || [];
+  const cost = ep.cost || {};
+  let html = '';
+
+  html += '<div class="detail-section"><div class="detail-label">Disposition</div>';
+  html += '<div class="detail-row"><span class="detail-val">' + dispositionBadge(result.disposition || ep.action || 'unknown') + '</span></div>';
+  html += '</div>';
+
+  if (trace.length) {
+    html += '<div class="detail-section"><div class="detail-label">Decision Path</div>';
+    html += renderTraceLadder(trace);
+    html += '</div>';
+  }
+
+  if (cost && Object.keys(cost).length) {
+    html += '<div class="detail-section"><div class="detail-label">Cost</div>';
+    const rung = cost.rung_reached || cost.rungReached;
+    if (rung) html += '<div class="detail-row"><span class="detail-key">Rung reached</span><span class="detail-val"><span class="trace-rung rung-' + rungClass(rung) + '">' + esc(rung) + '</span></span></div>';
+    if (cost.steps_taken !== undefined) html += '<div class="detail-row"><span class="detail-key">Steps</span><span class="detail-val">' + cost.steps_taken + '</span></div>';
+    if (cost.budget_spent !== undefined) html += '<div class="detail-row"><span class="detail-key">Budget spent</span><span class="detail-val">' + (cost.budget_spent * 100).toFixed(0) + '%</span></div>';
+    html += '</div>';
+  }
+
+  if (ep.evaluation) {
+    html += '<div class="detail-section"><div class="detail-label">Evaluation</div>';
+    html += renderDetailRows(ep.evaluation);
+    html += '</div>';
+  }
+
+  if (ep.situation) {
+    html += '<div class="detail-section"><div class="detail-label">Situation</div>';
+    html += '<div style="color:var(--text);font-size:12px;padding:4px 0">' + esc(ep.situation) + '</div>';
+    html += '</div>';
+  }
+
+  if (ep.id) {
+    html += '<div class="detail-section"><div class="detail-label">Episode</div>';
+    html += '<div class="detail-row"><span class="detail-key">ID</span><span class="detail-val"><code>' + esc(ep.id) + '</code></span></div>';
+    html += '</div>';
+  }
+
+  return html;
+}
+
+async function processQueue() {
+  const concurrent = document.getElementById('concurrent-mode').checked;
+  if (concurrent) {
+    const batch = messageQueue.splice(0);
+    await Promise.all(batch.map(msg => sendMessage(msg)));
+  } else {
+    while (messageQueue.length > 0) {
+      const msg = messageQueue.shift();
+      await sendMessage(msg);
+    }
+  }
+  if (totalDone >= totalQueued) {
+    totalQueued = 0;
+    totalDone = 0;
+    updateProgress();
+  }
+}
+
+function handleSend() {
+  const input = document.getElementById('input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  input.style.height = 'auto';
+
+  const batch = document.getElementById('batch-mode').checked;
+  const lines = batch ? text.split('\n').filter(l => l.trim()) : [text];
+
+  totalQueued += lines.length;
+  updateProgress();
+
+  messageQueue.push(...lines);
+  processQueue();
+}
+
+document.getElementById('send').addEventListener('click', handleSend);
+document.getElementById('input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+});
+document.getElementById('input').addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = Math.min(this.scrollHeight, 200) + 'px';
+});
+document.getElementById('new-session').addEventListener('click', createSession);
+
+// ===================== VISUAL IR BUILDER =====================
+
+const EXPR_NODES = [
+  {kind:'literal',label:'Literal',slots:[]},
+  {kind:'parameter',label:'Parameter',slots:[]},
+  {kind:'result',label:'Result',slots:[]},
+  {kind:'binary',label:'Binary Op',slots:['left','right']},
+  {kind:'unary',label:'Unary Op',slots:['operand']},
+  {kind:'if',label:'If / Then / Else',slots:['condition','then','else']},
+  {kind:'let',label:'Let Binding',slots:['value','body']},
+  {kind:'list',label:'List',slots:[]},
+  {kind:'index',label:'Index',slots:['collection','index']},
+  {kind:'field',label:'Field Access',slots:['object']},
+  {kind:'intrinsic',label:'Intrinsic',slots:[]},
+  {kind:'map_expr',label:'Map (transform)',slots:['collection','body']},
+  {kind:'filter',label:'Filter',slots:['collection','predicate']},
+  {kind:'reduce',label:'Reduce',slots:['collection','init','body']},
+];
+
+const BINARY_OPS = ['add','subtract','multiply','divide','modulo','equal','not_equal','less_than','less_or_equal','greater_than','greater_or_equal','and','or'];
+const UNARY_OPS = ['negate','not'];
+const VALUE_TYPES = ['any','null','bool','number','text','list','map'];
+const MUTABILITY_OPTS = ['definitional','defeasible_general','procedural'];
+
+const INTRINSIC_OPS = [
+  'length','text_split','text_join','text_trim','text_lowercase','text_uppercase','text_contains','text_starts_with','text_ends_with','text_replace','text_index_of','text_count','text_repeat','text_format','text_reverse','text_pad_start','text_pad_end','text_substring','text_char_at','text_matches_regex','text_regex_replace_all','text_regex_capture','text_base64_encode','text_base64_decode','text_url_encode','text_url_decode','text_hex_encode','text_hex_decode','text_char_code','text_from_char_code','text_levenshtein','text_concat_many',
+  'collection_contains','collection_find_index','collection_slice','collection_reverse','collection_sort','collection_unique','collection_flatten','collection_zip','collection_group_by','collection_sort_by','collection_min_by','collection_max_by','collection_chunk','collection_enumerate','collection_any','collection_all','collection_take','collection_drop','collection_first','collection_last','collection_partition','collection_repeat_value','collection_window','count_equal','range',
+  'map_keys','map_values','map_entries','map_from_entries','map_set','map_delete','map_merge','map_has_key','map_get_default','map_size','map_filter_keys',
+  'json_parse','json_stringify','path_get','path_get_optional','json_pointer_get','json_pointer_set','json_pointer_delete',
+  'numeric_abs','numeric_sign','numeric_min','numeric_max','numeric_clamp','numeric_floor','numeric_ceil','numeric_round','numeric_truncate','numeric_pow_int','numeric_pow_float','integer_quotient','integer_remainder',
+  'math_sqrt','math_log','math_log10','math_log2','math_exp','math_sin','math_cos','math_tan','math_asin','math_acos','math_atan','math_atan2','math_pi','math_e','math_is_nan','math_is_infinite','math_gcd','math_lcm','math_hypot',
+  'random_int','random_float','random_choice','random_shuffle','random_sample','random_uuid',
+  'date_now','date_from_parts','date_get_part','date_add','date_diff','date_format',
+  'type_name','is_null','is_bool','is_int','is_float','is_text','is_list','is_map','is_numeric','to_int','to_float','to_bool','to_text','parse_int','parse_float','parse_bool',
+  'set_union','set_intersect','set_difference','set_is_subset',
+  'bit_and','bit_or','bit_xor','bit_not','bit_shift_left','bit_shift_right',
+  'hash_sha256','hash_md5',
+  'numeric_to_fixed','numeric_to_hex','numeric_from_hex','numeric_to_binary','numeric_from_binary',
+  'coalesce','assert','default_if_null',
+].sort();
+
+const INTRINSIC_ARITY = {};
+['math_pi','math_e','random_float','random_uuid','date_now'].forEach(o => INTRINSIC_ARITY[o] = 0);
+['length','text_trim','text_lowercase','text_uppercase','text_reverse','text_base64_encode','text_base64_decode','text_url_encode','text_url_decode','text_hex_encode','text_hex_decode','text_char_code','text_from_char_code','text_tokenize','text_concat_many','text_trim_start','text_trim_end','collection_reverse','collection_sort','collection_unique','collection_flatten','collection_enumerate','collection_any','collection_all','collection_first','collection_last','map_keys','map_values','map_entries','map_from_entries','json_parse','json_stringify','type_name','is_null','is_bool','is_int','is_float','is_text','is_list','is_map','is_numeric','to_int','to_float','to_bool','to_text','parse_int','parse_float','parse_bool','numeric_abs','numeric_sign','numeric_floor','numeric_ceil','numeric_round','numeric_truncate','math_sqrt','math_log','math_log10','math_log2','math_exp','math_sin','math_cos','math_tan','math_asin','math_acos','math_atan','math_is_nan','math_is_infinite','bit_not','hash_sha256','hash_md5','numeric_to_hex','numeric_from_hex','numeric_to_binary','numeric_from_binary','map_size','coalesce','random_choice','random_shuffle','text_byte_length','text_scalar_length','text_grapheme_length'].forEach(o => INTRINSIC_ARITY[o] = 1);
+['text_split','text_join','text_contains','text_starts_with','text_ends_with','text_index_of','text_count','text_repeat','text_matches_regex','text_char_at','text_levenshtein','text_pad_start','text_pad_end','collection_contains','collection_find_index','collection_zip','collection_group_by','collection_sort_by','collection_min_by','collection_max_by','collection_chunk','collection_take','collection_drop','collection_partition','collection_repeat_value','collection_window','count_equal','range','map_delete','map_merge','map_has_key','map_filter_keys','path_get','path_get_optional','json_pointer_get','json_pointer_get_optional','json_pointer_delete','numeric_min','numeric_max','numeric_pow_int','numeric_pow_float','integer_quotient','integer_remainder','math_atan2','math_gcd','math_lcm','math_hypot','random_int','random_sample','date_get_part','date_format','set_union','set_intersect','set_difference','set_is_subset','bit_and','bit_or','bit_xor','bit_shift_left','bit_shift_right','numeric_to_fixed','assert','default_if_null','text_regex_capture'].forEach(o => INTRINSIC_ARITY[o] = 2);
+['text_replace','text_regex_replace_all','text_substring','text_format','text_grapheme_substring','collection_slice','map_set','map_get_default','json_pointer_set','numeric_clamp','date_from_parts','date_add','date_diff'].forEach(o => INTRINSIC_ARITY[o] = 3);
+
+let builderOpen = false;
+let builderConcepts = [];
+let builderProcedures = [];
+let exprIdCounter = 0;
+
+function nextExprId() { return 'expr-' + (++exprIdCounter); }
+
+// ---- Concept management ----
+function addConcept(key, name, desc, mut) {
+  const c = { id: 'c-' + Date.now() + '-' + Math.random().toString(36).slice(2,5), key: key||'', name: name||'', description: desc||'', mutability: mut||'procedural' };
+  builderConcepts.push(c);
+  renderConcepts();
+  updatePreview();
+  return c;
+}
+
+function renderConcepts() {
+  const el = document.getElementById('builder-concepts');
+  el.innerHTML = builderConcepts.map((c, i) =>
+    '<div class="builder-card" data-cidx="'+i+'">' +
+    '<div class="builder-row"><label>Key</label><input class="builder-input" data-field="key" value="'+esc(c.key)+'"><button class="btn-builder-remove" data-remove-concept="'+i+'">x</button></div>' +
+    '<div class="builder-row"><label>Name</label><input class="builder-input" data-field="name" value="'+esc(c.name)+'"></div>' +
+    '<div class="builder-row"><label>Description</label><input class="builder-input" data-field="description" value="'+esc(c.description)+'"></div>' +
+    '<div class="builder-row"><label>Mutability</label><select class="builder-select" data-field="mutability">' + MUTABILITY_OPTS.map(m => '<option' + (m===c.mutability?' selected':'') + '>' + m + '</option>').join('') + '</select></div>' +
+    '</div>'
+  ).join('') || '<div style="color:var(--muted);font-size:12px;padding:4px 0">No concepts yet. Add at least one.</div>';
+
+  el.querySelectorAll('[data-cidx]').forEach(card => {
+    const idx = parseInt(card.dataset.cidx);
+    card.querySelectorAll('input[data-field],select[data-field]').forEach(inp => {
+      inp.addEventListener('input', () => { builderConcepts[idx][inp.dataset.field] = inp.value; updatePreview(); });
+    });
+  });
+  el.querySelectorAll('[data-remove-concept]').forEach(btn => {
+    btn.addEventListener('click', () => { builderConcepts.splice(parseInt(btn.dataset.removeConcept), 1); renderConcepts(); updatePreview(); });
+  });
+}
+
+// ---- Procedure management ----
+function addProcedure() {
+  const p = {
+    id: 'p-' + Date.now(),
+    key: '', name: '',
+    conceptKey: '',
+    parameters: [{ name: '', description: '', valueType: 'any' }],
+    bodyExpr: null,
+    contract: { requires: [], promises: [], failsWhen: [] },
+  };
+  builderProcedures.push(p);
+  renderProcedures();
+  updatePreview();
+}
+
+function renderProcedures() {
+  const el = document.getElementById('builder-procedures');
+  el.innerHTML = builderProcedures.map((p, pi) => {
+    const conceptOpts = builderConcepts.map(c => '<option value="'+esc(c.key)+'"'+(c.key===p.conceptKey?' selected':'')+'>'+esc(c.name||c.key)+'</option>').join('');
+    const paramRows = p.parameters.map((param, pmi) =>
+      '<div class="builder-row" data-pmi="'+pmi+'">' +
+      '<input class="builder-input" data-pfield="name" placeholder="name" value="'+esc(param.name)+'" style="max-width:100px">' +
+      '<input class="builder-input" data-pfield="description" placeholder="description" value="'+esc(param.description)+'">' +
+      '<select class="builder-select" data-pfield="valueType">' + VALUE_TYPES.map(t => '<option'+(t===param.valueType?' selected':'')+'>'+t+'</option>').join('') + '</select>' +
+      '<button class="btn-builder-remove" data-remove-param="'+pmi+'">x</button>' +
+      '</div>'
+    ).join('');
+    const bodySlotId = nextExprId();
+    return '<div class="builder-card" data-pidx="'+pi+'">' +
+      '<div class="builder-row"><label>Key</label><input class="builder-input proc-field" data-field="key" value="'+esc(p.key)+'"><button class="btn-builder-remove" data-remove-proc="'+pi+'">x</button></div>' +
+      '<div class="builder-row"><label>Name</label><input class="builder-input proc-field" data-field="name" value="'+esc(p.name)+'"></div>' +
+      '<div class="builder-row"><label>Concept</label><select class="builder-select proc-field" data-field="conceptKey">'+conceptOpts+'</select></div>' +
+      '<div style="margin:8px 0 4px"><strong style="font-size:12px;color:var(--muted)">PARAMETERS</strong></div>' +
+      paramRows +
+      '<button class="btn-builder-add" data-add-param="'+pi+'">+ Parameter</button>' +
+      '<div style="margin:10px 0 4px"><strong style="font-size:12px;color:var(--muted)">BODY</strong></div>' +
+      '<div class="expr-slot-root" data-proc-body="'+pi+'" id="'+bodySlotId+'"></div>' +
+      renderContractSection(pi, p.contract) +
+      '</div>';
+  }).join('') || '<div style="color:var(--muted);font-size:12px;padding:4px 0">No procedures yet. Add at least one.</div>';
+
+  // Wire up procedure field inputs
+  el.querySelectorAll('[data-pidx]').forEach(card => {
+    const pi = parseInt(card.dataset.pidx);
+    card.querySelectorAll('.proc-field').forEach(inp => {
+      inp.addEventListener('input', () => { builderProcedures[pi][inp.dataset.field] = inp.value; updatePreview(); updateInvokeDropdown(); });
+    });
+    card.querySelectorAll('[data-pmi]').forEach(row => {
+      const pmi = parseInt(row.dataset.pmi);
+      row.querySelectorAll('[data-pfield]').forEach(inp => {
+        inp.addEventListener('input', () => { builderProcedures[pi].parameters[pmi][inp.dataset.pfield] = inp.value; updatePreview(); updateInvokeInputs(); });
+      });
+    });
+    card.querySelectorAll('[data-remove-param]').forEach(btn => {
+      btn.addEventListener('click', () => { builderProcedures[pi].parameters.splice(parseInt(btn.dataset.removeParam), 1); renderProcedures(); updatePreview(); });
+    });
+    card.querySelectorAll('[data-add-param]').forEach(btn => {
+      btn.addEventListener('click', () => { builderProcedures[parseInt(btn.dataset.addParam)].parameters.push({ name:'', description:'', valueType:'any' }); renderProcedures(); updatePreview(); });
+    });
+    card.querySelectorAll('[data-remove-proc]').forEach(btn => {
+      btn.addEventListener('click', () => { builderProcedures.splice(parseInt(btn.dataset.removeProc), 1); renderProcedures(); updatePreview(); updateInvokeDropdown(); });
+    });
+    // Render expression body
+    const bodyRoot = card.querySelector('[data-proc-body]');
+    if (bodyRoot) renderExprSlot(bodyRoot, builderProcedures[pi], 'bodyExpr');
+    // Wire contract expression slots
+    wireContractSlots(card, pi);
+  });
+  updateInvokeDropdown();
+}
+
+function renderContractSection(pi, contract) {
+  function condRows(type, items) {
+    return items.map((item, ci) =>
+      '<div class="builder-card" style="margin:4px 0" data-cond-type="'+type+'" data-cond-idx="'+ci+'">' +
+      '<div class="builder-row"><label>Description</label><input class="builder-input cond-desc" value="'+esc(item.description)+'"><button class="btn-builder-remove cond-remove">x</button></div>' +
+      '<div style="margin:4px 0 0"><span style="font-size:11px;color:var(--muted)">Check expression:</span></div>' +
+      '<div class="expr-slot-root cond-body-slot" data-cond-body="'+type+'-'+ci+'"></div>' +
+      '</div>'
+    ).join('');
+  }
+  return '<div style="margin:10px 0 4px"><strong style="font-size:12px;color:var(--muted)">CONTRACT</strong></div>' +
+    '<div style="margin:4px 0"><span style="font-size:11px;color:var(--accent)">requires</span>' +
+    '<button class="btn-builder-add" data-add-cond="requires" data-proc-idx="'+pi+'" style="width:auto;display:inline;margin-left:8px;padding:2px 8px">+</button></div>' +
+    condRows('requires', contract.requires) +
+    '<div style="margin:4px 0"><span style="font-size:11px;color:var(--green)">promises</span>' +
+    '<button class="btn-builder-add" data-add-cond="promises" data-proc-idx="'+pi+'" style="width:auto;display:inline;margin-left:8px;padding:2px 8px">+</button></div>' +
+    condRows('promises', contract.promises) +
+    '<div style="margin:4px 0"><span style="font-size:11px;color:var(--red)">fails when</span>' +
+    '<button class="btn-builder-add" data-add-cond="failsWhen" data-proc-idx="'+pi+'" style="width:auto;display:inline;margin-left:8px;padding:2px 8px">+</button></div>' +
+    condRows('failsWhen', contract.failsWhen);
+}
+
+function wireContractSlots(card, pi) {
+  card.querySelectorAll('[data-add-cond]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const type = btn.dataset.addCond;
+      builderProcedures[pi].contract[type].push({ description:'', checkExpr: null });
+      renderProcedures();
+      updatePreview();
+    });
+  });
+  card.querySelectorAll('[data-cond-type]').forEach(condCard => {
+    const type = condCard.dataset.condType;
+    const ci = parseInt(condCard.dataset.condIdx);
+    const descInput = condCard.querySelector('.cond-desc');
+    if (descInput) descInput.addEventListener('input', () => { builderProcedures[pi].contract[type][ci].description = descInput.value; updatePreview(); });
+    const removeBtn = condCard.querySelector('.cond-remove');
+    if (removeBtn) removeBtn.addEventListener('click', () => { builderProcedures[pi].contract[type].splice(ci, 1); renderProcedures(); updatePreview(); });
+    const bodySlot = condCard.querySelector('.cond-body-slot');
+    if (bodySlot) renderExprSlot(bodySlot, builderProcedures[pi].contract[type][ci], 'checkExpr');
+  });
+}
+
+// ---- Expression tree builder ----
+function renderExprSlot(container, parent, field) {
+  const expr = parent[field];
+  container.innerHTML = '';
+  if (!expr) {
+    container.className = 'expr-slot empty';
+    const addBtn = document.createElement('button');
+    addBtn.className = 'btn-builder-add';
+    addBtn.textContent = '+ Add expression';
+    addBtn.style.margin = '0';
+    addBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      showPalette(addBtn, (kind) => {
+        parent[field] = createExprNode(kind);
+        renderExprSlot(container, parent, field);
+        updatePreview();
+      });
+    });
+    container.appendChild(addBtn);
+    return;
+  }
+  container.className = 'expr-slot';
+  const node = document.createElement('div');
+  node.className = 'expr-node';
+  const head = document.createElement('div');
+  head.className = 'expr-node-head';
+  head.innerHTML = '<span class="expr-kind">' + esc(expr.kind) + '</span>';
+  const removeBtn = document.createElement('button');
+  removeBtn.className = 'btn-builder-remove';
+  removeBtn.textContent = 'x';
+  removeBtn.style.marginLeft = 'auto';
+  removeBtn.addEventListener('click', (e) => { e.stopPropagation(); parent[field] = null; renderExprSlot(container, parent, field); updatePreview(); });
+  head.appendChild(removeBtn);
+  node.appendChild(head);
+
+  const body = document.createElement('div');
+  body.style.fontSize = '12px';
+
+  switch (expr.kind) {
+    case 'literal': {
+      const typeSelect = document.createElement('select');
+      typeSelect.className = 'builder-select';
+      typeSelect.style.marginRight = '6px';
+      ['text','number','bool','null'].forEach(t => { const o = document.createElement('option'); o.value = t; o.textContent = t; if (t === expr._valueType) o.selected = true; typeSelect.appendChild(o); });
+      typeSelect.addEventListener('change', () => { expr._valueType = typeSelect.value; if (typeSelect.value === 'null') expr.value = null; updatePreview(); });
+      body.appendChild(typeSelect);
+      if (expr._valueType !== 'null') {
+        const valInput = document.createElement('input');
+        valInput.className = 'builder-input';
+        valInput.style.maxWidth = '150px';
+        valInput.value = expr.value !== null && expr.value !== undefined ? String(expr.value) : '';
+        valInput.placeholder = expr._valueType === 'bool' ? 'true/false' : 'value';
+        valInput.addEventListener('input', () => {
+          const v = valInput.value;
+          if (expr._valueType === 'number') expr.value = v.includes('.') ? parseFloat(v) : parseInt(v, 10);
+          else if (expr._valueType === 'bool') expr.value = v === 'true';
+          else expr.value = v;
+          updatePreview();
+        });
+        body.appendChild(valInput);
+      }
+      break;
+    }
+    case 'parameter': {
+      const sel = document.createElement('select');
+      sel.className = 'builder-select';
+      const proc = builderProcedures.find(p => exprBelongsToProc(p, expr));
+      const params = proc ? proc.parameters : (builderProcedures[0]?.parameters || []);
+      params.forEach(p => { const o = document.createElement('option'); o.value = p.name; o.textContent = p.name || '(unnamed)'; if (p.name === expr.name) o.selected = true; sel.appendChild(o); });
+      sel.addEventListener('change', () => { expr.name = sel.value; updatePreview(); });
+      body.appendChild(sel);
+      break;
+    }
+    case 'result': break;
+    case 'binary': {
+      const sel = document.createElement('select');
+      sel.className = 'builder-select';
+      BINARY_OPS.forEach(op => { const o = document.createElement('option'); o.value = op; o.textContent = op; if (op === expr.op) o.selected = true; sel.appendChild(o); });
+      sel.addEventListener('change', () => { expr.op = sel.value; updatePreview(); });
+      body.appendChild(sel);
+      const children = document.createElement('div');
+      children.className = 'expr-node-children';
+      ['left','right'].forEach(s => { const slot = document.createElement('div'); slot.style.margin = '4px 0'; const lbl = document.createElement('div'); lbl.style.cssText = 'font-size:11px;color:var(--muted)'; lbl.textContent = s; slot.appendChild(lbl); const slotEl = document.createElement('div'); renderExprSlot(slotEl, expr, s); slot.appendChild(slotEl); children.appendChild(slot); });
+      body.appendChild(children);
+      break;
+    }
+    case 'unary': {
+      const sel = document.createElement('select');
+      sel.className = 'builder-select';
+      UNARY_OPS.forEach(op => { const o = document.createElement('option'); o.value = op; o.textContent = op; if (op === expr.op) o.selected = true; sel.appendChild(o); });
+      sel.addEventListener('change', () => { expr.op = sel.value; updatePreview(); });
+      body.appendChild(sel);
+      const children = document.createElement('div');
+      children.className = 'expr-node-children';
+      const slotEl = document.createElement('div');
+      renderExprSlot(slotEl, expr, 'operand');
+      children.appendChild(slotEl);
+      body.appendChild(children);
+      break;
+    }
+    case 'if': {
+      const children = document.createElement('div');
+      children.className = 'expr-node-children';
+      ['condition','then','else'].forEach(s => { const slot = document.createElement('div'); slot.style.margin = '4px 0'; const lbl = document.createElement('div'); lbl.style.cssText = 'font-size:11px;color:var(--muted)'; lbl.textContent = s; slot.appendChild(lbl); const slotEl = document.createElement('div'); renderExprSlot(slotEl, expr, s); slot.appendChild(slotEl); children.appendChild(slot); });
+      body.appendChild(children);
+      break;
+    }
+    case 'let': {
+      const nameInput = document.createElement('input');
+      nameInput.className = 'builder-input';
+      nameInput.style.maxWidth = '120px';
+      nameInput.value = expr.name || '';
+      nameInput.placeholder = 'variable name';
+      nameInput.addEventListener('input', () => { expr.name = nameInput.value; updatePreview(); });
+      body.appendChild(nameInput);
+      const children = document.createElement('div');
+      children.className = 'expr-node-children';
+      ['value','body'].forEach(s => { const slot = document.createElement('div'); slot.style.margin = '4px 0'; const lbl = document.createElement('div'); lbl.style.cssText = 'font-size:11px;color:var(--muted)'; lbl.textContent = s; slot.appendChild(lbl); const slotEl = document.createElement('div'); renderExprSlot(slotEl, expr, s); slot.appendChild(slotEl); children.appendChild(slot); });
+      body.appendChild(children);
+      break;
+    }
+    case 'list': {
+      const children = document.createElement('div');
+      children.className = 'expr-node-children';
+      (expr.items || []).forEach((_, i) => {
+        const slot = document.createElement('div');
+        slot.style.margin = '4px 0';
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:4px';
+        const lbl = document.createElement('span');
+        lbl.style.cssText = 'font-size:11px;color:var(--muted)';
+        lbl.textContent = '[' + i + ']';
+        row.appendChild(lbl);
+        const rmBtn = document.createElement('button');
+        rmBtn.className = 'btn-builder-remove';
+        rmBtn.textContent = 'x';
+        rmBtn.addEventListener('click', () => { expr.items.splice(i, 1); renderExprSlot(container, parent, field); updatePreview(); });
+        row.appendChild(rmBtn);
+        slot.appendChild(row);
+        const slotEl = document.createElement('div');
+        renderExprSlot(slotEl, expr.items, i);
+        slot.appendChild(slotEl);
+        children.appendChild(slot);
+      });
+      const addBtn = document.createElement('button');
+      addBtn.className = 'btn-builder-add';
+      addBtn.textContent = '+ Item';
+      addBtn.addEventListener('click', () => { if (!expr.items) expr.items = []; expr.items.push(null); renderExprSlot(container, parent, field); updatePreview(); });
+      children.appendChild(addBtn);
+      body.appendChild(children);
+      break;
+    }
+    case 'index': {
+      const children = document.createElement('div');
+      children.className = 'expr-node-children';
+      ['collection','index'].forEach(s => { const slot = document.createElement('div'); slot.style.margin = '4px 0'; const lbl = document.createElement('div'); lbl.style.cssText = 'font-size:11px;color:var(--muted)'; lbl.textContent = s; slot.appendChild(lbl); const slotEl = document.createElement('div'); renderExprSlot(slotEl, expr, s); slot.appendChild(slotEl); children.appendChild(slot); });
+      body.appendChild(children);
+      break;
+    }
+    case 'field': {
+      const nameInput = document.createElement('input');
+      nameInput.className = 'builder-input';
+      nameInput.style.maxWidth = '120px';
+      nameInput.value = expr.field || '';
+      nameInput.placeholder = 'field name';
+      nameInput.addEventListener('input', () => { expr.field = nameInput.value; updatePreview(); });
+      body.appendChild(nameInput);
+      const children = document.createElement('div');
+      children.className = 'expr-node-children';
+      const slotEl = document.createElement('div');
+      renderExprSlot(slotEl, expr, 'object');
+      children.appendChild(slotEl);
+      body.appendChild(children);
+      break;
+    }
+    case 'intrinsic': {
+      const opSel = document.createElement('select');
+      opSel.className = 'builder-select';
+      opSel.style.maxWidth = '200px';
+      INTRINSIC_OPS.forEach(op => { const o = document.createElement('option'); o.value = op; o.textContent = op; if (op === expr.op) o.selected = true; opSel.appendChild(o); });
+      opSel.addEventListener('change', () => {
+        expr.op = opSel.value;
+        const arity = INTRINSIC_ARITY[expr.op] || 0;
+        expr.args = Array.from({ length: arity }, (_, i) => expr.args?.[i] || null);
+        renderExprSlot(container, parent, field);
+        updatePreview();
+      });
+      body.appendChild(opSel);
+      const children = document.createElement('div');
+      children.className = 'expr-node-children';
+      (expr.args || []).forEach((_, i) => {
+        const slot = document.createElement('div');
+        slot.style.margin = '4px 0';
+        const lbl = document.createElement('div');
+        lbl.style.cssText = 'font-size:11px;color:var(--muted)';
+        lbl.textContent = 'arg ' + (i + 1);
+        slot.appendChild(lbl);
+        const slotEl = document.createElement('div');
+        renderExprSlot(slotEl, expr.args, i);
+        slot.appendChild(slotEl);
+        children.appendChild(slot);
+      });
+      body.appendChild(children);
+      break;
+    }
+    case 'map_expr': {
+      const varInput = document.createElement('input');
+      varInput.className = 'builder-input';
+      varInput.style.maxWidth = '100px';
+      varInput.value = expr.var || '';
+      varInput.placeholder = 'var name';
+      varInput.addEventListener('input', () => { expr.var = varInput.value; updatePreview(); });
+      body.appendChild(varInput);
+      const children = document.createElement('div');
+      children.className = 'expr-node-children';
+      ['collection','body'].forEach(s => { const slot = document.createElement('div'); slot.style.margin = '4px 0'; const lbl = document.createElement('div'); lbl.style.cssText = 'font-size:11px;color:var(--muted)'; lbl.textContent = s; slot.appendChild(lbl); const slotEl = document.createElement('div'); renderExprSlot(slotEl, expr, s); slot.appendChild(slotEl); children.appendChild(slot); });
+      body.appendChild(children);
+      break;
+    }
+    case 'filter': {
+      const varInput = document.createElement('input');
+      varInput.className = 'builder-input';
+      varInput.style.maxWidth = '100px';
+      varInput.value = expr.var || '';
+      varInput.placeholder = 'var name';
+      varInput.addEventListener('input', () => { expr.var = varInput.value; updatePreview(); });
+      body.appendChild(varInput);
+      const children = document.createElement('div');
+      children.className = 'expr-node-children';
+      ['collection','predicate'].forEach(s => { const slot = document.createElement('div'); slot.style.margin = '4px 0'; const lbl = document.createElement('div'); lbl.style.cssText = 'font-size:11px;color:var(--muted)'; lbl.textContent = s; slot.appendChild(lbl); const slotEl = document.createElement('div'); renderExprSlot(slotEl, expr, s); slot.appendChild(slotEl); children.appendChild(slot); });
+      body.appendChild(children);
+      break;
+    }
+    case 'reduce': {
+      const accInput = document.createElement('input');
+      accInput.className = 'builder-input';
+      accInput.style.maxWidth = '80px';
+      accInput.value = expr.acc || '';
+      accInput.placeholder = 'acc var';
+      accInput.addEventListener('input', () => { expr.acc = accInput.value; updatePreview(); });
+      body.appendChild(accInput);
+      const varInput = document.createElement('input');
+      varInput.className = 'builder-input';
+      varInput.style.maxWidth = '80px';
+      varInput.value = expr.var || '';
+      varInput.placeholder = 'item var';
+      varInput.addEventListener('input', () => { expr.var = varInput.value; updatePreview(); });
+      body.appendChild(varInput);
+      const children = document.createElement('div');
+      children.className = 'expr-node-children';
+      ['collection','init','body'].forEach(s => { const slot = document.createElement('div'); slot.style.margin = '4px 0'; const lbl = document.createElement('div'); lbl.style.cssText = 'font-size:11px;color:var(--muted)'; lbl.textContent = s; slot.appendChild(lbl); const slotEl = document.createElement('div'); renderExprSlot(slotEl, expr, s); slot.appendChild(slotEl); children.appendChild(slot); });
+      body.appendChild(children);
+      break;
+    }
+  }
+  node.appendChild(body);
+  container.appendChild(node);
+}
+
+function exprBelongsToProc(proc, expr) {
+  // Rough check - just returns first proc if we can't determine
+  return true;
+}
+
+function createExprNode(kind) {
+  switch (kind) {
+    case 'literal': return { kind:'literal', _valueType:'text', value:'' };
+    case 'parameter': return { kind:'parameter', name: builderProcedures[0]?.parameters[0]?.name || '' };
+    case 'result': return { kind:'result' };
+    case 'binary': return { kind:'binary', op:'add', left:null, right:null };
+    case 'unary': return { kind:'unary', op:'negate', operand:null };
+    case 'if': return { kind:'if', condition:null, then:null, else:null };
+    case 'let': return { kind:'let', name:'', value:null, body:null };
+    case 'list': return { kind:'list', items:[] };
+    case 'index': return { kind:'index', collection:null, index:null };
+    case 'field': return { kind:'field', object:null, field:'' };
+    case 'intrinsic': return { kind:'intrinsic', version:1, op:INTRINSIC_OPS[0], args:Array(INTRINSIC_ARITY[INTRINSIC_OPS[0]]||0).fill(null) };
+    case 'map_expr': return { kind:'map_expr', collection:null, var:'x', body:null };
+    case 'filter': return { kind:'filter', collection:null, var:'x', predicate:null };
+    case 'reduce': return { kind:'reduce', collection:null, init:null, acc:'acc', var:'x', body:null };
+    default: return { kind };
+  }
+}
+
+function showPalette(anchor, onSelect) {
+  document.querySelectorAll('.expr-palette').forEach(p => p.remove());
+  const palette = document.createElement('div');
+  palette.className = 'expr-palette visible';
+  const search = document.createElement('input');
+  search.className = 'expr-palette-search';
+  search.placeholder = 'Search...';
+  palette.appendChild(search);
+  const list = document.createElement('div');
+
+  function renderItems(filter) {
+    list.innerHTML = EXPR_NODES.filter(n => !filter || n.label.toLowerCase().includes(filter) || n.kind.includes(filter)).map(n =>
+      '<div class="expr-palette-item" data-kind="'+n.kind+'"><span class="ep-kind">'+n.kind+'</span> '+n.label+'</div>'
+    ).join('');
+    list.querySelectorAll('.expr-palette-item').forEach(item => {
+      item.addEventListener('click', (e) => { e.stopPropagation(); palette.remove(); onSelect(item.dataset.kind); });
+    });
+  }
+  renderItems('');
+  search.addEventListener('input', () => renderItems(search.value.toLowerCase()));
+  palette.appendChild(list);
+  anchor.style.position = 'relative';
+  anchor.appendChild(palette);
+  search.focus();
+  setTimeout(() => {
+    document.addEventListener('click', function dismiss(e) {
+      if (!palette.contains(e.target)) { palette.remove(); document.removeEventListener('click', dismiss); }
+    });
+  }, 0);
+}
+
+// ---- Invocation ----
+function updateInvokeDropdown() {
+  const sel = document.getElementById('builder-invoke-proc');
+  const current = sel.value;
+  sel.innerHTML = builderProcedures.map(p => '<option value="'+esc(p.key)+'">'+esc(p.name||p.key||'(unnamed)')+'</option>').join('');
+  if (current && builderProcedures.find(p => p.key === current)) sel.value = current;
+  updateInvokeInputs();
+}
+
+function updateInvokeInputs() {
+  const sel = document.getElementById('builder-invoke-proc');
+  const el = document.getElementById('builder-invoke-inputs');
+  const proc = builderProcedures.find(p => p.key === sel.value);
+  if (!proc) { el.innerHTML = '<div style="color:var(--muted);font-size:12px">Select a procedure first</div>'; return; }
+  el.innerHTML = proc.parameters.map((p, i) =>
+    '<div class="builder-row"><label>'+esc(p.name||'arg'+i)+'</label><input class="builder-input invoke-val" data-invoke-idx="'+i+'" placeholder="'+esc(p.valueType)+'"></div>'
+  ).join('');
+  el.querySelectorAll('.invoke-val').forEach(inp => inp.addEventListener('input', updatePreview));
+}
+
+// ---- Serialization ----
+function serializeExpr(expr) {
+  if (!expr) return null;
+  switch (expr.kind) {
+    case 'literal': return { kind:'literal', value: expr.value };
+    case 'parameter': return { kind:'parameter', name: expr.name };
+    case 'result': return { kind:'result' };
+    case 'binary': return { kind:'binary', op: expr.op, left: serializeExpr(expr.left), right: serializeExpr(expr.right) };
+    case 'unary': return { kind:'unary', op: expr.op, operand: serializeExpr(expr.operand) };
+    case 'if': return { kind:'if', condition: serializeExpr(expr.condition), then: serializeExpr(expr.then), else: serializeExpr(expr.else) };
+    case 'let': return { kind:'let', name: expr.name, value: serializeExpr(expr.value), body: serializeExpr(expr.body) };
+    case 'list': return { kind:'list', items: (expr.items||[]).map(serializeExpr) };
+    case 'index': return { kind:'index', collection: serializeExpr(expr.collection), index: serializeExpr(expr.index) };
+    case 'field': return { kind:'field', object: serializeExpr(expr.object), field: expr.field };
+    case 'intrinsic': return { kind:'intrinsic', version:1, op: expr.op, args: (expr.args||[]).map(serializeExpr) };
+    case 'map_expr': return { kind:'map', collection: serializeExpr(expr.collection), var: expr.var, body: serializeExpr(expr.body) };
+    case 'filter': return { kind:'filter', collection: serializeExpr(expr.collection), var: expr.var, predicate: serializeExpr(expr.predicate) };
+    case 'reduce': return { kind:'reduce', collection: serializeExpr(expr.collection), init: serializeExpr(expr.init), acc: expr.acc, var: expr.var, body: serializeExpr(expr.body) };
+    default: return expr;
+  }
+}
+
+function buildProposal() {
+  const invokeProcKey = document.getElementById('builder-invoke-proc').value;
+  const invokeInputEls = document.querySelectorAll('#builder-invoke-inputs .invoke-val');
+  const invokeProc = builderProcedures.find(p => p.key === invokeProcKey);
+  const invokeInputs = invokeProc ? invokeProc.parameters.map((p, i) => {
+    const raw = invokeInputEls[i]?.value ?? '';
+    let val = raw;
+    if (raw === 'null') val = null;
+    else if (raw === 'true') val = true;
+    else if (raw === 'false') val = false;
+    else if (raw !== '' && !isNaN(Number(raw))) val = Number(raw);
+    return { name: p.name, value: val };
+  }) : [];
+
+  return {
+    proposalKind: 'reusable_lesson',
+    interpretations: [],
+    lesson: {
+      primitiveSet: 'pure_expr_v2',
+      concepts: builderConcepts.map(c => ({ key: c.key, name: c.name, description: c.description, mutability: c.mutability })),
+      relationships: [],
+      procedures: builderProcedures.map(p => ({
+        key: p.key,
+        name: p.name,
+        concept: { kind: 'new_concept', key: p.conceptKey || builderConcepts[0]?.key || '' },
+        parameters: p.parameters.map(pm => ({ name: pm.name, description: pm.description, valueType: pm.valueType })),
+        body: serializeExpr(p.bodyExpr),
+        contract: {
+          requires: p.contract.requires.map(c => ({ description: c.description, check: serializeExpr(c.checkExpr) })),
+          promises: p.contract.promises.map(c => ({ description: c.description, check: serializeExpr(c.checkExpr) })),
+          failsWhen: p.contract.failsWhen.map(c => ({ description: c.description, check: serializeExpr(c.checkExpr) })),
+        },
+      })),
+      invocation: { procedureKey: invokeProcKey, inputs: invokeInputs },
+    },
+    procedure: null,
+    answer: null,
+    abstainReason: null,
+  };
+}
+
+// ---- Preview ----
+function updatePreview() {
+  const el = document.getElementById('builder-preview');
+  if (!el.classList.contains('open')) return;
+  try {
+    el.textContent = JSON.stringify(buildProposal(), null, 2);
+  } catch (e) {
+    el.textContent = 'Error building proposal: ' + e.message;
+  }
+}
+
+// ---- Submit ----
+async function submitBuilder() {
+  const situation = document.getElementById('builder-situation').value.trim();
+  if (!situation) { document.getElementById('builder-status').textContent = 'Situation is required'; return; }
+  if (!builderConcepts.length) { document.getElementById('builder-status').textContent = 'Add at least one concept'; return; }
+  if (!builderProcedures.length) { document.getElementById('builder-status').textContent = 'Add at least one procedure'; return; }
+
+  const proposal = buildProposal();
+  document.getElementById('builder-status').textContent = 'Submitting...';
+  document.getElementById('builder-submit').disabled = true;
+
+  try {
+    const result = await api('/api/teach', {
+      method: 'POST',
+      body: JSON.stringify({ situation, proposal }),
+    });
+
+    document.getElementById('builder-status').textContent = '';
+    document.getElementById('builder-submit').disabled = false;
+
+    // Show result in chat
+    addMessage('user', '[Taught] ' + situation);
+    const answer = result.answer !== null && result.answer !== undefined
+      ? (typeof result.answer === 'string' ? result.answer : JSON.stringify(result.answer, null, 2))
+      : result.disposition || result.status || 'Completed';
+    const assistantDiv = addMessage('assistant', answer);
+
+    if (result.episode || result.disposition) {
+      const toggle = document.createElement('button');
+      toggle.className = 'details-toggle';
+      toggle.innerHTML = '<span class="arrow">&#9654;</span> Details';
+      const detailWrap = document.createElement('div');
+      detailWrap.className = 'episode-detail';
+      detailWrap.style.display = 'none';
+      detailWrap.innerHTML = renderEpisodeDetail(result);
+      toggle.addEventListener('click', () => {
+        const open = detailWrap.style.display !== 'none';
+        detailWrap.style.display = open ? 'none' : 'block';
+        toggle.querySelector('.arrow').classList.toggle('open', !open);
+      });
+      assistantDiv.appendChild(toggle);
+      assistantDiv.appendChild(detailWrap);
+    }
+
+    // Close builder
+    toggleBuilder(false);
+  } catch (error) {
+    document.getElementById('builder-status').textContent = 'Error: ' + (error.message || error);
+    document.getElementById('builder-submit').disabled = false;
+  }
+}
+
+// ---- Builder toggle ----
+function toggleBuilder(force) {
+  builderOpen = force !== undefined ? force : !builderOpen;
+  document.getElementById('builder-panel').classList.toggle('open', builderOpen);
+  document.getElementById('builder-toggle-btn').classList.toggle('active', builderOpen);
+  if (builderOpen && !builderConcepts.length && !builderProcedures.length) {
+    addConcept('main', '', '', 'procedural');
+    addProcedure();
+  }
+}
+
+function resetBuilder() {
+  builderConcepts = [];
+  builderProcedures = [];
+  document.getElementById('builder-situation').value = '';
+  document.getElementById('builder-status').textContent = '';
+  renderConcepts();
+  renderProcedures();
+  updatePreview();
+}
+
+// ---- Teacher Assist ----
+async function teacherAssist() {
+  const situation = document.getElementById('builder-situation').value.trim();
+  if (!situation) { document.getElementById('builder-status').textContent = 'Fill in the situation first'; return; }
+
+  document.getElementById('builder-status').textContent = 'Asking teacher...';
+  document.getElementById('builder-assist').disabled = true;
+
+  const hints = {
+    parameters: builderProcedures.flatMap(p => p.parameters.filter(pm => pm.name)),
+    concepts: builderConcepts.filter(c => c.key || c.name),
+  };
+
+  try {
+    const proposal = await api('/api/teach/assist', {
+      method: 'POST',
+      body: JSON.stringify({ situation, hints }),
+    });
+
+    if (proposal.error) throw new Error(proposal.error);
+    populateBuilderFromProposal(proposal);
+    document.getElementById('builder-status').textContent = 'Teacher filled in a draft - review and edit before submitting';
+  } catch (error) {
+    document.getElementById('builder-status').textContent = 'Assist failed: ' + (error.message || error);
+  } finally {
+    document.getElementById('builder-assist').disabled = false;
+  }
+}
+
+function populateBuilderFromProposal(proposal) {
+  const lesson = proposal.lesson || proposal;
+  if (!lesson) return;
+
+  // Populate concepts (merge, don't replace existing ones with content)
+  if (lesson.concepts && Array.isArray(lesson.concepts)) {
+    const existingKeys = new Set(builderConcepts.filter(c => c.key).map(c => c.key));
+    // Update empty existing concepts first
+    lesson.concepts.forEach((c, i) => {
+      if (i < builderConcepts.length && !builderConcepts[i].key && !builderConcepts[i].name) {
+        builderConcepts[i].key = c.key || '';
+        builderConcepts[i].name = c.name || '';
+        builderConcepts[i].description = c.description || '';
+        builderConcepts[i].mutability = c.mutability || 'procedural';
+        existingKeys.add(c.key);
+      } else if (!existingKeys.has(c.key)) {
+        addConcept(c.key, c.name, c.description, c.mutability);
+        existingKeys.add(c.key);
+      }
+    });
+    renderConcepts();
+  }
+
+  // Populate procedures
+  if (lesson.procedures && Array.isArray(lesson.procedures)) {
+    lesson.procedures.forEach((proc, i) => {
+      if (i >= builderProcedures.length) addProcedure();
+      const bp = builderProcedures[i];
+      if (!bp.key) bp.key = proc.key || '';
+      if (!bp.name) bp.name = proc.name || '';
+      if (proc.concept) {
+        bp.conceptKey = proc.concept.key || proc.concept.id || '';
+      }
+      // Populate parameters if empty
+      if (proc.parameters && bp.parameters.length <= 1 && !bp.parameters[0]?.name) {
+        bp.parameters = proc.parameters.map(p => ({
+          name: p.name || '',
+          description: p.description || '',
+          valueType: p.valueType || 'any',
+        }));
+      }
+      // Populate body if empty
+      if (proc.body && !bp.bodyExpr) {
+        bp.bodyExpr = deserializeExpr(proc.body);
+      }
+      // Populate contract if empty
+      if (proc.contract) {
+        ['requires','promises','failsWhen'].forEach(type => {
+          if (proc.contract[type] && !bp.contract[type].length) {
+            bp.contract[type] = (proc.contract[type] || []).map(c => ({
+              description: c.description || '',
+              checkExpr: c.check ? deserializeExpr(c.check) : null,
+            }));
+          }
+        });
+      }
+    });
+    renderProcedures();
+  }
+
+  // Populate invocation
+  if (lesson.invocation) {
+    const sel = document.getElementById('builder-invoke-proc');
+    if (lesson.invocation.procedureKey) sel.value = lesson.invocation.procedureKey;
+    updateInvokeInputs();
+    if (lesson.invocation.inputs) {
+      const inputEls = document.querySelectorAll('#builder-invoke-inputs .invoke-val');
+      lesson.invocation.inputs.forEach((inp, i) => {
+        if (inputEls[i]) inputEls[i].value = inp.value !== null && inp.value !== undefined ? String(inp.value) : '';
+      });
+    }
+  }
+
+  updatePreview();
+}
+
+function deserializeExpr(node) {
+  if (!node || typeof node !== 'object') return null;
+  switch (node.kind) {
+    case 'literal': return { kind:'literal', _valueType: node.value === null ? 'null' : typeof node.value === 'boolean' ? 'bool' : typeof node.value === 'number' ? 'number' : 'text', value: node.value };
+    case 'parameter': return { kind:'parameter', name: node.name || '' };
+    case 'result': return { kind:'result' };
+    case 'binary': return { kind:'binary', op: node.op || 'add', left: deserializeExpr(node.left), right: deserializeExpr(node.right) };
+    case 'unary': return { kind:'unary', op: node.op || 'negate', operand: deserializeExpr(node.operand) };
+    case 'if': return { kind:'if', condition: deserializeExpr(node.condition), then: deserializeExpr(node.then), else: deserializeExpr(node.else || node.otherwise) };
+    case 'let': return { kind:'let', name: node.name || '', value: deserializeExpr(node.value), body: deserializeExpr(node.body) };
+    case 'list': return { kind:'list', items: (node.items || []).map(deserializeExpr) };
+    case 'index': return { kind:'index', collection: deserializeExpr(node.collection), index: deserializeExpr(node.index) };
+    case 'field': return { kind:'field', object: deserializeExpr(node.object), field: node.field || '' };
+    case 'intrinsic': return { kind:'intrinsic', version:1, op: node.op || '', args: (node.args || []).map(deserializeExpr) };
+    case 'map': return { kind:'map_expr', collection: deserializeExpr(node.collection), var: node.var || 'x', body: deserializeExpr(node.body) };
+    case 'filter': return { kind:'filter', collection: deserializeExpr(node.collection), var: node.var || 'x', predicate: deserializeExpr(node.predicate) };
+    case 'reduce': return { kind:'reduce', collection: deserializeExpr(node.collection), init: deserializeExpr(node.init), acc: node.acc || 'acc', var: node.var || 'x', body: deserializeExpr(node.body) };
+    default: return null;
+  }
+}
+
+// ---- Wire up builder UI ----
+document.getElementById('builder-toggle-btn').addEventListener('click', () => toggleBuilder());
+document.getElementById('add-concept').addEventListener('click', () => { addConcept(); });
+document.getElementById('add-procedure').addEventListener('click', () => { addProcedure(); renderProcedures(); updatePreview(); });
+document.getElementById('builder-cancel').addEventListener('click', () => { resetBuilder(); toggleBuilder(false); });
+document.getElementById('builder-assist').addEventListener('click', teacherAssist);
+document.getElementById('builder-submit').addEventListener('click', submitBuilder);
+document.getElementById('toggle-preview').addEventListener('click', () => {
+  const el = document.getElementById('builder-preview');
+  const open = el.classList.toggle('open');
+  document.getElementById('toggle-preview').textContent = open ? 'Hide JSON' : 'Show JSON';
+  if (open) updatePreview();
+});
+
+loadRuntime();
+loadSessions();
+</script></body></html>

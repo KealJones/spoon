@@ -881,15 +881,16 @@ export interface CycleInput {
   assumptions: CycleAssumption[];
   budget: CycleBudget;
   teacherAllowed: boolean;
+  interpreterAllowed?: boolean;
   sessionId?: string;
   recallMode?: "global" | "session" | "none";
-  permissionMode?: "ask" | "workspace" | "full-access";
+  permissionMode?: "ask" | "workspace" | "full-access" | "god-mode";
 }
 
 export type SessionVisibility = "global" | "isolated";
 export type SessionState = "active" | "ended";
 export type RecallMode = "global" | "session" | "none";
-export type PermissionMode = "ask" | "workspace" | "full-access";
+export type PermissionMode = "ask" | "workspace" | "full-access" | "god-mode";
 
 export interface Session {
   id: string;
@@ -908,7 +909,14 @@ export interface TeacherRequestWire {
 }
 
 export interface ProposalProvenanceWire {
-  provider: "claude" | "codex" | "cli" | "openai" | "ollama" | "human";
+  provider:
+    | "claude"
+    | "codex"
+    | "cursor"
+    | "cli"
+    | "openai"
+    | "ollama"
+    | "human";
   teacher: string;
   model?: string;
   requestId: string;
@@ -936,6 +944,66 @@ export interface TeacherProposalWire {
   };
 }
 
+export interface IntentTokenRangeWire {
+  startToken: number;
+  endToken: number;
+}
+
+export interface IntentSlotProposalWire {
+  name: string;
+  confidence: number;
+  sourceTokens: IntentTokenRangeWire[];
+  inferredValue?: JsonValue;
+}
+
+export interface IntentFrameProposalWire {
+  name: string;
+  confidence: number;
+  scope: "CurrentTurn" | "Conversation" | "Workspace" | "External";
+  sourceTokens: IntentTokenRangeWire[];
+  slots: IntentSlotProposalWire[];
+  ambiguities: string[];
+}
+
+export interface InterpretationProposalWire {
+  candidates: IntentFrameProposalWire[];
+  selected: number | null;
+  disposition: "execute" | "clarify" | "abstain";
+}
+
+export interface IntentProposalWire {
+  content: InterpretationProposalWire;
+  rawContent?: unknown;
+  source: string;
+  status: "unverified";
+  provenance: {
+    provider: "ollama" | "cursor" | "spoon";
+    model: string;
+    requestId: string;
+    generatedAt: string;
+    requestHash: string;
+  };
+}
+
+export interface IntentRequestWire {
+  situation: string;
+  tokenStream: {
+    document: { text: string; normalization: string };
+    tokens: Array<{
+      kind: string;
+      span: { start_byte: number; end_byte: number };
+    }>;
+  };
+  context: JsonValue;
+  desiredOutput: JsonValue;
+}
+
+export interface NeedIntentProgress {
+  status: "need_intent";
+  cycleId: string;
+  request: IntentRequestWire;
+}
+
 export interface NeedTeacherProgress {
   status: "need_teacher";
   cycleId: string;
@@ -947,7 +1015,9 @@ export interface CompletedCycleProgress {
   cycleId: string;
   disposition: "verified" | "provisional" | "abstained";
   answer: JsonValue;
+  procedureIr?: JsonValue;
   episode: Record<string, JsonValue>;
 }
 
-export type CycleProgress = NeedTeacherProgress | CompletedCycleProgress;
+export type CycleProgress =
+  NeedIntentProgress | NeedTeacherProgress | CompletedCycleProgress;

@@ -36,6 +36,14 @@ pub enum Expr {
         version: u32,
         args: Vec<Expr>,
     },
+    /// Invoke an exact procedure from the imported capability registry. This
+    /// is intentionally distinct from `CallExact`: capability calls carry an
+    /// effect boundary and are authorized by the host at execution time.
+    CapabilityCall {
+        content_id: String,
+        procedure_id: String,
+        input: Box<Expr>,
+    },
     If {
         cond: Box<Expr>,
         then: Box<Expr>,
@@ -103,6 +111,10 @@ pub enum IntrinsicOp {
     TextStartsWith,
     TextEndsWith,
     TextReplace,
+    /// Percent-encode UTF-8 text for a URL query component. This is a pure
+    /// portable transform; network authorization remains a capability call.
+    TextUrlEncode,
+    TextRegexCapture,
     CollectionContains,
     CollectionFindIndex,
     CountEqual,
@@ -158,6 +170,126 @@ pub enum IntrinsicOp {
     NumericPowFloat,
     IntegerQuotient,
     IntegerRemainder,
+
+    // -- Randomness (nondeterministic) --
+    RandomInt,
+    RandomFloat,
+    RandomChoice,
+    RandomShuffle,
+    RandomSample,
+    RandomUuid,
+
+    // -- Date/Time (nondeterministic: DateNow) --
+    DateNow,
+    DateFromParts,
+    DateGetPart,
+    DateAdd,
+    DateDiff,
+    DateFormat,
+
+    // -- Math functions --
+    MathSqrt,
+    MathLog,
+    MathLog10,
+    MathLog2,
+    MathExp,
+    MathSin,
+    MathCos,
+    MathTan,
+    MathAsin,
+    MathAcos,
+    MathAtan,
+    MathAtan2,
+    MathPi,
+    MathE,
+    MathIsNan,
+    MathIsInfinite,
+    MathGcd,
+    MathLcm,
+    MathHypot,
+
+    // -- Text formatting --
+    TextPadStart,
+    TextPadEnd,
+    TextSubstring,
+    TextCharAt,
+    TextFormat,
+    TextMatchesRegex,
+    TextRegexReplaceAll,
+    TextBase64Encode,
+    TextBase64Decode,
+    TextUrlDecode,
+    TextHexEncode,
+    TextHexDecode,
+    TextReverse,
+    TextCharCode,
+    TextFromCharCode,
+    TextLevenshtein,
+
+    // -- Hashing --
+    HashSha256,
+    HashMd5,
+
+    // -- Set operations --
+    SetUnion,
+    SetIntersect,
+    SetDifference,
+    SetIsSubset,
+
+    // -- Collection extras --
+    CollectionGroupBy,
+    CollectionSortBy,
+    CollectionMinBy,
+    CollectionMaxBy,
+    CollectionChunk,
+    CollectionEnumerate,
+    CollectionAny,
+    CollectionAll,
+    CollectionTake,
+    CollectionDrop,
+    CollectionFirst,
+    CollectionLast,
+    CollectionPartition,
+    CollectionRepeatValue,
+    CollectionWindow,
+
+    // -- Map extras --
+    MapHasKey,
+    MapGetDefault,
+    MapSize,
+    MapFilterKeys,
+
+    // -- Type checking --
+    IsNull,
+    IsBool,
+    IsInt,
+    IsFloat,
+    IsText,
+    IsList,
+    IsMap,
+    IsNumeric,
+    ToInt,
+    ToFloat,
+    ToBool,
+
+    // -- Control --
+    Assert,
+    DefaultIfNull,
+
+    // -- Bitwise --
+    BitAnd,
+    BitOr,
+    BitXor,
+    BitNot,
+    BitShiftLeft,
+    BitShiftRight,
+
+    // -- Numeric formatting --
+    NumericToFixed,
+    NumericToHex,
+    NumericFromHex,
+    NumericToBinary,
+    NumericFromBinary,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

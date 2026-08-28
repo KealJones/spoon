@@ -1,6 +1,23 @@
 # spoon-server
 
-The newline-delimited JSON-RPC boundary for running SPOON as a local service.
+JSON-RPC over stdio, plus an HTTP chat UI.
+
+## HTTP chat
+
+```bash
+SPOON_DB=./spoon.db \
+SPOON_TEACHER_MODEL=qwen3.8:27b \
+  pnpm serve
+```
+
+That runs `cargo run -p spoon-server -- --http --port 4318`. Open
+<http://127.0.0.1:4318>. `SPOON_TEACHER_URL` / `SPOON_OLLAMA_URL` default to
+`http://localhost:11434`.
+
+## Stdio JSON-RPC
+
+Default (no `--http`): newline-delimited JSON-RPC on stdin/stdout. The CLI and
+SDK spawn this binary. Domain rules stay in the engine crates.
 
 ## Owns
 
@@ -43,6 +60,21 @@ The supplied stdio binary installs this adapter only when its host sets
 `SPOON_FILE_ROOT`; `SPOON_FILE_BINDING` selects the portable binding name and
 defaults to `workspace`. Its public ceiling is fixed at 1 MiB, 16 steps, and
 2 seconds. Missing configuration leaves file effects unavailable.
+
+For network capabilities, set `SPOON_WEB_FETCH_HOSTS` to a comma-separated
+allowlist such as `api.example.com`. This installs the bounded `web.fetch`
+adapter with a 1 MiB request/response ceiling, 16 steps, and a 10 second
+timeout. URLs must be HTTP(S), contain no embedded credentials, and match an
+allowlisted host exactly; redirects and credential-bearing headers are denied.
+The adapter remains unavailable when the variable is absent. File and network
+adapters can be enabled together.
+
+After configuring a network host, an administrator can register its concrete
+capability procedure with `capability.provisionWebFetch`. This makes the
+host-backed `web.fetch` procedure visible to teaching without granting the
+network permission; execution still requires the normal local permission
+decision. `capability.list` reports all imported procedures and every native
+boundary together with its adapter availability.
 
 ## Bounded response-plan rendering
 

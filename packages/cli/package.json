@@ -13,6 +13,7 @@
     "depcheck": "depcheck"
   },
   "dependencies": {
+    "@spoon/intent": "workspace:*",
     "@spoon/sdk": "workspace:*",
     "@spoon/teacher": "workspace:*"
   }

@@ -14,8 +14,16 @@ test("inspector package exposes a local dashboard entry point", async () => {
   const packageJson = await import("../package.json", {
     with: { type: "json" },
   });
-  assert.equal(packageJson.default.scripts.dev, "tsx src/server.ts");
+  assert.equal(packageJson.default.scripts.dev, "tsx watch src/server.ts");
   assert.equal(packageJson.default.scripts.start, "node dist/src/server.js");
+});
+
+test("episode detail binds replay by element id, not getElementById of a CSS selector", () => {
+  const dashboard = inspectorHtml();
+  assert.match(dashboard, /id="replay-button"/);
+  assert.match(dashboard, /\$\('replay-button'\)\?\.addEventListener/);
+  assert.doesNotMatch(dashboard, /\$\('\[data-replay\]'\)\.addEventListener/);
+  assert.match(dashboard, /detail\.narrative\|\|/);
 });
 
 test("inspector labels Phase 6 slots as bounded evidence, not broad claims", () => {

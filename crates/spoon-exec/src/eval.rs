@@ -1,6 +1,8 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
 
+use rand::Rng;
+use rand::seq::{IndexedRandom, SliceRandom};
 use spoon_core::{
     BinOp, Condition, Expr, IntrinsicOp, LanguageError, LanguageLimits, Procedure, ProcedureId,
     SpoonError, TokenKind, UnOp, Value, tokenize_with_limits,
@@ -96,24 +98,73 @@ impl ExecutionAttempt {
 
 /// Evaluates expression trees against a table of registered procedures,
 /// tracking a step budget and recording a call trace as it goes.
-pub struct Evaluator {
+pub trait CapabilityInvoker {
+    fn invoke(
+        &mut self,
+        content_id: &str,
+        procedure_id: &str,
+        input: Value,
+    ) -> Result<Value, SpoonError>;
+}
+
+impl<T: CapabilityInvoker + ?Sized> CapabilityInvoker for &mut T {
+    fn invoke(
+        &mut self,
+        content_id: &str,
+        procedure_id: &str,
+        input: Value,
+    ) -> Result<Value, SpoonError> {
+        (**self).invoke(content_id, procedure_id, input)
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct NoCapabilityInvoker;
+
+impl CapabilityInvoker for NoCapabilityInvoker {
+    fn invoke(
+        &mut self,
+        _content_id: &str,
+        _procedure_id: &str,
+        _input: Value,
+    ) -> Result<Value, SpoonError> {
+        Err(SpoonError::Other(
+            "capability call requires an authorized host runtime".into(),
+        ))
+    }
+}
+
+pub struct Evaluator<I = NoCapabilityInvoker> {
     procedures: HashMap<ProcedureId, Procedure>,
     budget: ExecutionBudget,
     trace: ExecTrace,
+    capability_invoker: I,
 }
 
-impl Default for Evaluator {
+impl Default for Evaluator<NoCapabilityInvoker> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Evaluator {
+impl Evaluator<NoCapabilityInvoker> {
     pub fn new() -> Self {
         Self {
             procedures: HashMap::new(),
             budget: ExecutionBudget::default(),
             trace: ExecTrace::new(),
+            capability_invoker: NoCapabilityInvoker,
+        }
+    }
+}
+
+impl<I: CapabilityInvoker> Evaluator<I> {
+    pub fn with_capability_invoker<J: CapabilityInvoker>(self, invoker: J) -> Evaluator<J> {
+        Evaluator {
+            procedures: self.procedures,
+            budget: self.budget,
+            trace: self.trace,
+            capability_invoker: invoker,
         }
     }
 
@@ -183,6 +234,16 @@ impl Evaluator {
                     arg_values.push(self.eval(arg, env)?);
                 }
                 self.call_procedure(procedure, arg_values)
+            }
+
+            Expr::CapabilityCall {
+                content_id,
+                procedure_id,
+                input,
+            } => {
+                let value = self.eval(input, env)?;
+                self.capability_invoker
+                    .invoke(content_id, procedure_id, value)
             }
 
             Expr::If { cond, then, else_ } => {
@@ -678,6 +739,8 @@ fn intrinsic_name(op: IntrinsicOp) -> &'static str {
         IntrinsicOp::TextStartsWith => "text_starts_with",
         IntrinsicOp::TextEndsWith => "text_ends_with",
         IntrinsicOp::TextReplace => "text_replace",
+        IntrinsicOp::TextUrlEncode => "text_url_encode",
+        IntrinsicOp::TextRegexCapture => "text_regex_capture",
         IntrinsicOp::CollectionContains => "collection_contains",
         IntrinsicOp::CollectionFindIndex => "collection_find_index",
         IntrinsicOp::CountEqual => "count_equal",
@@ -733,6 +796,114 @@ fn intrinsic_name(op: IntrinsicOp) -> &'static str {
         IntrinsicOp::NumericPowFloat => "numeric_pow_float",
         IntrinsicOp::IntegerQuotient => "integer_quotient",
         IntrinsicOp::IntegerRemainder => "integer_remainder",
+        // Randomness
+        IntrinsicOp::RandomInt => "random_int",
+        IntrinsicOp::RandomFloat => "random_float",
+        IntrinsicOp::RandomChoice => "random_choice",
+        IntrinsicOp::RandomShuffle => "random_shuffle",
+        IntrinsicOp::RandomSample => "random_sample",
+        IntrinsicOp::RandomUuid => "random_uuid",
+        // Date/Time
+        IntrinsicOp::DateNow => "date_now",
+        IntrinsicOp::DateFromParts => "date_from_parts",
+        IntrinsicOp::DateGetPart => "date_get_part",
+        IntrinsicOp::DateAdd => "date_add",
+        IntrinsicOp::DateDiff => "date_diff",
+        IntrinsicOp::DateFormat => "date_format",
+        // Math
+        IntrinsicOp::MathSqrt => "math_sqrt",
+        IntrinsicOp::MathLog => "math_log",
+        IntrinsicOp::MathLog10 => "math_log10",
+        IntrinsicOp::MathLog2 => "math_log2",
+        IntrinsicOp::MathExp => "math_exp",
+        IntrinsicOp::MathSin => "math_sin",
+        IntrinsicOp::MathCos => "math_cos",
+        IntrinsicOp::MathTan => "math_tan",
+        IntrinsicOp::MathAsin => "math_asin",
+        IntrinsicOp::MathAcos => "math_acos",
+        IntrinsicOp::MathAtan => "math_atan",
+        IntrinsicOp::MathAtan2 => "math_atan2",
+        IntrinsicOp::MathPi => "math_pi",
+        IntrinsicOp::MathE => "math_e",
+        IntrinsicOp::MathIsNan => "math_is_nan",
+        IntrinsicOp::MathIsInfinite => "math_is_infinite",
+        IntrinsicOp::MathGcd => "math_gcd",
+        IntrinsicOp::MathLcm => "math_lcm",
+        IntrinsicOp::MathHypot => "math_hypot",
+        // Text formatting
+        IntrinsicOp::TextPadStart => "text_pad_start",
+        IntrinsicOp::TextPadEnd => "text_pad_end",
+        IntrinsicOp::TextSubstring => "text_substring",
+        IntrinsicOp::TextCharAt => "text_char_at",
+        IntrinsicOp::TextFormat => "text_format",
+        IntrinsicOp::TextMatchesRegex => "text_matches_regex",
+        IntrinsicOp::TextRegexReplaceAll => "text_regex_replace_all",
+        IntrinsicOp::TextBase64Encode => "text_base64_encode",
+        IntrinsicOp::TextBase64Decode => "text_base64_decode",
+        IntrinsicOp::TextUrlDecode => "text_url_decode",
+        IntrinsicOp::TextHexEncode => "text_hex_encode",
+        IntrinsicOp::TextHexDecode => "text_hex_decode",
+        IntrinsicOp::TextReverse => "text_reverse",
+        IntrinsicOp::TextCharCode => "text_char_code",
+        IntrinsicOp::TextFromCharCode => "text_from_char_code",
+        IntrinsicOp::TextLevenshtein => "text_levenshtein",
+        // Hashing
+        IntrinsicOp::HashSha256 => "hash_sha256",
+        IntrinsicOp::HashMd5 => "hash_md5",
+        // Set operations
+        IntrinsicOp::SetUnion => "set_union",
+        IntrinsicOp::SetIntersect => "set_intersect",
+        IntrinsicOp::SetDifference => "set_difference",
+        IntrinsicOp::SetIsSubset => "set_is_subset",
+        // Collection extras
+        IntrinsicOp::CollectionGroupBy => "collection_group_by",
+        IntrinsicOp::CollectionSortBy => "collection_sort_by",
+        IntrinsicOp::CollectionMinBy => "collection_min_by",
+        IntrinsicOp::CollectionMaxBy => "collection_max_by",
+        IntrinsicOp::CollectionChunk => "collection_chunk",
+        IntrinsicOp::CollectionEnumerate => "collection_enumerate",
+        IntrinsicOp::CollectionAny => "collection_any",
+        IntrinsicOp::CollectionAll => "collection_all",
+        IntrinsicOp::CollectionTake => "collection_take",
+        IntrinsicOp::CollectionDrop => "collection_drop",
+        IntrinsicOp::CollectionFirst => "collection_first",
+        IntrinsicOp::CollectionLast => "collection_last",
+        IntrinsicOp::CollectionPartition => "collection_partition",
+        IntrinsicOp::CollectionRepeatValue => "collection_repeat_value",
+        IntrinsicOp::CollectionWindow => "collection_window",
+        // Map extras
+        IntrinsicOp::MapHasKey => "map_has_key",
+        IntrinsicOp::MapGetDefault => "map_get_default",
+        IntrinsicOp::MapSize => "map_size",
+        IntrinsicOp::MapFilterKeys => "map_filter_keys",
+        // Type checking
+        IntrinsicOp::IsNull => "is_null",
+        IntrinsicOp::IsBool => "is_bool",
+        IntrinsicOp::IsInt => "is_int",
+        IntrinsicOp::IsFloat => "is_float",
+        IntrinsicOp::IsText => "is_text",
+        IntrinsicOp::IsList => "is_list",
+        IntrinsicOp::IsMap => "is_map",
+        IntrinsicOp::IsNumeric => "is_numeric",
+        IntrinsicOp::ToInt => "to_int",
+        IntrinsicOp::ToFloat => "to_float",
+        IntrinsicOp::ToBool => "to_bool",
+        // Control
+        IntrinsicOp::Assert => "assert",
+        IntrinsicOp::DefaultIfNull => "default_if_null",
+        // Bitwise
+        IntrinsicOp::BitAnd => "bit_and",
+        IntrinsicOp::BitOr => "bit_or",
+        IntrinsicOp::BitXor => "bit_xor",
+        IntrinsicOp::BitNot => "bit_not",
+        IntrinsicOp::BitShiftLeft => "bit_shift_left",
+        IntrinsicOp::BitShiftRight => "bit_shift_right",
+        // Numeric formatting
+        IntrinsicOp::NumericToFixed => "numeric_to_fixed",
+        IntrinsicOp::NumericToHex => "numeric_to_hex",
+        IntrinsicOp::NumericFromHex => "numeric_from_hex",
+        IntrinsicOp::NumericToBinary => "numeric_to_binary",
+        IntrinsicOp::NumericFromBinary => "numeric_from_binary",
     }
 }
 
@@ -754,6 +925,7 @@ fn intrinsic_arity(op: IntrinsicOp) -> usize {
         | IntrinsicOp::Coalesce
         | IntrinsicOp::TextIndexOf
         | IntrinsicOp::TextCount
+        | IntrinsicOp::TextRegexCapture
         | IntrinsicOp::TextRepeat
         | IntrinsicOp::MapDelete
         | IntrinsicOp::MapMerge
@@ -771,6 +943,7 @@ fn intrinsic_arity(op: IntrinsicOp) -> usize {
         | IntrinsicOp::TextGraphemeLength
         | IntrinsicOp::TextTokenize
         | IntrinsicOp::TextTrim
+        | IntrinsicOp::TextUrlEncode
         | IntrinsicOp::TextLowercase
         | IntrinsicOp::TextUppercase
         | IntrinsicOp::MapKeys
@@ -807,10 +980,108 @@ fn intrinsic_arity(op: IntrinsicOp) -> usize {
         | IntrinsicOp::NumericPowFloat
         | IntrinsicOp::IntegerQuotient
         | IntrinsicOp::IntegerRemainder => 2,
+        // Randomness
+        IntrinsicOp::RandomFloat | IntrinsicOp::RandomUuid => 0,
+        IntrinsicOp::RandomChoice | IntrinsicOp::RandomShuffle => 1,
+        IntrinsicOp::RandomInt | IntrinsicOp::RandomSample => 2,
+        // Date/Time
+        IntrinsicOp::DateNow => 0,
+        IntrinsicOp::DateGetPart | IntrinsicOp::DateFormat => 2,
+        IntrinsicOp::DateFromParts | IntrinsicOp::DateAdd | IntrinsicOp::DateDiff => 3,
+        // Math
+        IntrinsicOp::MathPi | IntrinsicOp::MathE => 0,
+        IntrinsicOp::MathSqrt
+        | IntrinsicOp::MathLog
+        | IntrinsicOp::MathLog10
+        | IntrinsicOp::MathLog2
+        | IntrinsicOp::MathExp
+        | IntrinsicOp::MathSin
+        | IntrinsicOp::MathCos
+        | IntrinsicOp::MathTan
+        | IntrinsicOp::MathAsin
+        | IntrinsicOp::MathAcos
+        | IntrinsicOp::MathAtan
+        | IntrinsicOp::MathIsNan
+        | IntrinsicOp::MathIsInfinite => 1,
+        IntrinsicOp::MathAtan2
+        | IntrinsicOp::MathGcd
+        | IntrinsicOp::MathLcm
+        | IntrinsicOp::MathHypot => 2,
+        // Text formatting
+        IntrinsicOp::TextBase64Encode
+        | IntrinsicOp::TextBase64Decode
+        | IntrinsicOp::TextUrlDecode
+        | IntrinsicOp::TextHexEncode
+        | IntrinsicOp::TextHexDecode
+        | IntrinsicOp::TextReverse
+        | IntrinsicOp::TextCharCode
+        | IntrinsicOp::TextFromCharCode => 1,
+        IntrinsicOp::TextCharAt
+        | IntrinsicOp::TextFormat
+        | IntrinsicOp::TextMatchesRegex
+        | IntrinsicOp::TextLevenshtein => 2,
+        IntrinsicOp::TextPadStart
+        | IntrinsicOp::TextPadEnd
+        | IntrinsicOp::TextSubstring
+        | IntrinsicOp::TextRegexReplaceAll => 3,
+        // Hashing
+        IntrinsicOp::HashSha256 | IntrinsicOp::HashMd5 => 1,
+        // Set operations
+        IntrinsicOp::SetUnion
+        | IntrinsicOp::SetIntersect
+        | IntrinsicOp::SetDifference
+        | IntrinsicOp::SetIsSubset => 2,
+        // Collection extras
+        IntrinsicOp::CollectionEnumerate
+        | IntrinsicOp::CollectionAny
+        | IntrinsicOp::CollectionAll
+        | IntrinsicOp::CollectionFirst
+        | IntrinsicOp::CollectionLast => 1,
+        IntrinsicOp::CollectionGroupBy
+        | IntrinsicOp::CollectionSortBy
+        | IntrinsicOp::CollectionMinBy
+        | IntrinsicOp::CollectionMaxBy
+        | IntrinsicOp::CollectionChunk
+        | IntrinsicOp::CollectionTake
+        | IntrinsicOp::CollectionDrop
+        | IntrinsicOp::CollectionPartition
+        | IntrinsicOp::CollectionRepeatValue
+        | IntrinsicOp::CollectionWindow => 2,
+        // Map extras
+        IntrinsicOp::MapSize => 1,
+        IntrinsicOp::MapHasKey | IntrinsicOp::MapFilterKeys => 2,
+        IntrinsicOp::MapGetDefault => 3,
+        // Type checking
+        IntrinsicOp::IsNull
+        | IntrinsicOp::IsBool
+        | IntrinsicOp::IsInt
+        | IntrinsicOp::IsFloat
+        | IntrinsicOp::IsText
+        | IntrinsicOp::IsList
+        | IntrinsicOp::IsMap
+        | IntrinsicOp::IsNumeric
+        | IntrinsicOp::ToInt
+        | IntrinsicOp::ToFloat
+        | IntrinsicOp::ToBool => 1,
+        // Control
+        IntrinsicOp::Assert | IntrinsicOp::DefaultIfNull => 2,
+        // Bitwise
+        IntrinsicOp::BitNot => 1,
+        IntrinsicOp::BitAnd
+        | IntrinsicOp::BitOr
+        | IntrinsicOp::BitXor
+        | IntrinsicOp::BitShiftLeft
+        | IntrinsicOp::BitShiftRight => 2,
+        // Numeric formatting
+        IntrinsicOp::NumericToHex
+        | IntrinsicOp::NumericFromHex
+        | IntrinsicOp::NumericToBinary
+        | IntrinsicOp::NumericFromBinary => 1,
+        IntrinsicOp::NumericToFixed => 2,
     }
 }
 
-impl Evaluator {
+impl<I: CapabilityInvoker> Evaluator<I> {
     fn apply_intrinsic(&mut self, op: IntrinsicOp, args: Vec<Value>) -> Result<Value, SpoonError> {
         match op {
             IntrinsicOp::Length => match only_arg(args) {
@@ -953,6 +1224,50 @@ impl Evaluator {
                 self.ensure_text("text_replace output bytes", output.len())?;
                 self.charge_text(&output)?;
                 Ok(Value::Text(output))
+            }
+            IntrinsicOp::TextUrlEncode => {
+                let text = text_arg(only_arg(args))?;
+                self.charge_text(&text)?;
+                let mut output = String::new();
+                for byte in text.bytes() {
+                    if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
+                        output.push(char::from(byte));
+                    } else {
+                        use std::fmt::Write;
+                        write!(&mut output, "%{byte:02X}").expect("write to String cannot fail");
+                    }
+                }
+                self.ensure_text("text_url_encode output bytes", output.len())?;
+                self.charge_text(&output)?;
+                Ok(Value::Text(output))
+            }
+            IntrinsicOp::TextRegexCapture => {
+                let [text, pattern] = two_args(args);
+                let text = text_arg(text)?;
+                let pattern = text_arg(pattern)?;
+                self.charge_text(&text)?;
+                self.charge_text(&pattern)?;
+                if pattern.len() > 16 * 1024 {
+                    return Err(SpoonError::Other(
+                        "text_regex_capture pattern exceeds its bound".into(),
+                    ));
+                }
+                let compiled = regex::Regex::new(&pattern).map_err(|error| {
+                    SpoonError::Other(format!("text_regex_capture pattern is invalid: {error}"))
+                })?;
+                let captures = compiled.captures(&text);
+                let value = captures
+                    .and_then(|captures| captures.get(1).or_else(|| captures.get(0)))
+                    .map(|match_| Value::Text(match_.as_str().to_owned()))
+                    .unwrap_or(Value::Null);
+                self.ensure_text(
+                    "text_regex_capture output bytes",
+                    match &value {
+                        Value::Text(text) => text.len(),
+                        _ => 0,
+                    },
+                )?;
+                Ok(value)
             }
             IntrinsicOp::TextGraphemeSubstring => {
                 let [text, start, length] = three_args(args);
@@ -1270,6 +1585,929 @@ impl Evaluator {
                 .into_iter()
                 .find(|value| *value != Value::Null)
                 .unwrap_or(Value::Null)),
+
+            // -- Randomness --
+            IntrinsicOp::RandomInt => {
+                let [low, high] = two_args(args);
+                let low = int_arg(low)?;
+                let high = int_arg(high)?;
+                if low > high {
+                    return Err(SpoonError::Other(
+                        "random_int: low must be <= high".into(),
+                    ));
+                }
+                let val = rand::rng().random_range(low..=high);
+                Ok(Value::Int(val))
+            }
+            IntrinsicOp::RandomFloat => {
+                let _ = args;
+                let val: f64 = rand::rng().random();
+                Ok(Value::Float(val))
+            }
+            IntrinsicOp::RandomChoice => {
+                let items = list_arg(only_arg(args))?;
+                if items.is_empty() {
+                    return Err(SpoonError::Other(
+                        "random_choice: list must not be empty".into(),
+                    ));
+                }
+                let idx = rand::rng().random_range(0..items.len());
+                Ok(items.into_iter().nth(idx).unwrap())
+            }
+            IntrinsicOp::RandomShuffle => {
+                let mut items = list_arg(only_arg(args))?;
+                self.charge_intrinsic_work(items.len())?;
+                items.shuffle(&mut rand::rng());
+                Ok(Value::List(items))
+            }
+            IntrinsicOp::RandomSample => {
+                let [list, n] = two_args(args);
+                let items = list_arg(list)?;
+                let n = nonnegative_usize(int_arg(n)?, "random_sample n")?;
+                if n > items.len() {
+                    return Err(SpoonError::Other(
+                        "random_sample: n must be <= list length".into(),
+                    ));
+                }
+                self.charge_intrinsic_work(items.len())?;
+                let sampled: Vec<Value> = items
+                    .choose_multiple(&mut rand::rng(), n)
+                    .cloned()
+                    .collect();
+                Ok(Value::List(sampled))
+            }
+            IntrinsicOp::RandomUuid => {
+                let _ = args;
+                let id = uuid::Uuid::new_v4().to_string();
+                Ok(Value::Text(id))
+            }
+
+            // -- Date/Time --
+            IntrinsicOp::DateNow => {
+                let _ = args;
+                let secs = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs() as i64;
+                Ok(Value::Int(secs))
+            }
+            IntrinsicOp::DateFromParts => {
+                let [year, month, day] = three_args(args);
+                let year = int_arg(year)?;
+                let month = int_arg(month)?;
+                let day = int_arg(day)?;
+                let ts = date_from_parts(year, month, day)?;
+                Ok(Value::Int(ts))
+            }
+            IntrinsicOp::DateGetPart => {
+                let [timestamp, part] = two_args(args);
+                let ts = int_arg(timestamp)?;
+                let part = text_arg(part)?;
+                let val = date_get_part(ts, &part)?;
+                Ok(Value::Int(val))
+            }
+            IntrinsicOp::DateAdd => {
+                let [timestamp, amount, unit] = three_args(args);
+                let ts = int_arg(timestamp)?;
+                let amount = int_arg(amount)?;
+                let unit = text_arg(unit)?;
+                let secs_per_unit = match unit.as_str() {
+                    "seconds" => 1i64,
+                    "minutes" => 60,
+                    "hours" => 3600,
+                    "days" => 86400,
+                    _ => {
+                        return Err(SpoonError::Other(format!(
+                            "date_add: unknown unit '{unit}'"
+                        )));
+                    }
+                };
+                let delta = amount.checked_mul(secs_per_unit).ok_or_else(|| {
+                    SpoonError::ArithmeticOverflow {
+                        operation: "date_add".into(),
+                    }
+                })?;
+                let result = ts.checked_add(delta).ok_or_else(|| {
+                    SpoonError::ArithmeticOverflow {
+                        operation: "date_add".into(),
+                    }
+                })?;
+                Ok(Value::Int(result))
+            }
+            IntrinsicOp::DateDiff => {
+                let [t1, t2, unit] = three_args(args);
+                let t1 = int_arg(t1)?;
+                let t2 = int_arg(t2)?;
+                let unit = text_arg(unit)?;
+                let diff_secs = t2.checked_sub(t1).ok_or_else(|| {
+                    SpoonError::ArithmeticOverflow {
+                        operation: "date_diff".into(),
+                    }
+                })?;
+                let divisor = match unit.as_str() {
+                    "seconds" => 1i64,
+                    "minutes" => 60,
+                    "hours" => 3600,
+                    "days" => 86400,
+                    _ => {
+                        return Err(SpoonError::Other(format!(
+                            "date_diff: unknown unit '{unit}'"
+                        )));
+                    }
+                };
+                Ok(Value::Int(diff_secs / divisor))
+            }
+            IntrinsicOp::DateFormat => {
+                let [timestamp, format] = two_args(args);
+                let ts = int_arg(timestamp)?;
+                let format = text_arg(format)?;
+                self.charge_text(&format)?;
+                let formatted = date_format(ts, &format)?;
+                self.ensure_text("date_format output bytes", formatted.len())?;
+                Ok(Value::Text(formatted))
+            }
+
+            // -- Math --
+            IntrinsicOp::MathPi => {
+                let _ = args;
+                Ok(Value::Float(std::f64::consts::PI))
+            }
+            IntrinsicOp::MathE => {
+                let _ = args;
+                Ok(Value::Float(std::f64::consts::E))
+            }
+            IntrinsicOp::MathSqrt => {
+                let n = numeric_to_f64(only_arg(args))?;
+                Ok(Value::Float(n.sqrt()))
+            }
+            IntrinsicOp::MathLog => {
+                let n = numeric_to_f64(only_arg(args))?;
+                Ok(Value::Float(n.ln()))
+            }
+            IntrinsicOp::MathLog10 => {
+                let n = numeric_to_f64(only_arg(args))?;
+                Ok(Value::Float(n.log10()))
+            }
+            IntrinsicOp::MathLog2 => {
+                let n = numeric_to_f64(only_arg(args))?;
+                Ok(Value::Float(n.log2()))
+            }
+            IntrinsicOp::MathExp => {
+                let n = numeric_to_f64(only_arg(args))?;
+                Ok(Value::Float(n.exp()))
+            }
+            IntrinsicOp::MathSin => {
+                let n = numeric_to_f64(only_arg(args))?;
+                Ok(Value::Float(n.sin()))
+            }
+            IntrinsicOp::MathCos => {
+                let n = numeric_to_f64(only_arg(args))?;
+                Ok(Value::Float(n.cos()))
+            }
+            IntrinsicOp::MathTan => {
+                let n = numeric_to_f64(only_arg(args))?;
+                Ok(Value::Float(n.tan()))
+            }
+            IntrinsicOp::MathAsin => {
+                let n = numeric_to_f64(only_arg(args))?;
+                Ok(Value::Float(n.asin()))
+            }
+            IntrinsicOp::MathAcos => {
+                let n = numeric_to_f64(only_arg(args))?;
+                Ok(Value::Float(n.acos()))
+            }
+            IntrinsicOp::MathAtan => {
+                let n = numeric_to_f64(only_arg(args))?;
+                Ok(Value::Float(n.atan()))
+            }
+            IntrinsicOp::MathAtan2 => {
+                let [y, x] = two_args(args);
+                let y = numeric_to_f64(y)?;
+                let x = numeric_to_f64(x)?;
+                Ok(Value::Float(y.atan2(x)))
+            }
+            IntrinsicOp::MathIsNan => {
+                let v = only_arg(args);
+                match v {
+                    Value::Float(f) => Ok(Value::Bool(f.is_nan())),
+                    other => Err(SpoonError::type_error("float", &other)),
+                }
+            }
+            IntrinsicOp::MathIsInfinite => {
+                let v = only_arg(args);
+                match v {
+                    Value::Float(f) => Ok(Value::Bool(f.is_infinite())),
+                    other => Err(SpoonError::type_error("float", &other)),
+                }
+            }
+            IntrinsicOp::MathGcd => {
+                let [a, b] = two_args(args);
+                let a = int_arg(a)?;
+                let b = int_arg(b)?;
+                Ok(Value::Int(gcd(a, b)))
+            }
+            IntrinsicOp::MathLcm => {
+                let [a, b] = two_args(args);
+                let a = int_arg(a)?;
+                let b = int_arg(b)?;
+                if a == 0 && b == 0 {
+                    return Ok(Value::Int(0));
+                }
+                let g = gcd(a, b);
+                let result = (a / g).checked_mul(b).ok_or_else(|| {
+                    SpoonError::ArithmeticOverflow {
+                        operation: "math_lcm".into(),
+                    }
+                })?;
+                Ok(Value::Int(result.abs()))
+            }
+            IntrinsicOp::MathHypot => {
+                let [a, b] = two_args(args);
+                let a = numeric_to_f64(a)?;
+                let b = numeric_to_f64(b)?;
+                Ok(Value::Float(a.hypot(b)))
+            }
+
+            // -- Text formatting --
+            IntrinsicOp::TextPadStart => {
+                let [text, length, pad] = three_args(args);
+                let text = text_arg(text)?;
+                let length = nonnegative_usize(int_arg(length)?, "text_pad_start length")?;
+                let pad = text_arg(pad)?;
+                self.charge_text(&text)?;
+                if pad.is_empty() {
+                    return Ok(Value::Text(text));
+                }
+                let char_count = text.chars().count();
+                if char_count >= length {
+                    return Ok(Value::Text(text));
+                }
+                let needed = length - char_count;
+                self.charge_intrinsic_work(needed)?;
+                let padding: String = pad.chars().cycle().take(needed).collect();
+                let output = format!("{padding}{text}");
+                self.ensure_text("text_pad_start output bytes", output.len())?;
+                Ok(Value::Text(output))
+            }
+            IntrinsicOp::TextPadEnd => {
+                let [text, length, pad] = three_args(args);
+                let text = text_arg(text)?;
+                let length = nonnegative_usize(int_arg(length)?, "text_pad_end length")?;
+                let pad = text_arg(pad)?;
+                self.charge_text(&text)?;
+                if pad.is_empty() {
+                    return Ok(Value::Text(text));
+                }
+                let char_count = text.chars().count();
+                if char_count >= length {
+                    return Ok(Value::Text(text));
+                }
+                let needed = length - char_count;
+                self.charge_intrinsic_work(needed)?;
+                let padding: String = pad.chars().cycle().take(needed).collect();
+                let output = format!("{text}{padding}");
+                self.ensure_text("text_pad_end output bytes", output.len())?;
+                Ok(Value::Text(output))
+            }
+            IntrinsicOp::TextSubstring => {
+                let [text, start, end] = three_args(args);
+                let text = text_arg(text)?;
+                let start = nonnegative_usize(int_arg(start)?, "text_substring start")?;
+                let end = nonnegative_usize(int_arg(end)?, "text_substring end")?;
+                self.charge_text(&text)?;
+                let start = start.min(text.len());
+                let end = end.min(text.len());
+                if start >= end {
+                    return Ok(Value::Text(String::new()));
+                }
+                if !text.is_char_boundary(start) || !text.is_char_boundary(end) {
+                    return Err(SpoonError::Other(
+                        "text_substring: indices must be at char boundaries".into(),
+                    ));
+                }
+                Ok(Value::Text(text[start..end].to_owned()))
+            }
+            IntrinsicOp::TextCharAt => {
+                let [text, index] = two_args(args);
+                let text = text_arg(text)?;
+                let index = nonnegative_usize(int_arg(index)?, "text_char_at index")?;
+                self.charge_text(&text)?;
+                match text.chars().nth(index) {
+                    Some(c) => Ok(Value::Text(c.to_string())),
+                    None => Err(SpoonError::Other(
+                        "text_char_at: index out of bounds".into(),
+                    )),
+                }
+            }
+            IntrinsicOp::TextFormat => {
+                let [template, values] = two_args(args);
+                let template = text_arg(template)?;
+                let values = map_arg(values)?;
+                self.charge_text(&template)?;
+                self.charge_items(values.len())?;
+                let mut output = template.clone();
+                for (key, val) in &values {
+                    let replacement = match val {
+                        Value::Text(s) => s.clone(),
+                        Value::Int(n) => n.to_string(),
+                        Value::Float(f) => f.to_string(),
+                        Value::Bool(b) => b.to_string(),
+                        Value::Null => "null".to_string(),
+                        _ => format!("{val:?}"),
+                    };
+                    let placeholder = format!("{{{key}}}");
+                    output = output.replace(&placeholder, &replacement);
+                }
+                self.ensure_text("text_format output bytes", output.len())?;
+                Ok(Value::Text(output))
+            }
+            IntrinsicOp::TextMatchesRegex => {
+                let [text, pattern] = two_args(args);
+                let text = text_arg(text)?;
+                let pattern = text_arg(pattern)?;
+                self.charge_text(&text)?;
+                self.charge_text(&pattern)?;
+                let compiled = regex::Regex::new(&pattern).map_err(|e| {
+                    SpoonError::Other(format!("text_matches_regex: invalid pattern: {e}"))
+                })?;
+                Ok(Value::Bool(compiled.is_match(&text)))
+            }
+            IntrinsicOp::TextRegexReplaceAll => {
+                let [text, pattern, replacement] = three_args(args);
+                let text = text_arg(text)?;
+                let pattern = text_arg(pattern)?;
+                let replacement = text_arg(replacement)?;
+                self.charge_text(&text)?;
+                self.charge_text(&pattern)?;
+                let compiled = regex::Regex::new(&pattern).map_err(|e| {
+                    SpoonError::Other(format!(
+                        "text_regex_replace_all: invalid pattern: {e}"
+                    ))
+                })?;
+                let output = compiled.replace_all(&text, replacement.as_str()).into_owned();
+                self.ensure_text("text_regex_replace_all output bytes", output.len())?;
+                Ok(Value::Text(output))
+            }
+            IntrinsicOp::TextBase64Encode => {
+                use base64::Engine;
+                let text = text_arg(only_arg(args))?;
+                self.charge_text(&text)?;
+                let encoded = base64::engine::general_purpose::STANDARD.encode(text.as_bytes());
+                self.ensure_text("text_base64_encode output bytes", encoded.len())?;
+                Ok(Value::Text(encoded))
+            }
+            IntrinsicOp::TextBase64Decode => {
+                use base64::Engine;
+                let text = text_arg(only_arg(args))?;
+                self.charge_text(&text)?;
+                let bytes = base64::engine::general_purpose::STANDARD
+                    .decode(text.as_bytes())
+                    .map_err(|e| SpoonError::Other(format!("text_base64_decode: {e}")))?;
+                let decoded = String::from_utf8(bytes)
+                    .map_err(|e| SpoonError::Other(format!("text_base64_decode: {e}")))?;
+                self.ensure_text("text_base64_decode output bytes", decoded.len())?;
+                Ok(Value::Text(decoded))
+            }
+            IntrinsicOp::TextUrlDecode => {
+                let text = text_arg(only_arg(args))?;
+                self.charge_text(&text)?;
+                let mut output = String::new();
+                let bytes = text.as_bytes();
+                let mut i = 0;
+                while i < bytes.len() {
+                    if bytes[i] == b'%' && i + 2 < bytes.len() {
+                        let hi = hex_digit(bytes[i + 1]);
+                        let lo = hex_digit(bytes[i + 2]);
+                        if let (Some(h), Some(l)) = (hi, lo) {
+                            output.push((h << 4 | l) as char);
+                            i += 3;
+                            continue;
+                        }
+                    }
+                    if bytes[i] == b'+' {
+                        output.push(' ');
+                    } else {
+                        output.push(bytes[i] as char);
+                    }
+                    i += 1;
+                }
+                self.ensure_text("text_url_decode output bytes", output.len())?;
+                Ok(Value::Text(output))
+            }
+            IntrinsicOp::TextHexEncode => {
+                let text = text_arg(only_arg(args))?;
+                self.charge_text(&text)?;
+                let encoded: String = text.bytes().map(|b| format!("{b:02x}")).collect();
+                self.ensure_text("text_hex_encode output bytes", encoded.len())?;
+                Ok(Value::Text(encoded))
+            }
+            IntrinsicOp::TextHexDecode => {
+                let text = text_arg(only_arg(args))?;
+                self.charge_text(&text)?;
+                let bytes = hex_decode(&text).map_err(|e| {
+                    SpoonError::Other(format!("text_hex_decode: {e}"))
+                })?;
+                let decoded = String::from_utf8(bytes).map_err(|e| {
+                    SpoonError::Other(format!("text_hex_decode: {e}"))
+                })?;
+                self.ensure_text("text_hex_decode output bytes", decoded.len())?;
+                Ok(Value::Text(decoded))
+            }
+            IntrinsicOp::TextReverse => {
+                let text = text_arg(only_arg(args))?;
+                self.charge_text(&text)?;
+                let reversed: String = text.chars().rev().collect();
+                Ok(Value::Text(reversed))
+            }
+            IntrinsicOp::TextCharCode => {
+                let text = text_arg(only_arg(args))?;
+                match text.chars().next() {
+                    Some(c) => Ok(Value::Int(c as i64)),
+                    None => Err(SpoonError::Other(
+                        "text_char_code: text must not be empty".into(),
+                    )),
+                }
+            }
+            IntrinsicOp::TextFromCharCode => {
+                let code = int_arg(only_arg(args))?;
+                let c = u32::try_from(code)
+                    .ok()
+                    .and_then(char::from_u32)
+                    .ok_or_else(|| {
+                        SpoonError::Other(format!(
+                            "text_from_char_code: invalid code point {code}"
+                        ))
+                    })?;
+                Ok(Value::Text(c.to_string()))
+            }
+            IntrinsicOp::TextLevenshtein => {
+                let [a, b] = two_args(args);
+                let a = text_arg(a)?;
+                let b = text_arg(b)?;
+                self.charge_text(&a)?;
+                self.charge_text(&b)?;
+                let work = (a.len() * b.len()) / INTRINSIC_WORK_CHUNK.max(1);
+                self.charge_intrinsic_work(work.max(1))?;
+                let dist = levenshtein(&a, &b);
+                Ok(Value::Int(dist as i64))
+            }
+
+            // -- Hashing --
+            IntrinsicOp::HashSha256 => {
+                use sha2::Digest;
+                let text = text_arg(only_arg(args))?;
+                self.charge_text(&text)?;
+                let hash = sha2::Sha256::digest(text.as_bytes());
+                let hex: String = hash.iter().map(|b| format!("{b:02x}")).collect();
+                Ok(Value::Text(hex))
+            }
+            IntrinsicOp::HashMd5 => {
+                use md5::Digest;
+                let text = text_arg(only_arg(args))?;
+                self.charge_text(&text)?;
+                let hash = md5::Md5::digest(text.as_bytes());
+                let hex: String = hash.iter().map(|b| format!("{b:02x}")).collect();
+                Ok(Value::Text(hex))
+            }
+
+            // -- Set operations --
+            IntrinsicOp::SetUnion => {
+                let [a, b] = two_args(args);
+                let a = list_arg(a)?;
+                let b = list_arg(b)?;
+                self.charge_items(a.len())?;
+                self.charge_items(b.len())?;
+                let mut result = a;
+                for item in b {
+                    if !result.contains(&item) {
+                        self.ensure_items("set_union output items", result.len() + 1)?;
+                        result.push(item);
+                    }
+                }
+                Ok(Value::List(result))
+            }
+            IntrinsicOp::SetIntersect => {
+                let [a, b] = two_args(args);
+                let a = list_arg(a)?;
+                let b = list_arg(b)?;
+                self.charge_items(a.len())?;
+                self.charge_items(b.len())?;
+                let result: Vec<Value> = a
+                    .into_iter()
+                    .filter(|item| b.contains(item))
+                    .collect();
+                Ok(Value::List(result))
+            }
+            IntrinsicOp::SetDifference => {
+                let [a, b] = two_args(args);
+                let a = list_arg(a)?;
+                let b = list_arg(b)?;
+                self.charge_items(a.len())?;
+                self.charge_items(b.len())?;
+                let result: Vec<Value> = a
+                    .into_iter()
+                    .filter(|item| !b.contains(item))
+                    .collect();
+                Ok(Value::List(result))
+            }
+            IntrinsicOp::SetIsSubset => {
+                let [a, b] = two_args(args);
+                let a = list_arg(a)?;
+                let b = list_arg(b)?;
+                self.charge_items(a.len())?;
+                self.charge_items(b.len())?;
+                let all_in = a.iter().all(|item| b.contains(item));
+                Ok(Value::Bool(all_in))
+            }
+
+            // -- Collection extras --
+            IntrinsicOp::CollectionGroupBy => {
+                let [list, key] = two_args(args);
+                let items = list_arg(list)?;
+                let key = text_arg(key)?;
+                self.charge_items(items.len())?;
+                let mut groups: BTreeMap<String, Value> = BTreeMap::new();
+                for item in items {
+                    let map = map_arg(item.clone())?;
+                    let group_key = match map.get(&key) {
+                        Some(Value::Text(s)) => s.clone(),
+                        Some(Value::Int(n)) => n.to_string(),
+                        Some(Value::Bool(b)) => b.to_string(),
+                        Some(Value::Null) => "null".to_string(),
+                        Some(other) => {
+                            return Err(SpoonError::type_error("text or int", other));
+                        }
+                        None => "null".to_string(),
+                    };
+                    let entry = groups
+                        .entry(group_key)
+                        .or_insert_with(|| Value::List(vec![]));
+                    if let Value::List(list) = entry {
+                        list.push(item);
+                    }
+                }
+                Ok(Value::Map(groups))
+            }
+            IntrinsicOp::CollectionSortBy => {
+                let [list, key] = two_args(args);
+                let mut items = list_arg(list)?;
+                let key = text_arg(key)?;
+                self.charge_items(items.len())?;
+                items.sort_by(|a, b| {
+                    let a_val = match a {
+                        Value::Map(m) => m.get(&key).cloned().unwrap_or(Value::Null),
+                        _ => Value::Null,
+                    };
+                    let b_val = match b {
+                        Value::Map(m) => m.get(&key).cloned().unwrap_or(Value::Null),
+                        _ => Value::Null,
+                    };
+                    value_sort_cmp(&a_val, &b_val)
+                });
+                Ok(Value::List(items))
+            }
+            IntrinsicOp::CollectionMinBy => {
+                let [list, key] = two_args(args);
+                let items = list_arg(list)?;
+                let key = text_arg(key)?;
+                self.charge_items(items.len())?;
+                if items.is_empty() {
+                    return Err(SpoonError::Other(
+                        "collection_min_by: list must not be empty".into(),
+                    ));
+                }
+                let result = items
+                    .into_iter()
+                    .min_by(|a, b| {
+                        let a_val = match a {
+                            Value::Map(m) => m.get(&key).cloned().unwrap_or(Value::Null),
+                            _ => Value::Null,
+                        };
+                        let b_val = match b {
+                            Value::Map(m) => m.get(&key).cloned().unwrap_or(Value::Null),
+                            _ => Value::Null,
+                        };
+                        value_sort_cmp(&a_val, &b_val)
+                    })
+                    .unwrap();
+                Ok(result)
+            }
+            IntrinsicOp::CollectionMaxBy => {
+                let [list, key] = two_args(args);
+                let items = list_arg(list)?;
+                let key = text_arg(key)?;
+                self.charge_items(items.len())?;
+                if items.is_empty() {
+                    return Err(SpoonError::Other(
+                        "collection_max_by: list must not be empty".into(),
+                    ));
+                }
+                let result = items
+                    .into_iter()
+                    .max_by(|a, b| {
+                        let a_val = match a {
+                            Value::Map(m) => m.get(&key).cloned().unwrap_or(Value::Null),
+                            _ => Value::Null,
+                        };
+                        let b_val = match b {
+                            Value::Map(m) => m.get(&key).cloned().unwrap_or(Value::Null),
+                            _ => Value::Null,
+                        };
+                        value_sort_cmp(&a_val, &b_val)
+                    })
+                    .unwrap();
+                Ok(result)
+            }
+            IntrinsicOp::CollectionChunk => {
+                let [list, n] = two_args(args);
+                let items = list_arg(list)?;
+                let n = nonnegative_usize(int_arg(n)?, "collection_chunk n")?;
+                if n == 0 {
+                    return Err(SpoonError::Other(
+                        "collection_chunk: chunk size must be > 0".into(),
+                    ));
+                }
+                self.charge_items(items.len())?;
+                let chunks: Vec<Value> = items
+                    .chunks(n)
+                    .map(|chunk| Value::List(chunk.to_vec()))
+                    .collect();
+                self.ensure_items("collection_chunk output items", chunks.len())?;
+                Ok(Value::List(chunks))
+            }
+            IntrinsicOp::CollectionEnumerate => {
+                let items = list_arg(only_arg(args))?;
+                self.charge_items(items.len())?;
+                self.ensure_items("collection_enumerate output items", items.len())?;
+                let result: Vec<Value> = items
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, v)| Value::List(vec![Value::Int(i as i64), v]))
+                    .collect();
+                Ok(Value::List(result))
+            }
+            IntrinsicOp::CollectionAny => {
+                let items = list_arg(only_arg(args))?;
+                self.charge_items(items.len())?;
+                let result = items.iter().any(is_truthy);
+                Ok(Value::Bool(result))
+            }
+            IntrinsicOp::CollectionAll => {
+                let items = list_arg(only_arg(args))?;
+                self.charge_items(items.len())?;
+                let result = items.iter().all(is_truthy);
+                Ok(Value::Bool(result))
+            }
+            IntrinsicOp::CollectionTake => {
+                let [list, n] = two_args(args);
+                let items = list_arg(list)?;
+                let n = nonnegative_usize(int_arg(n)?, "collection_take n")?;
+                self.charge_items(items.len())?;
+                let taken: Vec<Value> = items.into_iter().take(n).collect();
+                Ok(Value::List(taken))
+            }
+            IntrinsicOp::CollectionDrop => {
+                let [list, n] = two_args(args);
+                let items = list_arg(list)?;
+                let n = nonnegative_usize(int_arg(n)?, "collection_drop n")?;
+                self.charge_items(items.len())?;
+                let dropped: Vec<Value> = items.into_iter().skip(n).collect();
+                Ok(Value::List(dropped))
+            }
+            IntrinsicOp::CollectionFirst => {
+                let items = list_arg(only_arg(args))?;
+                items.into_iter().next().ok_or_else(|| {
+                    SpoonError::Other("collection_first: list must not be empty".into())
+                })
+            }
+            IntrinsicOp::CollectionLast => {
+                let items = list_arg(only_arg(args))?;
+                items.into_iter().last().ok_or_else(|| {
+                    SpoonError::Other("collection_last: list must not be empty".into())
+                })
+            }
+            IntrinsicOp::CollectionPartition => {
+                let [list, value] = two_args(args);
+                let items = list_arg(list)?;
+                self.charge_items(items.len())?;
+                let mut matches = Vec::new();
+                let mut non_matches = Vec::new();
+                for item in items {
+                    if item == value {
+                        matches.push(item);
+                    } else {
+                        non_matches.push(item);
+                    }
+                }
+                Ok(Value::List(vec![
+                    Value::List(matches),
+                    Value::List(non_matches),
+                ]))
+            }
+            IntrinsicOp::CollectionRepeatValue => {
+                let [value, n] = two_args(args);
+                let n = nonnegative_usize(int_arg(n)?, "collection_repeat_value n")?;
+                self.ensure_items("collection_repeat_value output items", n)?;
+                self.charge_intrinsic_work(n)?;
+                let result = vec![value; n];
+                Ok(Value::List(result))
+            }
+            IntrinsicOp::CollectionWindow => {
+                let [list, n] = two_args(args);
+                let items = list_arg(list)?;
+                let n = nonnegative_usize(int_arg(n)?, "collection_window n")?;
+                self.charge_items(items.len())?;
+                if n == 0 || n > items.len() {
+                    return Ok(Value::List(vec![]));
+                }
+                let windows: Vec<Value> = items
+                    .windows(n)
+                    .map(|w| Value::List(w.to_vec()))
+                    .collect();
+                self.ensure_items("collection_window output items", windows.len())?;
+                Ok(Value::List(windows))
+            }
+
+            // -- Map extras --
+            IntrinsicOp::MapHasKey => {
+                let [map, key] = two_args(args);
+                let map = map_arg(map)?;
+                let key = text_arg(key)?;
+                Ok(Value::Bool(map.contains_key(&key)))
+            }
+            IntrinsicOp::MapGetDefault => {
+                let [map, key, default] = three_args(args);
+                let map = map_arg(map)?;
+                let key = text_arg(key)?;
+                Ok(map.get(&key).cloned().unwrap_or(default))
+            }
+            IntrinsicOp::MapSize => {
+                let map = map_arg(only_arg(args))?;
+                Ok(Value::Int(map.len() as i64))
+            }
+            IntrinsicOp::MapFilterKeys => {
+                let [map, keys] = two_args(args);
+                let map = map_arg(map)?;
+                let keys = list_arg(keys)?;
+                self.charge_items(map.len())?;
+                self.charge_items(keys.len())?;
+                let keep: Vec<String> = keys
+                    .into_iter()
+                    .filter_map(|v| match v {
+                        Value::Text(s) => Some(s),
+                        _ => None,
+                    })
+                    .collect();
+                let filtered: BTreeMap<String, Value> = map
+                    .into_iter()
+                    .filter(|(k, _)| keep.contains(k))
+                    .collect();
+                Ok(Value::Map(filtered))
+            }
+
+            // -- Type checking --
+            IntrinsicOp::IsNull => Ok(Value::Bool(matches!(only_arg(args), Value::Null))),
+            IntrinsicOp::IsBool => Ok(Value::Bool(matches!(only_arg(args), Value::Bool(_)))),
+            IntrinsicOp::IsInt => Ok(Value::Bool(matches!(only_arg(args), Value::Int(_)))),
+            IntrinsicOp::IsFloat => Ok(Value::Bool(matches!(only_arg(args), Value::Float(_)))),
+            IntrinsicOp::IsText => Ok(Value::Bool(matches!(only_arg(args), Value::Text(_)))),
+            IntrinsicOp::IsList => Ok(Value::Bool(matches!(only_arg(args), Value::List(_)))),
+            IntrinsicOp::IsMap => Ok(Value::Bool(matches!(only_arg(args), Value::Map(_)))),
+            IntrinsicOp::IsNumeric => {
+                let v = only_arg(args);
+                Ok(Value::Bool(matches!(v, Value::Int(_) | Value::Float(_))))
+            }
+            IntrinsicOp::ToInt => {
+                let v = only_arg(args);
+                match v {
+                    Value::Int(n) => Ok(Value::Int(n)),
+                    Value::Float(f) => Ok(Value::Int(f as i64)),
+                    Value::Text(s) => s
+                        .trim()
+                        .parse::<i64>()
+                        .map(Value::Int)
+                        .map_err(|_| {
+                            SpoonError::Other(format!("to_int: cannot parse '{s}'"))
+                        }),
+                    Value::Bool(b) => Ok(Value::Int(if b { 1 } else { 0 })),
+                    other => Err(SpoonError::type_error("int, float, text, or bool", &other)),
+                }
+            }
+            IntrinsicOp::ToFloat => {
+                let v = only_arg(args);
+                match v {
+                    Value::Float(f) => Ok(Value::Float(f)),
+                    Value::Int(n) => Ok(Value::Float(n as f64)),
+                    Value::Text(s) => s
+                        .trim()
+                        .parse::<f64>()
+                        .map(Value::Float)
+                        .map_err(|_| {
+                            SpoonError::Other(format!("to_float: cannot parse '{s}'"))
+                        }),
+                    Value::Bool(b) => Ok(Value::Float(if b { 1.0 } else { 0.0 })),
+                    other => Err(SpoonError::type_error(
+                        "int, float, text, or bool",
+                        &other,
+                    )),
+                }
+            }
+            IntrinsicOp::ToBool => {
+                let v = only_arg(args);
+                Ok(Value::Bool(is_truthy(&v)))
+            }
+
+            // -- Control --
+            IntrinsicOp::Assert => {
+                let [value, message] = two_args(args);
+                let message = text_arg(message)?;
+                if is_truthy(&value) {
+                    Ok(value)
+                } else {
+                    Err(SpoonError::Other(format!("assertion failed: {message}")))
+                }
+            }
+            IntrinsicOp::DefaultIfNull => {
+                let [value, default] = two_args(args);
+                if value == Value::Null {
+                    Ok(default)
+                } else {
+                    Ok(value)
+                }
+            }
+
+            // -- Bitwise --
+            IntrinsicOp::BitAnd => {
+                let [a, b] = two_args(args);
+                Ok(Value::Int(int_arg(a)? & int_arg(b)?))
+            }
+            IntrinsicOp::BitOr => {
+                let [a, b] = two_args(args);
+                Ok(Value::Int(int_arg(a)? | int_arg(b)?))
+            }
+            IntrinsicOp::BitXor => {
+                let [a, b] = two_args(args);
+                Ok(Value::Int(int_arg(a)? ^ int_arg(b)?))
+            }
+            IntrinsicOp::BitNot => {
+                let a = int_arg(only_arg(args))?;
+                Ok(Value::Int(!a))
+            }
+            IntrinsicOp::BitShiftLeft => {
+                let [a, bits] = two_args(args);
+                let a = int_arg(a)?;
+                let bits = int_arg(bits)?;
+                if !(0..=63).contains(&bits) {
+                    return Err(SpoonError::Other(
+                        "bit_shift_left: bits must be in 0..=63".into(),
+                    ));
+                }
+                Ok(Value::Int(a << bits))
+            }
+            IntrinsicOp::BitShiftRight => {
+                let [a, bits] = two_args(args);
+                let a = int_arg(a)?;
+                let bits = int_arg(bits)?;
+                if !(0..=63).contains(&bits) {
+                    return Err(SpoonError::Other(
+                        "bit_shift_right: bits must be in 0..=63".into(),
+                    ));
+                }
+                Ok(Value::Int(a >> bits))
+            }
+
+            // -- Numeric formatting --
+            IntrinsicOp::NumericToFixed => {
+                let [n, decimals] = two_args(args);
+                let f = numeric_to_f64(n)?;
+                let decimals = nonnegative_usize(int_arg(decimals)?, "numeric_to_fixed decimals")?;
+                let formatted = format!("{f:.prec$}", prec = decimals);
+                Ok(Value::Text(formatted))
+            }
+            IntrinsicOp::NumericToHex => {
+                let n = int_arg(only_arg(args))?;
+                Ok(Value::Text(format!("{n:x}")))
+            }
+            IntrinsicOp::NumericFromHex => {
+                let text = text_arg(only_arg(args))?;
+                let s = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")).unwrap_or(&text);
+                let n = i64::from_str_radix(s, 16).map_err(|e| {
+                    SpoonError::Other(format!("numeric_from_hex: {e}"))
+                })?;
+                Ok(Value::Int(n))
+            }
+            IntrinsicOp::NumericToBinary => {
+                let n = int_arg(only_arg(args))?;
+                Ok(Value::Text(format!("{n:b}")))
+            }
+            IntrinsicOp::NumericFromBinary => {
+                let text = text_arg(only_arg(args))?;
+                let s = text.strip_prefix("0b").or_else(|| text.strip_prefix("0B")).unwrap_or(&text);
+                let n = i64::from_str_radix(s, 2).map_err(|e| {
+                    SpoonError::Other(format!("numeric_from_binary: {e}"))
+                })?;
+                Ok(Value::Int(n))
+            }
         }
     }
 
@@ -1766,7 +3004,165 @@ fn map_arg(value: Value) -> Result<std::collections::BTreeMap<String, Value>, Sp
     }
 }
 
-impl Evaluator {
+fn numeric_to_f64(value: Value) -> Result<f64, SpoonError> {
+    match value {
+        Value::Int(n) => Ok(n as f64),
+        Value::Float(f) => Ok(f),
+        other => Err(SpoonError::type_error("numeric", &other)),
+    }
+}
+
+fn is_truthy(value: &Value) -> bool {
+    match value {
+        Value::Null => false,
+        Value::Bool(b) => *b,
+        Value::Int(n) => *n != 0,
+        Value::Float(f) => *f != 0.0,
+        Value::Text(s) => !s.is_empty(),
+        Value::List(l) => !l.is_empty(),
+        Value::Map(m) => !m.is_empty(),
+    }
+}
+
+fn gcd(mut a: i64, mut b: i64) -> i64 {
+    a = a.abs();
+    b = b.abs();
+    while b != 0 {
+        let t = b;
+        b = a % b;
+        a = t;
+    }
+    a
+}
+
+fn hex_digit(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
+}
+
+fn hex_decode(s: &str) -> Result<Vec<u8>, String> {
+    let s = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")).unwrap_or(s);
+    if !s.len().is_multiple_of(2) {
+        return Err("odd number of hex digits".into());
+    }
+    let bytes = s.as_bytes();
+    let mut result = Vec::with_capacity(s.len() / 2);
+    for chunk in bytes.chunks(2) {
+        let hi = hex_digit(chunk[0]).ok_or_else(|| format!("invalid hex digit '{}'", chunk[0] as char))?;
+        let lo = hex_digit(chunk[1]).ok_or_else(|| format!("invalid hex digit '{}'", chunk[1] as char))?;
+        result.push((hi << 4) | lo);
+    }
+    Ok(result)
+}
+
+fn levenshtein(a: &str, b: &str) -> usize {
+    let a_chars: Vec<char> = a.chars().collect();
+    let b_chars: Vec<char> = b.chars().collect();
+    let m = a_chars.len();
+    let n = b_chars.len();
+    if m == 0 {
+        return n;
+    }
+    if n == 0 {
+        return m;
+    }
+    let mut prev = (0..=n).collect::<Vec<_>>();
+    let mut curr = vec![0; n + 1];
+    for i in 1..=m {
+        curr[0] = i;
+        for j in 1..=n {
+            let cost = if a_chars[i - 1] == b_chars[j - 1] { 0 } else { 1 };
+            curr[j] = (prev[j] + 1).min(curr[j - 1] + 1).min(prev[j - 1] + cost);
+        }
+        std::mem::swap(&mut prev, &mut curr);
+    }
+    prev[n]
+}
+
+fn date_from_parts(year: i64, month: i64, day: i64) -> Result<i64, SpoonError> {
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return Err(SpoonError::Other("date_from_parts: invalid month or day".into()));
+    }
+    // Days from unix epoch (1970-01-01) using a simplified algorithm
+    let y = if month <= 2 { year - 1 } else { year };
+    let m = if month <= 2 { month + 9 } else { month - 3 };
+    let days = 365 * y + y / 4 - y / 100 + y / 400 + (m * 306 + 5) / 10 + (day - 1) - 719468;
+    Ok(days * 86400)
+}
+
+fn date_get_part(ts: i64, part: &str) -> Result<i64, SpoonError> {
+    let (year, month, day, hour, minute, second, weekday) = timestamp_to_parts(ts);
+    match part {
+        "year" => Ok(year),
+        "month" => Ok(month),
+        "day" => Ok(day),
+        "hour" => Ok(hour),
+        "minute" => Ok(minute),
+        "second" => Ok(second),
+        "weekday" => Ok(weekday),
+        _ => Err(SpoonError::Other(format!("date_get_part: unknown part '{part}'"))),
+    }
+}
+
+fn timestamp_to_parts(ts: i64) -> (i64, i64, i64, i64, i64, i64, i64) {
+    let secs_in_day: i64 = 86400;
+    let mut days = ts.div_euclid(secs_in_day);
+    let day_secs = ts.rem_euclid(secs_in_day);
+    let hour = day_secs / 3600;
+    let minute = (day_secs % 3600) / 60;
+    let second = day_secs % 60;
+
+    // Weekday: 1970-01-01 was Thursday (3 if 0=Mon)
+    let weekday = (days + 3).rem_euclid(7);
+
+    // Civil date from days since epoch (algorithm from Howard Hinnant)
+    days += 719468;
+    let era = if days >= 0 { days } else { days - 146096 } / 146097;
+    let doe = days - era * 146097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = if m <= 2 { y + 1 } else { y };
+    (year, m, d, hour, minute, second, weekday)
+}
+
+fn date_format(ts: i64, format: &str) -> Result<String, SpoonError> {
+    let (year, month, day, hour, minute, second, _) = timestamp_to_parts(ts);
+    let mut output = String::new();
+    let chars: Vec<char> = format.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '%' && i + 1 < chars.len() {
+            match chars[i + 1] {
+                'Y' => output.push_str(&format!("{year:04}")),
+                'm' => output.push_str(&format!("{month:02}")),
+                'd' => output.push_str(&format!("{day:02}")),
+                'H' => output.push_str(&format!("{hour:02}")),
+                'M' => output.push_str(&format!("{minute:02}")),
+                'S' => output.push_str(&format!("{second:02}")),
+                '%' => output.push('%'),
+                other => {
+                    output.push('%');
+                    output.push(other);
+                }
+            }
+            i += 2;
+        } else {
+            output.push(chars[i]);
+            i += 1;
+        }
+    }
+    Ok(output)
+}
+
+impl<I: CapabilityInvoker> Evaluator<I> {
     fn parse_json(&mut self, text: String) -> Result<Value, SpoonError> {
         if text.len() > MAX_JSON_BYTES {
             return Err(SpoonError::IntrinsicLimitExceeded {
@@ -1888,7 +3284,7 @@ enum PathSegment {
     Index(i64),
 }
 
-impl Evaluator {
+impl<I: CapabilityInvoker> Evaluator<I> {
     fn get_path(
         &mut self,
         value: Value,
@@ -2000,8 +3396,8 @@ impl Evaluator {
     }
 }
 
-fn update_json_pointer(
-    evaluator: &mut Evaluator,
+fn update_json_pointer<I: CapabilityInvoker>(
+    evaluator: &mut Evaluator<I>,
     value: Value,
     segments: &[PathSegment],
     replacement: Value,
@@ -4382,6 +5778,46 @@ mod tests {
         assert!(matches!(
             Evaluator::new().eval(&zero_quotient, &mut Env::new()),
             Err(SpoonError::DivisionByZero)
+        ));
+    }
+
+    struct EchoCapability;
+
+    impl CapabilityInvoker for EchoCapability {
+        fn invoke(
+            &mut self,
+            content_id: &str,
+            procedure_id: &str,
+            input: Value,
+        ) -> Result<Value, SpoonError> {
+            Ok(Value::Map(
+                [
+                    ("contentId".into(), Value::Text(content_id.into())),
+                    ("procedureId".into(), Value::Text(procedure_id.into())),
+                    ("input".into(), input),
+                ]
+                .into_iter()
+                .collect(),
+            ))
+        }
+    }
+
+    #[test]
+    fn capability_call_uses_the_injected_runtime_and_pure_evaluators_reject_it() {
+        let expression = Expr::CapabilityCall {
+            content_id: "bundle-1".into(),
+            procedure_id: "web.fetch".into(),
+            input: Box::new(Expr::Literal(Value::Text("https://example.test".into()))),
+        };
+        assert!(matches!(
+            Evaluator::new().eval(&expression, &mut Env::new()),
+            Err(SpoonError::Other(message)) if message.contains("authorized host runtime")
+        ));
+        let mut evaluator = Evaluator::new().with_capability_invoker(EchoCapability);
+        let result = evaluator.eval(&expression, &mut Env::new()).unwrap();
+        assert!(matches!(
+            result,
+            Value::Map(ref map) if map.get("contentId") == Some(&Value::Text("bundle-1".into()))
         ));
     }
 }

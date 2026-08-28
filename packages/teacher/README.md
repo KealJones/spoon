@@ -8,6 +8,7 @@ evaluation establishes evidence.
 ## Providers
 
 - `ClaudeTeacher` — invokes Claude’s print-mode CLI.
+- `CursorTeacher` — invokes Cursor’s `agent -p` CLI in ask/print mode.
 - `CodexTeacher` — invokes the local Codex CLI.
 - `OpenAITeacher` — uses the OpenAI API and `OPENAI_API_KEY`.
 - `OllamaTeacher` — uses a local Ollama model.

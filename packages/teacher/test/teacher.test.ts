@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   ClaudeTeacher,
+  CursorTeacher,
   HumanTeacher,
   normalizeClaudeSchema,
   OllamaTeacher,
@@ -54,6 +55,14 @@ test("teacher protocol teaches complete bounded reusable lessons", () => {
   assert.match(prompt, /defeasible_general/);
   assert.match(prompt, /lesson:<procedure-key>/);
   assert.match(prompt, /one to four focused procedures/i);
+  assert.match(prompt, /programmatic requests over user-supplied values/i);
+  assert.match(
+    prompt,
+    /arr\[0\]\.name should teach the reusable path operation/i,
+  );
+  assert.match(prompt, /path_get_optional/i);
+  assert.match(prompt, /obj\.field/i);
+  assert.match(prompt, /arr\[i\]/);
 });
 
 const schema: ProposalSchema = {
@@ -256,6 +265,54 @@ test("Claude adapter uses print-mode structured output and returns unverified co
   assert.equal(teacher.reliability().score, 0.5);
 });
 
+test("Cursor adapter uses print-mode ask and returns unverified content", async () => {
+  let invocation: CommandInvocation | undefined;
+  const teacher = new CursorTeacher({
+    model: "composer-2",
+    runner: async (nextInvocation) => {
+      invocation = nextInvocation;
+      return {
+        exitCode: 0,
+        stdout: JSON.stringify({
+          type: "result",
+          subtype: "success",
+          is_error: false,
+          result: JSON.stringify({
+            lesson: "Multiply by two",
+            confidence: 0.91,
+          }),
+        }),
+        stderr: "",
+      };
+    },
+    now: () => new Date("2026-08-22T00:00:00.000Z"),
+    idFactory: () => "cursor-request",
+  });
+
+  const result = await teacher.propose(request);
+
+  assert.equal(invocation?.command, "agent");
+  assert.deepEqual(invocation?.args.slice(0, 6), [
+    "-p",
+    "--mode",
+    "ask",
+    "--output-format",
+    "json",
+    "--trust",
+  ]);
+  assert.deepEqual(invocation?.args.slice(6, 8), ["--model", "composer-2"]);
+  assert.match(invocation?.args.at(-1) ?? "", /never automatically accepted/i);
+  assert.match(invocation?.args.at(-1) ?? "", /Return only the requested JSON/);
+  assert.deepEqual(result.content, {
+    lesson: "Multiply by two",
+    confidence: 0.91,
+  });
+  assert.equal(result.status, "unverified");
+  assert.equal(result.source, "cursor:composer-2");
+  assert.equal(result.provenance.provider, "cursor");
+  assert.equal(result.provenance.requestId, "cursor-request");
+});
+
 test("Claude schema normalization lowers union types for strict AJV", () => {
   assert.deepEqual(
     normalizeClaudeSchema({
@@ -331,7 +388,7 @@ test("OpenAI adapter sends Responses API strict structured-output request", asyn
   assert.equal(result.provenance.providerRequestId, "resp_123");
 });
 
-test("Ollama adapter uses non-streaming generate with JSON schema", async () => {
+test("Ollama adapter streams generate with JSON schema", async () => {
   let url = "";
   let init: RequestInit | undefined;
   const teacher = new OllamaTeacher({
@@ -341,8 +398,75 @@ test("Ollama adapter uses non-streaming generate with JSON schema", async () => 
       url = String(nextUrl);
       init = nextInit;
       return new Response(
+        [
+          JSON.stringify({ response: '{"lesson":"', done: false }),
+          JSON.stringify({
+            response: 'Multiply by two","confidence":0.8}',
+            done: true,
+          }),
+          "",
+        ].join("\n"),
+        { status: 200 },
+      );
+    },
+  });
+
+  const result = await teacher.propose(request);
+  const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+
+  assert.equal(url, "http://ollama.test/api/generate");
+  assert.equal(body.model, "qwen3:8b");
+  assert.equal(body.stream, true);
+  assert.equal(body.think, false);
+  assert.deepEqual(body.format, schema);
+  assert.equal(result.status, "unverified");
+  assert.equal(result.source, "ollama:qwen3:8b");
+  assert.deepEqual(result.content, {
+    lesson: "Multiply by two",
+    confidence: 0.8,
+  });
+});
+
+test("Ollama adapter reads JSON from thinking when response is empty", async () => {
+  const teacher = new OllamaTeacher({
+    model: "qwen3.8:27b",
+    fetch: async () =>
+      new Response(
+        [
+          JSON.stringify({
+            thinking: '{\n  "lesson":"',
+            response: "",
+            done: false,
+          }),
+          JSON.stringify({
+            thinking: 'Multiply by two","confidence":0.8}',
+            response: "",
+            done: true,
+          }),
+          "",
+        ].join("\n"),
+        { status: 200 },
+      ),
+  });
+
+  const result = await teacher.propose(request);
+  assert.deepEqual(result.content, {
+    lesson: "Multiply by two",
+    confidence: 0.8,
+  });
+});
+
+test("Ollama teacher defaults to the language interpreter Qwen model", async () => {
+  let url = "";
+  let init: RequestInit | undefined;
+  const teacher = new OllamaTeacher({
+    baseUrl: "http://ollama.test/",
+    fetch: async (nextUrl, nextInit) => {
+      url = String(nextUrl);
+      init = nextInit;
+      return new Response(
         JSON.stringify({
-          model: "qwen3:8b",
+          model: "qwen2.5:1.5b",
           created_at: "2026-08-22T00:00:00Z",
           response: JSON.stringify({
             lesson: "Multiply by two",
@@ -359,11 +483,12 @@ test("Ollama adapter uses non-streaming generate with JSON schema", async () => 
   const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
 
   assert.equal(url, "http://ollama.test/api/generate");
-  assert.equal(body.model, "qwen3:8b");
-  assert.equal(body.stream, false);
+  assert.equal(body.model, "qwen2.5:1.5b");
+  assert.equal(body.stream, true);
   assert.deepEqual(body.format, schema);
   assert.equal(result.status, "unverified");
-  assert.equal(result.source, "ollama:qwen3:8b");
+  assert.equal(result.source, "ollama:qwen2.5:1.5b");
+  assert.equal(result.provenance.provider, "ollama");
 });
 
 test("human adapter accepts injected structured input and never self-verifies", async () => {
@@ -663,6 +788,11 @@ test("transport and prompt rejections retain provider attribution", async () => 
         throw boundaryFailure;
       },
     }),
+    new CursorTeacher({
+      runner: async () => {
+        throw boundaryFailure;
+      },
+    }),
     new OpenAITeacher({
       apiKey: "test-key",
       model: "gpt-test",
@@ -681,7 +811,7 @@ test("transport and prompt rejections retain provider attribution", async () => 
       },
     }),
   ];
-  const providers = ["claude", "openai", "ollama", "human"];
+  const providers = ["claude", "cursor", "openai", "ollama", "human"];
 
   for (const [index, teacher] of teachers.entries()) {
     await assert.rejects(

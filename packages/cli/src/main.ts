@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import {
+  JsonRpcError,
   SpoonClient,
   StdioTransport,
   type AdaptationPlanInput,
@@ -10,8 +11,14 @@ import {
 } from "@spoon/sdk";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
+import { pathToFileURL } from "node:url";
 
-import { createConfiguredTeacher, runCycle } from "./cycle.js";
+import {
+  createConfiguredInterpreter,
+  createConfiguredTeacher,
+  runTeaching,
+  runCycle,
+} from "./cycle.js";
 import {
   runBenchmark,
   renderBenchmarkReport,
@@ -62,9 +69,52 @@ async function execute(
       const found = await client.getProcedureByName<{ id?: string }>(
         command.procedure,
       );
-      return client.executeProcedure(
-        found?.id ?? command.procedure,
-        command.inputs,
+      const procedureId = found?.id ?? command.procedure;
+      try {
+        return await client.executeProcedure(
+          procedureId,
+          command.inputs,
+          undefined,
+          resolvedConfig.config.capabilities.permissionMode,
+        );
+      } catch (error) {
+        const runtimePermission = runtimePermissionMessage(error);
+        if (
+          runtimePermission === undefined ||
+          resolvedConfig.config.capabilities.permissionMode !== "ask"
+        ) {
+          throw error;
+        }
+        const decision = await askRuntimePermission(runtimePermission);
+        if (!decision) {
+          throw new Error(
+            "Runtime capability request denied; the procedure was not executed.",
+          );
+        }
+        return client.executeProcedure(
+          procedureId,
+          command.inputs,
+          undefined,
+          "full-access",
+        );
+      }
+    }
+    case "teach.run": {
+      if (!resolvedConfig.config.teacher.enabled) {
+        throw new Error(
+          "Teaching is disabled by configuration; enable teacher.enabled first.",
+        );
+      }
+      return runTeaching(
+        client,
+        command.instruction,
+        createConfiguredTeacher(),
+        {
+          sessionId: command.session,
+          recallMode: command.recall,
+          permissionMode: command.permissionMode,
+        },
+        command.forceHeuristic,
       );
     }
     case "episode.list":
@@ -109,6 +159,10 @@ async function execute(
       return client.getClaimUncertainty(command.claimId);
     case "primitive.observe":
       return client.observePrimitive(command.target);
+    case "capability.provision-web-fetch":
+      return client.provisionWebFetch(command.host);
+    case "capability.list":
+      return client.listCapabilities();
     case "session.start":
       return client.createSession(
         command.name,
@@ -135,6 +189,7 @@ async function execute(
           recallMode: command.recall,
           permissionMode: command.permissionMode,
         },
+        createConfiguredInterpreter(),
       );
   }
 }
@@ -241,12 +296,35 @@ async function main(): Promise<void> {
       process.stdout.write(`${formatExplanation(result)}\n`);
     } else if (command.kind === "cycle.run" && command.quiet) {
       process.stdout.write(`${formatQuietAnswer(result)}\n`);
+    } else if (command.kind === "teach.run") {
+      process.stdout.write(
+        `${command.explain ? formatExplanation(result) : formatTeachingResult(result)}\n`,
+      );
     } else {
       process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     }
   } finally {
     client.close();
   }
+}
+
+function formatTeachingResult(result: unknown): string {
+  if (!isRecord(result)) return `Procedure taught.\n${JSON.stringify(result)}`;
+  const episode = isRecord(result.episode) ? result.episode : {};
+  const answer = formatValue(result.answer);
+  const procedure = result.procedureIr;
+  const action = stringValue(episode.action);
+  const deferredEffect =
+    action === "teacher-procedure-installed:awaiting-runtime-authorization";
+  return [
+    deferredEffect
+      ? "Effectful procedure taught and installed. It was not run while being taught."
+      : "Procedure taught and installed.",
+    ...(deferredEffect ? [] : [`Example result: ${answer}`]),
+    `Episode: ${stringValue(episode.id) ?? "unknown"}`,
+    "Procedure IR:",
+    JSON.stringify(procedure, null, 2),
+  ].join("\n");
 }
 
 async function runChat(
@@ -276,6 +354,32 @@ async function runChat(
         break;
       try {
         const currentConfig = await resolveConfig();
+        if (question === ":teach" || question.startsWith(":teach ")) {
+          if (!currentConfig.config.teacher.enabled) {
+            throw new Error(
+              "Teaching is disabled by configuration; enable teacher.enabled first.",
+            );
+          }
+          const instruction = question.slice(":teach".length).trim();
+          if (instruction === "") {
+            output.write(
+              "Usage: :teach <what to teach> (the request is shown to the Teacher and validated before admission)\n",
+            );
+            continue;
+          }
+          const result = await runTeaching(
+            client,
+            instruction,
+            createConfiguredTeacher(),
+            {
+              sessionId: session.id,
+              recallMode: command.recall,
+              permissionMode: command.permissionMode,
+            },
+          );
+          output.write(`${formatTeachingResult(result)}\n`);
+          continue;
+        }
         const adminResult = await tryHandleAdminRequest(
           question,
           currentConfig,
@@ -296,6 +400,7 @@ async function runChat(
             recallMode: command.recall,
             permissionMode: command.permissionMode,
           },
+          createConfiguredInterpreter(),
         );
         output.write(`${formatQuietAnswer(result)}\n`);
       } catch (error) {
@@ -321,7 +426,7 @@ function formatQuietAnswer(result: unknown): string {
     : "No direct answer.";
 }
 
-function formatExplanation(result: unknown): string {
+export function formatExplanation(result: unknown): string {
   if (!isRecord(result)) return `Result: ${JSON.stringify(result)}`;
   const episode = isRecord(result.episode) ? result.episode : {};
   const lines = [
@@ -330,6 +435,10 @@ function formatExplanation(result: unknown): string {
     `Answer: ${formatValue(result.answer)}`,
     `Episode: ${stringValue(episode.id) ?? "unknown"}`,
   ];
+  if (result.procedureIr !== undefined) {
+    lines.push("Procedure IR:");
+    lines.push(JSON.stringify(result.procedureIr, null, 2));
+  }
   const context = isRecord(episode.context) ? episode.context : {};
   const considered = Array.isArray(episode.knowledge_considered)
     ? episode.knowledge_considered.length
@@ -341,8 +450,55 @@ function formatExplanation(result: unknown): string {
       Array.isArray(context.assumptions) ? context.assumptions.length : 0
     } assumptions`,
   );
-  const teacher = episode.teacher_interaction ?? episode.teacherInteraction;
-  if (isRecord(teacher)) {
+  const interaction = episode.teacher_interaction ?? episode.teacherInteraction;
+  const languageInterpreter = findLanguageInterpreter(interaction);
+  if (languageInterpreter) {
+    const provenance = isRecord(languageInterpreter.provenance)
+      ? languageInterpreter.provenance
+      : {};
+    const frames = isRecord(languageInterpreter.frames)
+      ? languageInterpreter.frames
+      : undefined;
+    const request = isRecord(languageInterpreter.request)
+      ? languageInterpreter.request
+      : undefined;
+    const requestContext =
+      request && isRecord(request.context) ? request.context : {};
+    lines.push(
+      `Interpreter: ${stringValue(provenance.provider) ?? (stringValue(languageInterpreter.providerError) ? "attempted" : "unknown")}` +
+        (stringValue(provenance.model)
+          ? ` (${stringValue(provenance.model)})`
+          : ""),
+    );
+    if (stringValue(languageInterpreter.source)) {
+      lines.push(
+        `Interpreter source: ${stringValue(languageInterpreter.source)}`,
+      );
+    }
+    if (frames) {
+      lines.push(
+        `Interpreter decision: ${stringValue(frames.disposition) ?? "unknown"}`,
+      );
+    }
+    lines.push(
+      `Interpreter context: ${Array.isArray(requestContext.candidates) ? requestContext.candidates.length : 0} candidates, ${Array.isArray(requestContext.priorTurns) ? requestContext.priorTurns.length : 0} prior turns`,
+    );
+    if (stringValue(languageInterpreter.providerError)) {
+      lines.push(
+        `Interpreter fallback: ${stringValue(languageInterpreter.providerError)}`,
+      );
+    }
+  } else {
+    lines.push("Interpreter: not used");
+  }
+
+  const teacher = isRecord(interaction) ? interaction : undefined;
+  const hasTeacher =
+    teacher !== undefined &&
+    (isRecord(teacher.proposal) ||
+      isRecord(teacher.content) ||
+      (teacher.request !== undefined && languageInterpreter === undefined));
+  if (teacher && hasTeacher) {
     const proposal = isRecord(teacher.proposal) ? teacher.proposal : undefined;
     const proposalProvenance =
       proposal && isRecord(proposal.provenance)
@@ -431,6 +587,25 @@ function formatExplanation(result: unknown): string {
   return lines.join("\n");
 }
 
+/**
+ * Teacher handoff records the interpreter failure under `priorFailure` so the
+ * complete chain is durable. Walk that bounded wrapper when rendering an
+ * explanation; otherwise a real attempted interpreter is misreported as
+ * "not used".
+ */
+function findLanguageInterpreter(
+  value: unknown,
+  depth = 0,
+): Record<string, unknown> | undefined {
+  if (!isRecord(value) || depth > 4) return undefined;
+  if (isRecord(value.languageInterpreter)) return value.languageInterpreter;
+  for (const key of ["priorFailure", "rejectedTeacherInteraction"]) {
+    const found = findLanguageInterpreter(value[key], depth + 1);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
 function formatValue(value: unknown): string {
   if (value === null || value === undefined) return "none";
   return typeof value === "string" ? value : JSON.stringify(value);
@@ -442,13 +617,48 @@ function stringValue(value: unknown): string | undefined {
     : undefined;
 }
 
+function runtimePermissionMessage(error: unknown): string | undefined {
+  if (!(error instanceof JsonRpcError) || !isRecord(error.data))
+    return undefined;
+  const cause = stringValue(error.data.cause);
+  return cause?.startsWith("runtime permission required for native capability")
+    ? cause
+    : undefined;
+}
+
+async function askRuntimePermission(message: string): Promise<boolean> {
+  if (!input.isTTY || !output.isTTY) {
+    throw new Error(
+      `${message}. Re-run interactively or set SPOON_PERMISSION_MODE=full-access.`,
+    );
+  }
+  const terminal = createInterface({ input, output });
+  try {
+    const answer = await terminal.question(
+      `${message}\nAllow this one operation? [y/N] `,
+    );
+    return /^(y|yes)$/i.test(answer.trim());
+  } finally {
+    terminal.close();
+  }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-main().catch((error: unknown) => {
-  process.stderr.write(
-    `${error instanceof Error ? error.message : String(error)}\n`,
-  );
-  process.exitCode = 1;
-});
+if (
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  main().catch((error: unknown) => {
+    const cause =
+      error instanceof JsonRpcError && isRecord(error.data)
+        ? stringValue(error.data.cause)
+        : undefined;
+    process.stderr.write(
+      `${cause ?? (error instanceof Error ? error.message : String(error))}\n`,
+    );
+    process.exitCode = 1;
+  });
+}

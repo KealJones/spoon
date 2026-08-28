@@ -10,8 +10,11 @@ import {
   type CycleProgress,
   type RpcTransport,
 } from "@spoon/sdk";
+import { CursorLanguageInterpreter } from "@spoon/intent";
 import {
   CodexTeacher,
+  CursorTeacher,
+  OllamaTeacher,
   ProposalValidationPipeline,
   fingerprintTeacherRequest,
   type Teacher,
@@ -19,7 +22,12 @@ import {
   type TeacherRequest,
 } from "@spoon/teacher";
 
-import { createConfiguredTeacher, runCycle } from "../src/cycle.js";
+import {
+  createConfiguredInterpreter,
+  createConfiguredTeacher,
+  runCycle,
+  runTeaching,
+} from "../src/cycle.js";
 
 class FakeTeacher implements Pick<Teacher, "propose" | "validationPipeline"> {
   calls: TeacherRequest[] = [];
@@ -151,6 +159,35 @@ class RetryCycleTransport implements RpcTransport {
   }
 }
 
+class TeachingCycleTransport implements RpcTransport {
+  readonly calls: Array<{ method: string; params: unknown }> = [];
+
+  async request<T>(method: string, params: unknown): Promise<T> {
+    this.calls.push({ method, params });
+    if (method === "cycle.begin") {
+      return {
+        status: "need_teacher",
+        cycleId: "cycle-teach",
+        request: {
+          situation: String(
+            (params as { situation?: unknown }).situation ?? "",
+          ),
+          context: {},
+          desiredOutput: { type: "object" },
+        },
+      } as T;
+    }
+    return {
+      status: "completed",
+      cycleId: "cycle-teach",
+      disposition: "verified",
+      answer: 10,
+      procedureIr: { id: "procedure-teach" },
+      episode: {},
+    } as T;
+  }
+}
+
 function completed(): CycleProgress {
   return {
     status: "completed",
@@ -177,6 +214,54 @@ test("automatic teacher handoff happens once and a learned repeat stays local", 
   assert.deepEqual(
     transport.calls.map((call) => call.method),
     ["cycle.begin", "cycle.resume", "cycle.begin"],
+  );
+});
+
+test("explicit teaching marks the request and requires reusable procedure IR", async () => {
+  const transport = new TeachingCycleTransport();
+  const teacher = new FakeTeacher();
+  const result = await runTeaching(
+    new SpoonClient(transport),
+    "add two numbers",
+    teacher,
+  );
+
+  assert.deepEqual(result.procedureIr, { id: "procedure-teach" });
+  const begin = transport.calls.find((call) => call.method === "cycle.begin");
+  assert.match(
+    String((begin?.params as { situation: string }).situation),
+    /explicitly requested/,
+  );
+  assert.match(
+    String((begin?.params as { situation: string }).situation),
+    /capabilit/i,
+  );
+  assert.match(teacher.calls[0]?.situation ?? "", /pure_expr_v2/);
+});
+
+test("explicit teaching reports when the teacher did not author an installable procedure", async () => {
+  const transport = new TeachingCycleTransport();
+  transport.request = async function request<T>(
+    method: string,
+    params: unknown,
+  ) {
+    this.calls.push({ method, params });
+    return {
+      status: "completed",
+      cycleId: "cycle-teach-effect",
+      disposition: "provisional",
+      answer: "remote result",
+      episode: { action: "teacher-observation:provisional" },
+    } as T;
+  };
+  await assert.rejects(
+    () =>
+      runTeaching(
+        new SpoonClient(transport),
+        "use a network request to check spelling",
+        new FakeTeacher(),
+      ),
+    /did not produce an installable reusable procedure/i,
   );
 });
 
@@ -244,6 +329,33 @@ test("a malformed lesson can consume one bounded retry and then complete", async
 test("Codex CLI can be selected without an API key or explicit model", () => {
   const teacher = createConfiguredTeacher({ SPOON_TEACHER: "codex" });
   assert.ok(teacher instanceof CodexTeacher);
+});
+
+test("Cursor CLI can be selected as a teacher", () => {
+  const teacher = createConfiguredTeacher({
+    SPOON_TEACHER: "cursor",
+    SPOON_CURSOR_COMMAND: "agent",
+    SPOON_TEACHER_MODEL: "composer-2",
+  });
+  assert.ok(teacher instanceof CursorTeacher);
+});
+
+test("Cursor CLI can be selected as a language interpreter", () => {
+  const interpreter = createConfiguredInterpreter({
+    SPOON_INTERPRETER: "cursor",
+    SPOON_CURSOR_COMMAND: "agent",
+    SPOON_INTERPRETER_MODEL: "cursor-grok-4.6-high",
+  });
+  assert.ok(interpreter instanceof CursorLanguageInterpreter);
+});
+
+test("Ollama teacher reuses the language interpreter generate plumbing", () => {
+  const teacher = createConfiguredTeacher({
+    SPOON_TEACHER: "ollama",
+    SPOON_INTERPRETER_MODEL: "qwen2.5:1.5b",
+    SPOON_OLLAMA_URL: "http://ollama.test",
+  });
+  assert.ok(teacher instanceof OllamaTeacher);
 });
 
 test(
@@ -315,7 +427,13 @@ class ReusableLessonTeacher implements Pick<
               key: "double-procedure",
               name: "DOUBLE",
               concept: { kind: "new_concept", key: "double" },
-              parameters: [{ name: "x", description: "numeric input" }],
+              parameters: [
+                {
+                  name: "x",
+                  description: "numeric input",
+                  valueType: "number",
+                },
+              ],
               body: {
                 instructions: [
                   { op: "load_parameter", name: "x" },

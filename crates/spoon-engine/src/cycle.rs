@@ -1,14 +1,15 @@
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value as JsonValue, json};
 use sha2::{Digest, Sha256};
 use spoon_core::{
     Assumption, BinOp, Concept, ConceptId, Condition, Contract, Episode, EpisodeCost, EpisodeId,
-    EscalationRung, Evaluation, Expr, IntrinsicOp, KnowledgeCandidate, Lifecycle, MutabilityClass,
-    Param, Procedure, ProcedureId, ReasoningTrace, Relationship, SessionId, SessionVisibility,
-    SpoonError, TraceStep, TraceStepStatus, UnOp, Value, VerifiabilityTier,
+    EscalationRung, Evaluation, Expr, IntentDisposition, InterpretationProposal, IntrinsicOp,
+    KnowledgeCandidate, Lifecycle, MutabilityClass, Param, ParamType, Procedure, ProcedureId,
+    ReasoningTrace, Relationship, SessionId, SessionVisibility, SpoonError, TokenKind, TokenRange,
+    TokenStream, TraceStep, TraceStepStatus, UnOp, Value, VerifiabilityTier, tokenize,
 };
 use spoon_episode::EpisodeRecallMode;
 use spoon_exec::ExecTrace;
@@ -18,7 +19,9 @@ use spoon_reason::{
 };
 use uuid::Uuid;
 
-use crate::engine::{Engine, EngineError, bind_inputs, is_current_executable, reasoning_trace};
+use crate::engine::{
+    Engine, EngineError, bind_inputs, is_current_executable, reasoning_trace, routing_description,
+};
 use crate::lesson::DurableLessonStage;
 use spoon_intuition::RecallKind;
 
@@ -27,6 +30,8 @@ const MAX_TEACHER_TEXT_CHARS: usize = 2_048;
 const MAX_TEACHER_VALUE_DEPTH: usize = 8;
 const MAX_TEACHER_CONTEXT_NODES: usize = 8_192;
 const MAX_TEACHER_CONTEXT_CHARS: usize = 262_144;
+const MAX_INTERPRETER_PRIOR_TURNS: usize = 8;
+const MAX_ROUTING_RECALL_CANDIDATES: usize = 1_024;
 const MAX_LESSON_CONCEPTS: usize = 8;
 const MAX_LESSON_RELATIONSHIPS: usize = 16;
 const MAX_LESSON_PROCEDURES: usize = 4;
@@ -83,6 +88,8 @@ pub struct CycleInput {
     pub budget: CycleBudget,
     pub teacher_allowed: bool,
     #[serde(default)]
+    pub interpreter_allowed: bool,
+    #[serde(default)]
     pub session_id: Option<String>,
     #[serde(default)]
     pub recall_mode: RecallMode,
@@ -103,6 +110,8 @@ pub struct CycleOutcome {
     pub cycle_id: CycleId,
     pub disposition: CycleDisposition,
     pub answer: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub procedure_ir: Option<JsonValue>,
     pub episode: Episode,
 }
 
@@ -126,8 +135,32 @@ pub struct TeacherProposalWire {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct IntentRequestWire {
+    pub situation: String,
+    pub token_stream: TokenStream,
+    pub context: JsonValue,
+    pub desired_output: JsonValue,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct IntentProposalWire {
+    pub content: InterpretationProposal,
+    pub source: String,
+    pub status: String,
+    pub provenance: JsonValue,
+    #[serde(default)]
+    pub raw_content: Option<JsonValue>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum CycleProgress {
+    NeedIntent {
+        cycle_id: CycleId,
+        request: IntentRequestWire,
+    },
     NeedTeacher {
         cycle_id: CycleId,
         request: TeacherRequestWire,
@@ -143,6 +176,27 @@ pub(crate) struct PendingCycle {
     dependency_allowlist: Vec<TeacherDependency>,
     initial_interpretations: Vec<ResolvedInterpretation>,
     prior_failure: Option<JsonValue>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct PendingIntentCycle {
+    input: CycleInput,
+    request: IntentRequestWire,
+    bindings: Vec<IntentCandidateBinding>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct IntentCandidateBinding {
+    alias: String,
+    concept: Concept,
+    procedure: Procedure,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "state", rename_all = "snake_case")]
+enum PersistedPendingCycle {
+    Teacher(PendingCycle),
+    Intent(PendingIntentCycle),
 }
 
 /// An engine-owned reference captured with the Teacher request. This is never
@@ -163,7 +217,7 @@ struct ResolvedInterpretation {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 struct ProposalContent {
     #[serde(default)]
     proposal_kind: Option<ProposalKind>,
@@ -171,6 +225,8 @@ struct ProposalContent {
     interpretations: Vec<ProposalInterpretation>,
     #[serde(default)]
     lesson: Option<JsonValue>,
+    #[serde(default)]
+    source: Option<String>,
     #[serde(default, deserialize_with = "deserialize_optional_procedure")]
     procedure: Option<Procedure>,
     #[serde(default)]
@@ -189,7 +245,6 @@ enum ProposalKind {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct ProposalInterpretation {
     concept: ProposalConcept,
     weight: f64,
@@ -275,10 +330,16 @@ struct ProcedureDraft {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ParameterDraft {
     name: String,
     description: String,
+    #[serde(default = "default_parameter_type")]
+    value_type: ParamType,
+}
+
+fn default_parameter_type() -> ParamType {
+    ParamType::Any
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -317,9 +378,9 @@ struct ConditionDraft {
     check: JsonValue,
 }
 
-/// The versioned recursive grammar used by `pure_expr_v2`. It deliberately
-/// has no call/effect node: teachers can compose only engine-owned pure
-/// intrinsics, never name or mint executable procedures.
+/// The versioned recursive grammar used by `pure_expr_v2`. The name is kept
+/// for wire compatibility, but the grammar now has one explicit effect node:
+/// a capability call is data-only until the host re-authorizes it at runtime.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case", tag = "kind", deny_unknown_fields)]
 enum ExprDraft {
@@ -387,6 +448,13 @@ enum ExprDraft {
         alias: String,
         args: Vec<ExprDraft>,
     },
+    CapabilityCall {
+        #[serde(rename = "contentId")]
+        content_id: String,
+        #[serde(rename = "procedureId")]
+        procedure_id: String,
+        input: Box<ExprDraft>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
@@ -436,6 +504,8 @@ enum IntrinsicOpDraft {
     TextStartsWith,
     TextEndsWith,
     TextReplace,
+    TextUrlEncode,
+    TextRegexCapture,
     CollectionContains,
     CollectionFindIndex,
     CountEqual,
@@ -543,10 +613,22 @@ enum KnowledgeToLearn {
 impl Engine {
     pub(crate) fn recover_pending_cycles(&mut self) -> Result<(), EngineError> {
         for (cycle_id, pending_json) in self.runtime.pending_cycles()? {
-            let pending: PendingCycle = serde_json::from_str(&pending_json)?;
             self.runtime
                 .claim_pending_cycle(cycle_id, self.instance_id)?;
-            self.pending_cycles.insert(cycle_id, pending);
+            match serde_json::from_str::<PersistedPendingCycle>(&pending_json) {
+                Ok(PersistedPendingCycle::Teacher(pending)) => {
+                    self.pending_cycles.insert(cycle_id, pending);
+                }
+                Ok(PersistedPendingCycle::Intent(pending)) => {
+                    self.pending_intents.insert(cycle_id, pending);
+                }
+                Err(_) => {
+                    // Backward compatibility for pending Teacher continuations
+                    // written before the continuation kind was explicit.
+                    let pending: PendingCycle = serde_json::from_str(&pending_json)?;
+                    self.pending_cycles.insert(cycle_id, pending);
+                }
+            }
         }
         Ok(())
     }
@@ -593,6 +675,27 @@ impl Engine {
         cycle_id: CycleId,
         input: CycleInput,
     ) -> Result<CycleProgress, EngineError> {
+        if !is_explicit_teaching_request(&input.situation) {
+            if let Some(answer) = self.system_capability_answer(&input.situation)? {
+                return self.complete_simple(
+                    cycle_id,
+                    &input,
+                    CycleDisposition::Verified,
+                    Some(Value::Text(answer)),
+                    "system:self-capability-query",
+                    EscalationRung::Run,
+                    Some(Evaluation {
+                        tier: VerifiabilityTier::Hard,
+                        success: true,
+                        details: "reported the Engine-owned capability registry".into(),
+                        surprise: None,
+                    }),
+                    None,
+                    Vec::new(),
+                );
+            }
+        }
+
         if let Some(answer) = self.recall(&input)? {
             return self.complete_simple(
                 cycle_id,
@@ -612,14 +715,79 @@ impl Engine {
             );
         }
 
+        // `teach` is an explicit request to author or revise durable
+        // knowledge. It must not silently substitute a semantically nearby
+        // existing procedure before the Teacher sees the user's instruction.
+        if is_explicit_teaching_request(&input.situation)
+            && input.teacher_allowed
+            && input.budget.max_teacher_turns > 0
+        {
+            let interpretations = Vec::new();
+            let dependency_allowlist = self.pure_teacher_dependencies()?;
+            let request = self.teacher_request(&input, &interpretations, &dependency_allowlist)?;
+            let mut pending_input = input;
+            pending_input.budget.max_teacher_turns =
+                pending_input.budget.max_teacher_turns.saturating_sub(1);
+            self.pending_cycles.insert(
+                cycle_id,
+                PendingCycle {
+                    input: pending_input,
+                    request: request.clone(),
+                    dependency_allowlist,
+                    initial_interpretations: interpretations,
+                    prior_failure: None,
+                },
+            );
+            return Ok(CycleProgress::NeedTeacher { cycle_id, request });
+        }
+
+        // A bare correction such as "incorrect" is feedback about the last
+        // result, not a fresh request. It must not be resolved locally and
+        // accidentally execute a semantically unrelated stored procedure.
+        if is_explicit_incorrectness_feedback(&input.situation)
+            && input.teacher_allowed
+            && input.budget.max_teacher_turns > 0
+        {
+            let interpretations = Vec::new();
+            let dependency_allowlist = self.pure_teacher_dependencies()?;
+            let request = self.teacher_request(&input, &interpretations, &dependency_allowlist)?;
+            let mut pending_input = input;
+            pending_input.budget.max_teacher_turns =
+                pending_input.budget.max_teacher_turns.saturating_sub(1);
+            self.pending_cycles.insert(
+                cycle_id,
+                PendingCycle {
+                    input: pending_input,
+                    request: request.clone(),
+                    dependency_allowlist,
+                    initial_interpretations: interpretations,
+                    prior_failure: None,
+                },
+            );
+            return Ok(CycleProgress::NeedTeacher { cycle_id, request });
+        }
+
         let interpretations = self.local_interpretations(&input.situation)?;
-        if let Some(resolved) = uniquely_resolved(&interpretations)
+        // When an interpreter is enabled, keep the local match as a
+        // request-local candidate and require independent language grounding
+        // before execution. The deterministic fast path remains available to
+        // hosts that explicitly disable interpretation.
+        if !input.interpreter_allowed
+            && let Some(resolved) = uniquely_resolved(&interpretations)
             && let Some(procedure) = self.procedure_for(resolved.concept.id, &input.environment)?
             && let Some(inputs) = complete_inputs(
                 &procedure,
                 &input.environment,
                 &resolved.inputs,
                 &extract_literals(&input.situation),
+            )
+            && procedure_has_language_support(
+                &input.situation,
+                &IntentCandidateBinding {
+                    alias: "local".into(),
+                    concept: resolved.concept.clone(),
+                    procedure: procedure.clone(),
+                },
             )
         {
             return self.execute_cycle_procedure(
@@ -633,6 +801,31 @@ impl Engine {
                 None,
                 None,
             );
+        }
+
+        // Candidate Laboratory (P0F.4): attempt to compose known procedures
+        // before escalating to the interpreter or teacher.
+        if let Some(progress) = self.attempt_compose_and_execute(
+            cycle_id,
+            &input,
+            &interpretations,
+        )? {
+            return Ok(progress);
+        }
+
+        if input.interpreter_allowed {
+            let (request, bindings) = self.intent_request(&input)?;
+            if !bindings.is_empty() {
+                self.pending_intents.insert(
+                    cycle_id,
+                    PendingIntentCycle {
+                        input,
+                        request: request.clone(),
+                        bindings,
+                    },
+                );
+                return Ok(CycleProgress::NeedIntent { cycle_id, request });
+            }
         }
 
         if input.teacher_allowed && input.budget.max_teacher_turns > 0 {
@@ -701,6 +894,634 @@ impl Engine {
         Ok(input)
     }
 
+    fn intent_request(
+        &self,
+        input: &CycleInput,
+    ) -> Result<(IntentRequestWire, Vec<IntentCandidateBinding>), EngineError> {
+        let token_stream = tokenize(&input.situation)
+            .map_err(|error| EngineError::InvalidInput(error.to_string()))?;
+        let mut bindings = self
+            .graph
+            .list_procedures()?
+            .into_iter()
+            .filter(|procedure| is_current_executable(procedure.lifecycle))
+            // A language model may only route into procedures whose slot
+            // contract carries an actual type. Legacy procedures remain
+            // directly callable, but prose descriptions are not enough to
+            // make interpreter admission safe.
+            .filter(|procedure| {
+                procedure
+                    .params
+                    .iter()
+                    .all(|param| param.value_type.is_some())
+            })
+            .filter_map(|procedure| {
+                let concept_id = procedure.concept?;
+                match self.graph.get_concept(concept_id) {
+                    Ok(Some(concept)) if usable_lifecycle(concept.lifecycle) => {
+                        Some(Ok((concept, procedure)))
+                    }
+                    Ok(_) => None,
+                    Err(error) => Some(Err(error)),
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        // Multiple learning episodes may admit byte-for-byte equivalent IR
+        // under differently worded concepts. Showing every duplicate wastes
+        // scarce model context and makes tiny interpreters choose between
+        // aliases that execute identically. Collapse only exact executable
+        // semantics; differently contracted or implemented procedures remain.
+        let mut seen_semantics = HashSet::new();
+        let mut unique_bindings = Vec::with_capacity(bindings.len());
+        for (concept, procedure) in bindings {
+            let semantic_key =
+                serde_json::to_string(&(&procedure.params, &procedure.body, &procedure.contract))?;
+            if seen_semantics.insert(semantic_key) {
+                unique_bindings.push((concept, procedure));
+            }
+        }
+        bindings = unique_bindings;
+        bindings.sort_by(
+            |(left_concept, left_procedure), (right_concept, right_procedure)| {
+                left_concept
+                    .name
+                    .cmp(&right_concept.name)
+                    .then_with(|| left_procedure.name.cmp(&right_procedure.name))
+                    .then_with(|| left_procedure.version.cmp(&right_procedure.version))
+            },
+        );
+        let routing_strategy = if bindings.len() <= input.budget.max_context_items {
+            "all"
+        } else {
+            let recall_limit = bindings
+                .len()
+                .saturating_mul(3)
+                .max(input.budget.max_context_items)
+                .min(MAX_ROUTING_RECALL_CANDIDATES);
+            let ranked = self.rank_recall_candidates(&input.situation, recall_limit)?;
+            let ranks = ranked
+                .into_iter()
+                .filter(|candidate| candidate.kind == RecallKind::Procedure)
+                .enumerate()
+                .map(|(rank, candidate)| (candidate.id, rank))
+                .collect::<BTreeMap<_, _>>();
+            bindings.sort_by(
+                |(left_concept, left_procedure), (right_concept, right_procedure)| {
+                    let left_id =
+                        format!("procedure:{}:{}", left_procedure.id, left_procedure.version);
+                    let right_id = format!(
+                        "procedure:{}:{}",
+                        right_procedure.id, right_procedure.version
+                    );
+                    ranks
+                        .get(&left_id)
+                        .copied()
+                        .unwrap_or(usize::MAX)
+                        .cmp(&ranks.get(&right_id).copied().unwrap_or(usize::MAX))
+                        .then_with(|| left_concept.name.cmp(&right_concept.name))
+                        .then_with(|| left_procedure.name.cmp(&right_procedure.name))
+                        .then_with(|| left_procedure.version.cmp(&right_procedure.version))
+                },
+            );
+            "hybrid"
+        };
+        bindings.truncate(input.budget.max_context_items);
+        let mut bindings = bindings
+            .into_iter()
+            .enumerate()
+            .map(|(index, (concept, procedure))| IntentCandidateBinding {
+                alias: format!("candidate_{index}"),
+                concept,
+                procedure,
+            })
+            .collect::<Vec<_>>();
+
+        let session_id = input
+            .session_id
+            .as_deref()
+            .map(|value| Uuid::parse_str(value).map(SessionId))
+            .transpose()
+            .map_err(|_| EngineError::InvalidInput("session_id is not a UUID".into()))?;
+        let recall_mode = match input.recall_mode {
+            RecallMode::Global => EpisodeRecallMode::Global,
+            RecallMode::Session => EpisodeRecallMode::Session,
+            RecallMode::None => EpisodeRecallMode::None,
+        };
+        let recent = self.episodes.list_recent_for_recall(
+            session_id,
+            recall_mode,
+            input.budget.max_context_items.min(u32::MAX as usize) as u32,
+        )?;
+        let reconsideration = if is_reconsideration_situation(&input.situation) {
+            recent.iter().find_map(|episode| {
+                let procedure = action_procedure_id(episode.action.as_deref()?)?;
+                if !episode
+                    .evaluation
+                    .as_ref()
+                    .is_some_and(|evaluation| evaluation.success)
+                    || episode.observed_result.is_none()
+                    || !episode
+                        .action
+                        .as_deref()
+                        .is_some_and(|action| action.starts_with("procedure:"))
+                {
+                    return None;
+                }
+                Some((
+                    procedure,
+                    episode.situation.clone(),
+                    episode
+                        .observed_result
+                        .clone()
+                        .or_else(|| episode.prediction.clone()),
+                    episode.execution_trace.as_ref().and_then(execution_inputs),
+                ))
+            })
+        } else {
+            None
+        };
+        let reconsideration_procedure = reconsideration.as_ref().map(|(id, _, _, _)| *id);
+        if let Some(procedure_id) = reconsideration_procedure {
+            let narrowed = bindings
+                .iter()
+                .filter(|binding| binding.procedure.id == procedure_id)
+                .cloned()
+                .collect::<Vec<_>>();
+            if !narrowed.is_empty() {
+                bindings = narrowed;
+            }
+        }
+        let prior_turns = recent
+            .into_iter()
+            .take(MAX_INTERPRETER_PRIOR_TURNS)
+            .enumerate()
+            .map(|(index, episode)| {
+                json!({
+                    "alias": format!("turn_{index}"),
+                    "situation": truncate_text(&episode.situation, MAX_TEACHER_TEXT_CHARS),
+                    "succeeded": episode.evaluation.as_ref().map(|evaluation| evaluation.success),
+                    "answer": episode.observed_result.as_ref().or(episode.prediction.as_ref()),
+                    "actionKind": episode.action.as_deref().map(episode_action_kind),
+                })
+            })
+            .collect::<Vec<_>>();
+        let candidates = bindings
+            .iter()
+            .map(|binding| {
+                let uses_primitives = procedure_intrinsic_names(&binding.procedure.body);
+                json!({
+                    "alias": binding.alias,
+                    "name": truncate_text(&binding.concept.name, MAX_TEACHER_TEXT_CHARS),
+                    "description": binding.concept.description.as_deref().map(|value| {
+                        truncate_text(&routing_description(Some(value)), MAX_TEACHER_TEXT_CHARS)
+                    }),
+                    "procedure": {
+                        "name": truncate_text(&binding.procedure.name, MAX_TEACHER_TEXT_CHARS),
+                        "version": binding.procedure.version,
+                        "usesPrimitives": uses_primitives,
+                        "slots": binding.procedure.params.iter().map(|param| json!({
+                            "name": truncate_text(&param.name, MAX_TEACHER_TEXT_CHARS),
+                            "description": param.description.as_deref().map(|value| truncate_text(value, MAX_TEACHER_TEXT_CHARS)),
+                            "valueType": param.value_type.map(|value| format!("{value:?}").to_ascii_lowercase()),
+                        })).collect::<Vec<_>>(),
+                    },
+                })
+            })
+            .collect::<Vec<_>>();
+        let procedure_catalog = candidates
+            .iter()
+            .map(|candidate| {
+                json!({
+                    "kind": "procedure",
+                    "directlySelectable": true,
+                    "alias": candidate["alias"],
+                    "name": candidate["name"],
+                    "description": candidate["description"],
+                    "procedure": candidate["procedure"],
+                    "usesPrimitives": candidate["procedure"]["usesPrimitives"],
+                })
+            })
+            .collect::<Vec<_>>();
+        let catalog_primitive_names = bindings
+            .iter()
+            .flat_map(|binding| procedure_intrinsic_names(&binding.procedure.body))
+            .collect::<BTreeSet<_>>();
+        // The interpreter may only ground slots in request-local literal spans.
+        // Numbers alone made the constrained schema impossible for text-valued
+        // procedures (for example, counting `"r"` in `Strawberry`). Include
+        // bare words and complete quoted strings as well; Spoon still derives
+        // the value locally from the selected token range.
+        let literal_ranges = intent_literal_ranges(&token_stream)
+            .into_iter()
+            .enumerate()
+            .map(|(index, range)| {
+                let text = token_range_text(&token_stream, range).unwrap_or_default();
+                json!({
+                    "alias": format!("literal_{index}"),
+                    "tokenRange": range,
+                    "text": text,
+                    "value": intent_literal_value(text),
+                })
+            })
+            .collect::<Vec<_>>();
+        let context = json!({
+            "schemaVersion": 1,
+            "recallScope": match input.recall_mode {
+                RecallMode::Global => "global",
+                RecallMode::Session => "session",
+                RecallMode::None => "none",
+            },
+            "priorTurns": prior_turns,
+            "reconsideration": reconsideration.as_ref().map(|(_, situation, answer, inputs)| json!({
+                "candidateProcedure": reconsideration_procedure,
+                "previousSituation": truncate_text(situation, MAX_TEACHER_TEXT_CHARS),
+                "previousAnswer": answer,
+                "previousInputs": inputs,
+            })),
+            "candidates": candidates,
+            "catalog": {
+                "procedures": procedure_catalog,
+                "primitives": interpreter_primitive_catalog(&catalog_primitive_names),
+                "capabilities": interpreter_capability_catalog(),
+                "selectionRule": "Only procedure aliases marked directlySelectable may be selected. Primitives compose stored procedures; capabilities require a locally validated procedure and permission boundary.",
+            },
+            "retrieval": {
+                "strategy": routing_strategy,
+                "authority": "candidate_generation_only",
+            },
+            "literalCandidates": literal_ranges,
+            "truncation": {
+                "candidateLimit": input.budget.max_context_items,
+                "priorTurnLimit": MAX_INTERPRETER_PRIOR_TURNS,
+            },
+        });
+        Ok((
+            IntentRequestWire {
+                situation: input.situation.clone(),
+                desired_output: intent_output_schema(
+                    &bindings,
+                    token_stream.tokens.len(),
+                    &literal_ranges,
+                ),
+                token_stream,
+                context,
+            },
+            bindings,
+        ))
+    }
+
+    pub fn resume_intent(
+        &mut self,
+        cycle_id: CycleId,
+        proposal: IntentProposalWire,
+    ) -> Result<CycleProgress, EngineError> {
+        self.runtime
+            .assert_cycle_owner(cycle_id, self.instance_id)?;
+        let result = self.resume_intent_inner(cycle_id, proposal);
+        self.persist_cycle_result(cycle_id, &result)?;
+        result
+    }
+
+    pub fn skip_intent(
+        &mut self,
+        cycle_id: CycleId,
+        reason: impl Into<String>,
+    ) -> Result<CycleProgress, EngineError> {
+        self.skip_intent_with_diagnostic(cycle_id, reason, None)
+    }
+
+    pub fn skip_intent_with_diagnostic(
+        &mut self,
+        cycle_id: CycleId,
+        reason: impl Into<String>,
+        diagnostic: Option<JsonValue>,
+    ) -> Result<CycleProgress, EngineError> {
+        self.runtime
+            .assert_cycle_owner(cycle_id, self.instance_id)?;
+        let pending = self.pending_intents.remove(&cycle_id).ok_or_else(|| {
+            EngineError::InvalidInput(format!(
+                "cycle {cycle_id} has no pending language interpretation"
+            ))
+        })?;
+        let mut interaction = json!({
+            "languageInterpreter": {
+                "request": pending.request,
+                "providerError": truncate_text(&reason.into(), MAX_TEACHER_TEXT_CHARS),
+            }
+        });
+        if let Some(diagnostic) = diagnostic {
+            if let Some(language_interpreter) = interaction
+                .get_mut("languageInterpreter")
+                .and_then(JsonValue::as_object_mut)
+            {
+                language_interpreter.insert("rejectedProposal".into(), diagnostic);
+            }
+        }
+        let result = self.continue_after_intent(cycle_id, pending.input, interaction);
+        self.persist_cycle_result(cycle_id, &result)?;
+        result
+    }
+
+    fn resume_intent_inner(
+        &mut self,
+        cycle_id: CycleId,
+        proposal: IntentProposalWire,
+    ) -> Result<CycleProgress, EngineError> {
+        let pending = self.pending_intents.remove(&cycle_id).ok_or_else(|| {
+            EngineError::InvalidInput(format!(
+                "cycle {cycle_id} has no pending language interpretation"
+            ))
+        })?;
+        if proposal.status != "unverified"
+            || proposal.source.trim().is_empty()
+            || !proposal.provenance.is_object()
+        {
+            return self.continue_after_intent(
+                cycle_id,
+                pending.input,
+                rejected_intent_interaction(
+                    &pending.request,
+                    &proposal,
+                    "language interpreter proposal provenance is invalid",
+                ),
+            );
+        }
+        let frames = match proposal.content.ground_for(
+            &pending.request.token_stream,
+            &spoon_core::LanguageLimits::default(),
+        ) {
+            Ok(frames) => frames,
+            Err(error) => {
+                return self.continue_after_intent(
+                    cycle_id,
+                    pending.input,
+                    rejected_intent_interaction(&pending.request, &proposal, error.to_string()),
+                );
+            }
+        };
+        let mut interaction = json!({
+            "languageInterpreter": {
+                "request": pending.request,
+                "source": proposal.source,
+                "status": proposal.status,
+                "provenance": proposal.provenance,
+                "frames": frames,
+            }
+        });
+
+        match frames.disposition {
+            IntentDisposition::Execute => {
+                let selected = frames.selected.expect("validated execute selection");
+                let frame = &frames.candidates[selected];
+                let binding = pending
+                    .bindings
+                    .iter()
+                    .find(|binding| binding.alias == frame.name);
+                let Some(binding) = binding else {
+                    return self.continue_after_intent(
+                        cycle_id,
+                        pending.input,
+                        rejected_intent_interaction(
+                            &pending.request,
+                            &proposal,
+                            "interpreter selected an unknown request-local candidate",
+                        ),
+                    );
+                };
+                let current = self
+                    .graph
+                    .get_procedure_version(binding.procedure.id, binding.procedure.version)?;
+                let Some(current) = current else {
+                    return self.continue_after_intent(
+                        cycle_id,
+                        pending.input,
+                        rejected_intent_interaction(
+                            &pending.request,
+                            &proposal,
+                            "captured interpreter procedure revision is unavailable",
+                        ),
+                    );
+                };
+                if !is_current_executable(current.lifecycle)
+                    || current.concept != Some(binding.concept.id)
+                {
+                    return self.continue_after_intent(
+                        cycle_id,
+                        pending.input,
+                        rejected_intent_interaction(
+                            &pending.request,
+                            &proposal,
+                            "captured interpreter candidate is no longer executable",
+                        ),
+                    );
+                }
+                if !procedure_has_language_support(&pending.input.situation, binding) {
+                    return self.continue_after_intent(
+                        cycle_id,
+                        pending.input,
+                        rejected_intent_interaction(
+                            &pending.request,
+                            &proposal,
+                            "interpreter selected a procedure without enough language support",
+                        ),
+                    );
+                }
+                let allowed_slots = current
+                    .params
+                    .iter()
+                    .map(|param| param.name.as_str())
+                    .collect::<HashSet<_>>();
+                let mut proposed_inputs = BTreeMap::new();
+                for slot in &frame.slots {
+                    if !allowed_slots.contains(slot.name.as_str()) {
+                        return self.continue_after_intent(
+                            cycle_id,
+                            pending.input,
+                            rejected_intent_interaction(
+                                &pending.request,
+                                &proposal,
+                                format!("interpreter proposed unknown slot {:?}", slot.name),
+                            ),
+                        );
+                    }
+                    if proposed_inputs
+                        .insert(slot.name.clone(), slot.value.clone())
+                        .is_some()
+                    {
+                        return self.continue_after_intent(
+                            cycle_id,
+                            pending.input,
+                            rejected_intent_interaction(
+                                &pending.request,
+                                &proposal,
+                                format!("interpreter proposed duplicate slot {:?}", slot.name),
+                            ),
+                        );
+                    }
+                }
+                let inputs = complete_inputs(
+                    &current,
+                    &pending.input.environment,
+                    &proposed_inputs,
+                    &extract_literals(&pending.input.situation),
+                );
+                let Some(inputs) = inputs else {
+                    return self.continue_after_intent(
+                        cycle_id,
+                        pending.input,
+                        rejected_intent_interaction(
+                            &pending.request,
+                            &proposal,
+                            "interpreter proposal did not bind the exact procedure inputs",
+                        ),
+                    );
+                };
+                let interpretations = vec![ResolvedInterpretation {
+                    concept: binding.concept.clone(),
+                    weight: 1.0,
+                    inputs: proposed_inputs.clone(),
+                }];
+                interaction["selectionReason"] = json!({
+                    "path": "interpreter",
+                    "summary": format!(
+                        "Language interpreter selected {} (concept {:?}) with disposition Execute",
+                        frame.name, binding.concept.id
+                    ),
+                    "source": proposal.source,
+                    "selectedCandidate": frame.name,
+                    "concept": binding.concept.id.to_string(),
+                    "procedure": binding.procedure.id.to_string(),
+                    "version": binding.procedure.version,
+                    "disposition": "Execute",
+                    "slotBindings": proposed_inputs,
+                });
+                self.execute_cycle_procedure(
+                    cycle_id,
+                    &pending.input,
+                    &interpretations,
+                    &current,
+                    inputs,
+                    EscalationRung::Run,
+                    Some(interaction),
+                    None,
+                    None,
+                )
+            }
+            IntentDisposition::Clarify => {
+                let ambiguity = frames
+                    .candidates
+                    .iter()
+                    .flat_map(|frame| frame.ambiguities.iter())
+                    .next()
+                    .map(String::as_str)
+                    .unwrap_or("the request is ambiguous");
+                self.complete_simple(
+                    cycle_id,
+                    &pending.input,
+                    CycleDisposition::Abstained,
+                    None,
+                    &format!(
+                        "clarify:{}",
+                        truncate_text(ambiguity, MAX_TEACHER_TEXT_CHARS)
+                    ),
+                    EscalationRung::Abstain,
+                    None,
+                    Some(interaction),
+                    Vec::new(),
+                )
+            }
+            IntentDisposition::Abstain => {
+                self.continue_after_intent(cycle_id, pending.input, interaction)
+            }
+        }
+    }
+
+    fn system_capability_answer(&self, situation: &str) -> Result<Option<String>, EngineError> {
+        let lower = situation.to_ascii_lowercase();
+        let asks_about_capabilities = lower.contains("capabilit")
+            || lower.contains("what can you do")
+            || lower.contains("what tools do you have")
+            || (lower.contains("can you")
+                && ["web", "internet", "search", "file", "network", "tool"]
+                    .iter()
+                    .any(|term| lower.contains(term)));
+        if !asks_about_capabilities {
+            return Ok(None);
+        }
+
+        let imported = self
+            .capabilities
+            .list_imported()
+            .map_err(|error| EngineError::InvalidInput(format!("capability inventory: {error}")))?;
+        let imported_summary = if imported.is_empty() {
+            "No external capability bundles are currently imported.".to_owned()
+        } else {
+            imported
+                .iter()
+                .map(|capability| {
+                    format!(
+                        "{} ({}, locally validated: {})",
+                        capability.name,
+                        format!("{:?}", capability.status).to_ascii_lowercase(),
+                        capability.locally_validated
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+
+        let asks_about_web = ["web", "internet", "search"]
+            .iter()
+            .any(|term| lower.contains(term));
+        if asks_about_web {
+            return Ok(Some(format!(
+                "Web search is unavailable: no web-search adapter is registered. Spoon has a generic policy-authorized network_request boundary, but it requires an imported, locally validated capability procedure and permission. {imported_summary}"
+            )));
+        }
+
+        Ok(Some(format!(
+            "Spoon has built-in capability boundaries for policy-authorized network requests, file reads, file writes, external observation, and bounded sandbox execution. These are not automatically available; each requires a locally validated capability procedure and permission. {imported_summary}"
+        )))
+    }
+
+    fn continue_after_intent(
+        &mut self,
+        cycle_id: CycleId,
+        input: CycleInput,
+        interaction: JsonValue,
+    ) -> Result<CycleProgress, EngineError> {
+        let interpretations = self.local_interpretations(&input.situation)?;
+        if input.teacher_allowed && input.budget.max_teacher_turns > 0 {
+            let dependency_allowlist = self.pure_teacher_dependencies()?;
+            let request = self.teacher_request(&input, &interpretations, &dependency_allowlist)?;
+            let mut pending_input = input;
+            pending_input.budget.max_teacher_turns =
+                pending_input.budget.max_teacher_turns.saturating_sub(1);
+            self.pending_cycles.insert(
+                cycle_id,
+                PendingCycle {
+                    input: pending_input,
+                    request: request.clone(),
+                    dependency_allowlist,
+                    initial_interpretations: interpretations,
+                    prior_failure: Some(interaction),
+                },
+            );
+            return Ok(CycleProgress::NeedTeacher { cycle_id, request });
+        }
+        self.complete_simple(
+            cycle_id,
+            &input,
+            CycleDisposition::Abstained,
+            None,
+            "abstain:language-interpreter",
+            EscalationRung::Abstain,
+            None,
+            Some(interaction),
+            interpretations,
+        )
+    }
+
     pub fn resume_cycle(
         &mut self,
         cycle_id: CycleId,
@@ -749,7 +1570,7 @@ impl Engine {
             );
         }
 
-        let content: ProposalContent = match serde_json::from_value(proposal.content.clone()) {
+        let mut content: ProposalContent = match serde_json::from_value(proposal.content.clone()) {
             Ok(content) => content,
             Err(_) => {
                 return self.complete_simple(
@@ -765,6 +1586,27 @@ impl Engine {
                 );
             }
         };
+        if let Err(error) = apply_spoonlang_source(&mut content) {
+            if pending.input.budget.max_teacher_turns > 0 {
+                return self.retry_reusable_lesson(
+                    cycle_id,
+                    pending,
+                    teacher_json,
+                    &error.to_string(),
+                );
+            }
+            return self.complete_simple(
+                cycle_id,
+                &pending.input,
+                CycleDisposition::Abstained,
+                None,
+                "abstain:invalid-teacher-proposal",
+                EscalationRung::Abstain,
+                None,
+                Some(teacher_json),
+                pending.initial_interpretations,
+            );
+        }
 
         if content.proposal_kind == Some(ProposalKind::ExternalObservation)
             && let Some(answer) = content.answer.clone()
@@ -1013,6 +1855,18 @@ impl Engine {
         result: &Result<CycleProgress, EngineError>,
     ) -> Result<(), EngineError> {
         match result {
+            Ok(CycleProgress::NeedIntent { .. }) => {
+                let pending = self.pending_intents.get(&cycle_id).ok_or_else(|| {
+                    EngineError::InvalidInput(format!(
+                        "cycle {cycle_id} requested interpretation without durable continuation state"
+                    ))
+                })?;
+                self.runtime.save_pending_cycle(
+                    cycle_id,
+                    self.instance_id,
+                    &serde_json::to_string(&PersistedPendingCycle::Intent(pending.clone()))?,
+                )?;
+            }
             Ok(CycleProgress::NeedTeacher { .. }) => {
                 let pending = self.pending_cycles.get(&cycle_id).ok_or_else(|| {
                     EngineError::InvalidInput(format!(
@@ -1022,7 +1876,7 @@ impl Engine {
                 self.runtime.save_pending_cycle(
                     cycle_id,
                     self.instance_id,
-                    &serde_json::to_string(pending)?,
+                    &serde_json::to_string(&PersistedPendingCycle::Teacher(pending.clone()))?,
                 )?;
             }
             Ok(CycleProgress::Completed(_)) => {
@@ -1251,7 +2105,7 @@ impl Engine {
             &pending.dependency_allowlist,
         )?;
         request.specific_question = Some(format!(
-            "The reusable lesson could not be safely compiled: {}. Return one corrected pure_expr_v2 reusable_lesson (preferred; pure_rpn_v1 remains accepted) using only the advertised grammar, or answer/abstain without a lesson.",
+            "The previous source was not valid spoonlang: {}. Put spoonlang text in source, not tagged IR JSON. If this situation is a stable fact with no inputs to transform, use kind answer_only. Do not copy an example lesson from the prompt.",
             truncate_text(reason, MAX_TEACHER_TEXT_CHARS)
         ));
         if let Some(context) = request.context.as_object_mut() {
@@ -1457,6 +2311,7 @@ impl Engine {
                 parameters.push(Param {
                     name: parameter_draft.name.clone(),
                     description: Some(parameter_draft.description.clone()),
+                    value_type: Some(parameter_draft.value_type),
                 });
             }
             let (body, used_parameters, mut used_dependencies) = compile_lesson_body(
@@ -1477,6 +2332,20 @@ impl Engine {
                 &parameter_names,
                 &dependencies,
             )?;
+            if contract
+                .requires
+                .iter()
+                .chain(&contract.promises)
+                .chain(&contract.fails_when)
+                .filter_map(|condition| condition.check.as_ref())
+                .any(|check| {
+                    Procedure::new("contract-check", Vec::new(), check.clone()).is_effectful()
+                })
+            {
+                return Err(lesson_error(
+                    "capability calls are allowed in procedure bodies, not contract checks",
+                ));
+            }
             used_dependencies.extend(contract_dependencies);
             let used_external_dependencies = used_dependencies
                 .iter()
@@ -1507,6 +2376,7 @@ impl Engine {
                 .get(&format!("lesson:{}", procedure_draft.key))
                 .expect("lesson procedure aliases were built above")
                 .procedure;
+            self.validate_capability_dependencies(&procedure)?;
             procedure.lifecycle = Lifecycle::Provisional;
             procedures_by_key.insert(procedure_draft.key.clone(), procedure.clone());
             procedures.push(procedure);
@@ -1702,6 +2572,7 @@ impl Engine {
             // Old unconstrained calls have no exact provenance pin and are
             // therefore never legal dependency candidates.
             Expr::Call { .. } => Ok(false),
+            Expr::CapabilityCall { .. } => Ok(false),
             Expr::CallExact {
                 procedure,
                 version,
@@ -1771,6 +2642,28 @@ impl Engine {
             .budget
             .max_context_items
             .min(MAX_TEACHER_CONTEXT_ITEMS);
+        let session_id = input
+            .session_id
+            .as_deref()
+            .map(|value| Uuid::parse_str(value).map(SessionId))
+            .transpose()
+            .map_err(|_| EngineError::InvalidInput("session_id is not a UUID".into()))?;
+        let recall_mode = match input.recall_mode {
+            RecallMode::Global => EpisodeRecallMode::Global,
+            RecallMode::Session => EpisodeRecallMode::Session,
+            RecallMode::None => EpisodeRecallMode::None,
+        };
+        let recent_episodes =
+            self.episodes
+                .list_recent_for_recall(session_id, recall_mode, item_limit as u32)?;
+        let correction_target = is_explicit_incorrectness_feedback(&input.situation)
+            .then(|| recent_episodes.first())
+            .flatten()
+            .map(teacher_episode_context);
+        let recent_episodes = recent_episodes
+            .into_iter()
+            .map(|episode| teacher_episode_context(&episode))
+            .collect::<Vec<_>>();
         let concepts = self
             .graph
             .list_concepts()?
@@ -1813,6 +2706,46 @@ impl Engine {
                 })
             })
             .collect::<Vec<_>>();
+        let mut capability_procedures = Vec::new();
+        for imported in self
+            .capabilities
+            .list_imported()
+            .map_err(|error| EngineError::InvalidInput(format!("capability registry: {error}")))?
+            .into_iter()
+            .filter(|capability| capability.locally_validated)
+        {
+            let Ok(bundle) = self.capabilities.reconstruct(&imported.content_id) else {
+                continue;
+            };
+            for procedure in bundle.procedures.into_iter().take(item_limit) {
+                capability_procedures.push(json!({
+                    "contentId": imported.content_id.clone(),
+                    "procedureId": procedure.id,
+                    "name": truncate_text(&procedure.name, MAX_TEACHER_TEXT_CHARS),
+                    "primitive": procedure.primitive,
+                    "inputSchema": procedure.input_schema,
+                    "outputSchema": procedure.output_schema,
+                    "effects": procedure.effects,
+                    "permissions": procedure.permissions,
+                }));
+                if capability_procedures.len() >= item_limit {
+                    break;
+                }
+            }
+            if capability_procedures.len() >= item_limit {
+                break;
+            }
+        }
+        // Native boundaries are always authorable.  They deliberately appear
+        // even when this process has no adapter configured yet: configuration
+        // and consent are runtime questions, never a reason to suppress a
+        // procedure from the language the teacher may express.
+        for native in native_teacher_capability_procedures() {
+            if capability_procedures.len() >= item_limit {
+                break;
+            }
+            capability_procedures.push(native);
+        }
         let mut environment_nodes = MAX_TEACHER_CONTEXT_NODES;
         let mut environment_chars = MAX_TEACHER_CONTEXT_CHARS;
         let environment = input
@@ -1851,6 +2784,7 @@ impl Engine {
             })).collect::<Vec<_>>(),
             "concepts": concepts,
             "procedures": procedures,
+            "capabilityProcedures": capability_procedures,
             "pureProcedureDependencies": dependencies.iter().map(|dependency| {
                 let procedure = self.graph.get_procedure_version(dependency.procedure, dependency.version)
                     .ok().flatten();
@@ -1865,6 +2799,8 @@ impl Engine {
             }).collect::<Vec<_>>(),
             "environment": environment,
             "assumptions": assumptions,
+            "recentEpisodes": recent_episodes,
+            "correctionTarget": correction_target,
             "budget": input.budget,
             "authoringProtocol": authoring_protocol(),
         });
@@ -1877,15 +2813,139 @@ impl Engine {
             &mut context_nodes,
             &mut context_chars,
         );
+        let correction_guidance = if is_explicit_incorrectness_feedback(&input.situation) {
+            " The user is reporting a prior answer as incorrect. correctionTarget is the immediately preceding episode to inspect; use it rather than a merely similar older episode in recentEpisodes. Correct that target. Do not replay its prior procedure merely because it ran successfully; only propose reusable knowledge if it actually matches the target request."
+        } else {
+            ""
+        };
         Ok(TeacherRequestWire {
             situation: input.situation.clone(),
             context,
-            specific_question: Some(
-                "For deterministic generalizable tasks, return one safe reusable_lesson in pure_expr_v2 (preferred; pure_rpn_v1 remains accepted) with one to four focused procedures and an example answer from its selected invocation. Use lesson:<procedure-key> only for acyclic composition within the lesson. Preserve supported definitions or qualified general facts as concepts. For external observations without a trusted primitive, return external_observation with no lesson. Otherwise answer or explicitly abstain."
-                    .into(),
-            ),
+            specific_question: Some(format!(
+                "Write spoonlang for THIS situation in JSON field source. Do not copy prompt examples. For a stable general fact with no user-supplied value to transform (how many eyes, spelling a word), use kind answer_only. For deterministic generalizable tasks over inputs, return kind reusable_lesson. Programmatic work on user-supplied data is deterministic: field/index/path extraction, JSON parsing, text or collection transforms, counting, sorting, and arithmetic should teach a reusable procedure. For effectful work, use cap(\"<contentId>\", \"<procedureId>\", input) only with advertised capabilityProcedures. Native capabilities are authorable even if an adapter is not currently configured. For a field or indexed path, teach path_get or path_get_optional; use json_parse only when the input is JSON text. Use dep(\"lesson:<procedure-key>\", ...) only for acyclic composition. For external observations without a trusted primitive, return kind external_observation. Otherwise answer or abstain.{correction_guidance}"
+            )),
             desired_output: proposal_schema(),
         })
+    }
+
+    /// Candidate Laboratory (P0F.4): try to compose known procedures
+    /// into a sequential chain and execute it in quarantine.
+    fn attempt_compose_and_execute(
+        &mut self,
+        cycle_id: CycleId,
+        input: &CycleInput,
+        interpretations: &[ResolvedInterpretation],
+    ) -> Result<Option<CycleProgress>, EngineError> {
+        let procedures: Vec<Procedure> = self
+            .graph
+            .list_procedures()?
+            .into_iter()
+            .filter(|p| is_current_executable(p.lifecycle))
+            .collect();
+
+        let literals = extract_literals(&input.situation);
+
+        let candidate = match crate::compose::attempt_composition(
+            &input.situation,
+            &procedures,
+            &literals,
+        ) {
+            Some(candidate) => candidate,
+            None => return Ok(None),
+        };
+
+        let composed = candidate.procedure.clone();
+        let mut evaluator = self
+            .current_evaluator()?
+            .with_budget(input.budget.max_exec_steps.min(self.max_steps));
+        evaluator.register_procedure(composed.clone());
+        let mut capability_runtime = crate::engine::EngineCapabilityInvoker {
+            engine: self,
+            permission_mode: input.permission_mode.clone(),
+        };
+        let mut evaluator = evaluator.with_capability_invoker(&mut capability_runtime);
+
+        let args: Vec<Value> = composed
+            .params
+            .iter()
+            .enumerate()
+            .map(|(i, _param)| {
+                candidate
+                    .inputs
+                    .get(i)
+                    .cloned()
+                    .unwrap_or(Value::Null)
+            })
+            .collect();
+
+        let attempt = evaluator.exec_procedure_captured(&composed.id, args);
+        let steps_used = evaluator.budget().steps_used;
+        drop(evaluator);
+        drop(capability_runtime);
+
+        match &attempt.result {
+            Ok(value) => {
+                // Composition succeeded - persist the new procedure and record episode
+                self.graph.insert_procedure(&composed)?;
+                self.index_procedure(&composed)?;
+
+                let chain_names: Vec<&str> = candidate.chain.iter().map(|c| c.name.as_str()).collect();
+                let mut episode = self.base_episode(input, interpretations)?;
+                episode.action = Some(format!(
+                    "compose:{}@{}",
+                    composed.id, composed.version,
+                ));
+                episode.reasoning_trace = reasoning_trace(&attempt.trace);
+                let mut prefix = ladder_prefix(EscalationRung::Compose, false);
+                prefix.push(simple_step(
+                    &format!(
+                        "composed {} from known procedures",
+                        chain_names.join(" then "),
+                    ),
+                    EscalationRung::Compose,
+                ));
+                prefix.append(&mut episode.reasoning_trace.steps);
+                episode.reasoning_trace.steps = prefix;
+                episode.execution_trace = Some(serde_json::to_value(&attempt.trace)?);
+                episode.teacher_interaction = Some(json!({
+                    "selectionReason": {
+                        "path": "composition",
+                        "summary": format!(
+                            "Composed new procedure by chaining: {}",
+                            chain_names.join(" -> ")
+                        ),
+                        "chain": chain_names,
+                        "composedProcedure": composed.id.to_string(),
+                        "inputs": candidate.inputs,
+                    }
+                }));
+                episode.observed_result = Some(value.clone());
+                episode.evaluation = Some(Evaluation {
+                    tier: VerifiabilityTier::Deferred,
+                    success: true,
+                    details: "composed procedure executes; semantic fit is provisional".into(),
+                    surprise: None,
+                });
+                episode.cost = EpisodeCost {
+                    rung_reached: EscalationRung::Compose,
+                    steps_taken: attempt.trace.len() as u32,
+                    budget_spent: f64::from(steps_used),
+                };
+                self.persist_engine_episode(&episode)?;
+
+                Ok(Some(CycleProgress::Completed(Box::new(CycleOutcome {
+                    cycle_id,
+                    disposition: CycleDisposition::Provisional,
+                    answer: Some(value.clone()),
+                    procedure_ir: Some(serde_json::to_value(&composed)?),
+                    episode,
+                }))))
+            }
+            Err(_) => {
+                // Composition execution failed - fall through to interpreter/teacher
+                Ok(None)
+            }
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1901,6 +2961,24 @@ impl Engine {
         knowledge_to_learn: Option<KnowledgeToLearn>,
         expected_answer: Option<Value>,
     ) -> Result<CycleProgress, EngineError> {
+        // Installing knowledge and exercising an effect are different phases.
+        // A teacher's worked example may require a real network/file/etc.
+        // operation, but its inability to run *now* must never decide whether
+        // the procedure is admissible.  Runtime authorization happens only
+        // when a later request actually reaches the capability call.
+        if let Some(KnowledgeToLearn::Lesson(lesson)) = &knowledge_to_learn
+            && procedure.is_effectful()
+        {
+            return self.install_effectful_lesson_without_execution(
+                cycle_id,
+                input,
+                procedure,
+                rung,
+                teacher_interaction,
+                lesson,
+                expected_answer,
+            );
+        }
         let (prior_reasoning, prior_execution_trace, prior_steps_used, prior_trace_len) =
             prior_failure_material(teacher_interaction.as_ref());
         let args = bind_inputs(procedure, &inputs, None)?;
@@ -1915,8 +2993,15 @@ impl Engine {
             }
         }
         evaluator.register_procedure(procedure.clone());
+        let mut capability_runtime = crate::engine::EngineCapabilityInvoker {
+            engine: self,
+            permission_mode: input.permission_mode.clone(),
+        };
+        let mut evaluator = evaluator.with_capability_invoker(&mut capability_runtime);
         let attempt = evaluator.exec_procedure_captured(&procedure.id, args);
         let steps_used = evaluator.budget().steps_used;
+        drop(evaluator);
+        drop(capability_runtime);
         let mut episode = self.base_episode(input, interpretations)?;
         episode.action = Some(format!("procedure:{}@{}", procedure.id, procedure.version));
         episode.reasoning_trace = reasoning_trace(&attempt.trace);
@@ -1929,9 +3014,25 @@ impl Engine {
             ladder_prefix(rung, rung == EscalationRung::Ask)
         } else {
             let mut steps = prior_reasoning.steps;
-            steps.push(simple_step("ask teacher", EscalationRung::Ask));
+            steps.push(simple_step(
+                "ask: escalated to teacher for guidance",
+                EscalationRung::Ask,
+            ));
             steps
         };
+        for step in &mut prefix {
+            if step.rung == rung && step.procedure_used.is_none() {
+                step.procedure_used = Some(procedure.id);
+                if step.rung == EscalationRung::Run
+                    && step.description.contains("uniquely matched")
+                {
+                    step.description = format!(
+                        "run: uniquely matched procedure {}@{}, executing",
+                        procedure.id, procedure.version
+                    );
+                }
+            }
+        }
         prefix.append(&mut episode.reasoning_trace.steps);
         episode.reasoning_trace.steps = prefix;
         let mut cumulative_trace = prior_execution_trace
@@ -1977,6 +3078,7 @@ impl Engine {
                         cycle_id,
                         disposition: CycleDisposition::Abstained,
                         answer: None,
+                        procedure_ir: Some(serde_json::to_value(procedure)?),
                         episode,
                     })));
                 }
@@ -2098,6 +3200,7 @@ impl Engine {
                         cycle_id,
                         disposition: CycleDisposition::Abstained,
                         answer: None,
+                        procedure_ir: Some(serde_json::to_value(procedure)?),
                         episode,
                     })));
                 }
@@ -2113,6 +3216,7 @@ impl Engine {
                         CycleDisposition::Provisional
                     },
                     answer: Some(value),
+                    procedure_ir: Some(serde_json::to_value(procedure)?),
                     episode,
                 })))
             }
@@ -2181,10 +3285,114 @@ impl Engine {
                     cycle_id,
                     disposition: CycleDisposition::Abstained,
                     answer: None,
+                    procedure_ir: Some(serde_json::to_value(procedure)?),
                     episode,
                 })))
             }
         }
+    }
+
+    /// Admit an effectful teacher lesson without invoking its selected sample.
+    /// This intentionally performs no permission, adapter, host, or network
+    /// check: all of those are execution-time concerns.
+    #[allow(clippy::too_many_arguments)]
+    fn install_effectful_lesson_without_execution(
+        &mut self,
+        cycle_id: CycleId,
+        input: &CycleInput,
+        procedure: &Procedure,
+        rung: EscalationRung,
+        teacher_interaction: Option<JsonValue>,
+        lesson: &CompiledLesson,
+        expected_answer: Option<Value>,
+    ) -> Result<CycleProgress, EngineError> {
+        let mut episode = self.base_episode(input, &[])?;
+        episode.action = Some("teacher-procedure-installed:awaiting-runtime-authorization".into());
+        episode.prediction = expected_answer;
+        episode.evaluation = Some(Evaluation {
+            tier: VerifiabilityTier::Deferred,
+            success: true,
+            details: "effectful procedure was installed without executing its worked example; capability authorization is deferred to runtime".into(),
+            surprise: None,
+        });
+        episode.teacher_interaction = teacher_interaction;
+        episode.reasoning_trace.steps = ladder_prefix(rung, rung == EscalationRung::Ask);
+        episode.reasoning_trace.steps.push(simple_step(
+            "install effectful teacher procedure without execution",
+            rung,
+        ));
+        episode.cost = EpisodeCost {
+            rung_reached: rung,
+            steps_taken: 0,
+            budget_spent: if rung == EscalationRung::Ask {
+                1.0
+            } else {
+                0.0
+            },
+        };
+        enrich_episode_for_lesson(&mut episode, &lesson.interpretation)?;
+
+        let binding_bytes = serde_json::to_vec(
+            episode
+                .teacher_interaction
+                .as_ref()
+                .unwrap_or(&JsonValue::Null),
+        )?;
+        let request_binding_digest = format!(
+            "sha256:{}",
+            hex_bytes(&lesson_sha256(
+                b"spoon:teacher-lesson:request-binding:v1",
+                &binding_bytes,
+            ))
+        );
+        let stage_identity =
+            serde_json::to_vec(&(&lesson.idempotency_key, &request_binding_digest))?;
+        let stage = DurableLessonStage {
+            stage_id: format!(
+                "lesson-stage:{}",
+                hex_bytes(&lesson_sha256(
+                    b"spoon:teacher-lesson:stage:v1",
+                    &stage_identity,
+                ))
+            ),
+            bundle_key: lesson.idempotency_key.clone(),
+            request_binding_digest,
+            concepts: lesson.concepts.clone(),
+            relationships: lesson.relationships.clone(),
+            procedures: lesson.procedures.clone(),
+            episode: episode.clone(),
+        };
+        self.lesson_stages.stage(&stage)?;
+        let integration = (|| {
+            self.graph.insert_knowledge_bundle(
+                &lesson.idempotency_key,
+                &lesson.concepts,
+                &lesson.relationships,
+                &lesson.procedures,
+            )?;
+            for concept in &lesson.concepts {
+                self.index_concept(concept)?;
+            }
+            for procedure in &lesson.procedures {
+                self.index_procedure(procedure)?;
+            }
+            Ok::<(), EngineError>(())
+        })();
+        if let Err(error) = integration {
+            self.lesson_stages.discard(&stage)?;
+            return Err(error);
+        }
+        self.persist_engine_episode(&episode)?;
+        self.lesson_stages.complete(&stage)?;
+        Ok(CycleProgress::Completed(Box::new(CycleOutcome {
+            cycle_id,
+            disposition: CycleDisposition::Provisional,
+            // The teacher's example is retained as a prediction in the
+            // episode, not asserted as the live result of an unrun effect.
+            answer: None,
+            procedure_ir: Some(serde_json::to_value(procedure)?),
+            episode,
+        })))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2247,6 +3455,7 @@ impl Engine {
             cycle_id,
             disposition,
             answer,
+            procedure_ir: None,
             episode,
         })))
     }
@@ -2428,6 +3637,486 @@ impl Engine {
     }
 }
 
+fn intent_output_schema(
+    bindings: &[IntentCandidateBinding],
+    token_count: usize,
+    literal_candidates: &[JsonValue],
+) -> JsonValue {
+    let max_token_start = token_count.saturating_sub(1);
+    let candidate_schemas = bindings
+        .iter()
+        .map(|binding| {
+            let slot_schemas = binding
+                .procedure
+                .params
+                .iter()
+                .map(|param| {
+                    let permitted_literal_ranges =
+                        literal_ranges_for_slot(&param.name, literal_candidates);
+                    json!({
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["name", "confidence", "sourceTokens"],
+                        "properties": {
+                            "name": { "type": "string", "enum": [param.name] },
+                            "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+                            "sourceTokens": {
+                                "type": "array", "maxItems": 1,
+                                "items": { "type": "object", "enum": permitted_literal_ranges },
+                            },
+                            "inferredValue": {
+                                "type": ["null", "boolean", "number", "string"],
+                            },
+                        },
+                    })
+                })
+                .collect::<Vec<_>>();
+            let slot_items = if slot_schemas.is_empty() {
+                json!(false)
+            } else {
+                json!({ "oneOf": slot_schemas })
+            };
+            json!({
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "confidence", "scope", "sourceTokens", "slots", "ambiguities"],
+                "properties": {
+                    "name": { "type": "string", "enum": [binding.alias] },
+                    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+                    "scope": { "enum": ["CurrentTurn", "Conversation", "Workspace", "External"] },
+                    "sourceTokens": {
+                        "type": "array", "minItems": 1, "maxItems": 1,
+                        "items": token_range_schema(max_token_start, token_count),
+                    },
+                    "slots": {
+                        "type": "array",
+                        "minItems": binding.procedure.params.len(),
+                        "maxItems": binding.procedure.params.len(),
+                        "uniqueItems": true,
+                        "items": slot_items,
+                    },
+                    "ambiguities": {
+                        "type": "array",
+                        "maxItems": 4,
+                        "items": { "type": "string", "maxLength": 256 },
+                    },
+                },
+            })
+        })
+        .collect::<Vec<_>>();
+    json!({
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["candidates", "selected", "disposition"],
+        "properties": {
+            "candidates": {
+                "type": "array",
+                // The interpreter's only executable outcome is one selected
+                // procedure. Letting a small constrained model fill sixteen
+                // alternative frames makes `selected` needlessly fragile and
+                // does not add execution capability.
+                "maxItems": 1,
+                "items": { "oneOf": candidate_schemas },
+            },
+            // `selected` indexes the emitted frame array, not the catalog.
+            // Since that array has at most one item, zero is the only valid
+            // executable selection regardless of the chosen alias.
+            "selected": { "type": ["integer", "null"], "minimum": 0, "maximum": 0 },
+            "disposition": { "enum": ["execute", "clarify", "abstain"] },
+        },
+    })
+}
+
+fn intent_literal_ranges(token_stream: &TokenStream) -> Vec<TokenRange> {
+    let mut ranges = token_stream
+        .tokens
+        .iter()
+        .enumerate()
+        .filter(|(_, token)| matches!(token.kind, TokenKind::Word | TokenKind::Number))
+        .map(|(index, _)| TokenRange::new(index, index + 1))
+        .collect::<Vec<_>>();
+
+    let mut opening_quote = None;
+    for (index, token) in token_stream.tokens.iter().enumerate() {
+        let Some(quote) = token_stream
+            .slice(&token.span)
+            .filter(|text| *text == "\"" || *text == "'")
+        else {
+            continue;
+        };
+        match opening_quote {
+            Some((opening, start)) if opening == quote => {
+                ranges.push(TokenRange::new(start, index + 1));
+                opening_quote = None;
+            }
+            _ => opening_quote = Some((quote, index)),
+        }
+    }
+    ranges.sort_by_key(|range| (range.start_token, range.end_token));
+    ranges.dedup_by_key(|range| (range.start_token, range.end_token));
+    ranges
+}
+
+fn literal_ranges_for_slot(slot_name: &str, candidates: &[JsonValue]) -> Vec<JsonValue> {
+    let slot = slot_name.to_ascii_lowercase();
+    let mut ranked = candidates
+        .iter()
+        .filter_map(|candidate| {
+            let range = candidate.get("tokenRange")?.clone();
+            let text = candidate.get("text")?.as_str().unwrap_or_default();
+            let trimmed = text.trim_matches(['\'', '"']);
+            let start = range
+                .get("startToken")
+                .and_then(JsonValue::as_u64)
+                .unwrap_or(0);
+            let quoted = text.len() >= 2
+                && ((text.starts_with('"') && text.ends_with('"'))
+                    || (text.starts_with('\'') && text.ends_with('\'')));
+            let scalar_count = trimmed.chars().count();
+            let is_number = candidate
+                .get("value")
+                .is_some_and(|value| value.is_number());
+            let score = if matches!(
+                slot.as_str(),
+                "target" | "needle" | "character" | "letter" | "substring" | "pattern"
+            ) {
+                i64::from(quoted) * 1_000 + i64::from(scalar_count == 1) * 800
+                    - scalar_count.min(256) as i64
+            } else if matches!(
+                slot.as_str(),
+                "text" | "source" | "haystack" | "document" | "content"
+            ) {
+                i64::from(quoted && scalar_count > 1) * 1_000
+                    + scalar_count.min(256) as i64 * 10
+                    + start.min(i64::MAX as u64) as i64
+            } else if matches!(
+                slot.as_str(),
+                "x" | "n" | "number" | "count" | "index" | "amount" | "a" | "b"
+            ) {
+                i64::from(is_number) * 1_000 + start.min(i64::MAX as u64) as i64
+            } else {
+                start.min(i64::MAX as u64) as i64
+            };
+            Some((score, start, range))
+        })
+        .collect::<Vec<_>>();
+    ranked.sort_by(|left, right| right.0.cmp(&left.0).then_with(|| right.1.cmp(&left.1)));
+    ranked.into_iter().map(|(_, _, range)| range).collect()
+}
+
+fn token_range_text<'a>(token_stream: &'a TokenStream, range: TokenRange) -> Option<&'a str> {
+    let start = token_stream.tokens.get(range.start_token)?.span.start_byte;
+    let end = token_stream
+        .tokens
+        .get(range.end_token.checked_sub(1)?)?
+        .span
+        .end_byte;
+    token_stream.document.text.get(start..end)
+}
+
+fn intent_literal_value(text: &str) -> Value {
+    match extract_literals(text).as_slice() {
+        [value] => value.clone(),
+        _ => Value::Text(text.trim().to_owned()),
+    }
+}
+
+fn episode_action_kind(action: &str) -> &str {
+    if action.starts_with("procedure:") {
+        "procedure"
+    } else if action.starts_with("abstain:") {
+        "abstain"
+    } else if action.starts_with("failed:") {
+        "failed"
+    } else {
+        "other"
+    }
+}
+
+fn execution_inputs(trace: &JsonValue) -> Option<Vec<JsonValue>> {
+    trace
+        .get("steps")
+        .and_then(JsonValue::as_array)
+        .and_then(|steps| {
+            steps.iter().rev().find_map(|step| {
+                if step.get("procedure_used").is_none() && step.get("procedure_called").is_none() {
+                    return None;
+                }
+                step.get("input")?.as_array().cloned()
+            })
+        })
+}
+
+fn is_reconsideration_situation(situation: &str) -> bool {
+    let words = language_words(situation);
+    words.contains("sure")
+        || words.contains("recheck")
+        || words.contains("again")
+        || (words
+            .iter()
+            .any(|word| matches!(word.as_str(), "wrong" | "incorrect" | "mistake" | "correct"))
+            && words.iter().any(|word| {
+                matches!(
+                    word.as_str(),
+                    "last" | "previous" | "earlier" | "before" | "answer" | "result"
+                )
+            }))
+}
+
+/// Explicit authoring requests may mention capability terms as the subject of
+/// the procedure being taught. They must reach the Teacher rather than being
+/// answered by the deterministic self-capability introspection shortcut.
+fn is_explicit_teaching_request(situation: &str) -> bool {
+    situation
+        .trim_start()
+        .to_ascii_lowercase()
+        .starts_with("the user explicitly requested that spoon teach")
+}
+
+fn is_explicit_incorrectness_feedback(situation: &str) -> bool {
+    let words = language_words(situation);
+    words.iter().any(|word| {
+        matches!(
+            word.as_str(),
+            "wrong" | "incorrect" | "mistake" | "mistaken"
+        )
+    }) || situation.to_ascii_lowercase().contains("not correct")
+}
+
+fn teacher_episode_context(episode: &Episode) -> JsonValue {
+    json!({
+        "situation": truncate_text(&episode.situation, MAX_TEACHER_TEXT_CHARS),
+        "action": episode.action.as_deref().map(|action| truncate_text(action, MAX_TEACHER_TEXT_CHARS)),
+        "answer": episode.observed_result.as_ref().or(episode.prediction.as_ref()),
+        "succeeded": episode.evaluation.as_ref().map(|evaluation| evaluation.success),
+    })
+}
+
+fn rejected_intent_interaction(
+    request: &IntentRequestWire,
+    proposal: &IntentProposalWire,
+    reason: impl Into<String>,
+) -> JsonValue {
+    json!({
+        "languageInterpreter": {
+            "request": request,
+            "source": proposal.source,
+            "status": proposal.status,
+            "provenance": proposal.provenance,
+            "rejection": truncate_text(&reason.into(), MAX_TEACHER_TEXT_CHARS),
+            // Preserve the wire response, including rawContent when supplied,
+            // so a malformed local-model response remains inspectable.
+            "rejectedProposal": proposal,
+        }
+    })
+}
+
+fn procedure_has_language_support(situation: &str, binding: &IntentCandidateBinding) -> bool {
+    let query_terms = meaningful_language_words(situation);
+    if query_terms.is_empty() {
+        return false;
+    }
+    let procedure_name_terms = meaningful_language_words(&binding.procedure.name);
+    let concept_name_terms = meaningful_language_words(&binding.concept.name);
+    if query_terms
+        .iter()
+        .any(|term| procedure_name_terms.contains(term) || concept_name_terms.contains(term))
+    {
+        return true;
+    }
+    let action_hints = procedure_language_hints(&binding.procedure.body);
+    if query_terms.iter().any(|term| action_hints.contains(term)) {
+        return true;
+    }
+    let mut candidate_text = format!(
+        "{} {} {} {:?}",
+        binding.concept.name,
+        routing_description(binding.concept.description.as_deref()),
+        binding.procedure.name,
+        binding.procedure.body
+    );
+    for parameter in &binding.procedure.params {
+        candidate_text.push(' ');
+        candidate_text.push_str(&parameter.name);
+        if let Some(description) = &parameter.description {
+            candidate_text.push(' ');
+            candidate_text.push_str(description);
+        }
+    }
+    let candidate_terms = meaningful_language_words(&candidate_text);
+    query_terms.intersection(&candidate_terms).next().is_some()
+}
+
+fn meaningful_language_words(value: &str) -> BTreeSet<String> {
+    language_words(value)
+        .into_iter()
+        .filter(|word| {
+            !matches!(
+                word.as_str(),
+                "a" | "an"
+                    | "and"
+                    | "are"
+                    | "as"
+                    | "at"
+                    | "be"
+                    | "by"
+                    | "can"
+                    | "do"
+                    | "does"
+                    | "for"
+                    | "from"
+                    | "get"
+                    | "how"
+                    | "i"
+                    | "in"
+                    | "into"
+                    | "is"
+                    | "it"
+                    | "me"
+                    | "my"
+                    | "of"
+                    | "on"
+                    | "or"
+                    | "please"
+                    | "supplied"
+                    | "that"
+                    | "the"
+                    | "their"
+                    | "then"
+                    | "this"
+                    | "to"
+                    | "was"
+                    | "what"
+                    | "with"
+                    | "you"
+                    | "your"
+            )
+        })
+        .collect()
+}
+
+fn language_words(value: &str) -> BTreeSet<String> {
+    value
+        .split(|character: char| !character.is_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .map(|word| word.to_ascii_lowercase())
+        .collect()
+}
+
+fn procedure_language_hints(expr: &Expr) -> BTreeSet<String> {
+    fn visit(expr: &Expr, hints: &mut BTreeSet<String>) {
+        match expr {
+            Expr::Literal(_) | Expr::Var(_) => {}
+            Expr::BinOp { op, left, right } => {
+                if *op == BinOp::Mul {
+                    hints.extend(["multiply", "times", "product"].map(str::to_owned));
+                    if matches!(left.as_ref(), Expr::Literal(Value::Int(2)))
+                        || matches!(right.as_ref(), Expr::Literal(Value::Int(2)))
+                    {
+                        hints.extend(["double", "twice"].map(str::to_owned));
+                    }
+                }
+                visit(left, hints);
+                visit(right, hints);
+            }
+            Expr::UnOp { operand, .. } => visit(operand, hints),
+            Expr::CapabilityCall { input, .. } => {
+                hints.extend(["capability", "external", "fetch"].map(str::to_owned));
+                visit(input, hints);
+            }
+            Expr::Call { args, .. } | Expr::CallExact { args, .. } => {
+                for arg in args {
+                    visit(arg, hints);
+                }
+            }
+            Expr::If { cond, then, else_ } => {
+                visit(cond, hints);
+                visit(then, hints);
+                visit(else_, hints);
+            }
+            Expr::Let { value, body, .. } => {
+                visit(value, hints);
+                visit(body, hints);
+            }
+            Expr::Block(items) | Expr::ListExpr(items) => {
+                for item in items {
+                    visit(item, hints);
+                }
+            }
+            Expr::Index { collection, index } => {
+                hints.extend(["index", "element", "position"].map(str::to_owned));
+                visit(collection, hints);
+                visit(index, hints);
+            }
+            Expr::FieldAccess { object, .. } => {
+                hints.extend(["field", "property", "attribute"].map(str::to_owned));
+                visit(object, hints);
+            }
+            Expr::Map {
+                collection, body, ..
+            } => {
+                visit(collection, hints);
+                visit(body, hints);
+            }
+            Expr::Filter {
+                collection,
+                predicate,
+                ..
+            } => {
+                visit(collection, hints);
+                visit(predicate, hints);
+            }
+            Expr::Reduce {
+                collection,
+                init,
+                body,
+                ..
+            } => {
+                visit(collection, hints);
+                visit(init, hints);
+                visit(body, hints);
+            }
+            Expr::Intrinsic { op, args, .. } => {
+                if *op == IntrinsicOp::TextCount {
+                    hints.extend(
+                        [
+                            "count",
+                            "occurrence",
+                            "occurrences",
+                            "often",
+                            "many",
+                            "frequency",
+                        ]
+                        .map(str::to_owned),
+                    );
+                }
+                if matches!(op, IntrinsicOp::PathGet | IntrinsicOp::PathGetOptional) {
+                    hints.extend(["path", "get", "lookup", "retrieve"].map(str::to_owned));
+                }
+                for arg in args {
+                    visit(arg, hints);
+                }
+            }
+        }
+    }
+
+    let mut hints = BTreeSet::new();
+    visit(expr, &mut hints);
+    hints
+}
+
+fn token_range_schema(max_start: usize, max_end: usize) -> JsonValue {
+    json!({
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["startToken", "endToken"],
+        "properties": {
+            "startToken": { "type": "integer", "minimum": 0, "maximum": max_start },
+            "endToken": { "type": "integer", "minimum": 1, "maximum": max_end },
+        },
+    })
+}
+
 fn action_procedure_id(action: &str) -> Option<spoon_core::ProcedureId> {
     let value = action.strip_prefix("procedure:")?.split('@').next()?;
     uuid::Uuid::parse_str(value)
@@ -2481,6 +4170,67 @@ fn compile_lesson_contract(
         },
         used_dependencies,
     ))
+}
+
+fn native_teacher_capability_procedures() -> Vec<JsonValue> {
+    let content_id = crate::engine::NATIVE_CAPABILITY_CONTENT_ID;
+    vec![
+        json!({
+            "contentId": content_id,
+            "procedureId": "web.fetch",
+            "name": "Fetch a web URL",
+            "primitive": "network_request",
+            "inputSchema": {"type": "object", "required": ["url"], "properties": {"url": {"type": "string"}}},
+            "outputSchema": {"description": "host-provided bounded response"},
+            "effects": ["network"],
+            "permissions": ["runtime URL approval"],
+            "authoring": "always available; URL consent and adapter checks happen at execution"
+        }),
+        json!({
+            "contentId": content_id,
+            "procedureId": "file.read",
+            "name": "Read a scoped file",
+            "primitive": "file_read",
+            "inputSchema": {"type": "object", "required": ["path"], "properties": {"path": {"type": "string"}}},
+            "outputSchema": {"description": "host-provided bounded file content"},
+            "effects": ["file_read"],
+            "permissions": ["runtime path approval"],
+            "authoring": "always available; path consent and adapter checks happen at execution"
+        }),
+        json!({
+            "contentId": content_id,
+            "procedureId": "file.write",
+            "name": "Write a scoped file",
+            "primitive": "file_write",
+            "inputSchema": {"type": "object", "required": ["path", "content"], "properties": {"path": {"type": "string"}, "content": {}}},
+            "outputSchema": {"description": "host-provided write receipt"},
+            "effects": ["file_write"],
+            "permissions": ["runtime path approval"],
+            "authoring": "always available; path consent and adapter checks happen at execution"
+        }),
+        json!({
+            "contentId": content_id,
+            "procedureId": "observe",
+            "name": "Observe a host-provided target",
+            "primitive": "observe",
+            "inputSchema": {"type": "object", "required": ["target"], "properties": {"target": {"type": "string"}}},
+            "outputSchema": {"description": "host-provided observation"},
+            "effects": ["observation"],
+            "permissions": ["runtime target approval"],
+            "authoring": "always available; target consent and adapter checks happen at execution"
+        }),
+        json!({
+            "contentId": content_id,
+            "procedureId": "sandbox.execute",
+            "name": "Execute in a host sandbox",
+            "primitive": "sandbox_execute",
+            "inputSchema": {"type": "object", "required": ["command"], "properties": {"command": {"type": "string"}}},
+            "outputSchema": {"description": "host-provided bounded execution result"},
+            "effects": ["sandboxed_execution"],
+            "permissions": ["runtime sandbox approval"],
+            "authoring": "always available; sandbox consent and adapter checks happen at execution"
+        }),
+    ]
 }
 
 fn enrich_episode_for_lesson(
@@ -2555,7 +4305,14 @@ fn compile_lesson_body(
             Ok((expression, parameters, HashSet::new()))
         }
         "pure_expr_v2" => {
-            let draft: ExprDraft = serde_json::from_value(value.clone()).map_err(|error| {
+            let value = if let Some(source) = value.as_str() {
+                spoon_core::spoonlang::parse_expr(source).map_err(|error| {
+                    lesson_error(format!("invalid spoonlang expression: {error}"))
+                })?
+            } else {
+                value.clone()
+            };
+            let draft: ExprDraft = serde_json::from_value(value).map_err(|error| {
                 lesson_error(format!("invalid pure_expr_v2 expression: {error}"))
             })?;
             compile_lesson_expression(&draft, parameters, allow_result, dependencies)
@@ -2771,6 +4528,23 @@ fn compile_expr_node(
                     .collect::<Result<Vec<_>, _>>()?,
             })
         }
+        ExprDraft::CapabilityCall {
+            content_id,
+            procedure_id,
+            input,
+        } => {
+            validate_lesson_token(content_id, "capability content id", MAX_TEACHER_TEXT_CHARS)?;
+            validate_lesson_token(
+                procedure_id,
+                "capability procedure id",
+                MAX_LESSON_KEY_CHARS,
+            )?;
+            Ok(Expr::CapabilityCall {
+                content_id: content_id.clone(),
+                procedure_id: procedure_id.clone(),
+                input: Box::new(compile_expr_node(input, state, depth + 1)?),
+            })
+        }
     }
 }
 
@@ -2818,6 +4592,259 @@ fn compile_unary_op(op: UnaryOpDraft) -> UnOp {
     }
 }
 
+const PURE_PRIMITIVE_NAMES: &[&str] = &[
+    "add",
+    "sub",
+    "mul",
+    "div",
+    "mod",
+    "eq",
+    "ne",
+    "lt",
+    "le",
+    "gt",
+    "ge",
+    "and",
+    "or",
+    "neg",
+    "not",
+    "index",
+    "field_access",
+    "length",
+    "text_byte_length",
+    "text_scalar_length",
+    "text_grapheme_length",
+    "text_tokenize",
+    "text_split",
+    "text_join",
+    "text_trim",
+    "text_lowercase",
+    "text_uppercase",
+    "text_contains",
+    "text_starts_with",
+    "text_ends_with",
+    "text_replace",
+    "collection_contains",
+    "collection_find_index",
+    "count_equal",
+    "map_keys",
+    "map_values",
+    "json_parse",
+    "json_stringify",
+    "path_get",
+    "path_get_optional",
+    "json_pointer_get",
+    "json_pointer_get_optional",
+    "json_pointer_set",
+    "json_pointer_delete",
+    "coalesce",
+    "text_normalize_nfc",
+    "text_normalize_nfd",
+    "text_normalize_nfkc",
+    "text_normalize_nfkd",
+    "text_trim_start",
+    "text_trim_end",
+    "text_grapheme_substring",
+    "text_index_of",
+    "text_count",
+    "text_repeat",
+    "text_concat_many",
+    "map_entries",
+    "map_from_entries",
+    "map_set",
+    "map_delete",
+    "map_merge",
+    "collection_slice",
+    "collection_reverse",
+    "collection_sort",
+    "collection_unique",
+    "collection_flatten",
+    "collection_zip",
+    "range",
+    "type_name",
+    "parse_int",
+    "parse_float",
+    "parse_bool",
+    "to_text",
+    "numeric_abs",
+    "numeric_sign",
+    "numeric_min",
+    "numeric_max",
+    "numeric_clamp",
+    "numeric_floor",
+    "numeric_ceil",
+    "numeric_round",
+    "numeric_truncate",
+    "numeric_pow_int",
+    "numeric_pow_float",
+    "integer_quotient",
+    "integer_remainder",
+];
+
+fn interpreter_primitive_catalog(relevant_names: &BTreeSet<String>) -> Vec<JsonValue> {
+    PURE_PRIMITIVE_NAMES
+        .iter()
+        .filter(|name| relevant_names.contains(**name))
+        .map(|name| {
+            let description = match *name {
+                "text_count" => {
+                    "Count exact substring, character, or letter occurrences; answer how often text appears"
+                }
+                "count_equal" => "Count collection items equal to a target value",
+                "path_get" | "path_get_optional" => {
+                    "Read nested object fields or array indexes using a path such as arr[0].name"
+                }
+                "json_parse" => "Parse JSON text into structured data",
+                "json_pointer_get" | "json_pointer_get_optional" => {
+                    "Read structured data using an RFC 6901 JSON pointer"
+                }
+                "mul" => "Multiply two numeric values",
+                "div" => "Divide one numeric value by another",
+                "add" => "Add numeric values",
+                "sub" => "Subtract numeric values",
+                _ => "Pure portable Spoon IR operation",
+            };
+            json!({
+                "kind": "primitive",
+                "name": name,
+                "description": description,
+                "directlySelectable": false,
+            })
+        })
+        .collect()
+}
+
+fn interpreter_capability_catalog() -> Vec<JsonValue> {
+    [
+        (
+            "web.fetch",
+            "Fetch an HTTP(S) URL through a locally validated, host-allowlisted network capability procedure",
+        ),
+        (
+            "file_read",
+            "Read a policy-authorized file through a locally validated capability procedure",
+        ),
+        (
+            "file_write",
+            "Write a policy-authorized file through a locally validated capability procedure",
+        ),
+        (
+            "observe",
+            "Observe a policy-authorized external target through a native boundary",
+        ),
+        (
+            "sandbox_execute",
+            "Run bounded work in a policy-authorized sandbox profile",
+        ),
+    ]
+    .into_iter()
+    .map(|(name, description)| {
+        json!({
+            "kind": "capability",
+            "name": name,
+            "description": description,
+            "directlySelectable": false,
+            "requires": "locally_validated_procedure_and_permission",
+        })
+    })
+    .collect()
+}
+
+fn procedure_intrinsic_names(expr: &Expr) -> Vec<String> {
+    fn visit(expr: &Expr, names: &mut BTreeSet<String>) {
+        match expr {
+            Expr::Literal(_) | Expr::Var(_) => {}
+            Expr::BinOp { op, left, right } => {
+                names.insert(snake_case_variant(&format!("{op:?}")));
+                visit(left, names);
+                visit(right, names);
+            }
+            Expr::UnOp { op, operand } => {
+                names.insert(snake_case_variant(&format!("{op:?}")));
+                visit(operand, names);
+            }
+            Expr::CapabilityCall { input, .. } => visit(input, names),
+            Expr::Call { args, .. } | Expr::CallExact { args, .. } => {
+                for arg in args {
+                    visit(arg, names);
+                }
+            }
+            Expr::If { cond, then, else_ } => {
+                visit(cond, names);
+                visit(then, names);
+                visit(else_, names);
+            }
+            Expr::Let { value, body, .. } => {
+                visit(value, names);
+                visit(body, names);
+            }
+            Expr::Block(items) | Expr::ListExpr(items) => {
+                for item in items {
+                    visit(item, names);
+                }
+            }
+            Expr::Index { collection, index } => {
+                names.insert("index".into());
+                visit(collection, names);
+                visit(index, names);
+            }
+            Expr::FieldAccess { object, .. } => {
+                names.insert("field_access".into());
+                visit(object, names);
+            }
+            Expr::Map {
+                collection, body, ..
+            } => {
+                visit(collection, names);
+                visit(body, names);
+            }
+            Expr::Filter {
+                collection,
+                predicate,
+                ..
+            } => {
+                visit(collection, names);
+                visit(predicate, names);
+            }
+            Expr::Reduce {
+                collection,
+                init,
+                body,
+                ..
+            } => {
+                visit(collection, names);
+                visit(init, names);
+                visit(body, names);
+            }
+            Expr::Intrinsic { op, args, .. } => {
+                names.insert(snake_case_variant(&format!("{op:?}")));
+                for arg in args {
+                    visit(arg, names);
+                }
+            }
+        }
+    }
+
+    let mut names = BTreeSet::new();
+    visit(expr, &mut names);
+    names.into_iter().collect()
+}
+
+fn snake_case_variant(value: &str) -> String {
+    let mut result = String::with_capacity(value.len());
+    for (index, character) in value.chars().enumerate() {
+        if character.is_ascii_uppercase() {
+            if index > 0 {
+                result.push('_');
+            }
+            result.push(character.to_ascii_lowercase());
+        } else {
+            result.push(character);
+        }
+    }
+    result
+}
+
 fn compile_intrinsic_op(op: IntrinsicOpDraft) -> IntrinsicOp {
     match op {
         IntrinsicOpDraft::Length => IntrinsicOp::Length,
@@ -2834,6 +4861,8 @@ fn compile_intrinsic_op(op: IntrinsicOpDraft) -> IntrinsicOp {
         IntrinsicOpDraft::TextStartsWith => IntrinsicOp::TextStartsWith,
         IntrinsicOpDraft::TextEndsWith => IntrinsicOp::TextEndsWith,
         IntrinsicOpDraft::TextReplace => IntrinsicOp::TextReplace,
+        IntrinsicOpDraft::TextUrlEncode => IntrinsicOp::TextUrlEncode,
+        IntrinsicOpDraft::TextRegexCapture => IntrinsicOp::TextRegexCapture,
         IntrinsicOpDraft::CollectionContains => IntrinsicOp::CollectionContains,
         IntrinsicOpDraft::CollectionFindIndex => IntrinsicOp::CollectionFindIndex,
         IntrinsicOpDraft::CountEqual => IntrinsicOp::CountEqual,
@@ -3172,10 +5201,13 @@ fn validate_cycle_input(input: &CycleInput) -> Result<(), EngineError> {
             .map_err(|_| EngineError::InvalidInput("session_id is not a UUID".into()))?;
     }
     if let Some(permission_mode) = input.permission_mode.as_deref()
-        && !matches!(permission_mode, "ask" | "workspace" | "full-access")
+        && !matches!(
+            permission_mode,
+            "ask" | "workspace" | "full-access" | "god-mode"
+        )
     {
         return Err(EngineError::InvalidInput(
-            "permission_mode must be ask, workspace, or full-access".into(),
+            "permission_mode must be ask, workspace, full-access, or god-mode".into(),
         ));
     }
     if input.assumptions.len() > spoon_reason::MAX_CONTEXT_COLLECTION_ITEMS
@@ -3257,7 +5289,11 @@ fn extract_literals(situation: &str) -> Vec<Value> {
 
 fn extract_scalar_literals(text: &str) -> Vec<Value> {
     text.split(|character: char| {
-        character.is_whitespace() || matches!(character, ',' | '?' | '!' | '(' | ')' | '=')
+        character.is_whitespace()
+            || matches!(
+                character,
+                ',' | '?' | '!' | '(' | ')' | '=' | '*' | '/' | '×' | '÷' | '+'
+            )
     })
     .filter_map(|token| {
         let clean = token.trim_matches(|character: char| matches!(character, '.' | ':' | ';'));
@@ -3361,24 +5397,37 @@ fn simple_step(description: &str, rung: EscalationRung) -> TraceStep {
 fn ladder_prefix(terminal_rung: EscalationRung, teacher_was_used: bool) -> Vec<TraceStep> {
     let mut steps = vec![simple_step(
         if terminal_rung == EscalationRung::Recall {
-            "recall verified result"
+            "recall: found a verified cached result"
         } else {
-            "recall found no verified result"
+            "recall: no verified result in cache, escalating"
         },
         EscalationRung::Recall,
     )];
     if terminal_rung >= EscalationRung::Run {
         steps.push(simple_step(
             if terminal_rung == EscalationRung::Run {
-                "run matched procedure"
+                "run: uniquely matched a known procedure, executing directly"
             } else {
-                "run could not resolve locally"
+                "run: no unique local match, escalating"
             },
             EscalationRung::Run,
         ));
     }
+    if terminal_rung >= EscalationRung::Compose && terminal_rung != EscalationRung::Ask {
+        steps.push(simple_step(
+            if terminal_rung == EscalationRung::Compose {
+                "compose: built a new procedure by chaining known ones"
+            } else {
+                "compose: could not compose from known procedures, escalating"
+            },
+            EscalationRung::Compose,
+        ));
+    }
     if teacher_was_used {
-        steps.push(simple_step("ask teacher", EscalationRung::Ask));
+        steps.push(simple_step(
+            "ask: escalated to teacher for guidance",
+            EscalationRung::Ask,
+        ));
     }
     steps
 }
@@ -3411,204 +5460,67 @@ fn prior_failure_material(
     (reasoning, trace, steps_used, trace_len)
 }
 
-fn proposal_schema() -> JsonValue {
-    let scalar = json!({ "type": ["null", "boolean", "number", "string"] });
-    // `Value` permits nested lists and maps. OpenAI's strict-object dialect
-    // cannot express an arbitrary map with `additionalProperties: false`, so
-    // the recursive value boundary is enforced by the compiler instead.
-    let structured_value =
-        json!({ "type": ["null", "boolean", "number", "string", "array", "object"] });
-    let expr_definition = expr_definition_schema(structured_value.clone());
-    let named_value = json!({
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-            "name": { "type": "string" },
-            "value": scalar,
-        },
-        "required": ["name", "value"],
+fn apply_spoonlang_source(content: &mut ProposalContent) -> Result<(), EngineError> {
+    let Some(source) = content
+        .source
+        .as_deref()
+        .map(str::trim)
+        .filter(|source| !source.is_empty())
+    else {
+        return Ok(());
+    };
+    if let Ok(value) = serde_json::from_str::<JsonValue>(source)
+        && value.get("primitiveSet").is_some()
+        && value.get("procedures").is_some()
+    {
+        content.proposal_kind = Some(ProposalKind::ReusableLesson);
+        content.lesson = Some(value);
+        return Ok(());
+    }
+    let parsed = spoon_core::spoonlang::parse_proposal(source)
+        .map_err(|error| EngineError::InvalidInput(error.to_string()))?;
+    content.proposal_kind = Some(match parsed.kind {
+        spoon_core::spoonlang::SpoonlangKind::ReusableLesson => ProposalKind::ReusableLesson,
+        spoon_core::spoonlang::SpoonlangKind::ExternalObservation => {
+            ProposalKind::ExternalObservation
+        }
+        spoon_core::spoonlang::SpoonlangKind::AnswerOnly => ProposalKind::AnswerOnly,
+        spoon_core::spoonlang::SpoonlangKind::Abstain => ProposalKind::Abstain,
     });
-    let concept_reference = json!({
-        "anyOf": [
-            {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                    "kind": { "type": "string", "const": "new_concept" },
-                    "key": { "type": "string" },
-                },
-                "required": ["kind", "key"],
-            },
-            {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                    "kind": { "type": "string", "const": "existing_concept" },
-                    "id": { "type": "string" },
-                },
-                "required": ["kind", "id"],
-            },
-        ]
-    });
-    let program = lesson_program_schema();
-    let condition = json!({
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-            "description": { "type": "string" },
-            "check": program,
-        },
-        "required": ["description", "check"],
-    });
-    let rpn_lesson = json!({
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-            "primitiveSet": { "type": "string", "const": "pure_rpn_v1" },
-            "concepts": {
-                "type": "array",
-                "minItems": 1,
-                "maxItems": MAX_LESSON_CONCEPTS,
-                "items": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "properties": {
-                        "key": { "type": "string" },
-                        "name": { "type": "string" },
-                        "description": { "type": "string" },
-                        "mutability": { "type": "string", "enum": ["definitional", "defeasible_general", "procedural"] },
-                    },
-                    "required": ["key", "name", "description", "mutability"],
-                },
-            },
-            "relationships": {
-                "type": "array",
-                "maxItems": MAX_LESSON_RELATIONSHIPS,
-                "items": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "properties": {
-                        "source": concept_reference,
-                        "target": concept_reference,
-                        "kind": { "type": "string" },
-                        "strength": { "type": "number", "minimum": 0, "maximum": 1 },
-                    },
-                    "required": ["source", "target", "kind", "strength"],
-                },
-            },
-            "procedures": {
-                "type": "array",
-                "minItems": 1,
-                "maxItems": MAX_LESSON_PROCEDURES,
-                "items": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "properties": {
-                        "key": { "type": "string" },
-                        "name": { "type": "string" },
-                        "concept": concept_reference,
-                        "parameters": {
-                            "type": "array",
-                            "minItems": 1,
-                            "maxItems": MAX_LESSON_PARAMETERS,
-                            "items": {
-                                "type": "object",
-                                "additionalProperties": false,
-                                "properties": {
-                                    "name": { "type": "string" },
-                                    "description": { "type": "string" },
-                                },
-                                "required": ["name", "description"],
-                            },
-                        },
-                        "body": program,
-                        "contract": {
-                            "type": "object",
-                            "additionalProperties": false,
-                            "properties": {
-                                "requires": { "type": "array", "maxItems": MAX_LESSON_CONDITIONS, "items": condition },
-                                "promises": { "type": "array", "maxItems": MAX_LESSON_CONDITIONS, "items": condition },
-                                "failsWhen": { "type": "array", "maxItems": MAX_LESSON_CONDITIONS, "items": condition },
-                            },
-                            "required": ["requires", "promises", "failsWhen"],
-                        },
-                    },
-                    "required": ["key", "name", "concept", "parameters", "body", "contract"],
-                },
-            },
-            "invocation": {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                    "procedureKey": { "type": "string" },
-                    "inputs": { "type": "array", "maxItems": MAX_LESSON_PARAMETERS, "items": named_value },
-                },
-                "required": ["procedureKey", "inputs"],
-            },
-        },
-        "required": ["primitiveSet", "concepts", "relationships", "procedures", "invocation"],
-    });
+    content.lesson = parsed.lesson;
+    if let Some(answer) = parsed.answer {
+        content.answer = serde_json::from_value(answer).ok();
+    }
+    if parsed.abstain_reason.is_some() {
+        content.abstain_reason = parsed.abstain_reason;
+    }
+    Ok(())
+}
+
+pub fn proposal_schema() -> JsonValue {
     json!({
         "type": "object",
         "additionalProperties": false,
-        "$defs": { "pureExprV2": expr_definition },
         "properties": {
-            "proposalKind": {
-                "type": "string",
-                "enum": ["reusable_lesson", "external_observation", "answer_only", "abstain"]
-            },
+            "source": { "type": "string" },
             "interpretations": {
                 "type": "array",
                 "items": {
                     "type": "object",
                     "additionalProperties": false,
-                    "required": ["concept", "weight", "inputs"],
                     "properties": {
-                        "concept": {
-                            "anyOf": [
-                                {
-                                    "type": "object",
-                                    "additionalProperties": false,
-                                    "properties": { "id": { "type": "string" } },
-                                    "required": ["id"]
-                                },
-                                {
-                                    "type": "object",
-                                    "additionalProperties": false,
-                                    "properties": { "name": { "type": "string" } },
-                                    "required": ["name"]
-                                },
-                                { "type": "string" }
-                            ]
-                        },
-                        "weight": { "type": "number", "minimum": 0, "maximum": 1 },
-                        "inputs": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "additionalProperties": false,
-                                "properties": {
-                                    "name": { "type": "string" },
-                                    "value": { "type": ["null", "boolean", "number", "string"] }
-                                },
-                                "required": ["name", "value"]
-                            }
-                        }
-                    }
-                }
+                        "concept": { "type": "string" },
+                        "weight": { "type": "number" },
+                    },
+                    "required": ["concept", "weight"],
+                },
             },
-            "lesson": { "anyOf": [expr_lesson_schema(), rpn_lesson, { "type": "null" }] },
-            "procedure": {
-                "type": "null",
-                "description": "Compatibility field. Trusted procedure fields are engine-authored; always null."
-            },
-            "answer": structured_value,
-            "abstainReason": { "type": ["string", "null"] }
         },
-        "required": ["proposalKind", "interpretations", "lesson", "procedure", "answer", "abstainReason"]
+        "required": ["source", "interpretations"],
     })
 }
 
+#[allow(dead_code)]
 fn expr_lesson_schema() -> JsonValue {
     let structured_value =
         json!({ "type": ["null", "boolean", "number", "string", "array", "object"] });
@@ -3624,23 +5536,29 @@ fn expr_lesson_schema() -> JsonValue {
             { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "existing_concept" }, "id": { "type": "string" } }, "required": ["kind", "id"] }
         ]
     });
+    let parameter_type = json!({
+        "type": "string",
+        "enum": ["any", "null", "bool", "number", "text", "list", "map"],
+    });
     json!({
         "type": "object", "additionalProperties": false,
         "properties": {
             "primitiveSet": { "type": "string", "const": "pure_expr_v2" },
             "concepts": { "type": "array", "minItems": 1, "maxItems": MAX_LESSON_CONCEPTS, "items": { "type": "object", "additionalProperties": false, "properties": { "key": { "type": "string" }, "name": { "type": "string" }, "description": { "type": "string" }, "mutability": { "type": "string", "enum": ["definitional", "defeasible_general", "procedural"] } }, "required": ["key", "name", "description", "mutability"] } },
             "relationships": { "type": "array", "maxItems": MAX_LESSON_RELATIONSHIPS, "items": { "type": "object", "additionalProperties": false, "properties": { "source": concept_reference.clone(), "target": concept_reference, "kind": { "type": "string" }, "strength": { "type": "number", "minimum": 0, "maximum": 1 } }, "required": ["source", "target", "kind", "strength"] } },
-            "procedures": { "type": "array", "minItems": 1, "maxItems": MAX_LESSON_PROCEDURES, "items": { "type": "object", "additionalProperties": false, "properties": { "key": { "type": "string" }, "name": { "type": "string" }, "concept": concept_reference, "parameters": { "type": "array", "minItems": 1, "maxItems": MAX_LESSON_PARAMETERS, "items": { "type": "object", "additionalProperties": false, "properties": { "name": { "type": "string" }, "description": { "type": "string" } }, "required": ["name", "description"] } }, "body": expression, "contract": { "type": "object", "additionalProperties": false, "properties": { "requires": { "type": "array", "maxItems": MAX_LESSON_CONDITIONS, "items": condition.clone() }, "promises": { "type": "array", "maxItems": MAX_LESSON_CONDITIONS, "items": condition.clone() }, "failsWhen": { "type": "array", "maxItems": MAX_LESSON_CONDITIONS, "items": condition } }, "required": ["requires", "promises", "failsWhen"] } }, "required": ["key", "name", "concept", "parameters", "body", "contract"] } },
+            "procedures": { "type": "array", "minItems": 1, "maxItems": MAX_LESSON_PROCEDURES, "items": { "type": "object", "additionalProperties": false, "properties": { "key": { "type": "string" }, "name": { "type": "string" }, "concept": concept_reference, "parameters": { "type": "array", "minItems": 1, "maxItems": MAX_LESSON_PARAMETERS, "items": { "type": "object", "additionalProperties": false, "properties": { "name": { "type": "string" }, "description": { "type": "string" }, "valueType": parameter_type.clone() }, "required": ["name", "description", "valueType"] } }, "body": expression, "contract": { "type": "object", "additionalProperties": false, "properties": { "requires": { "type": "array", "maxItems": MAX_LESSON_CONDITIONS, "items": condition.clone() }, "promises": { "type": "array", "maxItems": MAX_LESSON_CONDITIONS, "items": condition.clone() }, "failsWhen": { "type": "array", "maxItems": MAX_LESSON_CONDITIONS, "items": condition } }, "required": ["requires", "promises", "failsWhen"] } }, "required": ["key", "name", "concept", "parameters", "body", "contract"] } },
             "invocation": { "type": "object", "additionalProperties": false, "properties": { "procedureKey": { "type": "string" }, "inputs": { "type": "array", "maxItems": MAX_LESSON_PARAMETERS, "items": { "type": "object", "additionalProperties": false, "properties": { "name": { "type": "string" }, "value": structured_value }, "required": ["name", "value"] } } }, "required": ["procedureKey", "inputs"] }
         },
         "required": ["primitiveSet", "concepts", "relationships", "procedures", "invocation"]
     })
 }
 
+#[allow(dead_code)]
 fn expr_program_schema() -> JsonValue {
     json!({ "$ref": "#/$defs/pureExprV2" })
 }
 
+#[allow(dead_code)]
 fn expr_definition_schema(value: JsonValue) -> JsonValue {
     let expression = json!({ "$ref": "#/$defs/pureExprV2" });
     let leaf = |kind: &str| json!({ "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": kind } }, "required": ["kind"] });
@@ -3676,11 +5594,51 @@ fn expr_definition_schema(value: JsonValue) -> JsonValue {
                     { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "filter" }, "collection": expression.clone(), "var": { "type": "string" }, "predicate": expression.clone() }, "required": ["kind", "collection", "var", "predicate"] },
                     { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "reduce" }, "collection": expression.clone(), "init": expression.clone(), "acc": { "type": "string" }, "var": { "type": "string" }, "body": expression.clone() }, "required": ["kind", "collection", "init", "acc", "var", "body"] },
                     { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "dependency" }, "alias": { "type": "string" }, "args": { "type": "array", "maxItems": MAX_LESSON_EXPR_CHILDREN, "items": expression.clone() } }, "required": ["kind", "alias", "args"] },
-                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "intrinsic" }, "version": { "type": "integer", "const": 1 }, "op": { "type": "string", "enum": ["length", "text_byte_length", "text_scalar_length", "text_grapheme_length", "text_tokenize", "text_split", "text_join", "text_trim", "text_lowercase", "text_uppercase", "text_contains", "text_starts_with", "text_ends_with", "text_replace", "collection_contains", "collection_find_index", "count_equal", "map_keys", "map_values", "json_parse", "json_stringify", "path_get", "path_get_optional", "json_pointer_get", "json_pointer_get_optional", "json_pointer_set", "json_pointer_delete", "coalesce", "text_normalize_nfc", "text_normalize_nfd", "text_normalize_nfkc", "text_normalize_nfkd", "text_trim_start", "text_trim_end", "text_grapheme_substring", "text_index_of", "text_count", "text_repeat", "text_concat_many", "map_entries", "map_from_entries", "map_set", "map_delete", "map_merge", "collection_slice", "collection_reverse", "collection_sort", "collection_unique", "collection_flatten", "collection_zip", "range", "type_name", "parse_int", "parse_float", "parse_bool", "to_text", "numeric_abs", "numeric_sign", "numeric_min", "numeric_max", "numeric_clamp", "numeric_floor", "numeric_ceil", "numeric_round", "numeric_truncate", "numeric_pow_int", "numeric_pow_float", "integer_quotient", "integer_remainder"] }, "args": { "type": "array", "maxItems": MAX_LESSON_EXPR_CHILDREN, "items": expression } }, "required": ["kind", "version", "op", "args"] }
+                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "capability_call" }, "contentId": { "type": "string", "minLength": 1, "maxLength": MAX_TEACHER_TEXT_CHARS }, "procedureId": { "type": "string", "minLength": 1, "maxLength": MAX_LESSON_KEY_CHARS }, "input": expression.clone() }, "required": ["kind", "contentId", "procedureId", "input"] },
+                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "intrinsic" }, "version": { "type": "integer", "const": 1 }, "op": { "type": "string", "enum": [
+                        "length", "text_byte_length", "text_scalar_length", "text_grapheme_length", "text_tokenize",
+                        "text_split", "text_join", "text_trim", "text_lowercase", "text_uppercase",
+                        "text_contains", "text_starts_with", "text_ends_with", "text_replace", "text_url_encode",
+                        "text_regex_capture", "text_normalize_nfc", "text_normalize_nfd", "text_normalize_nfkc", "text_normalize_nfkd",
+                        "text_trim_start", "text_trim_end", "text_grapheme_substring", "text_index_of", "text_count",
+                        "text_repeat", "text_concat_many",
+                        "text_pad_start", "text_pad_end", "text_substring", "text_char_at", "text_format",
+                        "text_matches_regex", "text_regex_replace_all", "text_base64_encode", "text_base64_decode",
+                        "text_url_decode", "text_hex_encode", "text_hex_decode", "text_reverse",
+                        "text_char_code", "text_from_char_code", "text_levenshtein",
+                        "collection_contains", "collection_find_index", "count_equal",
+                        "collection_slice", "collection_reverse", "collection_sort", "collection_unique",
+                        "collection_flatten", "collection_zip", "range",
+                        "collection_group_by", "collection_sort_by", "collection_min_by", "collection_max_by",
+                        "collection_chunk", "collection_enumerate", "collection_any", "collection_all",
+                        "collection_take", "collection_drop", "collection_first", "collection_last",
+                        "collection_partition", "collection_repeat_value", "collection_window",
+                        "map_keys", "map_values", "map_entries", "map_from_entries", "map_set", "map_delete", "map_merge",
+                        "map_has_key", "map_get_default", "map_size", "map_filter_keys",
+                        "json_parse", "json_stringify", "path_get", "path_get_optional",
+                        "json_pointer_get", "json_pointer_get_optional", "json_pointer_set", "json_pointer_delete",
+                        "coalesce", "assert", "default_if_null",
+                        "numeric_abs", "numeric_sign", "numeric_min", "numeric_max", "numeric_clamp",
+                        "numeric_floor", "numeric_ceil", "numeric_round", "numeric_truncate",
+                        "numeric_pow_int", "numeric_pow_float", "integer_quotient", "integer_remainder",
+                        "math_sqrt", "math_log", "math_log10", "math_log2", "math_exp",
+                        "math_sin", "math_cos", "math_tan", "math_asin", "math_acos", "math_atan", "math_atan2",
+                        "math_pi", "math_e", "math_is_nan", "math_is_infinite",
+                        "math_gcd", "math_lcm", "math_hypot",
+                        "random_int", "random_float", "random_choice", "random_shuffle", "random_sample", "random_uuid",
+                        "date_now", "date_from_parts", "date_get_part", "date_add", "date_diff", "date_format",
+                        "type_name", "is_null", "is_bool", "is_int", "is_float", "is_text", "is_list", "is_map", "is_numeric",
+                        "to_int", "to_float", "to_bool", "to_text", "parse_int", "parse_float", "parse_bool",
+                        "set_union", "set_intersect", "set_difference", "set_is_subset",
+                        "bit_and", "bit_or", "bit_xor", "bit_not", "bit_shift_left", "bit_shift_right",
+                        "hash_sha256", "hash_md5",
+                        "numeric_to_fixed", "numeric_to_hex", "numeric_from_hex", "numeric_to_binary", "numeric_from_binary"
+                    ] }, "args": { "type": "array", "maxItems": MAX_LESSON_EXPR_CHILDREN, "items": expression } }, "required": ["kind", "version", "op", "args"] }
         ]
     })
 }
 
+#[allow(dead_code)]
 fn lesson_program_schema() -> JsonValue {
     let scalar = json!({ "type": ["null", "boolean", "number", "string"] });
     let named = |op: &str| {
@@ -3746,25 +5704,21 @@ fn lesson_program_schema() -> JsonValue {
 fn authoring_protocol() -> JsonValue {
     json!({
         "primitiveSet": "pure_expr_v2",
+        "surfaceLanguage": "spoonlang",
         "acceptedPrimitiveSets": ["pure_expr_v2", "pure_rpn_v1"],
         "proposalKinds": ["reusable_lesson", "external_observation", "answer_only", "abstain"],
-        "pureRpnV1Instructions": [
-            "load_parameter", "load_result", "push_literal", "add", "subtract",
-            "multiply", "divide", "modulo", "equal", "not_equal", "less_than",
-            "less_or_equal", "greater_than", "greater_or_equal", "and", "or",
-            "negate", "not"
-        ],
+        "grammar": spoon_core::spoonlang::SPOONLANG_GRAMMAR,
         "teacherProvides": [
-            "concept name, description, and mutability", "relationship claim", "procedure parameters",
-            "pure expression body", "executable contract checks", "example invocation and answer"
+            "spoonlang source", "concept name, description, and mutability", "relationship claim",
+            "procedure parameters", "expression body", "example invocation and answer"
         ],
         "engineProvides": [
             "ids", "lifecycle", "version", "confidence", "timestamps", "test cases"
         ],
         "constraints": [
-            "pure_expr_v2 supports bounded neutral values, recursive expressions, intrinsic version 1, advertised pure dependency aliases, and acyclic lesson:<procedure-key> aliases for sibling procedures",
+            "write spoonlang in source; the engine compiles it to pure_expr_v2",
             "body must use every declared parameter",
-            "no generic calls, dependency ids/versions, effects, sensors, clocks, network, files, randomness, or opaque code; dependency aliases are engine-resolved and exact-version pinned",
+            "no generic calls, dependency ids/versions, effects, sensors, clocks, network, files, randomness, or opaque code; dep aliases are engine-resolved and exact-version pinned",
             "external observations without a trusted sensor remain provisional answers and must not include a lesson"
         ]
     })
@@ -3966,7 +5920,10 @@ fn valid_teacher_provenance(proposal: &TeacherProposalWire, situation: &str) -> 
         .and_then(JsonValue::as_str)
         .unwrap_or_default();
     let source_matches_provider =
-        matches!(provider, "claude" | "codex" | "openai" | "ollama" | "human")
+        matches!(
+            provider,
+            "claude" | "codex" | "cursor" | "openai" | "ollama" | "human"
+        )
             && proposal
                 .source
                 .strip_prefix(&format!("{provider}:"))

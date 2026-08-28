@@ -25,6 +25,9 @@ importers:
 
   packages/cli:
     dependencies:
+      "@spoon/intent":
+        specifier: workspace:*
+        version: link:../intent
       "@spoon/sdk":
         specifier: workspace:*
         version: link:../sdk
@@ -37,6 +40,8 @@ importers:
       "@spoon/sdk":
         specifier: workspace:*
         version: link:../sdk
+
+  packages/intent: {}
 
   packages/sdk: {}
 

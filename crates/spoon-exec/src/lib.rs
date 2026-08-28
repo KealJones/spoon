@@ -9,7 +9,7 @@ pub mod eval;
 pub mod trace;
 
 pub use error::SpoonError;
-pub use eval::{Env, Evaluator, ExecResult, ExecutionAttempt, ExecutionBudget};
+pub use eval::{CapabilityInvoker, Env, Evaluator, ExecResult, ExecutionAttempt, ExecutionBudget};
 pub use trace::{
     ConditionCheck, ConditionCheckStatus, ContractChecks, ExecStep, ExecStepStatus, ExecTrace,
 };

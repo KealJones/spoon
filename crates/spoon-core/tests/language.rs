@@ -1,7 +1,9 @@
 use spoon_core::{
-    DialogueAct, DialogueMove, EvidenceReference, GroundedClaim, IntentFrame, IntentScope,
-    IntentSlot, LanguageLimits, PlannedClaim, RenderVariant, ResponsePlan, ResponseRenderer,
-    ResponseTone, SourceKind, TextSpan, Uncertainty, Value, tokenize, tokenize_with_limits,
+    DialogueAct, DialogueMove, EvidenceReference, GroundedClaim, IntentDisposition, IntentFrame,
+    IntentFrameProposal, IntentFrameSet, IntentScope, IntentSlot, IntentSlotProposal,
+    InterpretationProposal, LanguageLimits, PlannedClaim, RenderVariant, ResponsePlan,
+    ResponseRenderer, ResponseTone, SourceKind, TextSpan, TokenRange, Uncertainty, Value, tokenize,
+    tokenize_with_limits,
 };
 
 fn evidence(id: &str) -> EvidenceReference {
@@ -150,4 +152,312 @@ fn intent_frame_is_typed_serializable_and_validates_slot_bounds() {
         ..LanguageLimits::default()
     };
     assert!(decoded.validate(&no_slots_allowed).is_err());
+}
+
+#[test]
+fn intent_frame_set_validates_grounded_execute_candidate() {
+    let source = "count r in strawberry";
+    let stream = tokenize(source).unwrap();
+    let frames = IntentFrameSet {
+        candidates: vec![count_intent_frame(source, Vec::new())],
+        selected: Some(0),
+        disposition: IntentDisposition::Execute,
+    };
+
+    frames
+        .validate_for(&stream, &LanguageLimits::default())
+        .unwrap();
+}
+
+#[test]
+fn intent_frame_rejects_slot_span_outside_its_document() {
+    let source = "count r";
+    let stream = tokenize(source).unwrap();
+    let mut frame = count_intent_frame(source, Vec::new());
+    frame.slots[0].source_spans = vec![TextSpan::new(source.len(), source.len() + 1)];
+
+    assert!(
+        frame
+            .validate_for(&stream, &LanguageLimits::default())
+            .is_err()
+    );
+}
+
+#[test]
+fn intent_frame_rejects_slot_span_inside_multibyte_character() {
+    let source = "count é";
+    let stream = tokenize(source).unwrap();
+    let mut frame = count_intent_frame(source, Vec::new());
+    let character = source.find('é').unwrap();
+    frame.slots[0].source_spans = vec![TextSpan::new(character + 1, character + 2)];
+
+    assert!(
+        frame
+            .validate_for(&stream, &LanguageLimits::default())
+            .is_err()
+    );
+}
+
+#[test]
+fn intent_frame_set_rejects_out_of_range_selection() {
+    let source = "count r in strawberry";
+    let stream = tokenize(source).unwrap();
+    let frames = IntentFrameSet {
+        candidates: vec![count_intent_frame(source, Vec::new())],
+        selected: Some(1),
+        disposition: IntentDisposition::Execute,
+    };
+
+    assert!(
+        frames
+            .validate_for(&stream, &LanguageLimits::default())
+            .is_err()
+    );
+}
+
+#[test]
+fn intent_frame_set_rejects_executing_unresolved_ambiguity() {
+    let source = "count letters in café";
+    let stream = tokenize(source).unwrap();
+    let frames = IntentFrameSet {
+        candidates: vec![count_intent_frame(
+            source,
+            vec!["graphemes versus Unicode scalar values".into()],
+        )],
+        selected: Some(0),
+        disposition: IntentDisposition::Execute,
+    };
+
+    assert!(
+        frames
+            .validate_for(&stream, &LanguageLimits::default())
+            .is_err()
+    );
+}
+
+#[test]
+fn intent_frame_set_preserves_competing_frames_for_clarification() {
+    let source = "count letters in café";
+    let stream = tokenize(source).unwrap();
+    let frames = IntentFrameSet {
+        candidates: vec![
+            count_intent_frame(source, vec!["use grapheme clusters".into()]),
+            count_intent_frame(source, vec!["use Unicode scalar values".into()]),
+        ],
+        selected: None,
+        disposition: IntentDisposition::Clarify,
+    };
+
+    frames
+        .validate_for(&stream, &LanguageLimits::default())
+        .unwrap();
+    let encoded = serde_json::to_string(&frames).unwrap();
+    let decoded: IntentFrameSet = serde_json::from_str(&encoded).unwrap();
+    assert_eq!(decoded, frames);
+}
+
+#[test]
+fn intent_frame_set_allows_empty_abstention() {
+    let stream = tokenize("do something unknowable").unwrap();
+    let frames = IntentFrameSet {
+        candidates: Vec::new(),
+        selected: None,
+        disposition: IntentDisposition::Abstain,
+    };
+
+    frames
+        .validate_for(&stream, &LanguageLimits::default())
+        .unwrap();
+}
+
+#[test]
+fn intent_frame_set_enforces_candidate_limit() {
+    let source = "count r in strawberry";
+    let stream = tokenize(source).unwrap();
+    let frames = IntentFrameSet {
+        candidates: vec![count_intent_frame(source, Vec::new())],
+        selected: Some(0),
+        disposition: IntentDisposition::Execute,
+    };
+    let no_candidates_allowed = LanguageLimits {
+        max_intent_candidates: 0,
+        ..LanguageLimits::default()
+    };
+
+    assert!(
+        frames
+            .validate_for(&stream, &no_candidates_allowed)
+            .is_err()
+    );
+}
+
+#[test]
+fn interpretation_proposal_grounds_token_ranges_into_exact_byte_spans() {
+    let stream = tokenize("please count é in café").unwrap();
+    let proposal = InterpretationProposal {
+        candidates: vec![IntentFrameProposal {
+            name: "text.count_occurrences".into(),
+            confidence: 0.94,
+            scope: IntentScope::CurrentTurn,
+            source_tokens: vec![TokenRange::new(2, 9)],
+            slots: vec![
+                IntentSlotProposal {
+                    name: "target".into(),
+                    confidence: 0.99,
+                    source_tokens: vec![TokenRange::new(4, 5)],
+                    inferred_value: None,
+                },
+                IntentSlotProposal {
+                    name: "text".into(),
+                    confidence: 0.99,
+                    source_tokens: vec![TokenRange::new(8, 9)],
+                    inferred_value: None,
+                },
+            ],
+            ambiguities: Vec::new(),
+        }],
+        selected: Some(0),
+        disposition: IntentDisposition::Execute,
+    };
+
+    let grounded = proposal
+        .ground_for(&stream, &LanguageLimits::default())
+        .unwrap();
+    assert_eq!(
+        grounded.candidates[0].source_spans,
+        vec![TextSpan::new(7, 24)]
+    );
+    assert_eq!(
+        grounded.candidates[0].slots[0].value,
+        Value::Text("é".into())
+    );
+    assert_eq!(
+        grounded.candidates[0].slots[0].source_spans,
+        vec![TextSpan::new(13, 15)]
+    );
+    assert_eq!(
+        grounded.candidates[0].slots[1].value,
+        Value::Text("café".into())
+    );
+}
+
+#[test]
+fn interpretation_proposal_rejects_invalid_token_ranges() {
+    let stream = tokenize("double 7").unwrap();
+    let proposal = InterpretationProposal {
+        candidates: vec![IntentFrameProposal {
+            name: "number.double".into(),
+            confidence: 1.0,
+            scope: IntentScope::CurrentTurn,
+            source_tokens: vec![TokenRange::new(0, 99)],
+            slots: Vec::new(),
+            ambiguities: Vec::new(),
+        }],
+        selected: Some(0),
+        disposition: IntentDisposition::Execute,
+    };
+
+    assert!(
+        proposal
+            .ground_for(&stream, &LanguageLimits::default())
+            .is_err()
+    );
+}
+
+#[test]
+fn interpretation_proposal_derives_literals_and_marks_inferred_values() {
+    let stream = tokenize("double 7").unwrap();
+    let proposal = InterpretationProposal {
+        candidates: vec![IntentFrameProposal {
+            name: "number.double".into(),
+            confidence: 1.0,
+            scope: IntentScope::CurrentTurn,
+            source_tokens: vec![TokenRange::new(0, 3)],
+            slots: vec![
+                IntentSlotProposal {
+                    name: "x".into(),
+                    confidence: 1.0,
+                    source_tokens: vec![TokenRange::new(2, 3)],
+                    inferred_value: None,
+                },
+                IntentSlotProposal {
+                    name: "format".into(),
+                    confidence: 0.7,
+                    source_tokens: Vec::new(),
+                    inferred_value: Some(Value::Text("decimal".into())),
+                },
+            ],
+            ambiguities: Vec::new(),
+        }],
+        selected: Some(0),
+        disposition: IntentDisposition::Execute,
+    };
+
+    let grounded = proposal
+        .ground_for(&stream, &LanguageLimits::default())
+        .unwrap();
+    assert_eq!(grounded.candidates[0].slots[0].value, Value::Int(7));
+    assert_eq!(
+        grounded.candidates[0].slots[1].value,
+        Value::Text("decimal".into())
+    );
+    assert!(grounded.candidates[0].slots[1].source_spans.is_empty());
+}
+
+#[test]
+fn interpretation_proposal_rejects_slot_with_both_or_neither_value_source() {
+    let stream = tokenize("double 7").unwrap();
+    for slot in [
+        IntentSlotProposal {
+            name: "x".into(),
+            confidence: 1.0,
+            source_tokens: vec![TokenRange::new(2, 3)],
+            inferred_value: Some(Value::Int(7)),
+        },
+        IntentSlotProposal {
+            name: "x".into(),
+            confidence: 1.0,
+            source_tokens: Vec::new(),
+            inferred_value: None,
+        },
+    ] {
+        let proposal = InterpretationProposal {
+            candidates: vec![IntentFrameProposal {
+                name: "number.double".into(),
+                confidence: 1.0,
+                scope: IntentScope::CurrentTurn,
+                source_tokens: vec![TokenRange::new(0, 3)],
+                slots: vec![slot],
+                ambiguities: Vec::new(),
+            }],
+            selected: Some(0),
+            disposition: IntentDisposition::Execute,
+        };
+        assert!(
+            proposal
+                .ground_for(&stream, &LanguageLimits::default())
+                .is_err()
+        );
+    }
+}
+
+fn count_intent_frame(source: &str, ambiguities: Vec<String>) -> IntentFrame {
+    let (target, target_start) = source
+        .find(" r ")
+        .map(|start| ("r", start + 1))
+        .or_else(|| source.find("letters").map(|start| ("letters", start)))
+        .unwrap_or((source, 0));
+    IntentFrame {
+        name: "text.count_occurrences".into(),
+        confidence: 0.9,
+        scope: IntentScope::CurrentTurn,
+        source_spans: vec![TextSpan::new(0, source.len())],
+        slots: vec![IntentSlot {
+            name: "target".into(),
+            value: Value::from(target),
+            source_spans: vec![TextSpan::new(target_start, target_start + target.len())],
+            confidence: 0.95,
+        }],
+        ambiguities,
+    }
 }

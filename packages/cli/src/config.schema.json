@@ -6,6 +6,7 @@
   "additionalProperties": false,
   "required": ["version"],
   "properties": {
+    "$schema": { "type": "string" },
     "version": { "const": 1 },
     "database": {
       "type": "object",
@@ -25,7 +26,9 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "permissionMode": { "enum": ["ask", "workspace", "full-access"] }
+        "permissionMode": {
+          "enum": ["ask", "workspace", "full-access", "god-mode"]
+        }
       }
     },
     "recall": {
@@ -38,6 +41,21 @@
           "pattern": "^[0-9]+(s|m|h|d|w)$"
         },
         "maxEpisodes": { "type": "integer", "minimum": 0, "maximum": 100000 }
+      }
+    },
+    "language": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "interpreter": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "provider": { "enum": ["off", "ollama", "cursor"], "default": "off" },
+            "model": { "type": ["string", "null"] },
+            "baseUrl": { "type": ["string", "null"] }
+          }
+        }
       }
     },
     "output": {

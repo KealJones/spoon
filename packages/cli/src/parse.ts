@@ -23,6 +23,15 @@ export type Command =
       procedure: string;
       inputs: Record<string, JsonValue>;
     }
+  | {
+      kind: "teach.run";
+      instruction: string;
+      explain: boolean;
+      forceHeuristic: boolean;
+      session?: string;
+      recall?: RecallMode;
+      permissionMode?: PermissionMode;
+    }
   | { kind: "episode.list"; limit: number }
   | { kind: "episode.get"; episodeId: string }
   | { kind: "failure.analyze"; request: Record<string, JsonValue> }
@@ -36,6 +45,8 @@ export type Command =
   | { kind: "contradiction.refine"; request: Record<string, JsonValue> }
   | { kind: "contradiction.uncertainty"; claimId: string }
   | { kind: "primitive.observe"; target: string }
+  | { kind: "capability.provision-web-fetch"; host: string }
+  | { kind: "capability.list" }
   | { kind: "config.path" }
   | { kind: "config.show"; withSources: boolean }
   | { kind: "config.validate" }
@@ -78,6 +89,7 @@ const usage = `Usage:
   spoon procedure define '<json>'
   spoon procedure list
   spoon procedure run <name-or-id> [key=json-value ...]
+  spoon teach [--explain] [--shut-the-fuck-up-and-do-it-bitch] [--session <id>] [--recall global|session|none] [--permission-mode ask|workspace|full-access|god-mode] <what to teach>
   spoon episode list [limit]
   spoon episode get <episode-id>
   spoon failure analyze '<json>'
@@ -91,6 +103,8 @@ const usage = `Usage:
   spoon contradiction refine '<json>'
   spoon contradiction uncertainty <claim-id>
   spoon primitive observe <target>
+  spoon capability provision-web-fetch <host>
+  spoon capability list
   spoon config path|show [--sources]|validate
   spoon config set <key> <json-value> [--layer user|project|local]
   spoon config unset <key> [--layer user|project|local]
@@ -145,6 +159,51 @@ export function parseCommand(args: string[]): Command {
       kind: "procedure.run",
       procedure: rest[0],
       inputs: Object.fromEntries(rest.slice(1).map(parseBinding)),
+    };
+  }
+  if (resource === "teach" && action) {
+    const teachArgs = [action, ...rest];
+    let explain = false;
+    let forceHeuristic = false;
+    let session: string | undefined;
+    let recall: RecallMode | undefined;
+    let permissionMode: PermissionMode | undefined;
+    const instruction: string[] = [];
+    for (let index = 0; index < teachArgs.length; index += 1) {
+      const argument = teachArgs[index]!;
+      if (argument === "--explain") {
+        explain = true;
+      } else if (argument === "--shut-the-fuck-up-and-do-it-bitch") {
+        forceHeuristic = true;
+      } else if (argument === "--session") {
+        session = teachArgs[++index];
+        if (!session) throw new Error(usage);
+      } else if (argument.startsWith("--session=")) {
+        session = argument.slice("--session=".length);
+        if (!session) throw new Error(usage);
+      } else if (argument === "--recall") {
+        recall = parseRecall(teachArgs[++index]);
+      } else if (argument.startsWith("--recall=")) {
+        recall = parseRecall(argument.slice("--recall=".length));
+      } else if (argument === "--permission-mode") {
+        permissionMode = parsePermissionMode(teachArgs[++index]);
+      } else if (argument.startsWith("--permission-mode=")) {
+        permissionMode = parsePermissionMode(
+          argument.slice("--permission-mode=".length),
+        );
+      } else {
+        instruction.push(argument);
+      }
+    }
+    if (instruction.length === 0) throw new Error(usage);
+    return {
+      kind: "teach.run",
+      instruction: instruction.join(" "),
+      explain,
+      forceHeuristic,
+      ...(session === undefined ? {} : { session }),
+      ...(recall === undefined ? {} : { recall }),
+      ...(permissionMode === undefined ? {} : { permissionMode }),
     };
   }
   if (resource === "episode" && action === "list" && rest.length <= 1) {
@@ -207,6 +266,16 @@ export function parseCommand(args: string[]): Command {
   }
   if (resource === "primitive" && action === "observe" && rest.length === 1) {
     return { kind: "primitive.observe", target: rest[0]! };
+  }
+  if (
+    resource === "capability" &&
+    action === "provision-web-fetch" &&
+    rest.length === 1
+  ) {
+    return { kind: "capability.provision-web-fetch", host: rest[0]! };
+  }
+  if (resource === "capability" && action === "list" && rest.length === 0) {
+    return { kind: "capability.list" };
   }
   if (resource === "config" && action === "path" && rest.length === 0) {
     return { kind: "config.path" };
@@ -391,7 +460,12 @@ function parseRecall(value: string | undefined): RecallMode {
 }
 
 function parsePermissionMode(value: string | undefined): PermissionMode {
-  if (value === "ask" || value === "workspace" || value === "full-access")
+  if (
+    value === "ask" ||
+    value === "workspace" ||
+    value === "full-access" ||
+    value === "god-mode"
+  )
     return value;
   throw new Error(usage);
 }

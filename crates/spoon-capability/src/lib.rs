@@ -287,7 +287,13 @@ pub struct AdapterExecution {
 /// Host-provided adapters are the sole effect boundary. Implementations may
 /// use a mock, a process sandbox, or a transport owned by the host, but must
 /// execute exactly the authorized primitive request supplied here.
-pub trait CapabilityInvocationAdapter {
+pub trait CapabilityInvocationAdapter: Send {
+    /// Return the host-owned primitive policy for this adapter. The policy is
+    /// never selected by a capability bundle or invocation input.
+    fn policy(&self, _primitive: &NativePrimitive) -> Option<PrimitivePolicy> {
+        None
+    }
+
     fn execute(
         &mut self,
         invocation: &AuthorizedPrimitiveInvocation,
@@ -1383,7 +1389,7 @@ pub fn run_sandbox_tests_with_adapter<A: CapabilityInvocationAdapter>(
 /// local-validation status and every declared grant. This method deliberately
 /// accepts an injected adapter rather than falling back to filesystem, network
 /// or process APIs on the caller's behalf.
-fn invoke_authorized_procedure<A: CapabilityInvocationAdapter>(
+fn invoke_authorized_procedure<A: CapabilityInvocationAdapter + ?Sized>(
     content_id: &str,
     procedure: &CapabilityProcedure,
     input: &Value,
@@ -1395,7 +1401,7 @@ fn invoke_authorized_procedure<A: CapabilityInvocationAdapter>(
     )
 }
 
-fn invoke_authorized_procedure_with_permission_policy<A: CapabilityInvocationAdapter>(
+fn invoke_authorized_procedure_with_permission_policy<A: CapabilityInvocationAdapter + ?Sized>(
     content_id: &str,
     procedure: &CapabilityProcedure,
     input: &Value,
@@ -2440,6 +2446,39 @@ impl CapabilityStore {
         Ok(store)
     }
 
+    /// Return the bounded, redacted capability inventory. Bundle contents and
+    /// permission payloads stay behind the reconstruct/authorize boundaries;
+    /// self-description only needs identity and lifecycle state.
+    pub fn list_imported(&self) -> Result<Vec<ImportedCapability>, CapabilityError> {
+        let mut statement = self.conn.prepare(
+            "SELECT content_id, name, status, locally_validated
+             FROM capability_bundles ORDER BY name, content_id LIMIT 512",
+        )?;
+        let rows = statement.query_map([], |row| {
+            let status: String = row.get(2)?;
+            let status = match status.as_str() {
+                "quarantined" => CapabilityStatus::Quarantined,
+                "provisional" => CapabilityStatus::Provisional,
+                "active" => CapabilityStatus::Active,
+                "rejected" => CapabilityStatus::Rejected,
+                _ => {
+                    return Err(rusqlite::Error::FromSqlConversionFailure(
+                        2,
+                        rusqlite::types::Type::Text,
+                        format!("unknown stored capability status {status}").into(),
+                    ));
+                }
+            };
+            Ok(ImportedCapability {
+                content_id: row.get(0)?,
+                name: row.get(1)?,
+                status,
+                locally_validated: row.get::<_, i64>(3)? != 0,
+            })
+        })?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+    }
+
     fn create_schema(&self) -> Result<(), CapabilityError> {
         self.conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS capability_bundles (
@@ -2990,7 +3029,7 @@ impl CapabilityStore {
     /// the procedure's declared authority are checked afresh on every call, so
     /// a later revocation takes effect immediately even if a caller retained a
     /// previous procedure value or receipt.
-    pub fn invoke<A: CapabilityInvocationAdapter>(
+    pub fn invoke<A: CapabilityInvocationAdapter + ?Sized>(
         &self,
         content_id: &str,
         procedure_id: &str,
@@ -3005,7 +3044,7 @@ impl CapabilityStore {
     /// Invoke one stored procedure using an explicit local prompt-resolution
     /// policy. This does not bypass procedure declarations, revalidation,
     /// resource bounds, adapter checks, or mandatory denials.
-    pub fn invoke_with_permission_policy<A: CapabilityInvocationAdapter>(
+    pub fn invoke_with_permission_policy<A: CapabilityInvocationAdapter + ?Sized>(
         &self,
         content_id: &str,
         procedure_id: &str,

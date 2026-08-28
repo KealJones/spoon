@@ -5,10 +5,19 @@ export {
   type ClaudeTeacherOptions,
 } from "./claude.js";
 export {
+  CursorTeacher,
+  parseCursorResult,
+  type CursorTeacherOptions,
+} from "./cursor.js";
+export {
   CodexTeacher,
   lowerCodexSchema,
   type CodexTeacherOptions,
 } from "./codex.js";
+export {
+  CODEX_FLAT_AUTHORING_SCHEMA,
+  decodeCodexFlatAuthoring,
+} from "./flat-authoring.js";
 export { CliTeacher, parseCliJson, type CliTeacherOptions } from "./command.js";
 export { TeacherError } from "./errors.js";
 export { HumanTeacher, type HumanTeacherOptions } from "./human.js";
@@ -17,6 +26,7 @@ export { OpenAITeacher, type OpenAITeacherOptions } from "./openai.js";
 export {
   buildTeacherPrompt,
   REUSABLE_LESSON_PROTOCOL,
+  SPOONLANG_GRAMMAR,
   TEACHER_SYSTEM_PROMPT,
 } from "./prompt.js";
 export { SourceReliabilityTracker } from "./reliability.js";

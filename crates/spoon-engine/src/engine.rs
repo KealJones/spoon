@@ -1,22 +1,24 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use spoon_capability::{
-    CapabilityBundle, CapabilityInvocation, CapabilityInvocationAdapter, CapabilityProcedure,
-    CapabilityStore, ImportedCapability, LocalValidation, Permission, PermissionPolicy,
-    PrimitivePolicy,
+    AuthorizedPrimitiveInvocation, CapabilityBundle, CapabilityInvocation,
+    CapabilityInvocationAdapter, CapabilityProcedure, CapabilityStore, Effect, ImportedCapability,
+    LocalValidation, NativePrimitive, Permission, PermissionMode, PermissionPolicy,
+    PrimitivePolicy, PrimitiveRequest,
 };
 use spoon_core::{
     Concept, ConceptId, ContractCheckResult, Episode, EpisodeCost, EpisodeId, EscalationRung,
-    Evaluation, Expr, Lifecycle, ObservedFact, Procedure, ProcedureId, ReasoningTrace,
+    Evaluation, Expr, Lifecycle, ObservedFact, ParamType, Procedure, ProcedureId, ReasoningTrace,
     Relationship, RelationshipId, Session, SessionVisibility, SpoonError, TestCase, TraceStep,
     TraceStepStatus, Value, VerifiabilityTier,
 };
 use spoon_episode::{
     EpisodeFeedback, EpisodeStore, TeacherInteractionMetrics, VerifiedRegressionCase,
 };
-use spoon_exec::{ConditionCheckStatus, Evaluator, ExecStepStatus, ExecTrace};
+use spoon_exec::{CapabilityInvoker, ConditionCheckStatus, Evaluator, ExecStepStatus, ExecTrace};
 use spoon_graph::{ActivationSpreadQuery, ActivationSpreadResult, GraphError, KnowledgeStore};
 use spoon_intuition::{
     EpistemicChallengeKind, IntuitionMetrics, IntuitionStore, RankingExample, RecallCandidate,
@@ -25,6 +27,19 @@ use spoon_intuition::{
 use thiserror::Error;
 
 use crate::evaluate_deterministic;
+
+/// Stable references for host-owned native boundaries. They are authorable
+/// without an imported third-party bundle; whether a particular call can run
+/// is decided by the host adapter and permission flow at execution time.
+pub(crate) const NATIVE_CAPABILITY_CONTENT_ID: &str = "spoon.native";
+
+pub(crate) fn is_native_capability_reference(content_id: &str, procedure_id: &str) -> bool {
+    content_id == NATIVE_CAPABILITY_CONTENT_ID
+        && matches!(
+            procedure_id,
+            "web.fetch" | "file.read" | "file.write" | "observe" | "sandbox.execute"
+        )
+}
 
 /// A self-supervision replay is deliberately much smaller than the normal
 /// execution allowance. It verifies one known trace; it is not a back door to
@@ -144,6 +159,7 @@ pub struct Engine {
     pub(crate) episodes: EpisodeStore,
     pub(crate) max_steps: u32,
     pub(crate) pending_cycles: HashMap<crate::CycleId, crate::cycle::PendingCycle>,
+    pub(crate) pending_intents: HashMap<crate::CycleId, crate::cycle::PendingIntentCycle>,
     pub(crate) adaptations: crate::adaptation::AdaptationStore,
     pub(crate) credit_analyses: crate::credit::CreditAnalysisStore,
     pub(crate) contradictions: spoon_adapt::ContradictionStore,
@@ -154,6 +170,7 @@ pub struct Engine {
     pub(crate) trust: crate::trust::TrustLedger,
     pub(crate) intuition: IntuitionStore,
     pub(crate) capabilities: CapabilityStore,
+    pub(crate) capability_adapter: Option<Box<dyn CapabilityInvocationAdapter>>,
     pub(crate) goals: crate::goals::GoalStore,
     pub(crate) skills: crate::skills::SkillStore,
     pub(crate) telemetry: crate::telemetry::FalsificationTelemetryStore,
@@ -161,13 +178,146 @@ pub struct Engine {
     pub(crate) admin_enabled: bool,
 }
 
+pub(crate) struct EngineCapabilityInvoker<'a> {
+    pub(crate) engine: &'a mut Engine,
+    pub(crate) permission_mode: Option<String>,
+}
+
+impl CapabilityInvoker for EngineCapabilityInvoker<'_> {
+    fn invoke(
+        &mut self,
+        content_id: &str,
+        procedure_id: &str,
+        input: Value,
+    ) -> Result<Value, SpoonError> {
+        if is_native_capability_reference(content_id, procedure_id) {
+            return self
+                .engine
+                .invoke_native_capability(procedure_id, input, self.permission_mode.as_deref())
+                .map_err(|error| SpoonError::Other(error.to_string()));
+        }
+        let json_input = serde_json::to_value(input).map_err(|error| {
+            SpoonError::Other(format!("capability input serialization: {error}"))
+        })?;
+        let outcome = self
+            .engine
+            .invoke_registered_capability(
+                content_id,
+                procedure_id,
+                &json_input,
+                self.permission_mode.as_deref(),
+            )
+            .map_err(|error| SpoonError::Other(error.to_string()))?;
+        serde_json::from_value(outcome.invocation.output).map_err(|error| {
+            SpoonError::Other(format!("capability output deserialization: {error}"))
+        })
+    }
+}
+
 impl Engine {
+    /// Install the host-owned effect adapter used by effectful procedures.
+    /// Capability bundles cannot install or replace this adapter.
+    pub fn set_capability_adapter(&mut self, adapter: Box<dyn CapabilityInvocationAdapter>) {
+        self.capability_adapter = Some(adapter);
+    }
+
+    fn invoke_registered_capability(
+        &mut self,
+        content_id: &str,
+        procedure_id: &str,
+        input: &serde_json::Value,
+        permission_mode: Option<&str>,
+    ) -> Result<CapabilityExecutionOutcome, EngineError> {
+        let mut adapter = self.capability_adapter.take().ok_or_else(|| {
+            EngineError::InvalidInput("no host capability adapter is configured".into())
+        })?;
+        let outcome = (|| {
+            let procedure = self.require_capability_procedure_with_policy(
+                content_id,
+                procedure_id,
+                permission_mode,
+            )?;
+            let policy = adapter.policy(&procedure.primitive).ok_or_else(|| {
+                EngineError::InvalidInput(
+                    "no host policy is configured for capability primitive".into(),
+                )
+            })?;
+            let permission_policy = permission_policy_from_mode(permission_mode)?;
+            self.invoke_capability_with_permission_policy(
+                content_id,
+                procedure_id,
+                input,
+                None,
+                &policy,
+                permission_policy.as_ref(),
+                &mut *adapter,
+            )
+        })();
+        self.capability_adapter = Some(adapter);
+        outcome
+    }
+
+    /// Execute one host-owned native boundary. Native references are part of
+    /// Spoon's language and therefore need no imported bundle to be authored.
+    /// They still require a concrete runtime adapter and a runtime permission
+    /// decision; no teaching-time configuration or grant is consulted here.
+    fn invoke_native_capability(
+        &mut self,
+        procedure_id: &str,
+        input: Value,
+        permission_mode: Option<&str>,
+    ) -> Result<Value, EngineError> {
+        let permission_policy = permission_policy_from_mode(permission_mode)?.unwrap_or_default();
+        let json_input = serde_json::to_value(&input)?;
+        let (primitive, effect, request, target) =
+            native_capability_request(procedure_id, &json_input)?;
+        if permission_policy.mode != PermissionMode::FullAccess {
+            return Err(EngineError::InvalidInput(format!(
+                "runtime permission required for native capability {procedure_id} targeting {target}; approve this operation in the runner or use full-access/god-mode"
+            )));
+        }
+
+        let mut adapter = self.capability_adapter.take().ok_or_else(|| {
+            EngineError::InvalidInput(format!(
+                "native capability {procedure_id} reached runtime, but no host adapter is configured"
+            ))
+        })?;
+        let result = (|| {
+            let policy = adapter.policy(&primitive).ok_or_else(|| {
+                EngineError::InvalidInput(format!(
+                    "native capability {procedure_id} reached runtime, but the host has no adapter for {primitive:?}"
+                ))
+            })?;
+            let invocation = AuthorizedPrimitiveInvocation {
+                content_id: NATIVE_CAPABILITY_CONTENT_ID.into(),
+                procedure_id: procedure_id.into(),
+                primitive,
+                effect,
+                request,
+                input: json_input,
+                bounds: policy.bounds,
+            };
+            let output = adapter
+                .execute(&invocation)
+                .map_err(|error| {
+                    EngineError::InvalidInput(format!(
+                        "native capability {procedure_id} runtime failure: {error}"
+                    ))
+                })?
+                .output;
+            serde_json::from_value(output).map_err(EngineError::Serialization)
+        })();
+        self.capability_adapter = Some(adapter);
+        result
+    }
+
     pub fn open(path: &str) -> Result<Self, EngineError> {
         let mut engine = Self {
             graph: KnowledgeStore::new(path)?,
             episodes: EpisodeStore::new(path)?,
             max_steps: 1_000_000,
             pending_cycles: HashMap::new(),
+            pending_intents: HashMap::new(),
             adaptations: crate::adaptation::AdaptationStore::open(path)?,
             credit_analyses: crate::credit::CreditAnalysisStore::open(path)?,
             contradictions: spoon_adapt::ContradictionStore::open(path)?,
@@ -179,6 +329,7 @@ impl Engine {
             intuition: IntuitionStore::open(path)?,
             capabilities: CapabilityStore::open(path)
                 .map_err(|error| EngineError::InvalidInput(format!("capability store: {error}")))?,
+            capability_adapter: None,
             goals: crate::goals::GoalStore::open(path)?,
             skills: crate::skills::SkillStore::open(path)?,
             telemetry: crate::telemetry::FalsificationTelemetryStore::open(path)?,
@@ -194,6 +345,7 @@ impl Engine {
         engine.recover_pending_lessons()?;
         engine.recover_pending_adaptations()?;
         engine.reconcile_observed_fact_contradictions()?;
+        engine.migrate_legacy_parameter_types()?;
         engine.rebuild_intuition_index()?;
         Ok(engine)
     }
@@ -204,6 +356,7 @@ impl Engine {
             episodes: EpisodeStore::in_memory()?,
             max_steps: 1_000_000,
             pending_cycles: HashMap::new(),
+            pending_intents: HashMap::new(),
             adaptations: crate::adaptation::AdaptationStore::in_memory()?,
             credit_analyses: crate::credit::CreditAnalysisStore::in_memory()?,
             contradictions: spoon_adapt::ContradictionStore::in_memory()?,
@@ -215,6 +368,7 @@ impl Engine {
             intuition: IntuitionStore::in_memory()?,
             capabilities: CapabilityStore::in_memory()
                 .map_err(|error| EngineError::InvalidInput(format!("capability store: {error}")))?,
+            capability_adapter: None,
             goals: crate::goals::GoalStore::in_memory()?,
             skills: crate::skills::SkillStore::in_memory()?,
             telemetry: crate::telemetry::FalsificationTelemetryStore::in_memory()?,
@@ -233,6 +387,27 @@ impl Engine {
         let mut engine = Self::open(path)?;
         engine.enable_admin(secret)?;
         Ok(engine)
+    }
+
+    /// Upgrade procedures written before `Param.value_type` existed. The
+    /// procedure id and behavior stay stable, while the current revision gets
+    /// an explicit slot contract so it can participate in language routing.
+    /// Ambiguous legacy descriptions deliberately become `any`; that records
+    /// uncertainty without taking the capability away from its callers.
+    fn migrate_legacy_parameter_types(&mut self) -> Result<(), EngineError> {
+        let procedures = self.graph.list_procedures()?;
+        for mut procedure in procedures {
+            let changed = upgrade_legacy_parameters(&mut procedure);
+            if !changed {
+                continue;
+            }
+            let expected_version = procedure.version;
+            procedure.version = expected_version.saturating_add(1);
+            procedure.updated_at = unix_now();
+            self.graph.revise_procedure(&procedure, expected_version)?;
+            self.index_procedure(&procedure)?;
+        }
+        Ok(())
     }
 
     pub fn with_max_steps(mut self, max_steps: u32) -> Self {
@@ -310,6 +485,15 @@ impl Engine {
         self.capabilities
             .import(bytes)
             .map_err(|error| EngineError::InvalidInput(format!("capability import: {error}")))
+    }
+
+    /// List the local capability inventory without granting authority or
+    /// exposing bundle contents. This is the discovery surface used by
+    /// interfaces that need to show what Spoon can potentially execute.
+    pub fn list_imported_capabilities(&self) -> Result<Vec<ImportedCapability>, EngineError> {
+        self.capabilities
+            .list_imported()
+            .map_err(|error| EngineError::InvalidInput(format!("capability inventory: {error}")))
     }
 
     pub fn import_and_revalidate_capability_bundle(
@@ -437,6 +621,28 @@ impl Engine {
             })
     }
 
+    fn require_capability_procedure_with_policy(
+        &self,
+        content_id: &str,
+        procedure_id: &str,
+        permission_mode: Option<&str>,
+    ) -> Result<spoon_capability::CapabilityProcedure, EngineError> {
+        let permission_policy = permission_policy_from_mode(permission_mode)?;
+        let procedure = match permission_policy.as_ref() {
+            Some(policy) => self.capabilities.require_procedure_permissions_with_policy(
+                content_id,
+                procedure_id,
+                policy,
+            ),
+            None => self
+                .capabilities
+                .require_procedure_permissions(content_id, procedure_id),
+        };
+        procedure.map_err(|error| {
+            EngineError::InvalidInput(format!("capability authorization: {error}"))
+        })
+    }
+
     /// Invoke one exact, locally revalidated capability procedure through an
     /// injected host adapter.
     ///
@@ -473,7 +679,7 @@ impl Engine {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn invoke_capability_with_permission_policy<A: CapabilityInvocationAdapter>(
+    pub fn invoke_capability_with_permission_policy<A: CapabilityInvocationAdapter + ?Sized>(
         &self,
         content_id: &str,
         procedure_id: &str,
@@ -1773,7 +1979,7 @@ impl Engine {
             text: format!(
                 "{} {}",
                 concept.name,
-                concept.description.as_deref().unwrap_or_default()
+                routing_description(concept.description.as_deref())
             ),
             concept_ids: vec![concept.id.to_string()],
             created_at: concept.created_at,
@@ -1784,12 +1990,25 @@ impl Engine {
     pub(crate) fn index_procedure(&self, procedure: &Procedure) -> Result<(), EngineError> {
         self.intuition
             .remove_documents_with_prefix(&format!("procedure:{}:", procedure.id))?;
+        let concept_text = procedure
+            .concept
+            .map(|id| self.graph.get_concept(id))
+            .transpose()?
+            .flatten()
+            .map(|concept| {
+                format!(
+                    "{} {}",
+                    concept.name,
+                    routing_description(concept.description.as_deref())
+                )
+            })
+            .unwrap_or_default();
         self.intuition.index_document(&RecallDocument {
             id: format!("procedure:{}:{}", procedure.id, procedure.version),
             kind: RecallKind::Procedure,
             text: format!(
-                "{} {:?} {:?}",
-                procedure.name, procedure.params, procedure.contract
+                "{} {} {:?} {:?} {:?}",
+                procedure.name, concept_text, procedure.params, procedure.contract, procedure.body
             ),
             concept_ids: procedure
                 .concept
@@ -1868,15 +2087,21 @@ impl Engine {
 
     pub fn admin_insert_procedure(&self, procedure: &Procedure) -> Result<(), EngineError> {
         self.require_admin()?;
-        self.graph.insert_procedure(procedure)?;
-        self.index_procedure(procedure)?;
+        let mut upgraded = procedure.clone();
+        upgrade_legacy_parameters(&mut upgraded);
+        self.validate_capability_dependencies(&upgraded)?;
+        self.graph.insert_procedure(&upgraded)?;
+        self.index_procedure(&upgraded)?;
         Ok(())
     }
 
     pub fn admin_update_procedure(&self, procedure: &Procedure) -> Result<(), EngineError> {
         self.require_admin()?;
-        self.graph.update_procedure(procedure)?;
-        self.index_procedure(procedure)?;
+        let mut upgraded = procedure.clone();
+        upgrade_legacy_parameters(&mut upgraded);
+        self.validate_capability_dependencies(&upgraded)?;
+        self.graph.update_procedure(&upgraded)?;
+        self.index_procedure(&upgraded)?;
         Ok(())
     }
 
@@ -1886,8 +2111,77 @@ impl Engine {
         expected_version: u32,
     ) -> Result<(), EngineError> {
         self.require_admin()?;
+        self.validate_capability_dependencies(procedure)?;
         self.graph.revise_procedure(procedure, expected_version)?;
         self.index_procedure(procedure)?;
+        Ok(())
+    }
+
+    /// Validate capability references when a procedure is admitted, without
+    /// checking grants. Grants and permission mode belong to execution time;
+    /// admission only requires a locally revalidated imported procedure with
+    /// the exact referenced revision present in its bundle.
+    pub(crate) fn validate_capability_dependencies(
+        &self,
+        procedure: &Procedure,
+    ) -> Result<(), EngineError> {
+        if procedure
+            .contract
+            .requires
+            .iter()
+            .chain(&procedure.contract.promises)
+            .chain(&procedure.contract.fails_when)
+            .filter_map(|condition| condition.check.as_ref())
+            .any(|check| Procedure::new("contract-check", Vec::new(), check.clone()).is_effectful())
+        {
+            return Err(EngineError::InvalidInput(
+                "capability calls are not allowed in contract checks".into(),
+            ));
+        }
+        let imported = self
+            .capabilities
+            .list_imported()
+            .map_err(|error| EngineError::InvalidInput(format!("capability registry: {error}")))?;
+        for dependency in procedure.capability_dependencies() {
+            // Native boundaries are part of Spoon's durable IR vocabulary.
+            // They do not need a pre-created, pre-granted capability bundle
+            // merely to be authored or installed. Their adapter/permission
+            // checks happen only when execution reaches this expression.
+            if is_native_capability_reference(&dependency.content_id, &dependency.procedure_id) {
+                continue;
+            }
+            let Some(bundle) = imported
+                .iter()
+                .find(|item| item.content_id == dependency.content_id)
+            else {
+                return Err(EngineError::InvalidInput(format!(
+                    "capability {} is not imported",
+                    dependency.content_id
+                )));
+            };
+            if !bundle.locally_validated {
+                return Err(EngineError::InvalidInput(format!(
+                    "capability {} is not locally validated",
+                    dependency.content_id
+                )));
+            }
+            let reconstructed = self
+                .capabilities
+                .reconstruct(&dependency.content_id)
+                .map_err(|error| {
+                    EngineError::InvalidInput(format!("capability reconstruction: {error}"))
+                })?;
+            if !reconstructed
+                .procedures
+                .iter()
+                .any(|candidate| candidate.id == dependency.procedure_id)
+            {
+                return Err(EngineError::InvalidInput(format!(
+                    "capability procedure {} is not present in {}",
+                    dependency.procedure_id, dependency.content_id
+                )));
+            }
+        }
         Ok(())
     }
 
@@ -2034,6 +2328,75 @@ impl Engine {
         let mut evaluator = self.evaluator_for_procedure(&procedure)?;
         let attempt = evaluator.exec_procedure_captured(&procedure_id, args);
         let steps_used = evaluator.budget().steps_used;
+        match attempt.result {
+            Ok(value) => {
+                let episode = self.record_execution(
+                    &procedure,
+                    &inputs,
+                    prediction,
+                    Some(value.clone()),
+                    &attempt.trace,
+                    None,
+                    steps_used,
+                )?;
+                Ok(ExecutionOutcome {
+                    value,
+                    trace: attempt.trace,
+                    episode,
+                })
+            }
+            Err(source) => {
+                let episode = self.record_execution(
+                    &procedure,
+                    &inputs,
+                    prediction,
+                    None,
+                    &attempt.trace,
+                    Some(&source),
+                    steps_used,
+                )?;
+                Err(EngineError::ExecutionFailed {
+                    episode_id: episode.id,
+                    source,
+                })
+            }
+        }
+    }
+
+    /// Execute through the configured host capability adapter. The adapter is
+    /// mutable host state, so effectful execution is exposed separately from
+    /// the legacy `&self` pure execution API. Permission mode is local policy,
+    /// never procedure data.
+    pub fn execute_procedure_with_capability_runtime(
+        &mut self,
+        procedure_id: ProcedureId,
+        inputs: BTreeMap<String, Value>,
+        prediction: Option<Value>,
+        permission_mode: Option<String>,
+    ) -> Result<ExecutionOutcome, EngineError> {
+        let procedure = self
+            .graph
+            .get_procedure(procedure_id)?
+            .ok_or_else(|| SpoonError::NotFound(format!("procedure {procedure_id}")))?;
+        if !is_current_executable(procedure.lifecycle) {
+            return Err(EngineError::InvalidInput(format!(
+                "procedure {procedure_id} is not executable in lifecycle {:?}",
+                procedure.lifecycle
+            )));
+        }
+        let args = bind_inputs(&procedure, &inputs, None)?;
+        let evaluator = self
+            .evaluator_for_procedure(&procedure)?
+            .with_budget(self.max_steps);
+        let mut capability_runtime = EngineCapabilityInvoker {
+            engine: self,
+            permission_mode,
+        };
+        let mut evaluator = evaluator.with_capability_invoker(&mut capability_runtime);
+        let attempt = evaluator.exec_procedure_captured(&procedure_id, args);
+        let steps_used = evaluator.budget().steps_used;
+        drop(evaluator);
+        drop(capability_runtime);
         match attempt.result {
             Ok(value) => {
                 let episode = self.record_execution(
@@ -2530,6 +2893,149 @@ impl Engine {
     }
 }
 
+fn permission_policy_from_mode(
+    mode: Option<&str>,
+) -> Result<Option<PermissionPolicy>, EngineError> {
+    let Some(mode) = mode else {
+        return Ok(None);
+    };
+    let parsed = match mode {
+        "ask" => PermissionMode::Ask,
+        "workspace" => PermissionMode::Workspace,
+        "full-access" | "god-mode" => PermissionMode::FullAccess,
+        other => {
+            return Err(EngineError::InvalidInput(format!(
+                "permission_mode must be ask, workspace, full-access, or god-mode (got {other})"
+            )));
+        }
+    };
+    Ok(Some(PermissionPolicy {
+        mode: parsed,
+        ..PermissionPolicy::default()
+    }))
+}
+
+fn native_capability_request(
+    procedure_id: &str,
+    input: &serde_json::Value,
+) -> Result<(NativePrimitive, Effect, PrimitiveRequest, String), EngineError> {
+    let text_field = |name: &str| {
+        input
+            .get(name)
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| {
+                EngineError::InvalidInput(format!(
+                    "native capability {procedure_id} requires a string {name} input field"
+                ))
+            })
+    };
+    match procedure_id {
+        "web.fetch" => {
+            let url = text_field("url")?;
+            let authority = web_fetch_authority(url)?;
+            Ok((
+                NativePrimitive::NetworkRequest,
+                Effect::Network,
+                PrimitiveRequest::Network {
+                    host: authority,
+                    method: "GET".into(),
+                    body_bytes: u64::try_from(serde_json::to_vec(input)?.len()).unwrap_or(u64::MAX),
+                },
+                url.into(),
+            ))
+        }
+        "file.read" => {
+            let path = text_field("path")?;
+            Ok((
+                NativePrimitive::FileRead,
+                Effect::FileRead,
+                PrimitiveRequest::FileRead {
+                    path: path.into(),
+                    bytes: 1024 * 1024,
+                },
+                path.into(),
+            ))
+        }
+        "file.write" => {
+            let path = text_field("path")?;
+            Ok((
+                NativePrimitive::FileWrite,
+                Effect::FileWrite,
+                PrimitiveRequest::FileWrite {
+                    path: path.into(),
+                    bytes: u64::try_from(serde_json::to_vec(input)?.len()).unwrap_or(u64::MAX),
+                },
+                path.into(),
+            ))
+        }
+        "observe" => {
+            let target = text_field("target")?;
+            Ok((
+                NativePrimitive::Observe,
+                Effect::Observation,
+                PrimitiveRequest::Observe {
+                    target: target.into(),
+                },
+                target.into(),
+            ))
+        }
+        "sandbox.execute" => {
+            let profile = text_field("profile")?;
+            Ok((
+                NativePrimitive::SandboxExecute,
+                Effect::SandboxedExecution,
+                PrimitiveRequest::SandboxExecute {
+                    profile: profile.into(),
+                    steps: 1,
+                },
+                profile.into(),
+            ))
+        }
+        _ => Err(EngineError::InvalidInput(format!(
+            "unknown native capability {procedure_id}"
+        ))),
+    }
+}
+
+fn web_fetch_authority(url: &str) -> Result<String, EngineError> {
+    let authority = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))
+        .and_then(|remaining| remaining.split(['/', '?', '#']).next())
+        .filter(|authority| !authority.is_empty() && !authority.contains('@'))
+        .ok_or_else(|| {
+            EngineError::InvalidInput(
+                "native web.fetch requires an http(s) URL without embedded credentials".into(),
+            )
+        })?;
+    Ok(authority.into())
+}
+
+/// Keeps illustrative values out of the routing representation. The original
+/// description remains durable knowledge; this is only the text used to
+/// retrieve and present executable candidates.
+pub(crate) fn routing_description(description: Option<&str>) -> String {
+    let Some(description) = description else {
+        return String::new();
+    };
+    description
+        .split_inclusive(['.', '!', '?'])
+        .filter_map(|sentence| {
+            let lower = sentence.to_ascii_lowercase();
+            let marker = ["for example", "such as", "e.g.", "for instance"]
+                .iter()
+                .filter_map(|marker| lower.find(marker))
+                .min();
+            let routing = marker
+                .and_then(|index| sentence.get(..index))
+                .unwrap_or(sentence)
+                .trim();
+            (!routing.is_empty()).then_some(routing)
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 pub(crate) fn observed_fact_for_procedure(
     procedure: &Procedure,
     value: Value,
@@ -2729,6 +3235,7 @@ pub(crate) fn collect_exact_calls(expression: &Expr, calls: &mut HashSet<(Proced
             collect_exact_calls(right, calls);
         }
         Expr::UnOp { operand, .. } => collect_exact_calls(operand, calls),
+        Expr::CapabilityCall { input, .. } => collect_exact_calls(input, calls),
         Expr::Call { args, .. } => {
             for argument in args {
                 collect_exact_calls(argument, calls);
@@ -2816,13 +3323,71 @@ pub(crate) fn bind_inputs(
         .iter()
         .enumerate()
         .map(|(index, param)| {
-            supplied
+            let value = supplied
                 .get(&param.name)
                 .cloned()
                 .or_else(|| defaults.and_then(|values| values.get(index)).cloned())
-                .ok_or_else(|| EngineError::InvalidInput(format!("missing input '{}'", param.name)))
+                .ok_or_else(|| {
+                    EngineError::InvalidInput(format!("missing input '{}'", param.name))
+                })?;
+            if let Some(expected) = param.value_type {
+                if !expected.accepts(&value) {
+                    return Err(EngineError::InvalidInput(format!(
+                        "input '{}' expects {:?}, received {}",
+                        param.name,
+                        expected,
+                        value.type_name()
+                    )));
+                }
+            }
+            Ok(value)
         })
         .collect()
+}
+
+fn infer_legacy_param_type(description: Option<&str>) -> ParamType {
+    let description = description.unwrap_or_default().to_ascii_lowercase();
+    if ["numeric", "number", "integer", "float", "addend"]
+        .iter()
+        .any(|term| description.contains(term))
+    {
+        ParamType::Number
+    } else if ["text", "string", "letter", "substring", "word", "character"]
+        .iter()
+        .any(|term| description.contains(term))
+    {
+        ParamType::Text
+    } else if ["list", "array", "collection", "items"]
+        .iter()
+        .any(|term| description.contains(term))
+    {
+        ParamType::List
+    } else if ["map", "object", "record"]
+        .iter()
+        .any(|term| description.contains(term))
+    {
+        ParamType::Map
+    } else {
+        ParamType::Any
+    }
+}
+
+fn upgrade_legacy_parameters(procedure: &mut Procedure) -> bool {
+    let mut changed = false;
+    for parameter in &mut procedure.params {
+        if parameter.value_type.is_none() {
+            parameter.value_type = Some(infer_legacy_param_type(parameter.description.as_deref()));
+            changed = true;
+        }
+    }
+    changed
+}
+
+fn unix_now() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64
 }
 
 /// Returns a stable, input/output-independent fingerprint of an observed

@@ -1,5 +1,8 @@
+pub mod http;
+
 use std::collections::BTreeMap;
-use std::io::{BufRead, Write};
+use std::io::{BufRead, Read, Write};
+use std::time::Instant;
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -22,9 +25,10 @@ use spoon_core::{
 use spoon_engine::{
     AdaptationPlanId, AdaptationPlanRequest, ApplyAdaptationRequest, CapabilityBundle,
     CapabilityExecutionOutcome, CuriosityGap, CycleBudget, CycleId, CycleInput, CycleOutcome,
-    CycleProgress, Engine, EngineError, FailureAnalysisRequest, FalsificationMeasurementInput,
-    FalsificationRunInput, GoalKind, InterfaceDescription, LocalValidation, Permission,
-    PromotionReplay, RecallMode, SkillCandidate, TeacherProposalWire,
+    CycleProgress, DiscoveredOperation, Engine, EngineError, FailureAnalysisRequest,
+    FalsificationMeasurementInput, FalsificationRunInput, GoalKind, IntentProposalWire,
+    InterfaceDescription, LocalValidation, Permission, PromotionReplay, RecallMode, SkillCandidate,
+    TeacherProposalWire,
 };
 use spoon_episode::{EpisodeFeedback, EpisodeQuery, FeedbackSource};
 use spoon_graph::GraphError;
@@ -40,12 +44,261 @@ const MAX_PUBLIC_LANGUAGE_RENDER_INPUT_BYTES: usize = 128 * 1024;
 /// Server-owned registry of concrete host effect adapters. It is configured
 /// out of band by the embedding host; JSON-RPC callers cannot register an
 /// adapter, choose a root, or supply a permission policy.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct CapabilityHostAdapters {
     scoped_files: Option<ScopedFileAdapter>,
+    web_fetch: Option<WebFetchAdapter>,
+}
+
+/// A host-owned HTTP(S) adapter for the `NetworkRequest` primitive.
+///
+/// The capability contract still supplies the authorized host and method. The
+/// typed input supplies a URL, and this adapter requires that URL's authority
+/// match the authorized host exactly. This keeps URL paths/query strings
+/// useful without allowing a procedure to turn a host grant into open egress.
+#[derive(Debug, Clone)]
+pub struct WebFetchAdapter {
+    client: reqwest::blocking::Client,
+    authorization_policy: PrimitivePolicy,
+    allow_runtime_hosts: bool,
+}
+
+impl WebFetchAdapter {
+    pub fn new(
+        hosts: impl IntoIterator<Item = String>,
+        bounds: ResourceBounds,
+    ) -> Result<Self, CapabilityError> {
+        Self::build(hosts, bounds, false)
+    }
+
+    /// A native Spoon capability may resolve its exact URL only at runtime.
+    /// This adapter supports that path without pre-registering each host;
+    /// the caller must still make the runtime permission decision before the
+    /// adapter is invoked. Imported capability bundles remain host-scoped.
+    pub fn new_runtime_approved(bounds: ResourceBounds) -> Result<Self, CapabilityError> {
+        Self::build(Vec::new(), bounds, true)
+    }
+
+    fn build(
+        hosts: impl IntoIterator<Item = String>,
+        bounds: ResourceBounds,
+        allow_runtime_hosts: bool,
+    ) -> Result<Self, CapabilityError> {
+        if bounds.max_bytes == 0 || bounds.max_steps == 0 || bounds.max_millis == 0 {
+            return Err(CapabilityError::Invalid(
+                "web fetch bounds must all be positive".into(),
+            ));
+        }
+        let network_hosts = hosts
+            .into_iter()
+            .map(|host| {
+                let host = host.trim().to_owned();
+                if !valid_fetch_host(&host) {
+                    return Err(CapabilityError::Invalid(format!(
+                        "web fetch host is not a portable host authority: {host}"
+                    )));
+                }
+                Ok(host)
+            })
+            .collect::<Result<std::collections::BTreeSet<_>, _>>()?;
+        if network_hosts.is_empty() && !allow_runtime_hosts {
+            return Err(CapabilityError::Invalid(
+                "web fetch requires at least one allowed host".into(),
+            ));
+        }
+        let client = reqwest::blocking::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .timeout(std::time::Duration::from_millis(bounds.max_millis))
+            .build()
+            .map_err(|error| {
+                CapabilityError::Invalid(format!("web fetch client failed: {error}"))
+            })?;
+        Ok(Self {
+            client,
+            authorization_policy: PrimitivePolicy {
+                network_hosts,
+                bounds,
+                ..PrimitivePolicy::default()
+            },
+            allow_runtime_hosts,
+        })
+    }
+
+    pub fn policy(&self) -> &PrimitivePolicy {
+        &self.authorization_policy
+    }
+
+    fn execute_network(
+        &self,
+        invocation: &AuthorizedPrimitiveInvocation,
+    ) -> Result<AdapterExecution, CapabilityError> {
+        let started = Instant::now();
+        let spoon_capability::PrimitiveRequest::Network {
+            host,
+            method,
+            body_bytes,
+        } = &invocation.request
+        else {
+            return Err(CapabilityError::AdapterViolation(
+                "web fetch adapter received a non-network request".into(),
+            ));
+        };
+        let url_text = invocation
+            .input
+            .get("url")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                CapabilityError::Invalid("web.fetch input requires a string url".into())
+            })?;
+        let url = reqwest::Url::parse(url_text).map_err(|error| {
+            CapabilityError::Invalid(format!("web.fetch url is invalid: {error}"))
+        })?;
+        if !matches!(url.scheme(), "http" | "https")
+            || url.username() != ""
+            || url.password().is_some()
+        {
+            return Err(CapabilityError::Invalid(
+                "web.fetch only accepts http(s) URLs without embedded credentials".into(),
+            ));
+        }
+        let host_name = url
+            .host_str()
+            .ok_or_else(|| CapabilityError::Invalid("web.fetch url has no host".into()))?
+            .to_owned();
+        let authority_host = if host_name.contains(':') {
+            format!("[{host_name}]")
+        } else {
+            host_name
+        };
+        let authority = match url.port() {
+            Some(port) => format!("{authority_host}:{port}"),
+            None => authority_host,
+        };
+        if authority != *host
+            || (!self.allow_runtime_hosts
+                && !self.authorization_policy.network_hosts.contains(host))
+        {
+            return Err(CapabilityError::PermissionRequired(format!(
+                "network host {authority} is outside the authorized web.fetch host"
+            )));
+        }
+        if *method != method.to_ascii_uppercase() {
+            return Err(CapabilityError::Invalid(
+                "web.fetch method must be uppercase".into(),
+            ));
+        }
+        let method = reqwest::Method::from_bytes(method.as_bytes()).map_err(|error| {
+            CapabilityError::Invalid(format!("web.fetch method is invalid: {error}"))
+        })?;
+        let mut request = self.client.request(method, url);
+        if let Some(headers) = invocation.input.get("headers") {
+            let headers = headers.as_object().ok_or_else(|| {
+                CapabilityError::Invalid("web.fetch headers must be an object".into())
+            })?;
+            for (name, value) in headers {
+                if forbidden_fetch_header(name) {
+                    return Err(CapabilityError::PermissionRequired(format!(
+                        "web.fetch header {name} is not host-authorized"
+                    )));
+                }
+                let value = value.as_str().ok_or_else(|| {
+                    CapabilityError::Invalid(format!("web.fetch header {name} must be a string"))
+                })?;
+                request = request.header(name, value);
+            }
+        }
+        if let Some(body) = invocation.input.get("body") {
+            let bytes = match body {
+                Value::String(text) => text.as_bytes().to_vec(),
+                _ => serde_json::to_vec(body).map_err(|error| {
+                    CapabilityError::Invalid(format!("web.fetch body is not serializable: {error}"))
+                })?,
+            };
+            if bytes.len() as u64 > *body_bytes
+                || bytes.len() as u64 > self.authorization_policy.bounds.max_bytes
+            {
+                return Err(CapabilityError::Invalid(
+                    "web.fetch request body exceeds its resource byte bound".into(),
+                ));
+            }
+            request = request.body(bytes);
+        }
+        let response = request.send().map_err(|error| {
+            CapabilityError::Invalid(format!("web.fetch request failed: {error}"))
+        })?;
+        let status = response.status().as_u16();
+        let mut response_headers = BTreeMap::new();
+        for (name, value) in response.headers() {
+            if let Ok(value) = value.to_str() {
+                response_headers.insert(name.to_string(), Value::String(value.to_owned()));
+            }
+        }
+        let max_bytes =
+            usize::try_from(self.authorization_policy.bounds.max_bytes).unwrap_or(usize::MAX);
+        let mut bytes = Vec::new();
+        response
+            .take((max_bytes as u64).saturating_add(1))
+            .read_to_end(&mut bytes)
+            .map_err(|error| {
+                CapabilityError::Invalid(format!("web.fetch response read failed: {error}"))
+            })?;
+        if bytes.len() > max_bytes {
+            return Err(CapabilityError::Invalid(
+                "web.fetch response exceeds its resource byte bound".into(),
+            ));
+        }
+        let body = match String::from_utf8(bytes.clone()) {
+            Ok(text) => Value::String(text),
+            Err(_) => Value::Array(bytes.into_iter().map(|byte| Value::from(byte)).collect()),
+        };
+        let output = json!({
+            "status": status,
+            "headers": response_headers,
+            "body": body,
+        });
+        let usage_bytes = serde_json::to_vec(&invocation.input)?
+            .len()
+            .saturating_add(serde_json::to_vec(&output)?.len());
+        Ok(AdapterExecution {
+            effect: invocation.effect.clone(),
+            output,
+            usage: spoon_capability::ResourceUsage {
+                bytes: u64::try_from(usage_bytes).unwrap_or(u64::MAX),
+                steps: 1,
+                millis: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+            },
+        })
+    }
+}
+
+fn valid_fetch_host(host: &str) -> bool {
+    !host.is_empty()
+        && host != "*"
+        && !host
+            .bytes()
+            .any(|byte| matches!(byte, b'/' | b'\\' | b'@' | b'?' | b'#'))
+        && host.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b':' | b'[' | b']')
+        })
+}
+
+fn forbidden_fetch_header(name: &str) -> bool {
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "authorization" | "cookie" | "proxy-authorization" | "host"
+    )
 }
 
 impl CapabilityHostAdapters {
+    pub fn with_runtime_approved_web_fetch(
+        bounds: ResourceBounds,
+    ) -> Result<Self, CapabilityError> {
+        Ok(Self {
+            scoped_files: None,
+            web_fetch: Some(WebFetchAdapter::new_runtime_approved(bounds)?),
+        })
+    }
+
     pub fn with_scoped_files(
         binding: impl Into<String>,
         root: impl AsRef<std::path::Path>,
@@ -53,27 +306,64 @@ impl CapabilityHostAdapters {
     ) -> Result<Self, CapabilityError> {
         Ok(Self {
             scoped_files: Some(ScopedFileAdapter::new(binding, root, bounds)?),
+            web_fetch: None,
+        })
+    }
+
+    pub fn with_web_fetch(
+        hosts: impl IntoIterator<Item = String>,
+        bounds: ResourceBounds,
+    ) -> Result<Self, CapabilityError> {
+        Ok(Self {
+            scoped_files: None,
+            web_fetch: Some(WebFetchAdapter::new(hosts, bounds)?),
+        })
+    }
+
+    pub fn with_scoped_files_and_web_fetch(
+        binding: impl Into<String>,
+        root: impl AsRef<std::path::Path>,
+        file_bounds: ResourceBounds,
+        hosts: impl IntoIterator<Item = String>,
+        web_bounds: ResourceBounds,
+    ) -> Result<Self, CapabilityError> {
+        Ok(Self {
+            scoped_files: Some(ScopedFileAdapter::new(binding, root, file_bounds)?),
+            web_fetch: Some(WebFetchAdapter::new(hosts, web_bounds)?),
         })
     }
 
     fn supports(&self, primitive: &NativePrimitive) -> bool {
-        matches!(
+        (matches!(
             primitive,
             NativePrimitive::FileRead | NativePrimitive::FileWrite
-        ) && self.scoped_files.is_some()
+        ) && self.scoped_files.is_some())
+            || (matches!(primitive, NativePrimitive::NetworkRequest) && self.web_fetch.is_some())
     }
 
     fn policy(&self, primitive: &NativePrimitive) -> Option<PrimitivePolicy> {
         if !self.supports(primitive) {
             return None;
         }
-        self.scoped_files
-            .as_ref()
-            .map(|adapter| adapter.policy().clone())
+        match primitive {
+            NativePrimitive::FileRead | NativePrimitive::FileWrite => self
+                .scoped_files
+                .as_ref()
+                .map(|adapter| adapter.policy().clone()),
+            NativePrimitive::NetworkRequest => self
+                .web_fetch
+                .as_ref()
+                .map(|adapter| adapter.policy().clone()),
+            _ => None,
+        }
     }
 }
 
 impl CapabilityInvocationAdapter for CapabilityHostAdapters {
+    fn policy(&self, primitive: &NativePrimitive) -> Option<PrimitivePolicy> {
+        CapabilityHostAdapters::policy(self, primitive)
+    }
+
     fn execute(
         &mut self,
         invocation: &AuthorizedPrimitiveInvocation,
@@ -88,6 +378,15 @@ impl CapabilityInvocationAdapter for CapabilityHostAdapters {
                     )
                 })?
                 .execute(invocation),
+            NativePrimitive::NetworkRequest => self
+                .web_fetch
+                .as_ref()
+                .ok_or_else(|| {
+                    CapabilityError::AdapterViolation(
+                        "no web fetch host adapter is configured".into(),
+                    )
+                })?
+                .execute_network(invocation),
             _ => Err(CapabilityError::AdapterViolation(
                 "no host adapter is configured for the requested primitive".into(),
             )),
@@ -96,25 +395,35 @@ impl CapabilityInvocationAdapter for CapabilityHostAdapters {
 }
 
 pub struct RpcServer {
-    engine: Engine,
+    pub(crate) engine: Engine,
     admin_token: Option<String>,
     feedback_source_identity: String,
     capability_adapters: CapabilityHostAdapters,
 }
 
 impl RpcServer {
-    pub fn from_engine(engine: Engine) -> Self {
+    pub fn from_engine(mut engine: Engine) -> Self {
+        let capability_adapters =
+            CapabilityHostAdapters::with_runtime_approved_web_fetch(ResourceBounds {
+                max_bytes: 1_048_576,
+                max_steps: 1,
+                max_millis: 10_000,
+            })
+            .expect("fixed native web fetch bounds are valid");
+        engine.set_capability_adapter(Box::new(capability_adapters.clone()));
         Self {
             engine,
             admin_token: None,
             feedback_source_identity: "spoon-server".into(),
-            capability_adapters: CapabilityHostAdapters::default(),
+            capability_adapters,
         }
     }
 
     /// Install an explicit server-local host adapter registry. This is the
     /// only supported way to make `capability.invoke` effectful.
     pub fn with_capability_host_adapters(mut self, adapters: CapabilityHostAdapters) -> Self {
+        self.engine
+            .set_capability_adapter(Box::new(adapters.clone()));
         self.capability_adapters = adapters;
         self
     }
@@ -346,6 +655,14 @@ impl RpcServer {
                         .discover_capability(&input)
                         .map_err(engine_error)?,
                 )
+            }
+            "capability.list" => encode(json!({
+                "imported": self.engine.list_imported_capabilities().map_err(engine_error)?,
+                "nativeBoundaries": self.native_capability_boundaries(),
+            })),
+            "capability.provisionWebFetch" => {
+                let input: ProvisionWebFetchParam = decode(params)?;
+                self.provision_web_fetch(&input.host)
             }
             "capability.import" => {
                 let input: CapabilityBundleParam = decode(params)?;
@@ -817,7 +1134,12 @@ impl RpcServer {
                 let input: ExecuteParams = decode(params)?;
                 encode(
                     self.engine
-                        .execute_procedure(input.procedure_id()?, input.inputs, input.prediction)
+                        .execute_procedure_with_capability_runtime(
+                            input.procedure_id()?,
+                            input.inputs,
+                            input.prediction,
+                            input.permission_mode,
+                        )
                         .map_err(engine_error)?,
                 )
             }
@@ -1051,6 +1373,22 @@ impl RpcServer {
                     .map_err(app_error)?;
                 encode_cycle_progress(progress)
             }
+            "cycle.resumeIntent" => {
+                let input: ResumeIntentParams = decode(params)?;
+                let progress = self
+                    .engine
+                    .resume_intent(input.cycle_id()?, input.proposal)
+                    .map_err(app_error)?;
+                encode_cycle_progress(progress)
+            }
+            "cycle.skipIntent" => {
+                let input: SkipIntentParams = decode(params)?;
+                let progress = self
+                    .engine
+                    .skip_intent_with_diagnostic(input.cycle_id()?, input.reason, input.diagnostic)
+                    .map_err(app_error)?;
+                encode_cycle_progress(progress)
+            }
             "cycle.abort" => {
                 let input: AbortCycleParams = decode(params)?;
                 let progress = self
@@ -1082,6 +1420,109 @@ impl RpcServer {
             })),
         )
     }
+
+    /// Register one concrete host-scoped `web.fetch` procedure for teaching.
+    /// This is an administrative mutation, but deliberately does not grant
+    /// network permission: the resulting procedure remains subject to the
+    /// normal ask/workspace/full-access decision at execution time.
+    fn provision_web_fetch(&self, host: &str) -> Result<Value, RpcFault> {
+        let host = host.trim();
+        if !valid_fetch_host(host) {
+            return Err(
+                RpcFault::new(-32602, "invalid web fetch host").with_data(json!({
+                    "kind": "invalid_web_fetch_host"
+                })),
+            );
+        }
+        let policy = self
+            .capability_adapters
+            .policy(&NativePrimitive::NetworkRequest)
+            .ok_or_else(capability_adapter_unavailable)?;
+        if !policy.network_hosts.contains(host) {
+            return Err(RpcFault::new(
+                -32602,
+                "web fetch host is not configured for this Spoon server",
+            )
+            .with_data(json!({
+                "kind": "web_fetch_host_not_configured",
+                "host": host,
+            })));
+        }
+        let description = InterfaceDescription {
+            source: "spoon-server:web-fetch-provisioner".into(),
+            fingerprint: format!("web-fetch:{host}:v1"),
+            operations: vec![DiscoveredOperation {
+                name: "web.fetch".into(),
+                input_schema: json!({"type": "object"}),
+                output_schema: json!({"type": "object"}),
+                host: host.into(),
+                method: "GET".into(),
+                response_fixture: json!({"status": 200, "headers": {}, "body": ""}),
+            }],
+        };
+        let bundle = self
+            .engine
+            .discover_capability(&description)
+            .map_err(engine_error)?;
+        let imported = self
+            .engine
+            .import_capability_bundle(&spoon_engine::export_bundle(&bundle).map_err(app_error)?)
+            .map_err(engine_error)?;
+        let validation_episode = self
+            .engine
+            .record_authenticated_observation(
+                "capability.fixture",
+                SpoonValue::Bool(true),
+                BTreeMap::from([("host".into(), SpoonValue::Text(host.into()))]),
+                Evaluation {
+                    tier: spoon_core::VerifiabilityTier::Hard,
+                    success: true,
+                    details: "host-scoped web.fetch fixture validated".into(),
+                    surprise: Some(0.0),
+                },
+                "spoon-server:web-fetch-provisioner",
+            )
+            .map_err(engine_error)?;
+        let revalidated = self
+            .engine
+            .revalidate_capability(
+                &imported.content_id,
+                &LocalValidation {
+                    passed: true,
+                    validation_episodes: vec![validation_episode.id.to_string()],
+                    environment_digest: format!("web-fetch:{host}:v1"),
+                },
+            )
+            .map_err(engine_error)?;
+        let procedure = bundle
+            .procedures
+            .first()
+            .ok_or_else(|| RpcFault::new(-32603, "web fetch provisioning produced no procedure"))?;
+        encode(json!({
+            "capability": revalidated,
+            "procedureId": procedure.id,
+            "permissionGranted": false,
+            "executionRequirement": "pass --permission-mode full-access or grant the declared network host"
+        }))
+    }
+
+    fn native_capability_boundaries(&self) -> Vec<Value> {
+        [
+            ("network_request", NativePrimitive::NetworkRequest),
+            ("file_read", NativePrimitive::FileRead),
+            ("file_write", NativePrimitive::FileWrite),
+            ("observe", NativePrimitive::Observe),
+            ("sandbox_execute", NativePrimitive::SandboxExecute),
+        ]
+        .into_iter()
+        .map(|(kind, primitive)| {
+            json!({
+                "kind": kind,
+                "hostAdapterConfigured": self.capability_adapters.policy(&primitive).is_some(),
+            })
+        })
+        .collect()
+    }
 }
 
 fn requires_admin(method: &str) -> bool {
@@ -1098,6 +1539,7 @@ fn requires_admin(method: &str) -> bool {
             | "procedure.delete"
             | "capability.grant"
             | "capability.revoke"
+            | "capability.provisionWebFetch"
             | "observation.recordAuthenticated"
             | "intuition.activateRepresentation"
             | "consolidation.register"
@@ -1116,6 +1558,12 @@ fn requires_admin(method: &str) -> bool {
 #[derive(Debug, Deserialize)]
 struct CapabilityBundleParam {
     bundle: Value,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ProvisionWebFetchParam {
+    host: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1334,6 +1782,11 @@ pub fn run_stdio<R: BufRead, W: Write>(
 
 fn encode_cycle_progress(progress: CycleProgress) -> Result<Value, RpcFault> {
     match progress {
+        CycleProgress::NeedIntent { cycle_id, request } => Ok(json!({
+            "status": "need_intent",
+            "cycleId": cycle_id,
+            "request": request,
+        })),
         CycleProgress::NeedTeacher { cycle_id, request } => Ok(json!({
             "status": "need_teacher",
             "cycleId": cycle_id,
@@ -1350,6 +1803,8 @@ struct CompletedCycleWire {
     cycle_id: CycleId,
     disposition: spoon_engine::CycleDisposition,
     answer: Option<SpoonValue>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    procedure_ir: Option<Value>,
     episode: spoon_core::Episode,
 }
 
@@ -1360,6 +1815,7 @@ impl From<CycleOutcome> for CompletedCycleWire {
             cycle_id: outcome.cycle_id,
             disposition: outcome.disposition,
             answer: outcome.answer,
+            procedure_ir: outcome.procedure_ir,
             episode: outcome.episode,
         }
     }
@@ -2317,6 +2773,8 @@ struct ExecuteParams {
     #[serde(default)]
     inputs: BTreeMap<String, SpoonValue>,
     prediction: Option<SpoonValue>,
+    #[serde(default)]
+    permission_mode: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -2399,6 +2857,8 @@ struct BeginCycleParams {
     budget: CycleBudgetParams,
     teacher_allowed: bool,
     #[serde(default)]
+    interpreter_allowed: bool,
+    #[serde(default)]
     session_id: Option<String>,
     #[serde(default)]
     recall_mode: RecallMode,
@@ -2419,6 +2879,7 @@ impl BeginCycleParams {
                 max_teacher_turns: self.budget.max_teacher_turns,
             },
             teacher_allowed: self.teacher_allowed,
+            interpreter_allowed: self.interpreter_allowed,
             session_id: self.session_id,
             recall_mode: self.recall_mode,
             permission_mode: self.permission_mode,
@@ -2449,6 +2910,22 @@ struct ResumeCycleParams {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ResumeIntentParams {
+    cycle_id: String,
+    proposal: IntentProposalWire,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SkipIntentParams {
+    cycle_id: String,
+    reason: String,
+    #[serde(default)]
+    diagnostic: Option<Value>,
+}
+
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AbortCycleParams {
     cycle_id: String,
@@ -2456,6 +2933,18 @@ struct AbortCycleParams {
 }
 
 impl ResumeCycleParams {
+    fn cycle_id(&self) -> Result<CycleId, RpcFault> {
+        Ok(CycleId(parse_uuid(&self.cycle_id)?))
+    }
+}
+
+impl ResumeIntentParams {
+    fn cycle_id(&self) -> Result<CycleId, RpcFault> {
+        Ok(CycleId(parse_uuid(&self.cycle_id)?))
+    }
+}
+
+impl SkipIntentParams {
     fn cycle_id(&self) -> Result<CycleId, RpcFault> {
         Ok(CycleId(parse_uuid(&self.cycle_id)?))
     }

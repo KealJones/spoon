@@ -3,6 +3,12 @@ import os from "node:os";
 import path from "node:path";
 
 import { TeacherError } from "./errors.js";
+import {
+  CODEX_FLAT_AUTHORING_INSTRUCTION,
+  CODEX_FLAT_AUTHORING_SCHEMA,
+  decodeCodexFlatAuthoring,
+  isCodexFlatAuthoringSchema,
+} from "./flat-authoring.js";
 import { buildTeacherPrompt, TEACHER_SYSTEM_PROMPT } from "./prompt.js";
 import { SourceReliabilityTracker } from "./reliability.js";
 import {
@@ -71,6 +77,7 @@ export class CodexTeacher implements Teacher {
     const outputPath = path.join(directory, "proposal.json");
     try {
       const outputSchema = lowerCodexSchema(request.desiredOutput);
+      const usesFlatAuthoring = isCodexFlatAuthoringSchema(outputSchema);
       const usesJsonEnvelope = outputSchema === CODEX_JSON_ENVELOPE_SCHEMA;
       await writeFile(schemaPath, JSON.stringify(outputSchema));
       const args = [
@@ -93,11 +100,16 @@ export class CodexTeacher implements Teacher {
         outputSchema === request.desiredOutput
           ? request
           : { ...request, desiredOutput: outputSchema };
-      const envelopeInstruction = usesJsonEnvelope
-        ? "The required outer object has proposalJson. Put the complete canonical Spoon proposal JSON as an escaped JSON string in proposalJson; include proposalKind, interpretations, lesson, procedure, answer, and abstainReason."
-        : "";
+      const promptRequest = usesFlatAuthoring
+        ? { ...providerRequest, desiredOutput: CODEX_FLAT_PROMPT_SCHEMA }
+        : providerRequest;
+      const providerInstruction = usesFlatAuthoring
+        ? CODEX_FLAT_AUTHORING_INSTRUCTION
+        : usesJsonEnvelope
+          ? "The required outer object has proposalJson. Put the complete requested JSON as an escaped JSON string in proposalJson."
+          : "";
       args.push(
-        `${this.#systemPrompt}\n\n${this.#promptBuilder(providerRequest)}\n\n${envelopeInstruction}\n\nReturn only the requested JSON object.`,
+        `${this.#systemPrompt}\n\n${this.#promptBuilder(promptRequest)}\n\n${providerInstruction}\n\nReturn only the requested JSON object.`,
       );
 
       const result = await atProviderBoundary(
@@ -108,7 +120,7 @@ export class CodexTeacher implements Teacher {
       if (result.exitCode !== 0) {
         throw new TeacherError(
           "codex",
-          `command exited with status ${result.exitCode}: ${result.stderr.trim() || "unknown error"}`,
+          `command exited with status ${result.exitCode}: ${commandFailureDetail(result.stderr)}`,
         );
       }
       const content = await atProviderBoundary(
@@ -118,7 +130,11 @@ export class CodexTeacher implements Teacher {
       );
       const parsed = parseJsonContent("codex", content);
       return makeProposal({
-        content: usesJsonEnvelope ? unwrapCodexJsonEnvelope(parsed) : parsed,
+        content: usesFlatAuthoring
+          ? decodeCodexFlatAuthoring(parsed)
+          : usesJsonEnvelope
+            ? unwrapCodexJsonEnvelope(parsed)
+            : parsed,
         provider: "codex",
         source: this.#source,
         model: this.#model,
@@ -147,13 +163,14 @@ export class CodexTeacher implements Teacher {
 
 /**
  * Codex CLI currently rejects Spoon's recursive `$defs`/`$ref` lesson
- * grammar. Keep the canonical schema for prompts and local validation, while
- * giving only that provider a non-recursive envelope: the lesson remains an
- * opaque JSON object at the CLI boundary and must still pass the canonical
- * validator before Spoon uses it.
+ * grammar. Give it a strict non-recursive node graph instead; the adapter
+ * expands that graph into canonical `pure_expr_v2` before local validation.
  */
 export function lowerCodexSchema(schema: ProposalSchema): ProposalSchema {
-  return needsCodexJsonEnvelope(schema) ? CODEX_JSON_ENVELOPE_SCHEMA : schema;
+  if (!needsCodexFlatAuthoring(schema)) return schema;
+  return isSpoonTeacherProposalSchema(schema)
+    ? CODEX_FLAT_AUTHORING_SCHEMA
+    : CODEX_JSON_ENVELOPE_SCHEMA;
 }
 
 const CODEX_JSON_ENVELOPE_SCHEMA: ProposalSchema = {
@@ -163,15 +180,36 @@ const CODEX_JSON_ENVELOPE_SCHEMA: ProposalSchema = {
   required: ["proposalJson"],
 };
 
-function needsCodexJsonEnvelope(value: unknown): boolean {
-  if (Array.isArray(value)) return value.some(needsCodexJsonEnvelope);
+const CODEX_FLAT_PROMPT_SCHEMA: ProposalSchema = {
+  type: "object",
+  description:
+    "The enforced spoon_flat_expr_v1 output schema is supplied separately through Codex structured output. Follow the flat-wire syntax card below.",
+};
+
+function isSpoonTeacherProposalSchema(schema: ProposalSchema): boolean {
+  const properties = schema.properties;
+  return (
+    properties !== undefined &&
+    [
+      "proposalKind",
+      "interpretations",
+      "lesson",
+      "procedure",
+      "answer",
+      "abstainReason",
+    ].every((key) => key in properties)
+  );
+}
+
+function needsCodexFlatAuthoring(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(needsCodexFlatAuthoring);
   if (typeof value !== "object" || value === null) return false;
   return Object.entries(value).some(
     ([key, child]) =>
       key === "$defs" ||
       key === "$ref" ||
       (key === "type" && Array.isArray(child)) ||
-      needsCodexJsonEnvelope(child),
+      needsCodexFlatAuthoring(child),
   );
 }
 
@@ -191,4 +229,11 @@ function unwrapCodexJsonEnvelope(value: unknown) {
     "codex",
     (value as { proposalJson: string }).proposalJson,
   );
+}
+
+function commandFailureDetail(stderr: string): string {
+  const detail = stderr.trim();
+  if (!detail) return "unknown error";
+  const maxChars = 4_000;
+  return detail.length > maxChars ? `…${detail.slice(-maxChars)}` : detail;
 }
