@@ -134,6 +134,13 @@ macro_rules! intrinsic_ops {
                 }
             }
 
+            /// The variant identifier, which is also the stored spelling.
+            pub fn variant_name(self) -> &'static str {
+                match self {
+                    $(IntrinsicOp::$variant => stringify!($variant),)+
+                }
+            }
+
             /// Resolves a lesson's operation name, rejecting unknown spellings.
             pub fn from_lesson_name(name: &str) -> Option<Self> {
                 match name {

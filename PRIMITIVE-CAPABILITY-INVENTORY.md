@@ -4,7 +4,14 @@ This is the living completion checklist for Spoon's executable substrate. It
 tracks what Spoon can actually execute, not names that merely appear in a type
 or plan.
 
-Snapshot: 2026-08-23
+Snapshot: 2026-08-28
+
+An operation is only real when it is declared, evaluated, nameable by a lesson,
+advertised accurately, and tested. Those five facts used to live in five
+hand-maintained places, which is how 96 operations came to be evaluable but
+unusable. They are now derived from one table and checked by the guards in
+`crates/spoon-exec/tests/intrinsic_coverage.rs`, so a row below that claims an
+operation works is backed by a test that fails if it stops working.
 
 ## Legend and boundary
 
@@ -42,6 +49,7 @@ capability adapters without changing the evaluator.
 | 2026-08-23 | Capability grants and invocation are integrated | Unit/direct API | Durable grants and injected-adapter engine tests exist; no public invocation transport or cognitive-cycle selection. Downgraded to partial. |
 | 2026-08-23 | Scoped file read/write through `capability.invoke` | Failure/adversarial tested locally | JSON-RPC reaches a real temporary-directory adapter with persistent grants, next-call revocation, malformed/bounds denial, redacted public receipts, symlink-escape rejection, and honest unsupported-primitive failure. Production deployment and cognitive-cycle selection are not evidenced. |
 | 2026-08-23 | Scoped file bridge after concurrent intrinsic work | Public/integrated/adversarial local proof | `cargo test -p spoon-server --test rpc capability_invoke` and the full Rust workspace gate pass after the intrinsic work settled. Real SDK invocation, cognitive-cycle selection, and production deployment remain missing. |
+| 2026-08-28 | This document's own "missing" rows for logarithms, trigonometry, bitwise, regex, edit distance, templates, set operations, take/drop/chunk/window, base64/hex/URL coding, hashing, predicates, conversions, and date arithmetic | Unit-executed and lesson-nameable | The rows were stale about the evaluator and accidentally right about the system. All 167 operations were evaluated, but 96 of them could not be named by a Teacher lesson. One table now generates the enum, the lesson name, the reverse lookup, and `ALL`. Tests covering the previously untested 98 operations then found real defects: math ops leaking NaN/inf, `gcd`/`numeric_to_fixed` panicking, `to_int` saturating silently, `date_from_parts` accepting February 30, URL decode treating bytes as Latin-1, `text_reverse` splitting graphemes, `text_format` rescanning substitutions, and `set_union` keeping left-side duplicates. Those are fixed. The RNG and clock still cannot be seeded or injected, so procedures that call them are not reproducible. |
 
 This log records material claim corrections. Focused evidence matrices may live
 in task scratchpads or benchmark reports; the inventory always reflects their
@@ -58,13 +66,15 @@ weakest supported conclusion.
 - [~] Arithmetic safety: integer overflow and division-by-zero are typed; the
   new numeric intrinsics reject non-finite inputs/results, while legacy mixed
   float arithmetic still needs a complete non-finite policy.
-- [~] Numeric standard operations: bounded `numeric_abs`, `numeric_sign`,
+- [x] Numeric standard operations: bounded `numeric_abs`, `numeric_sign`,
   `numeric_min`/`numeric_max`, `numeric_clamp`, floor/ceil/round/truncate,
-  checked integer power, finite float power, and strict integer
-  quotient/remainder are evaluator- and Teacher-grammar-tested. Logarithms,
-  roots, trigonometry, and exact decimal/rational operations remain missing.
+  checked integer power, finite float power, strict integer
+  quotient/remainder, logarithms, roots, trigonometry, gcd/lcm, and hypot.
+  Non-finite inputs and results are `InvalidNumber`. Exact decimal/rational
+  arithmetic is still missing.
 - [ ] Exact decimal/rational arithmetic and configurable rounding modes.
-- [ ] Bitwise integer operations and shifts.
+- [x] Bitwise integer operations and shifts. Shift distance outside 0..=63 is
+  an error. Left shift wraps the bit pattern rather than reporting overflow.
 - [x] Equality, inequality, numeric/text ordering, boolean and/or/not.
 - [ ] Explicit total/deep ordering across neutral values.
 - [x] Exact procedure calls and version-pinned replay; `CallExact` additionally
@@ -109,10 +119,16 @@ weakest supported conclusion.
   text plus `startByte`/`endByte` spans in neutral token maps; a real Rust-stdio
   SDK lesson counts held-out word tokens with Teacher OFF. It is lexical only,
   not intent inference or parsing.
-- [ ] Bounded, non-backtracking regular expressions with match/capture values.
+- [x] Bounded regular expressions with match, capture, and replace-all. An
+  invalid pattern is an error. The regex crate is backtracking, not a
+  custom non-backtracking engine, so a pathological pattern is a resource
+  cost rather than a guaranteed linear scan.
 - [ ] Glob/pattern matching with explicit syntax and limits.
-- [ ] Similarity/edit distance and phonetic transforms as bounded pure operations.
-- [ ] Format/template operation that cannot invent fields or execute code.
+- [x] Bounded Levenshtein edit distance over Unicode scalars. Phonetic
+  transforms are still missing.
+- [x] Format/template operation that substitutes named placeholders from a map
+  and does not rescan substituted values. There is no escape for a literal
+  `{name}` other than omitting that key.
 - [ ] Parsing and rendering of escaped strings.
 
 The versioned intrinsic vocabulary is available to `pure_expr_v2` lessons in
@@ -131,12 +147,20 @@ tracked in section 1.
 - [x] Strict get versus optional get distinguishes missing from present null;
   optional access converts absence only and preserves malformed/type errors.
 - [~] Immutable copy set, delete, and shallow right-biased merge execute; deep merge is missing.
-- [~] List contains and equality-count execute; bounded structural find-index now executes, while predicate find, any/all/none, and partition remain missing.
-- [~] Slice, reverse, and bounded end-exclusive range generation execute; take/drop, chunks/windows remain missing.
-- [x] Stable deterministic total-order sort executes.
-- [~] Stable unique/deduplicate executes; set union/intersection/difference are missing.
-- [~] One-level flatten and zip execute; unzip, enumerate, transpose, and group-by are missing.
-- [ ] Sum/product/min/max/average and frequency tables.
+- [x] List contains, equality-count, structural find-index, any, all, and
+  partition. Predicate find over an expression (rather than a field name)
+  is still missing.
+- [x] Slice, reverse, take, drop, chunk, window, and bounded end-exclusive
+  range. Chunk and window size 0 are errors or empty rather than panics.
+- [x] Stable deterministic total-order sort executes. Mixed int/float columns
+  sort by type rank, not numerically.
+- [x] Stable unique/deduplicate, and set union/intersection/difference/
+  subset. Union deduplicates both operands. Intersect and difference keep
+  left-operand duplicates, matching their filter-shaped descriptions.
+- [x] One-level flatten, zip, enumerate, and group-by. Unzip and transpose
+  remain missing. Group-by stringifies keys, so `2` and `"2"` collide.
+- [~] Min/max by field, with ties going first for min and last for max.
+  Sum/product/average and frequency tables are still missing.
 - [ ] Bounded cartesian product and combinatorics.
 - [ ] Deterministic map/filter/reduce over maps as key/value entries.
 
@@ -159,11 +183,17 @@ tracked in section 1.
 - [ ] JSON Patch and Merge Patch as bounded pure transforms.
 - [~] Capability schemas support a JSON-schema subset at admission/invocation.
 - [ ] Procedure-accessible schema validation with structured violations.
-- [~] Type name and bounded parse-int/parse-float/parse-bool/to-text conversions
-  execute; variadic null-only `coalesce` is now procedure-executable, while
-  richer predicates remain missing.
-- [ ] Canonical deterministic encoding and hashing exposed to procedures.
-- [ ] Base16, Base32, Base64, URL encoding, and UTF-8 encode/decode.
+- [x] Type name, predicates (`is_null` through `is_numeric`), bounded
+  parse-int/parse-float/parse-bool/to-text, `to_int`/`to_float`/`to_bool`,
+  and variadic null-only `coalesce`. Predicates are representation checks,
+  not value checks: `is_int(2.0)` is false. `to_int` refuses non-finite and
+  out-of-range floats rather than saturating.
+- [x] SHA-256 and MD5 hex digests, plus hex and binary integer rendering that
+  round-trips through a signed magnitude encoding. Canonical deterministic
+  encoding of arbitrary values is still missing.
+- [x] Base64, hex, and URL encode/decode of UTF-8 text. Base32 and a distinct
+  binary value type are still missing. URL decode rejects malformed percent
+  escapes and reassembles UTF-8 rather than Latin-1.
 - [ ] CSV/TSV parse/stringify with dialect metadata.
 - [ ] Query-string and form-data transforms.
 - [ ] YAML/TOML/XML/HTML parsing through sandboxed/acquired adapters rather than the
@@ -171,19 +201,26 @@ tracked in section 1.
 
 ## 5. Identifiers, time, units, and algorithms — pure or observed
 
-- [ ] Deterministic UUID/ULID parsing, formatting, and validation.
-- [ ] Random UUID generation through the randomness observation/effect boundary.
+- [x] Random UUID v4 generation, plus integer/float/choice/shuffle/sample.
+  None of these can be seeded, so a learned procedure that calls them cannot
+  be replayed or regression-tested. That is a real architectural gap, not
+  a missing operation.
 - [ ] URL parse/resolve/normalize and origin/host/path extraction.
 - [ ] IP/CIDR parsing and containment without performing network access.
 - [ ] MIME/media-type parsing.
-- [ ] Date, local date, time, timestamp, duration, timezone identifier values.
-- [ ] Pure date/time parsing, formatting, comparison, and duration arithmetic.
-- [~] Current Unix time can be obtained through the native `clock` observation, but it
-  is not integrated into ordinary learned procedure execution.
+- [~] Dates are unix-epoch integers, not a distinct value type. `date_from_parts`
+  rejects days the month does not have, including the Gregorian leap-year
+  cases. Arithmetic is seconds/minutes/hours/days only, no months or timezones.
+- [x] Pure date formatting, part extraction, and duration arithmetic over the
+  epoch representation. Timezone-aware values are still missing.
+- [x] `date_now` is an evaluator intrinsic over `SystemTime::now`. The clock
+  cannot be injected, with the same reproducibility cost as the unseedable
+  RNG. The native `clock` observation still exists separately.
 - [ ] Timezone database capability with version provenance.
 - [ ] Unit/quantity values, dimensional checks, and exact conversions.
-- [ ] Deterministic hash, checksum, HMAC request, signing request, and verification
-  boundaries; secret-backed operations must not expose key material.
+- [x] SHA-256 and MD5 as pure text-to-hex operations. HMAC signing lives in
+  `spoon-secret` as a local identity, not as a procedure intrinsic. Secret
+  material never becomes a Spoon value.
 - [ ] General graph traversal, shortest path, topological sort, and cycle detection
   over neutral graph-shaped values.
 - [ ] Bounded search/optimization primitives and deterministic priority queues.
@@ -246,30 +283,41 @@ tracked in section 1.
 
 ## 9. Sandboxed execution mechanism — native effect
 
-- [~] Sandbox profile permission, step/byte/time bounds, redacted receipts, injected host
-  adapter boundary, and a deterministic fixture executor exist.
-- [ ] A real operating-system sandbox runner.
-- [ ] Exact executable identity, version, digest, and allowed argument schema.
-- [ ] Declared stdin, stdout, stderr, exit status, and structured output contract.
-- [ ] CPU, memory, process-count, open-file, disk, output, and wall-time limits.
-- [ ] Explicit filesystem mount/read/write policy.
-- [ ] Explicit network/offline policy independent from the network primitive grant.
-- [ ] Minimal allowlisted environment and secret-reference injection.
-- [ ] Working-directory and input/output artifact declarations.
-- [ ] Signal/cancellation/timeout handling with child-process cleanup.
+- [x] A real operating-system sandbox runner in `spoon-sandbox`. Digest-pinned
+  executable, empty environment plus an allowlist, working directory confined
+  to a configured root, byte-bounded output, and a wall-clock bound that kills
+  the process group. macOS confinement uses `sandbox-exec` and denies network.
+- [x] Exact executable identity via content digest, and an allowed argument schema.
+- [x] Stdin, stdout, stderr, and exit status captured in the adapter receipt.
+- [~] Wall-time and output-byte limits are enforced. CPU, memory, process-count,
+  open-file, and disk quotas are not.
+- [ ] Explicit filesystem mount/read/write policy beyond the working-directory root.
+- [x] Network/offline policy independent from the network primitive: the default
+  profile denies network. Proven by a test that the child cannot connect.
+- [x] Minimal allowlisted environment. Secret-reference injection is not wired.
+- [x] Working-directory confinement. Input/output artifact declarations are not.
+- [x] Timeout kills the child and its process group rather than just the leader.
 - [ ] Container/VM/WASI adapter support behind the same invocation contract.
-- [ ] Reproducible fixture runner and platform/version compatibility fingerprints.
+- [~] Tests use real children, not a fixture executor. Platform compatibility
+  fingerprints are not recorded.
 - [ ] Determinism/replay classification based on declared inputs and captured artifacts.
 
 ## 10. Secrets, identity, and trust — native effect/policy
 
-- [ ] Opaque local secret references as a distinct value type.
-- [ ] Secret metadata lookup without secret-value disclosure.
-- [ ] Just-in-time secret resolution only inside an authorized adapter.
-- [ ] Automatic redaction from prompts, logs, episodes, traces, errors, bundles, and receipts.
-- [ ] Secret scope by capability/procedure/host/path/purpose and expiry.
-- [ ] Rotation/revocation and stale-reference failure behavior.
-- [ ] Signing and verification operations where private key material never enters Spoon values.
+- [x] Opaque `SecretRef` in `spoon-secret`. It cannot carry a value, and
+  `Debug`/`Display`/serde cannot leak one. It is not yet a Spoon `Value`
+  variant, so a procedure cannot name a secret.
+- [x] Metadata lookup (namespace, name, version, grant status) without
+  disclosing the value.
+- [x] Just-in-time resolution through a `SecretResolver`, in-memory or
+  environment-allowlist. Out-of-scope use never touches material. Not yet
+  called from a host adapter in the invoke path.
+- [x] A `Redactor` replaces resolved values in strings, nested JSON, and URL
+  query parameters. It is not yet installed on prompts, episodes, or receipts.
+- [x] Grants carry primitive/target/purpose scope, mandatory expiry, rotation
+  that supersedes a version, and revocation. Stale versions fail.
+- [x] HMAC-SHA-256 local signing identity. Key material never becomes a Spoon
+  value. Not a publisher identity: no non-repudiation, no public verifiability.
 - [ ] Local user/agent/service identity assertions and authentication receipts.
 - [x] Imported capability bundles do not transfer grants automatically.
 - [x] Mandatory local denials override permission modes.

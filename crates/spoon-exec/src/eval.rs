@@ -1555,54 +1555,39 @@ impl<I: CapabilityInvoker> Evaluator<I> {
                 Ok(Value::Float(std::f64::consts::E))
             }
             IntrinsicOp::MathSqrt => {
-                let n = numeric_to_f64(only_arg(args))?;
-                Ok(Value::Float(n.sqrt()))
+                math_float_unary(IntrinsicOp::MathSqrt, only_arg(args), f64::sqrt)
             }
-            IntrinsicOp::MathLog => {
-                let n = numeric_to_f64(only_arg(args))?;
-                Ok(Value::Float(n.ln()))
-            }
+            IntrinsicOp::MathLog => math_float_unary(IntrinsicOp::MathLog, only_arg(args), f64::ln),
             IntrinsicOp::MathLog10 => {
-                let n = numeric_to_f64(only_arg(args))?;
-                Ok(Value::Float(n.log10()))
+                math_float_unary(IntrinsicOp::MathLog10, only_arg(args), f64::log10)
             }
             IntrinsicOp::MathLog2 => {
-                let n = numeric_to_f64(only_arg(args))?;
-                Ok(Value::Float(n.log2()))
+                math_float_unary(IntrinsicOp::MathLog2, only_arg(args), f64::log2)
             }
             IntrinsicOp::MathExp => {
-                let n = numeric_to_f64(only_arg(args))?;
-                Ok(Value::Float(n.exp()))
+                math_float_unary(IntrinsicOp::MathExp, only_arg(args), f64::exp)
             }
             IntrinsicOp::MathSin => {
-                let n = numeric_to_f64(only_arg(args))?;
-                Ok(Value::Float(n.sin()))
+                math_float_unary(IntrinsicOp::MathSin, only_arg(args), f64::sin)
             }
             IntrinsicOp::MathCos => {
-                let n = numeric_to_f64(only_arg(args))?;
-                Ok(Value::Float(n.cos()))
+                math_float_unary(IntrinsicOp::MathCos, only_arg(args), f64::cos)
             }
             IntrinsicOp::MathTan => {
-                let n = numeric_to_f64(only_arg(args))?;
-                Ok(Value::Float(n.tan()))
+                math_float_unary(IntrinsicOp::MathTan, only_arg(args), f64::tan)
             }
             IntrinsicOp::MathAsin => {
-                let n = numeric_to_f64(only_arg(args))?;
-                Ok(Value::Float(n.asin()))
+                math_float_unary(IntrinsicOp::MathAsin, only_arg(args), f64::asin)
             }
             IntrinsicOp::MathAcos => {
-                let n = numeric_to_f64(only_arg(args))?;
-                Ok(Value::Float(n.acos()))
+                math_float_unary(IntrinsicOp::MathAcos, only_arg(args), f64::acos)
             }
             IntrinsicOp::MathAtan => {
-                let n = numeric_to_f64(only_arg(args))?;
-                Ok(Value::Float(n.atan()))
+                math_float_unary(IntrinsicOp::MathAtan, only_arg(args), f64::atan)
             }
             IntrinsicOp::MathAtan2 => {
                 let [y, x] = two_args(args);
-                let y = numeric_to_f64(y)?;
-                let x = numeric_to_f64(x)?;
-                Ok(Value::Float(y.atan2(x)))
+                math_float_binary(IntrinsicOp::MathAtan2, y, x, f64::atan2)
             }
             IntrinsicOp::MathIsNan => {
                 let v = only_arg(args);
@@ -1620,9 +1605,7 @@ impl<I: CapabilityInvoker> Evaluator<I> {
             }
             IntrinsicOp::MathGcd => {
                 let [a, b] = two_args(args);
-                let a = int_arg(a)?;
-                let b = int_arg(b)?;
-                Ok(Value::Int(gcd(a, b)))
+                Ok(Value::Int(gcd(int_arg(a)?, int_arg(b)?)?))
             }
             IntrinsicOp::MathLcm => {
                 let [a, b] = two_args(args);
@@ -1631,20 +1614,22 @@ impl<I: CapabilityInvoker> Evaluator<I> {
                 if a == 0 && b == 0 {
                     return Ok(Value::Int(0));
                 }
-                let g = gcd(a, b);
-                let result =
+                let g = gcd(a, b)?;
+                let product =
                     (a / g)
                         .checked_mul(b)
                         .ok_or_else(|| SpoonError::ArithmeticOverflow {
                             operation: "math_lcm".into(),
                         })?;
-                Ok(Value::Int(result.abs()))
+                product.checked_abs().map(Value::Int).ok_or_else(|| {
+                    SpoonError::ArithmeticOverflow {
+                        operation: "math_lcm".into(),
+                    }
+                })
             }
             IntrinsicOp::MathHypot => {
                 let [a, b] = two_args(args);
-                let a = numeric_to_f64(a)?;
-                let b = numeric_to_f64(b)?;
-                Ok(Value::Float(a.hypot(b)))
+                math_float_binary(IntrinsicOp::MathHypot, a, b, f64::hypot)
             }
 
             // -- Text formatting --
@@ -1724,19 +1709,7 @@ impl<I: CapabilityInvoker> Evaluator<I> {
                 let values = map_arg(values)?;
                 self.charge_text(&template)?;
                 self.charge_items(values.len())?;
-                let mut output = template.clone();
-                for (key, val) in &values {
-                    let replacement = match val {
-                        Value::Text(s) => s.clone(),
-                        Value::Int(n) => n.to_string(),
-                        Value::Float(f) => f.to_string(),
-                        Value::Bool(b) => b.to_string(),
-                        Value::Null => "null".to_string(),
-                        _ => format!("{val:?}"),
-                    };
-                    let placeholder = format!("{{{key}}}");
-                    output = output.replace(&placeholder, &replacement);
-                }
+                let output = format_template(&template, &values);
                 self.ensure_text("text_format output bytes", output.len())?;
                 Ok(Value::Text(output))
             }
@@ -1790,28 +1763,9 @@ impl<I: CapabilityInvoker> Evaluator<I> {
             IntrinsicOp::TextUrlDecode => {
                 let text = text_arg(only_arg(args))?;
                 self.charge_text(&text)?;
-                let mut output = String::new();
-                let bytes = text.as_bytes();
-                let mut i = 0;
-                while i < bytes.len() {
-                    if bytes[i] == b'%' && i + 2 < bytes.len() {
-                        let hi = hex_digit(bytes[i + 1]);
-                        let lo = hex_digit(bytes[i + 2]);
-                        if let (Some(h), Some(l)) = (hi, lo) {
-                            output.push((h << 4 | l) as char);
-                            i += 3;
-                            continue;
-                        }
-                    }
-                    if bytes[i] == b'+' {
-                        output.push(' ');
-                    } else {
-                        output.push(bytes[i] as char);
-                    }
-                    i += 1;
-                }
-                self.ensure_text("text_url_decode output bytes", output.len())?;
-                Ok(Value::Text(output))
+                let decoded = url_decode(&text)?;
+                self.ensure_text("text_url_decode output bytes", decoded.len())?;
+                Ok(Value::Text(decoded))
             }
             IntrinsicOp::TextHexEncode => {
                 let text = text_arg(only_arg(args))?;
@@ -1833,7 +1787,7 @@ impl<I: CapabilityInvoker> Evaluator<I> {
             IntrinsicOp::TextReverse => {
                 let text = text_arg(only_arg(args))?;
                 self.charge_text(&text)?;
-                let reversed: String = text.chars().rev().collect();
+                let reversed: String = text.graphemes(true).rev().collect();
                 Ok(Value::Text(reversed))
             }
             IntrinsicOp::TextCharCode => {
@@ -1892,8 +1846,8 @@ impl<I: CapabilityInvoker> Evaluator<I> {
                 let b = list_arg(b)?;
                 self.charge_items(a.len())?;
                 self.charge_items(b.len())?;
-                let mut result = a;
-                for item in b {
+                let mut result = Vec::new();
+                for item in a.into_iter().chain(b) {
                     if !result.contains(&item) {
                         self.ensure_items("set_union output items", result.len() + 1)?;
                         result.push(item);
@@ -2186,7 +2140,17 @@ impl<I: CapabilityInvoker> Evaluator<I> {
                 let v = only_arg(args);
                 match v {
                     Value::Int(n) => Ok(Value::Int(n)),
-                    Value::Float(f) => Ok(Value::Int(f as i64)),
+                    Value::Float(f) => {
+                        if !f.is_finite() {
+                            return Err(invalid_number("to_int", "value must be finite"));
+                        }
+                        if !(i64::MIN as f64..=i64::MAX as f64).contains(&f) {
+                            return Err(SpoonError::ArithmeticOverflow {
+                                operation: "to_int".into(),
+                            });
+                        }
+                        Ok(Value::Int(f as i64))
+                    }
                     Value::Text(s) => s
                         .trim()
                         .parse::<i64>()
@@ -2199,13 +2163,21 @@ impl<I: CapabilityInvoker> Evaluator<I> {
             IntrinsicOp::ToFloat => {
                 let v = only_arg(args);
                 match v {
-                    Value::Float(f) => Ok(Value::Float(f)),
+                    Value::Float(f) => {
+                        if f.is_finite() {
+                            Ok(Value::Float(f))
+                        } else {
+                            Err(invalid_number("to_float", "value must be finite"))
+                        }
+                    }
                     Value::Int(n) => Ok(Value::Float(n as f64)),
                     Value::Text(s) => s
                         .trim()
                         .parse::<f64>()
+                        .ok()
+                        .filter(|n| n.is_finite())
                         .map(Value::Float)
-                        .map_err(|_| SpoonError::Other(format!("to_float: cannot parse '{s}'"))),
+                        .ok_or_else(|| SpoonError::Other(format!("to_float: cannot parse '{s}'"))),
                     Value::Bool(b) => Ok(Value::Float(if b { 1.0 } else { 0.0 })),
                     other => Err(SpoonError::type_error("int, float, text, or bool", &other)),
                 }
@@ -2277,14 +2249,23 @@ impl<I: CapabilityInvoker> Evaluator<I> {
             // -- Numeric formatting --
             IntrinsicOp::NumericToFixed => {
                 let [n, decimals] = two_args(args);
-                let f = numeric_to_f64(n)?;
+                let f = finite_numeric_float(&n, "numeric_to_fixed")?;
                 let decimals = nonnegative_usize(int_arg(decimals)?, "numeric_to_fixed decimals")?;
+                // `format!` stores precision in a u16, so any count above that
+                // panics the process instead of failing the procedure.
+                if decimals > u16::MAX as usize || decimals > MAX_INTRINSIC_TEXT_BYTES {
+                    return Err(SpoonError::IntrinsicLimitExceeded {
+                        operation: "numeric_to_fixed".into(),
+                        limit: MAX_INTRINSIC_TEXT_BYTES,
+                    });
+                }
                 let formatted = format!("{f:.prec$}", prec = decimals);
+                self.ensure_text("numeric_to_fixed output bytes", formatted.len())?;
                 Ok(Value::Text(formatted))
             }
             IntrinsicOp::NumericToHex => {
                 let n = int_arg(only_arg(args))?;
-                Ok(Value::Text(format!("{n:x}")))
+                Ok(Value::Text(signed_radix(n, 16)))
             }
             IntrinsicOp::NumericFromHex => {
                 let text = text_arg(only_arg(args))?;
@@ -2298,7 +2279,7 @@ impl<I: CapabilityInvoker> Evaluator<I> {
             }
             IntrinsicOp::NumericToBinary => {
                 let n = int_arg(only_arg(args))?;
-                Ok(Value::Text(format!("{n:b}")))
+                Ok(Value::Text(signed_radix(n, 2)))
             }
             IntrinsicOp::NumericFromBinary => {
                 let text = text_arg(only_arg(args))?;
@@ -2806,11 +2787,54 @@ fn map_arg(value: Value) -> Result<std::collections::BTreeMap<String, Value>, Sp
     }
 }
 
-fn numeric_to_f64(value: Value) -> Result<f64, SpoonError> {
-    match value {
-        Value::Int(n) => Ok(n as f64),
-        Value::Float(f) => Ok(f),
-        other => Err(SpoonError::type_error("numeric", &other)),
+fn math_float_unary(
+    op: IntrinsicOp,
+    value: Value,
+    compute: impl FnOnce(f64) -> f64,
+) -> Result<Value, SpoonError> {
+    let operation = intrinsic_name(op);
+    let number = finite_numeric_float(&value, operation)?;
+    let result = compute(number);
+    if result.is_finite() {
+        Ok(Value::Float(result))
+    } else {
+        Err(invalid_number(operation, "result must be finite"))
+    }
+}
+
+fn math_float_binary(
+    op: IntrinsicOp,
+    left: Value,
+    right: Value,
+    compute: impl FnOnce(f64, f64) -> f64,
+) -> Result<Value, SpoonError> {
+    let operation = intrinsic_name(op);
+    let left = finite_numeric_float(&left, operation)?;
+    let right = finite_numeric_float(&right, operation)?;
+    let result = compute(left, right);
+    if result.is_finite() {
+        Ok(Value::Float(result))
+    } else {
+        Err(invalid_number(operation, "result must be finite"))
+    }
+}
+
+fn signed_radix(n: i64, radix: u32) -> String {
+    // `{n:x}` / `{n:b}` on a signed integer emit the two's-complement bit
+    // pattern with no sign, which `from_str_radix` then refuses as too large.
+    // Writing the sign explicitly makes encode then decode the identity.
+    if n < 0 {
+        format!("-{}", format_radix(n.unsigned_abs(), radix))
+    } else {
+        format_radix(n as u64, radix)
+    }
+}
+
+fn format_radix(n: u64, radix: u32) -> String {
+    match radix {
+        16 => format!("{n:x}"),
+        2 => format!("{n:b}"),
+        _ => unreachable!("signed_radix only writes hex and binary"),
     }
 }
 
@@ -2826,15 +2850,18 @@ fn is_truthy(value: &Value) -> bool {
     }
 }
 
-fn gcd(mut a: i64, mut b: i64) -> i64 {
-    a = a.abs();
-    b = b.abs();
+fn gcd(a: i64, b: i64) -> Result<i64, SpoonError> {
+    let overflow = || SpoonError::ArithmeticOverflow {
+        operation: "math_gcd".into(),
+    };
+    let mut a = a.checked_abs().ok_or_else(overflow)?;
+    let mut b = b.checked_abs().ok_or_else(overflow)?;
     while b != 0 {
         let t = b;
         b = a % b;
         a = t;
     }
-    a
+    Ok(a)
 }
 
 fn hex_digit(byte: u8) -> Option<u8> {
@@ -2843,6 +2870,79 @@ fn hex_digit(byte: u8) -> Option<u8> {
         b'a'..=b'f' => Some(byte - b'a' + 10),
         b'A'..=b'F' => Some(byte - b'A' + 10),
         _ => None,
+    }
+}
+
+fn url_decode(text: &str) -> Result<String, SpoonError> {
+    let bytes = text.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'%' => {
+                if i + 2 >= bytes.len() {
+                    return Err(SpoonError::Other(
+                        "text_url_decode: truncated percent escape".into(),
+                    ));
+                }
+                let (Some(hi), Some(lo)) = (hex_digit(bytes[i + 1]), hex_digit(bytes[i + 2]))
+                else {
+                    return Err(SpoonError::Other(
+                        "text_url_decode: malformed percent escape".into(),
+                    ));
+                };
+                decoded.push((hi << 4) | lo);
+                i += 3;
+            }
+            b'+' => {
+                decoded.push(b' ');
+                i += 1;
+            }
+            byte => {
+                decoded.push(byte);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8(decoded)
+        .map_err(|error| SpoonError::Other(format!("text_url_decode: {error}")))
+}
+
+fn format_template(template: &str, values: &std::collections::BTreeMap<String, Value>) -> String {
+    let mut output = String::new();
+    let mut rest = template;
+    while let Some(open) = rest.find('{') {
+        output.push_str(&rest[..open]);
+        let after = &rest[open + 1..];
+        match after.find('}') {
+            Some(close) => {
+                let key = &after[..close];
+                if let Some(value) = values.get(key) {
+                    output.push_str(&format_placeholder(value));
+                    rest = &after[close + 1..];
+                } else {
+                    output.push('{');
+                    rest = after;
+                }
+            }
+            None => {
+                output.push_str(&rest[open..]);
+                rest = "";
+            }
+        }
+    }
+    output.push_str(rest);
+    output
+}
+
+fn format_placeholder(value: &Value) -> String {
+    match value {
+        Value::Text(s) => s.clone(),
+        Value::Int(n) => n.to_string(),
+        Value::Float(f) => f.to_string(),
+        Value::Bool(b) => b.to_string(),
+        Value::Null => "null".to_string(),
+        other => format!("{other:?}"),
     }
 }
 
@@ -2895,7 +2995,14 @@ fn levenshtein(a: &str, b: &str) -> usize {
 }
 
 fn date_from_parts(year: i64, month: i64, day: i64) -> Result<i64, SpoonError> {
-    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+    let days_in_month = match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if is_gregorian_leap_year(year) => 29,
+        2 => 28,
+        _ => 0,
+    };
+    if days_in_month == 0 || day < 1 || day > days_in_month {
         return Err(SpoonError::Other(
             "date_from_parts: invalid month or day".into(),
         ));
@@ -2905,6 +3012,10 @@ fn date_from_parts(year: i64, month: i64, day: i64) -> Result<i64, SpoonError> {
     let m = if month <= 2 { month + 9 } else { month - 3 };
     let days = 365 * y + y / 4 - y / 100 + y / 400 + (m * 306 + 5) / 10 + (day - 1) - 719468;
     Ok(days * 86400)
+}
+
+fn is_gregorian_leap_year(year: i64) -> bool {
+    year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
 }
 
 fn date_get_part(ts: i64, part: &str) -> Result<i64, SpoonError> {
