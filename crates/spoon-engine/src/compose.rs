@@ -94,10 +94,7 @@ fn find_mentioned_procedures<'a>(
 /// - "X and then Y" / "X then Y" / "X followed by Y" - X before Y
 /// - "Y after X" - X before Y
 /// - Default: left-to-right order of first mention
-fn sequence_mentions<'a>(
-    situation: &str,
-    mentions: &[ProcedureMention<'a>],
-) -> Vec<&'a Procedure> {
+fn sequence_mentions<'a>(situation: &str, mentions: &[ProcedureMention<'a>]) -> Vec<&'a Procedure> {
     if mentions.len() != 2 {
         return mentions.iter().map(|m| m.procedure).collect();
     }
@@ -169,7 +166,11 @@ fn build_chain(procedures: &[&Procedure], literals: &[Value]) -> Option<Composit
 
     // Build the body: Let-chain of CallExact nodes
     let first_args: Vec<Expr> = if first.params.is_empty() {
-        literals.iter().take(1).map(|v| Expr::Literal(v.clone())).collect()
+        literals
+            .iter()
+            .take(1)
+            .map(|v| Expr::Literal(v.clone()))
+            .collect()
     } else {
         first
             .params
@@ -324,8 +325,14 @@ mod tests {
         let snip = make_proc("snip", &["x"]);
 
         let mentions = vec![
-            ProcedureMention { procedure: &glorp, position: 0 },
-            ProcedureMention { procedure: &snip, position: 10 },
+            ProcedureMention {
+                procedure: &glorp,
+                position: 0,
+            },
+            ProcedureMention {
+                procedure: &snip,
+                position: 10,
+            },
         ];
 
         let ordered = sequence_mentions("glorp 7 and snip it", &mentions);
@@ -339,8 +346,14 @@ mod tests {
         let snip = make_proc("snip", &["x"]);
 
         let mentions = vec![
-            ProcedureMention { procedure: &snip, position: 0 },
-            ProcedureMention { procedure: &glorp, position: 15 },
+            ProcedureMention {
+                procedure: &snip,
+                position: 0,
+            },
+            ProcedureMention {
+                procedure: &glorp,
+                position: 15,
+            },
         ];
 
         let ordered = sequence_mentions("snip the result after glorp on 7", &mentions);
@@ -366,7 +379,11 @@ mod tests {
             Expr::Let { name, value, body } => {
                 assert_eq!(name, "step_0");
                 match value.as_ref() {
-                    Expr::CallExact { procedure, version, args } => {
+                    Expr::CallExact {
+                        procedure,
+                        version,
+                        args,
+                    } => {
                         assert_eq!(*procedure, glorp.id);
                         assert_eq!(*version, 1);
                         assert_eq!(args.len(), 1);
@@ -375,7 +392,11 @@ mod tests {
                     other => panic!("expected CallExact, got {other:?}"),
                 }
                 match body.as_ref() {
-                    Expr::CallExact { procedure, version, args } => {
+                    Expr::CallExact {
+                        procedure,
+                        version,
+                        args,
+                    } => {
                         assert_eq!(*procedure, snip.id);
                         assert_eq!(*version, 1);
                         assert_eq!(args.len(), 1);
@@ -435,11 +456,14 @@ mod tests {
         };
 
         let procs: Vec<&Procedure> = vec![&glorp, &snip];
-        let chain: Vec<ChainedProcedure> = procs.iter().map(|p| ChainedProcedure {
-            id: p.id,
-            name: p.name.clone(),
-            version: p.version,
-        }).collect();
+        let chain: Vec<ChainedProcedure> = procs
+            .iter()
+            .map(|p| ChainedProcedure {
+                id: p.id,
+                name: p.name.clone(),
+                version: p.version,
+            })
+            .collect();
 
         let contract = synthesize_contract(&chain, &procs);
         assert_eq!(contract.requires[0].description, "x must be numeric");

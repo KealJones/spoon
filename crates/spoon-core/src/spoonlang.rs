@@ -1,6 +1,6 @@
 //! Spoonlang: a small infix surface language that compiles to `pure_expr_v2` JSON.
 
-use serde_json::{json, Value as JsonValue};
+use serde_json::{Value as JsonValue, json};
 use thiserror::Error;
 
 pub const MAX_SPOONLANG_BYTES: usize = 64 * 1024;
@@ -456,8 +456,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_literal_value(&mut self) -> Result<JsonValue, SpoonlangError> {
-        expr_to_literal(&self.parse_expression(0)?)
-            .map_err(|message| self.error(message))
+        expr_to_literal(&self.parse_expression(0)?).map_err(|message| self.error(message))
     }
 
     fn parse_expression(&mut self, min_bp: u8) -> Result<JsonValue, SpoonlangError> {
@@ -1082,18 +1081,24 @@ fn lex_string(source: &str, start: usize) -> Result<(String, usize), SpoonlangEr
     let mut i = start + 1;
     let mut value = String::new();
     while i < source.len() {
-        let ch = source[i..].chars().next().ok_or_else(|| SpoonlangError::Parse {
-            offset: start,
-            message: "unterminated string".into(),
-        })?;
+        let ch = source[i..]
+            .chars()
+            .next()
+            .ok_or_else(|| SpoonlangError::Parse {
+                offset: start,
+                message: "unterminated string".into(),
+            })?;
         match ch {
             '"' => return Ok((value, i + ch.len_utf8())),
             '\\' => {
                 i += ch.len_utf8();
-                let escaped = source[i..].chars().next().ok_or_else(|| SpoonlangError::Parse {
-                    offset: start,
-                    message: "unterminated string escape".into(),
-                })?;
+                let escaped = source[i..]
+                    .chars()
+                    .next()
+                    .ok_or_else(|| SpoonlangError::Parse {
+                        offset: start,
+                        message: "unterminated string escape".into(),
+                    })?;
                 match escaped {
                     'n' => value.push('\n'),
                     't' => value.push('\t'),

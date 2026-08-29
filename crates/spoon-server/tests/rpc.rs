@@ -781,18 +781,8 @@ fn complete_cycle(server: &mut RpcServer, id: u64, situation: &str, session_id: 
 #[test]
 fn episode_list_filters_by_session() {
     let mut server = test_server();
-    let alpha = call(
-        &mut server,
-        800,
-        "session.create",
-        json!({"name": "alpha"}),
-    );
-    let beta = call(
-        &mut server,
-        801,
-        "session.create",
-        json!({"name": "beta"}),
-    );
+    let alpha = call(&mut server, 800, "session.create", json!({"name": "alpha"}));
+    let beta = call(&mut server, 801, "session.create", json!({"name": "beta"}));
     let alpha_id = alpha["id"].as_str().unwrap();
     let beta_id = beta["id"].as_str().unwrap();
 

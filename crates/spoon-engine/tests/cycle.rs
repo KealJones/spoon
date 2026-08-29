@@ -1681,10 +1681,7 @@ fn invalid_spoonlang_source_retries_when_teacher_budget_remains() {
         panic!("invalid spoonlang with remaining budget should retry, got {retry:?}");
     };
     let question = request.specific_question.unwrap_or_default();
-    assert!(
-        question.contains("not valid spoonlang"),
-        "{question}"
-    );
+    assert!(question.contains("not valid spoonlang"), "{question}");
 }
 
 #[test]
@@ -2930,10 +2927,7 @@ fn composition_chains_two_known_procedures_teacher_off() {
 
     assert_eq!(outcome.disposition, CycleDisposition::Provisional);
     assert_eq!(outcome.answer, Some(Value::Int(6)));
-    assert_eq!(
-        outcome.episode.cost.rung_reached,
-        EscalationRung::Compose,
-    );
+    assert_eq!(outcome.episode.cost.rung_reached, EscalationRung::Compose,);
     assert!(
         outcome
             .episode

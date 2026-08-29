@@ -1,5 +1,5 @@
 use serde_json::{Value as JsonValue, json};
-use spoon_core::spoonlang::{parse_expr, parse_proposal, SpoonlangKind};
+use spoon_core::spoonlang::{SpoonlangKind, parse_expr, parse_proposal};
 
 fn expr(src: &str) -> JsonValue {
     parse_expr(src).unwrap_or_else(|error| panic!("{src:?}: {error}"))
@@ -116,7 +116,9 @@ example percent_of(50, 100) => 50
 
     assert_eq!(parsed.kind, SpoonlangKind::ReusableLesson);
     assert_eq!(parsed.answer, Some(json!(50)));
-    let lesson = parsed.lesson.expect("reusable lesson must include lesson JSON");
+    let lesson = parsed
+        .lesson
+        .expect("reusable lesson must include lesson JSON");
     assert_eq!(lesson["primitiveSet"], "pure_expr_v2");
     assert_eq!(lesson["concepts"][0]["key"], "percent");
     assert_eq!(lesson["concepts"][0]["mutability"], "defeasible_general");

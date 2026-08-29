@@ -1592,9 +1592,7 @@ impl<I: CapabilityInvoker> Evaluator<I> {
                 let low = int_arg(low)?;
                 let high = int_arg(high)?;
                 if low > high {
-                    return Err(SpoonError::Other(
-                        "random_int: low must be <= high".into(),
-                    ));
+                    return Err(SpoonError::Other("random_int: low must be <= high".into()));
                 }
                 let val = rand::rng().random_range(low..=high);
                 Ok(Value::Int(val))
@@ -1687,11 +1685,11 @@ impl<I: CapabilityInvoker> Evaluator<I> {
                         operation: "date_add".into(),
                     }
                 })?;
-                let result = ts.checked_add(delta).ok_or_else(|| {
-                    SpoonError::ArithmeticOverflow {
-                        operation: "date_add".into(),
-                    }
-                })?;
+                let result =
+                    ts.checked_add(delta)
+                        .ok_or_else(|| SpoonError::ArithmeticOverflow {
+                            operation: "date_add".into(),
+                        })?;
                 Ok(Value::Int(result))
             }
             IntrinsicOp::DateDiff => {
@@ -1699,11 +1697,11 @@ impl<I: CapabilityInvoker> Evaluator<I> {
                 let t1 = int_arg(t1)?;
                 let t2 = int_arg(t2)?;
                 let unit = text_arg(unit)?;
-                let diff_secs = t2.checked_sub(t1).ok_or_else(|| {
-                    SpoonError::ArithmeticOverflow {
-                        operation: "date_diff".into(),
-                    }
-                })?;
+                let diff_secs =
+                    t2.checked_sub(t1)
+                        .ok_or_else(|| SpoonError::ArithmeticOverflow {
+                            operation: "date_diff".into(),
+                        })?;
                 let divisor = match unit.as_str() {
                     "seconds" => 1i64,
                     "minutes" => 60,
@@ -1814,11 +1812,12 @@ impl<I: CapabilityInvoker> Evaluator<I> {
                     return Ok(Value::Int(0));
                 }
                 let g = gcd(a, b);
-                let result = (a / g).checked_mul(b).ok_or_else(|| {
-                    SpoonError::ArithmeticOverflow {
-                        operation: "math_lcm".into(),
-                    }
-                })?;
+                let result =
+                    (a / g)
+                        .checked_mul(b)
+                        .ok_or_else(|| SpoonError::ArithmeticOverflow {
+                            operation: "math_lcm".into(),
+                        })?;
                 Ok(Value::Int(result.abs()))
             }
             IntrinsicOp::MathHypot => {
@@ -1940,11 +1939,11 @@ impl<I: CapabilityInvoker> Evaluator<I> {
                 self.charge_text(&text)?;
                 self.charge_text(&pattern)?;
                 let compiled = regex::Regex::new(&pattern).map_err(|e| {
-                    SpoonError::Other(format!(
-                        "text_regex_replace_all: invalid pattern: {e}"
-                    ))
+                    SpoonError::Other(format!("text_regex_replace_all: invalid pattern: {e}"))
                 })?;
-                let output = compiled.replace_all(&text, replacement.as_str()).into_owned();
+                let output = compiled
+                    .replace_all(&text, replacement.as_str())
+                    .into_owned();
                 self.ensure_text("text_regex_replace_all output bytes", output.len())?;
                 Ok(Value::Text(output))
             }
@@ -2004,12 +2003,10 @@ impl<I: CapabilityInvoker> Evaluator<I> {
             IntrinsicOp::TextHexDecode => {
                 let text = text_arg(only_arg(args))?;
                 self.charge_text(&text)?;
-                let bytes = hex_decode(&text).map_err(|e| {
-                    SpoonError::Other(format!("text_hex_decode: {e}"))
-                })?;
-                let decoded = String::from_utf8(bytes).map_err(|e| {
-                    SpoonError::Other(format!("text_hex_decode: {e}"))
-                })?;
+                let bytes = hex_decode(&text)
+                    .map_err(|e| SpoonError::Other(format!("text_hex_decode: {e}")))?;
+                let decoded = String::from_utf8(bytes)
+                    .map_err(|e| SpoonError::Other(format!("text_hex_decode: {e}")))?;
                 self.ensure_text("text_hex_decode output bytes", decoded.len())?;
                 Ok(Value::Text(decoded))
             }
@@ -2034,9 +2031,7 @@ impl<I: CapabilityInvoker> Evaluator<I> {
                     .ok()
                     .and_then(char::from_u32)
                     .ok_or_else(|| {
-                        SpoonError::Other(format!(
-                            "text_from_char_code: invalid code point {code}"
-                        ))
+                        SpoonError::Other(format!("text_from_char_code: invalid code point {code}"))
                     })?;
                 Ok(Value::Text(c.to_string()))
             }
@@ -2092,10 +2087,7 @@ impl<I: CapabilityInvoker> Evaluator<I> {
                 let b = list_arg(b)?;
                 self.charge_items(a.len())?;
                 self.charge_items(b.len())?;
-                let result: Vec<Value> = a
-                    .into_iter()
-                    .filter(|item| b.contains(item))
-                    .collect();
+                let result: Vec<Value> = a.into_iter().filter(|item| b.contains(item)).collect();
                 Ok(Value::List(result))
             }
             IntrinsicOp::SetDifference => {
@@ -2104,10 +2096,7 @@ impl<I: CapabilityInvoker> Evaluator<I> {
                 let b = list_arg(b)?;
                 self.charge_items(a.len())?;
                 self.charge_items(b.len())?;
-                let result: Vec<Value> = a
-                    .into_iter()
-                    .filter(|item| !b.contains(item))
-                    .collect();
+                let result: Vec<Value> = a.into_iter().filter(|item| !b.contains(item)).collect();
                 Ok(Value::List(result))
             }
             IntrinsicOp::SetIsSubset => {
@@ -2320,10 +2309,8 @@ impl<I: CapabilityInvoker> Evaluator<I> {
                 if n == 0 || n > items.len() {
                     return Ok(Value::List(vec![]));
                 }
-                let windows: Vec<Value> = items
-                    .windows(n)
-                    .map(|w| Value::List(w.to_vec()))
-                    .collect();
+                let windows: Vec<Value> =
+                    items.windows(n).map(|w| Value::List(w.to_vec())).collect();
                 self.ensure_items("collection_window output items", windows.len())?;
                 Ok(Value::List(windows))
             }
@@ -2358,10 +2345,8 @@ impl<I: CapabilityInvoker> Evaluator<I> {
                         _ => None,
                     })
                     .collect();
-                let filtered: BTreeMap<String, Value> = map
-                    .into_iter()
-                    .filter(|(k, _)| keep.contains(k))
-                    .collect();
+                let filtered: BTreeMap<String, Value> =
+                    map.into_iter().filter(|(k, _)| keep.contains(k)).collect();
                 Ok(Value::Map(filtered))
             }
 
@@ -2386,9 +2371,7 @@ impl<I: CapabilityInvoker> Evaluator<I> {
                         .trim()
                         .parse::<i64>()
                         .map(Value::Int)
-                        .map_err(|_| {
-                            SpoonError::Other(format!("to_int: cannot parse '{s}'"))
-                        }),
+                        .map_err(|_| SpoonError::Other(format!("to_int: cannot parse '{s}'"))),
                     Value::Bool(b) => Ok(Value::Int(if b { 1 } else { 0 })),
                     other => Err(SpoonError::type_error("int, float, text, or bool", &other)),
                 }
@@ -2402,14 +2385,9 @@ impl<I: CapabilityInvoker> Evaluator<I> {
                         .trim()
                         .parse::<f64>()
                         .map(Value::Float)
-                        .map_err(|_| {
-                            SpoonError::Other(format!("to_float: cannot parse '{s}'"))
-                        }),
+                        .map_err(|_| SpoonError::Other(format!("to_float: cannot parse '{s}'"))),
                     Value::Bool(b) => Ok(Value::Float(if b { 1.0 } else { 0.0 })),
-                    other => Err(SpoonError::type_error(
-                        "int, float, text, or bool",
-                        &other,
-                    )),
+                    other => Err(SpoonError::type_error("int, float, text, or bool", &other)),
                 }
             }
             IntrinsicOp::ToBool => {
@@ -2490,10 +2468,12 @@ impl<I: CapabilityInvoker> Evaluator<I> {
             }
             IntrinsicOp::NumericFromHex => {
                 let text = text_arg(only_arg(args))?;
-                let s = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")).unwrap_or(&text);
-                let n = i64::from_str_radix(s, 16).map_err(|e| {
-                    SpoonError::Other(format!("numeric_from_hex: {e}"))
-                })?;
+                let s = text
+                    .strip_prefix("0x")
+                    .or_else(|| text.strip_prefix("0X"))
+                    .unwrap_or(&text);
+                let n = i64::from_str_radix(s, 16)
+                    .map_err(|e| SpoonError::Other(format!("numeric_from_hex: {e}")))?;
                 Ok(Value::Int(n))
             }
             IntrinsicOp::NumericToBinary => {
@@ -2502,10 +2482,12 @@ impl<I: CapabilityInvoker> Evaluator<I> {
             }
             IntrinsicOp::NumericFromBinary => {
                 let text = text_arg(only_arg(args))?;
-                let s = text.strip_prefix("0b").or_else(|| text.strip_prefix("0B")).unwrap_or(&text);
-                let n = i64::from_str_radix(s, 2).map_err(|e| {
-                    SpoonError::Other(format!("numeric_from_binary: {e}"))
-                })?;
+                let s = text
+                    .strip_prefix("0b")
+                    .or_else(|| text.strip_prefix("0B"))
+                    .unwrap_or(&text);
+                let n = i64::from_str_radix(s, 2)
+                    .map_err(|e| SpoonError::Other(format!("numeric_from_binary: {e}")))?;
                 Ok(Value::Int(n))
             }
         }
@@ -3045,15 +3027,20 @@ fn hex_digit(byte: u8) -> Option<u8> {
 }
 
 fn hex_decode(s: &str) -> Result<Vec<u8>, String> {
-    let s = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")).unwrap_or(s);
+    let s = s
+        .strip_prefix("0x")
+        .or_else(|| s.strip_prefix("0X"))
+        .unwrap_or(s);
     if !s.len().is_multiple_of(2) {
         return Err("odd number of hex digits".into());
     }
     let bytes = s.as_bytes();
     let mut result = Vec::with_capacity(s.len() / 2);
     for chunk in bytes.chunks(2) {
-        let hi = hex_digit(chunk[0]).ok_or_else(|| format!("invalid hex digit '{}'", chunk[0] as char))?;
-        let lo = hex_digit(chunk[1]).ok_or_else(|| format!("invalid hex digit '{}'", chunk[1] as char))?;
+        let hi = hex_digit(chunk[0])
+            .ok_or_else(|| format!("invalid hex digit '{}'", chunk[0] as char))?;
+        let lo = hex_digit(chunk[1])
+            .ok_or_else(|| format!("invalid hex digit '{}'", chunk[1] as char))?;
         result.push((hi << 4) | lo);
     }
     Ok(result)
@@ -3075,7 +3062,11 @@ fn levenshtein(a: &str, b: &str) -> usize {
     for i in 1..=m {
         curr[0] = i;
         for j in 1..=n {
-            let cost = if a_chars[i - 1] == b_chars[j - 1] { 0 } else { 1 };
+            let cost = if a_chars[i - 1] == b_chars[j - 1] {
+                0
+            } else {
+                1
+            };
             curr[j] = (prev[j] + 1).min(curr[j - 1] + 1).min(prev[j - 1] + cost);
         }
         std::mem::swap(&mut prev, &mut curr);
@@ -3085,7 +3076,9 @@ fn levenshtein(a: &str, b: &str) -> usize {
 
 fn date_from_parts(year: i64, month: i64, day: i64) -> Result<i64, SpoonError> {
     if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
-        return Err(SpoonError::Other("date_from_parts: invalid month or day".into()));
+        return Err(SpoonError::Other(
+            "date_from_parts: invalid month or day".into(),
+        ));
     }
     // Days from unix epoch (1970-01-01) using a simplified algorithm
     let y = if month <= 2 { year - 1 } else { year };
@@ -3104,7 +3097,9 @@ fn date_get_part(ts: i64, part: &str) -> Result<i64, SpoonError> {
         "minute" => Ok(minute),
         "second" => Ok(second),
         "weekday" => Ok(weekday),
-        _ => Err(SpoonError::Other(format!("date_get_part: unknown part '{part}'"))),
+        _ => Err(SpoonError::Other(format!(
+            "date_get_part: unknown part '{part}'"
+        ))),
     }
 }
 

@@ -1,12 +1,12 @@
 use std::collections::BTreeMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use axum::Router;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::sse::{Event, Sse};
 use axum::response::{Html, IntoResponse, Json};
 use axum::routing::{get, post};
-use axum::Router;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio_stream::wrappers::ReceiverStream;
@@ -14,11 +14,11 @@ use tower_http::cors::CorsLayer;
 use uuid::Uuid;
 
 use spoon_core::{InterpretationProposal, SessionId, SessionVisibility, Value as SpoonValue};
-use spoon_episode::EpisodeQuery;
 use spoon_engine::{
     CycleBudget, CycleInput, CycleProgress, Engine, EngineError, IntentProposalWire,
     IntentRequestWire, RecallMode, TeacherProposalWire,
 };
+use spoon_episode::EpisodeQuery;
 
 use crate::RpcServer;
 
@@ -36,10 +36,13 @@ impl TeacherConfig {
         let base_url = std::env::var("SPOON_TEACHER_URL")
             .or_else(|_| std::env::var("SPOON_OLLAMA_URL"))
             .unwrap_or_else(|_| "http://localhost:11434".into());
-        let model = std::env::var("SPOON_TEACHER_MODEL")
-            .unwrap_or_else(|_| "qwen2.5:1.5b".into());
+        let model = std::env::var("SPOON_TEACHER_MODEL").unwrap_or_else(|_| "qwen2.5:1.5b".into());
         let api_key = std::env::var("SPOON_TEACHER_API_KEY").ok();
-        Some(Self { base_url, model, api_key })
+        Some(Self {
+            base_url,
+            model,
+            api_key,
+        })
     }
 }
 
@@ -61,12 +64,24 @@ struct EngineRequest {
 
 enum EngineOp {
     Cycle(CycleInput),
-    Teach { situation: String, proposal: TeacherProposalWire },
-    Assist { situation: String, hints: Value },
+    Teach {
+        situation: String,
+        proposal: TeacherProposalWire,
+    },
+    Assist {
+        situation: String,
+        hints: Value,
+    },
     ListSessions,
-    CreateSession { name: Option<String>, visibility: SessionVisibility },
+    CreateSession {
+        name: Option<String>,
+        visibility: SessionVisibility,
+    },
     EndSession(String),
-    ListEpisodes { session_id: Option<String>, limit: u32 },
+    ListEpisodes {
+        session_id: Option<String>,
+        limit: u32,
+    },
 }
 
 impl EngineHandle {
@@ -79,7 +94,9 @@ impl EngineHandle {
                 .timeout(std::time::Duration::from_secs(300))
                 .build()
                 .expect("failed to build HTTP client")
-        }).join().expect("client builder thread panicked");
+        })
+        .join()
+        .expect("client builder thread panicked");
         std::thread::spawn(move || {
             while let Some(req) = rx.blocking_recv() {
                 let result = match req.op {
@@ -87,37 +104,40 @@ impl EngineHandle {
                         run_engine_cycle(&mut server.engine, input, &teacher, &http_client)
                             .map_err(|e| e.to_string())
                     }
-                    EngineOp::Teach { situation, proposal } => {
-                        run_teach(&mut server.engine, situation, proposal)
-                            .map_err(|e| e.to_string())
-                    }
+                    EngineOp::Teach {
+                        situation,
+                        proposal,
+                    } => run_teach(&mut server.engine, situation, proposal)
+                        .map_err(|e| e.to_string()),
                     EngineOp::Assist { situation, hints } => {
                         run_assist(&teacher, &http_client, &situation, &hints)
                     }
-                    EngineOp::ListSessions => {
-                        server.engine.list_sessions()
-                            .map(|s| serde_json::to_value(s).unwrap_or_default())
-                            .map_err(|e| e.to_string())
-                    }
-                    EngineOp::CreateSession { name, visibility } => {
-                        server.engine.create_session(name, visibility)
-                            .map(|s| serde_json::to_value(s).unwrap_or_default())
-                            .map_err(|e| e.to_string())
-                    }
-                    EngineOp::EndSession(id) => {
-                        server.engine.end_session(&id)
-                            .map(|s| serde_json::to_value(s).unwrap_or_default())
-                            .map_err(|e| e.to_string())
-                    }
+                    EngineOp::ListSessions => server
+                        .engine
+                        .list_sessions()
+                        .map(|s| serde_json::to_value(s).unwrap_or_default())
+                        .map_err(|e| e.to_string()),
+                    EngineOp::CreateSession { name, visibility } => server
+                        .engine
+                        .create_session(name, visibility)
+                        .map(|s| serde_json::to_value(s).unwrap_or_default())
+                        .map_err(|e| e.to_string()),
+                    EngineOp::EndSession(id) => server
+                        .engine
+                        .end_session(&id)
+                        .map(|s| serde_json::to_value(s).unwrap_or_default())
+                        .map_err(|e| e.to_string()),
                     EngineOp::ListEpisodes { session_id, limit } => {
                         let query = EpisodeQuery {
-                            session_id: session_id.and_then(|id| {
-                                Uuid::parse_str(&id).ok().map(SessionId)
-                            }),
+                            session_id: session_id
+                                .and_then(|id| Uuid::parse_str(&id).ok().map(SessionId)),
                             limit,
                             ..EpisodeQuery::default()
                         };
-                        server.engine.episodes().query(&query)
+                        server
+                            .engine
+                            .episodes()
+                            .query(&query)
                             .map(|e| serde_json::to_value(e).unwrap_or_default())
                             .map_err(|e| e.to_string())
                     }
@@ -130,9 +150,16 @@ impl EngineHandle {
 
     async fn send(&self, op: EngineOp) -> EngineResponse {
         let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
-        self.tx.send(EngineRequest { op, reply: reply_tx }).await
+        self.tx
+            .send(EngineRequest {
+                op,
+                reply: reply_tx,
+            })
+            .await
             .map_err(|_| "engine thread gone".to_string())?;
-        reply_rx.await.map_err(|_| "engine reply dropped".to_string())?
+        reply_rx
+            .await
+            .map_err(|_| "engine reply dropped".to_string())?
     }
 }
 
@@ -376,7 +403,11 @@ async fn chat_completions(
         let model = req.model.clone();
 
         tokio::spawn(async move {
-            let send_chunk = |id: String, m: String, content: Option<String>, role: Option<String>, finish: Option<String>| {
+            let send_chunk = |id: String,
+                              m: String,
+                              content: Option<String>,
+                              role: Option<String>,
+                              finish: Option<String>| {
                 Event::default().data(
                     serde_json::to_string(&ChatCompletionChunk {
                         id,
@@ -388,22 +419,55 @@ async fn chat_completions(
                             delta: ChunkDelta { role, content },
                             finish_reason: finish,
                         }],
-                    }).unwrap()
+                    })
+                    .unwrap(),
                 )
             };
 
-            let _ = tx.send(Ok(send_chunk(comp_id.clone(), model.clone(), None, Some("assistant".into()), None))).await;
+            let _ = tx
+                .send(Ok(send_chunk(
+                    comp_id.clone(),
+                    model.clone(),
+                    None,
+                    Some("assistant".into()),
+                    None,
+                )))
+                .await;
 
             let result = engine.send(EngineOp::Cycle(input)).await;
             match result {
                 Ok(answer) => {
-                    let _ = tx.send(Ok(send_chunk(comp_id.clone(), model.clone(), Some(format_answer(&answer)), None, None))).await;
+                    let _ = tx
+                        .send(Ok(send_chunk(
+                            comp_id.clone(),
+                            model.clone(),
+                            Some(format_answer(&answer)),
+                            None,
+                            None,
+                        )))
+                        .await;
                 }
                 Err(error) => {
-                    let _ = tx.send(Ok(send_chunk(comp_id.clone(), model.clone(), Some(format!("[error: {error}]")), None, None))).await;
+                    let _ = tx
+                        .send(Ok(send_chunk(
+                            comp_id.clone(),
+                            model.clone(),
+                            Some(format!("[error: {error}]")),
+                            None,
+                            None,
+                        )))
+                        .await;
                 }
             }
-            let _ = tx.send(Ok(send_chunk(comp_id, model, None, None, Some("stop".into())))).await;
+            let _ = tx
+                .send(Ok(send_chunk(
+                    comp_id,
+                    model,
+                    None,
+                    None,
+                    Some("stop".into()),
+                )))
+                .await;
             let _ = tx.send(Ok(Event::default().data("[DONE]"))).await;
         });
 
@@ -523,7 +587,14 @@ async fn create_session(
         Some("isolated") => SessionVisibility::Isolated,
         _ => SessionVisibility::Global,
     };
-    match state.engine.send(EngineOp::CreateSession { name: req.name, visibility }).await {
+    match state
+        .engine
+        .send(EngineOp::CreateSession {
+            name: req.name,
+            visibility,
+        })
+        .await
+    {
         Ok(session) => Json(session).into_response(),
         Err(error) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -597,7 +668,14 @@ async fn teach_procedure(
         None,
         &req.situation,
     );
-    match state.engine.send(EngineOp::Teach { situation: req.situation, proposal }).await {
+    match state
+        .engine
+        .send(EngineOp::Teach {
+            situation: req.situation,
+            proposal,
+        })
+        .await
+    {
         Ok(result) => Json(result).into_response(),
         Err(error) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -618,7 +696,14 @@ async fn teach_assist(
     State(state): State<HttpState>,
     Json(req): Json<AssistRequest>,
 ) -> impl IntoResponse {
-    match state.engine.send(EngineOp::Assist { situation: req.situation, hints: req.hints }).await {
+    match state
+        .engine
+        .send(EngineOp::Assist {
+            situation: req.situation,
+            hints: req.hints,
+        })
+        .await
+    {
         Ok(result) => Json(result).into_response(),
         Err(error) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -643,26 +728,42 @@ fn run_assist(
         format!("Situation/trigger: {situation}"),
     ];
     if let Some(params) = hints.get("parameters").and_then(|v| v.as_array()) {
-        let param_desc: Vec<String> = params.iter().filter_map(|p| {
-            let name = p.get("name").and_then(|v| v.as_str()).unwrap_or("");
-            let vtype = p.get("valueType").and_then(|v| v.as_str()).unwrap_or("any");
-            let desc = p.get("description").and_then(|v| v.as_str()).unwrap_or("");
-            if name.is_empty() { return None; }
-            Some(format!("{name}: {vtype} - {desc}"))
-        }).collect();
+        let param_desc: Vec<String> = params
+            .iter()
+            .filter_map(|p| {
+                let name = p.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                let vtype = p.get("valueType").and_then(|v| v.as_str()).unwrap_or("any");
+                let desc = p.get("description").and_then(|v| v.as_str()).unwrap_or("");
+                if name.is_empty() {
+                    return None;
+                }
+                Some(format!("{name}: {vtype} - {desc}"))
+            })
+            .collect();
         if !param_desc.is_empty() {
-            context_parts.push(format!("Parameters already defined:\n{}", param_desc.join("\n")));
+            context_parts.push(format!(
+                "Parameters already defined:\n{}",
+                param_desc.join("\n")
+            ));
         }
     }
     if let Some(concepts) = hints.get("concepts").and_then(|v| v.as_array()) {
-        let concept_desc: Vec<String> = concepts.iter().filter_map(|c| {
-            let key = c.get("key").and_then(|v| v.as_str()).unwrap_or("");
-            let name = c.get("name").and_then(|v| v.as_str()).unwrap_or("");
-            if key.is_empty() && name.is_empty() { return None; }
-            Some(format!("{key}: {name}"))
-        }).collect();
+        let concept_desc: Vec<String> = concepts
+            .iter()
+            .filter_map(|c| {
+                let key = c.get("key").and_then(|v| v.as_str()).unwrap_or("");
+                let name = c.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                if key.is_empty() && name.is_empty() {
+                    return None;
+                }
+                Some(format!("{key}: {name}"))
+            })
+            .collect();
         if !concept_desc.is_empty() {
-            context_parts.push(format!("Concepts already defined: {}", concept_desc.join(", ")));
+            context_parts.push(format!(
+                "Concepts already defined: {}",
+                concept_desc.join(", ")
+            ));
         }
     }
     if let Some(notes) = hints.get("notes").and_then(|v| v.as_str()) {
@@ -674,7 +775,16 @@ fn run_assist(
     let context = json!({ "builderHints": context_parts.join("\n\n") });
     let desired_output = spoon_engine::proposal_schema();
 
-    match call_teacher(config, http_client, situation, &context, Some("Fill in the complete proposal based on the hints provided. The user will review and edit your suggestions in a visual builder."), &desired_output) {
+    match call_teacher(
+        config,
+        http_client,
+        situation,
+        &context,
+        Some(
+            "Fill in the complete proposal based on the hints provided. The user will review and edit your suggestions in a visual builder.",
+        ),
+        &desired_output,
+    ) {
         Ok(proposal) => Ok(proposal.content),
         Err(error) => Err(format!("teacher assist failed: {error}")),
     }
@@ -824,7 +934,14 @@ fn run_engine_cycle(
                 }
                 teacher_turns += 1;
 
-                match call_teacher(config, http_client, &request.situation, &request.context, request.specific_question.as_deref(), &request.desired_output) {
+                match call_teacher(
+                    config,
+                    http_client,
+                    &request.situation,
+                    &request.context,
+                    request.specific_question.as_deref(),
+                    &request.desired_output,
+                ) {
                     Ok(proposal) => {
                         progress = engine.resume_cycle(cycle_id, proposal)?;
                     }
@@ -899,7 +1016,9 @@ fn call_teacher(
         return Err(format!("teacher returned {status}: {body}"));
     }
 
-    let body = response.text().map_err(|e| format!("failed to read teacher response: {e}"))?;
+    let body = response
+        .text()
+        .map_err(|e| format!("failed to read teacher response: {e}"))?;
     let content = parse_ollama_streaming_response(&body)?;
 
     let parsed: Value = serde_json::from_str(&content)
@@ -948,7 +1067,10 @@ fn build_teacher_prompt(
 ) -> String {
     let mut parts = vec![
         format!("Situation:\n{situation}"),
-        format!("Relevant Spoon knowledge context:\n{}", serde_json::to_string_pretty(context).unwrap_or_default()),
+        format!(
+            "Relevant Spoon knowledge context:\n{}",
+            serde_json::to_string_pretty(context).unwrap_or_default()
+        ),
     ];
 
     if let Some(question) = specific_question {
@@ -957,14 +1079,21 @@ fn build_teacher_prompt(
 
     parts.push("Teaching checklist (encode every supported facet in the supplied schema):".into());
     parts.push("1. Language: identify the introduced terms, names, aliases, and wording.".into());
-    parts.push("2. Meaning: state the definition, semantic role, units or domain, and scope.".into());
+    parts.push(
+        "2. Meaning: state the definition, semantic role, units or domain, and scope.".into(),
+    );
     parts.push("3. Intent: identify what the user wants to accomplish.".into());
     parts.push("4. Structure: record stable relationships, dependencies, inputs, outputs.".into());
     parts.push("5. Procedure: when deterministic and safe, author focused procedures with contracts and a worked invocation.".into());
     parts.push("6. Limits: preserve uncertainty and use answer-only or abstain when reusable structure is not justified.".into());
-    parts.push(format!("Desired proposal JSON Schema:\n{}", serde_json::to_string_pretty(desired_output).unwrap_or_default()));
+    parts.push(format!(
+        "Desired proposal JSON Schema:\n{}",
+        serde_json::to_string_pretty(desired_output).unwrap_or_default()
+    ));
     parts.push(spoon_core::spoonlang::SPOONLANG_GRAMMAR.into());
-    parts.push("Produce the most complete safe structured lesson the evidence and schema permit.".into());
+    parts.push(
+        "Produce the most complete safe structured lesson the evidence and schema permit.".into(),
+    );
 
     parts.join("\n\n")
 }
@@ -1029,11 +1158,14 @@ fn call_interpreter(
         return Err(format!("interpreter returned {status}: {body}"));
     }
 
-    let body = response.text().map_err(|e| format!("failed to read interpreter response: {e}"))?;
+    let body = response
+        .text()
+        .map_err(|e| format!("failed to read interpreter response: {e}"))?;
     let content = parse_ollama_streaming_response(&body)?;
 
-    let parsed: InterpretationProposal = serde_json::from_str(&content)
-        .map_err(|e| format!("interpreter response was not valid InterpretationProposal: {e}\nraw: {content}"))?;
+    let parsed: InterpretationProposal = serde_json::from_str(&content).map_err(|e| {
+        format!("interpreter response was not valid InterpretationProposal: {e}\nraw: {content}")
+    })?;
 
     Ok(IntentProposalWire {
         content: parsed,

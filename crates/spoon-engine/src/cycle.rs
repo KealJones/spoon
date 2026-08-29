@@ -805,11 +805,9 @@ impl Engine {
 
         // Candidate Laboratory (P0F.4): attempt to compose known procedures
         // before escalating to the interpreter or teacher.
-        if let Some(progress) = self.attempt_compose_and_execute(
-            cycle_id,
-            &input,
-            &interpretations,
-        )? {
+        if let Some(progress) =
+            self.attempt_compose_and_execute(cycle_id, &input, &interpretations)?
+        {
             return Ok(progress);
         }
 
@@ -2845,14 +2843,11 @@ impl Engine {
 
         let literals = extract_literals(&input.situation);
 
-        let candidate = match crate::compose::attempt_composition(
-            &input.situation,
-            &procedures,
-            &literals,
-        ) {
-            Some(candidate) => candidate,
-            None => return Ok(None),
-        };
+        let candidate =
+            match crate::compose::attempt_composition(&input.situation, &procedures, &literals) {
+                Some(candidate) => candidate,
+                None => return Ok(None),
+            };
 
         let composed = candidate.procedure.clone();
         let mut evaluator = self
@@ -2869,13 +2864,7 @@ impl Engine {
             .params
             .iter()
             .enumerate()
-            .map(|(i, _param)| {
-                candidate
-                    .inputs
-                    .get(i)
-                    .cloned()
-                    .unwrap_or(Value::Null)
-            })
+            .map(|(i, _param)| candidate.inputs.get(i).cloned().unwrap_or(Value::Null))
             .collect();
 
         let attempt = evaluator.exec_procedure_captured(&composed.id, args);
@@ -2889,12 +2878,10 @@ impl Engine {
                 self.graph.insert_procedure(&composed)?;
                 self.index_procedure(&composed)?;
 
-                let chain_names: Vec<&str> = candidate.chain.iter().map(|c| c.name.as_str()).collect();
+                let chain_names: Vec<&str> =
+                    candidate.chain.iter().map(|c| c.name.as_str()).collect();
                 let mut episode = self.base_episode(input, interpretations)?;
-                episode.action = Some(format!(
-                    "compose:{}@{}",
-                    composed.id, composed.version,
-                ));
+                episode.action = Some(format!("compose:{}@{}", composed.id, composed.version,));
                 episode.reasoning_trace = reasoning_trace(&attempt.trace);
                 let mut prefix = ladder_prefix(EscalationRung::Compose, false);
                 prefix.push(simple_step(
@@ -3023,8 +3010,7 @@ impl Engine {
         for step in &mut prefix {
             if step.rung == rung && step.procedure_used.is_none() {
                 step.procedure_used = Some(procedure.id);
-                if step.rung == EscalationRung::Run
-                    && step.description.contains("uniquely matched")
+                if step.rung == EscalationRung::Run && step.description.contains("uniquely matched")
                 {
                     step.description = format!(
                         "run: uniquely matched procedure {}@{}, executing",
@@ -5919,15 +5905,13 @@ fn valid_teacher_provenance(proposal: &TeacherProposalWire, situation: &str) -> 
         .get("provider")
         .and_then(JsonValue::as_str)
         .unwrap_or_default();
-    let source_matches_provider =
-        matches!(
-            provider,
-            "claude" | "codex" | "cursor" | "openai" | "ollama" | "human"
-        )
-            && proposal
-                .source
-                .strip_prefix(&format!("{provider}:"))
-                .is_some_and(|suffix| !suffix.trim().is_empty());
+    let source_matches_provider = matches!(
+        provider,
+        "claude" | "codex" | "cursor" | "openai" | "ollama" | "human"
+    ) && proposal
+        .source
+        .strip_prefix(&format!("{provider}:"))
+        .is_some_and(|suffix| !suffix.trim().is_empty());
     provenance.get("situation").and_then(JsonValue::as_str) == Some(situation)
         && provenance.get("teacher").and_then(JsonValue::as_str) == Some(proposal.source.as_str())
         && source_matches_provider
