@@ -86,7 +86,7 @@ test("Ollama interpreter sends the Engine request with strict JSON output", asyn
   assert.equal(url, "http://ollama.test/api/generate");
   assert.equal(init?.method, "POST");
   assert.deepEqual(body.model, "qwen-test");
-  assert.equal(body.stream, false);
+  assert.equal(body.stream, true);
   assert.deepEqual(body.format, schema);
   assert.match(String(body.prompt), /please double 7/);
   assert.match(String(body.prompt), /candidate_0: double; required slots: x/);
@@ -228,7 +228,7 @@ test("bare incorrectness is not converted into a deterministic procedure replay"
     },
   });
   assert.equal(modelCalled, true);
-  assert.equal(result.source, "ollama:qwen2.5:0.5b");
+  assert.equal(result.source, "ollama:qwen3:30b-a3b");
 });
 
 test("Ollama interpreter drops contradictory inferred values from grounded slots", async () => {

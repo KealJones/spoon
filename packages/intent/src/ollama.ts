@@ -1,4 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
+import { request as httpRequest } from "node:http";
+import type { IncomingMessage } from "node:http";
+import { request as httpsRequest } from "node:https";
 
 import {
   LanguageInterpreterError,
@@ -33,8 +36,74 @@ interface OllamaGenerateResponse {
   error?: unknown;
 }
 
-const DEFAULT_MODEL = "qwen2.5:0.5b";
+// Grounding slots onto half-open token indexes needs real instruction
+// following: a 4b model picks plausible-looking but wrong spans. This mixture
+// of experts activates about 3b parameters per token, so it reasons like a
+// large model while evaluating the prompt like a small one.
+const DEFAULT_MODEL = "qwen3:30b-a3b";
 const DEFAULT_BASE_URL = "http://localhost:11434";
+const OLLAMA_FETCH_TIMEOUT_MS = 60 * 60 * 1000;
+
+/**
+ * Talks to Ollama over `node:http` rather than the global `fetch`.
+ *
+ * `fetch` applies undici's 300s header timeout, and Ollama sends no headers
+ * until it has finished evaluating the prompt. A large prompt on a local model
+ * can exceed that, which aborted the request and turned every slow
+ * interpretation into an abstention. A plain client lets the caller own the
+ * deadline instead.
+ */
+function defaultOllamaFetch(
+  input: string | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  const url = new URL(String(input));
+  const send = url.protocol === "https:" ? httpsRequest : httpRequest;
+  const headers = new Headers(init?.headers);
+  if (!headers.has("content-type")) {
+    headers.set("content-type", "application/json");
+  }
+  const body =
+    typeof init?.body === "string" || init?.body === undefined
+      ? init?.body
+      : undefined;
+  if (init?.body !== undefined && body === undefined) {
+    return Promise.reject(
+      new OllamaLanguageInterpreterError("generate API request failed"),
+    );
+  }
+
+  return new Promise((resolve, reject) => {
+    const request = send(
+      url,
+      {
+        method: init?.method ?? "GET",
+        headers: Object.fromEntries(headers.entries()),
+      },
+      (response: IncomingMessage) => {
+        const chunks: Buffer[] = [];
+        response.on("data", (chunk: Buffer | string) => {
+          chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+        });
+        response.on("end", () => {
+          resolve(
+            new Response(Buffer.concat(chunks), {
+              status: response.statusCode ?? 502,
+              statusText: response.statusMessage ?? "",
+            }),
+          );
+        });
+        response.on("error", reject);
+      },
+    );
+    request.setTimeout(OLLAMA_FETCH_TIMEOUT_MS, () => {
+      request.destroy(new Error("ollama generate timed out"));
+    });
+    request.on("error", reject);
+    if (body !== undefined) request.write(body);
+    request.end();
+  });
+}
 
 export class OllamaLanguageInterpreter implements LanguageInterpreter {
   readonly #model: string;
@@ -47,7 +116,7 @@ export class OllamaLanguageInterpreter implements LanguageInterpreter {
   constructor(options: OllamaLanguageInterpreterOptions = {}) {
     this.#model = options.model ?? DEFAULT_MODEL;
     this.#baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, "");
-    this.#fetch = options.fetch ?? globalThis.fetch;
+    this.#fetch = options.fetch ?? defaultOllamaFetch;
     this.#now = options.now ?? (() => new Date());
     this.#idFactory = options.idFactory ?? randomUUID;
     this.#source = `ollama:${this.#model}`;
@@ -69,7 +138,12 @@ export class OllamaLanguageInterpreter implements LanguageInterpreter {
         body: JSON.stringify({
           model: this.#model,
           prompt,
-          stream: false,
+          // A non-streaming generate sends no bytes until the whole completion
+          // is built, so a slow local model trips undici's 300s header timeout
+          // before the response ever starts. Streaming delivers headers at once
+          // and keeps the body flowing, which removes that ceiling.
+          stream: true,
+          keep_alive: "30m",
           think: false,
           options: { temperature: 0, seed: 0 },
           // Ollama treats a JSON schema supplied here as constrained output.
@@ -82,15 +156,7 @@ export class OllamaLanguageInterpreter implements LanguageInterpreter {
       });
     }
 
-    let payload: OllamaGenerateResponse;
-    try {
-      payload = (await response.json()) as OllamaGenerateResponse;
-    } catch (error) {
-      throw new OllamaLanguageInterpreterError(
-        "provider returned a non-JSON response",
-        { cause: error },
-      );
-    }
+    const payload = await readOllamaGenerate(response);
 
     if (!isRecord(payload)) {
       throw new OllamaLanguageInterpreterError(
@@ -108,7 +174,11 @@ export class OllamaLanguageInterpreter implements LanguageInterpreter {
       );
     }
 
-    if (payload.response === undefined && payload.thinking === undefined) {
+    const content = ollamaStructuredContent(payload);
+    if (
+      content === undefined ||
+      (typeof content === "string" && content.trim().length === 0)
+    ) {
       throw new OllamaLanguageInterpreterError(
         "generate API result did not contain response",
       );
@@ -118,12 +188,69 @@ export class OllamaLanguageInterpreter implements LanguageInterpreter {
       "ollama",
       this.#source,
       this.#model,
-      ollamaStructuredContent(payload),
+      content,
       request,
       this.#idFactory(),
       this.#now(),
     );
   }
+}
+
+/**
+ * Reads a generate response in either shape. A streaming generate emits one
+ * JSON object per line and splits the completion across `response` chunks, so
+ * the parts are reassembled here; a single-object body is returned as-is.
+ */
+async function readOllamaGenerate(
+  response: Response,
+): Promise<OllamaGenerateResponse> {
+  let raw: string;
+  try {
+    raw = await response.text();
+  } catch (error) {
+    throw new OllamaLanguageInterpreterError(
+      "provider returned a non-JSON response",
+      { cause: error },
+    );
+  }
+
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) {
+    throw new OllamaLanguageInterpreterError(
+      "provider returned a non-JSON response",
+    );
+  }
+
+  try {
+    return JSON.parse(trimmed) as OllamaGenerateResponse;
+  } catch {
+    // Fall through to the newline-delimited streaming form.
+  }
+
+  let assembledResponse = "";
+  let assembledThinking = "";
+  let error: unknown;
+  for (const line of trimmed.split("\n")) {
+    const chunk = line.trim();
+    if (chunk.length === 0) continue;
+    let parsed: OllamaGenerateResponse;
+    try {
+      parsed = JSON.parse(chunk) as OllamaGenerateResponse;
+    } catch (cause) {
+      throw new OllamaLanguageInterpreterError(
+        "provider returned a non-JSON response",
+        { cause },
+      );
+    }
+    if (parsed.error !== undefined) error = parsed.error;
+    if (typeof parsed.response === "string") assembledResponse += parsed.response;
+    if (typeof parsed.thinking === "string") assembledThinking += parsed.thinking;
+  }
+  return {
+    response: assembledResponse,
+    thinking: assembledThinking,
+    ...(error === undefined ? {} : { error }),
+  };
 }
 
 export function reconsiderationProposal(
@@ -296,18 +423,18 @@ export function buildIntentPrompt(request: EngineRequest): string {
       token.span.end_byte,
     ),
   }));
+  // Ordered stable content first, then per-turn content. A local model reuses
+  // its KV cache only across an identical prompt prefix, so anything that
+  // changes every turn has to sit behind everything that does not. The rules
+  // therefore carry no per-utterance numbers; the concrete token bounds travel
+  // with the tokens instead.
   return [
     "You are Spoon's bounded language interpreter.",
     "Return only one JSON object matching the supplied schema.",
-    `UTTERANCE: ${JSON.stringify(request.situation)}`,
-    `INDEXED TOKENS: ${JSON.stringify(indexedTokens)}`,
-    `CANDIDATE GUIDE:\n${candidateGuide(request.context)}`,
-    `TURN MODE: ${isReconsideration(request) ? "RECONSIDERATION — challenge the most recent prior procedure and repair or re-run it" : "NEW OR STANDALONE REQUEST"}`,
-    `AVAILABLE CONTEXT AND CANDIDATES: ${JSON.stringify(request.context)}`,
     "Rules:",
-    "1. Candidate names MUST be an exact request-local alias from AVAILABLE CONTEXT, such as candidate_0. Never output a semantic name or database identifier.",
+    "1. Candidate names MUST be an exact request-local alias from CANDIDATES, such as candidate_0. Never output a semantic name or database identifier.",
     '2. sourceTokens are half-open INDEX POSITIONS in INDEXED TOKENS, not character or byte offsets. A single token at index 4 is {"startToken":4,"endToken":5}.',
-    `3. Valid token indexes are 0 through ${Math.max(0, indexedTokens.length - 1)}; the largest valid endToken is ${indexedTokens.length}.`,
+    "3. Valid token indexes are bounded by TOKEN BOUNDS below; never emit an index outside that range.",
     "4. Use exactly one contiguous sourceTokens range for each frame and grounded slot. A slot sourceTokens value MUST exactly copy tokenRange from one of the supplied literalCandidates.",
     "5. For execute, selected MUST be the zero-based index of the chosen candidate in your candidates array. For clarify or abstain, selected MUST be null.",
     "6. For occurrence/count procedures, the `text` slot is the containing source and the `target` slot is the substring being searched. If the request quotes a target letter and names a larger unquoted word, bind those to target and text respectively; do not bind both slots to the same span unless the utterance explicitly says so.",
@@ -315,8 +442,50 @@ export function buildIntentPrompt(request: EngineRequest): string {
     "8. If the current turn corrects or refers to the last turn, preserve that prior operation and carry forward unchanged slot values with inferredValue plus an empty sourceTokens array. Do not invent a new operation from conversational filler such as `are you sure`.",
     "9. In RECONSIDERATION mode, `previousInputs` are listed in the prior procedure's slot order. Preserve them unless the current wording explicitly replaces a value; a newly quoted source word replaces the source-text slot, while an omitted target remains inferred from the prior turn.",
     "10. Emit every required slot exactly once and emit no other slots. For a clear match with grounded required slots, ambiguities MUST be [] and disposition MUST be execute; never copy the utterance into ambiguities.",
-    `OUTPUT SCHEMA: ${JSON.stringify(request.desiredOutput)}`,
+    // The schema is not repeated here. It travels in the request's `format`
+    // field, where Ollama uses it to constrain decoding, so restating it in
+    // the prompt only doubled a large document the model cannot deviate from
+    // anyway.
+    `CANDIDATES: ${JSON.stringify(candidateContext(request.context))}`,
+    `CANDIDATE GUIDE:\n${candidateGuide(request.context)}`,
+    `TURN CONTEXT: ${JSON.stringify(turnContext(request.context))}`,
+    `TURN MODE: ${isReconsideration(request) ? "RECONSIDERATION — challenge the most recent prior procedure and repair or re-run it" : "NEW OR STANDALONE REQUEST"}`,
+    `INDEXED TOKENS: ${JSON.stringify(indexedTokens)}`,
+    `TOKEN BOUNDS: valid indexes are 0 through ${Math.max(0, indexedTokens.length - 1)}; the largest valid endToken is ${indexedTokens.length}.`,
+    `UTTERANCE: ${JSON.stringify(request.situation)}`,
   ].join("\n\n");
+}
+
+/** The candidate set, which changes only as the engine learns. */
+function candidateContext(context: JsonValue): JsonValue {
+  if (!isRecord(context)) return context;
+  const { candidates } = context as Record<string, JsonValue>;
+  return (candidates ?? []) as JsonValue;
+}
+
+/** Everything that can differ from one turn to the next. */
+function turnContext(context: JsonValue): JsonValue {
+  if (!isRecord(context)) return context;
+  const {
+    catalog: _catalog,
+    candidates: _candidates,
+    ...rest
+  } = context as Record<string, JsonValue>;
+  return rest as JsonValue;
+}
+
+/**
+ * The slice of the engine context worth spending prompt budget on.
+ *
+ * The context also carries a full procedure catalog for other consumers. The
+ * interpreter routes purely on request-local aliases, so the catalog is a
+ * large document the model is never asked to read. Dropping it keeps the
+ * prompt from growing with everything Spoon has ever learned.
+ */
+function promptContext(context: JsonValue): JsonValue {
+  if (!isRecord(context)) return context;
+  const { catalog: _catalog, ...rest } = context as Record<string, JsonValue>;
+  return rest as JsonValue;
 }
 
 function candidateGuide(context: JsonValue): string {

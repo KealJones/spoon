@@ -2,7 +2,6 @@ import {
   JsonRpcError,
   SpoonClient,
   type CompletedCycleProgress,
-  type JsonValue,
   type TeacherRequestWire,
 } from "@spoon/sdk";
 import {
@@ -84,25 +83,29 @@ export async function runCycle(
         );
         continue;
       }
-      let proposal: IntentProposalWire | undefined;
+      let proposal: IntentProposalWire;
       try {
         proposal = await interpreter.interpret(progress.request);
-        progress = await client.resumeIntent(progress.cycleId, proposal);
       } catch (error) {
+        // No proposal reached the engine, so the cycle is still pending and
+        // skipping it records an honest interpreter-failure abstention.
         progress = await client.skipIntent(
           progress.cycleId,
           describeCycleError(error),
-          proposal === undefined
-            ? undefined
-            : ({
-                source: proposal.source,
-                status: proposal.status,
-                provenance: proposal.provenance,
-                content: proposal.content,
-                ...(proposal.rawContent === undefined
-                  ? {}
-                  : { rawContent: proposal.rawContent }),
-              } as unknown as JsonValue),
+        );
+        continue;
+      }
+      try {
+        progress = await client.resumeIntent(progress.cycleId, proposal);
+      } catch (error) {
+        // The engine finalizes a cycle whose resume failed, so skipping it
+        // afterwards only replaces the real rejection with an ownership
+        // complaint about a cycle that no longer exists. Report the rejection
+        // and the proposal that caused it instead.
+        throw new Error(
+          `the interpreter proposal was rejected: ${describeCycleError(error)}\n` +
+            `proposal: ${JSON.stringify(proposal.content)}`,
+          { cause: error },
         );
       }
       continue;
