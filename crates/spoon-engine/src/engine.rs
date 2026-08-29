@@ -985,6 +985,70 @@ impl Engine {
         self.goals.list_scheduled_learning_actions(limit)
     }
 
+    pub fn upsert_intent_catalog_entry(
+        &self,
+        entry: &crate::intent_catalog::IntentCatalogEntry,
+    ) -> Result<(), EngineError> {
+        self.intent_catalog.upsert_entry(entry)
+    }
+
+    pub fn get_intent_catalog_entry(
+        &self,
+        key: &str,
+    ) -> Result<Option<crate::intent_catalog::IntentCatalogEntry>, EngineError> {
+        self.intent_catalog.get_entry(key)
+    }
+
+    pub fn list_intent_catalog_entries(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<crate::intent_catalog::IntentCatalogEntry>, EngineError> {
+        self.intent_catalog.list_entries(limit)
+    }
+
+    pub fn bind_intent_catalog_procedure(
+        &self,
+        key: &str,
+        concept_id: &str,
+        procedure_id: &str,
+        version: u32,
+    ) -> Result<(), EngineError> {
+        self.intent_catalog
+            .bind_procedure(key, concept_id, procedure_id, version)
+    }
+
+    pub fn admit_intent_catalog_pattern(
+        &self,
+        key: &str,
+        pattern: &str,
+        episode: &str,
+    ) -> Result<crate::intent_catalog::PatternAdmission, EngineError> {
+        self.intent_catalog.admit_pattern(key, pattern, episode)
+    }
+
+    pub fn record_intent_catalog_contradiction(
+        &self,
+        key: &str,
+        skeleton: &str,
+    ) -> Result<(), EngineError> {
+        self.intent_catalog.record_contradiction(key, skeleton)
+    }
+
+    /// Only `Active` patterns may drive interpreter-off local matching.
+    pub fn matching_intent_catalog_patterns(
+        &self,
+        skeleton: &str,
+    ) -> Result<Vec<crate::intent_catalog::IntentCatalogPattern>, EngineError> {
+        self.intent_catalog.matching_patterns(skeleton)
+    }
+
+    pub fn list_intent_catalog_patterns(
+        &self,
+        key: &str,
+    ) -> Result<Vec<crate::intent_catalog::IntentCatalogPattern>, EngineError> {
+        self.intent_catalog.list_patterns(key)
+    }
+
     pub fn discover_skill_candidates(
         &self,
         limit: u32,

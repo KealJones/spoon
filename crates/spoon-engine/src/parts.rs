@@ -61,17 +61,17 @@ impl EvidenceOrigin {
             Self::Procedure { .. } => EvidenceReference {
                 id: format!("{episode}:part:{part}"),
                 source_kind: SourceKind::SelfVerified,
-                linked_episode: Some(episode.clone()),
+                linked_episode: Some(*episode),
             },
             Self::Observation { fact_id, .. } => EvidenceReference {
                 id: fact_id.clone(),
                 source_kind: SourceKind::Observed,
-                linked_episode: Some(episode.clone()),
+                linked_episode: Some(*episode),
             },
             Self::Utterance { span } => EvidenceReference {
                 id: format!("{episode}:utterance:{}-{}", span.start_byte, span.end_byte),
                 source_kind: SourceKind::Observed,
-                linked_episode: Some(episode.clone()),
+                linked_episode: Some(*episode),
             },
         }
     }
@@ -373,7 +373,7 @@ impl PartsRun {
                             .get(need)
                             .is_some_and(|outcome| outcome.claim_text.is_some())
                     })
-                    .map(|need| claim_id(need))
+                    .map(claim_id)
                     .collect();
                 if needs.is_empty() {
                     None

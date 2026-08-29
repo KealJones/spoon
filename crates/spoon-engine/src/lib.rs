@@ -3,6 +3,7 @@
 #![recursion_limit = "512"]
 
 pub mod adaptation;
+pub mod admission;
 pub mod compose;
 mod compression;
 pub mod credit;
@@ -12,6 +13,7 @@ pub mod evaluation;
 mod goals;
 pub mod intent_catalog;
 mod lesson;
+pub mod parts;
 mod regression;
 mod runtime;
 mod skills;
