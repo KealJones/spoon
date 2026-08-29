@@ -804,7 +804,7 @@ const INTRINSICS_CATALOG=[
 {name:'collection_flatten',arity:1,desc:'Flatten nested lists one level'},
 {name:'collection_zip',arity:2,desc:'Zip two lists into pairs'},
 {name:'count_equal',arity:2,desc:'Count elements equal to value'},
-{name:'range',arity:2,desc:'Generate integer range [start, end)'},
+{name:'range',arity:3,desc:'Generate integer range [start, end) by step'},
 {name:'collection_group_by',arity:2,desc:'Group list of maps by key'},
 {name:'collection_sort_by',arity:2,desc:'Sort list of maps by key'},
 {name:'collection_min_by',arity:2,desc:'Element with minimum value at key'},
@@ -938,7 +938,7 @@ const INTRINSICS_CATALOG=[
 {name:'numeric_from_binary',arity:1,desc:'Parse binary string to integer'},
 ]},
 {cat:'Control',ops:[
-{name:'coalesce',arity:1,desc:'First non-null value from list'},
+{name:'coalesce',arity:2,desc:'First non-null of two or more arguments'},
 {name:'assert',arity:2,desc:'Return value if truthy, else error with message'},
 {name:'default_if_null',arity:2,desc:'Value if not null, else default'},
 ]},
