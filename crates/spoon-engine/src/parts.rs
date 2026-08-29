@@ -410,10 +410,7 @@ impl PartsRun {
 
             match (&outcome.claim_text, &outcome.origin) {
                 (Some(text), Some(origin)) => {
-                    let act = match outcome.state {
-                        PartState::Clarified => DialogueAct::Clarify,
-                        _ => part.act,
-                    };
+                    let act = response_act(part.act, outcome.state);
                     claims.push(PlannedClaim::Grounded(GroundedClaim {
                         id: claim_id(&id),
                         text: text.clone(),
@@ -458,6 +455,23 @@ impl PartsRun {
             // its own line, which reads as a list rather than a reply.
             variant: RenderVariant::Joined,
         }
+    }
+}
+
+/// The act Spoon performs in reply, which is not the act the user performed.
+///
+/// A part's `act` records what the user did: asking a question is `Ask`.
+/// Answering that question is an `Inform`. Copying the part's act onto the
+/// claim would make a plan that answered two questions report itself as `Ask`,
+/// and a client reads that as "this turn expects a reply from you".
+///
+/// A greeting is the exception worth keeping: the reply to `Acknowledge` is
+/// also an acknowledgement, not an assertion of fact.
+fn response_act(part_act: DialogueAct, state: PartState) -> DialogueAct {
+    match (state, part_act) {
+        (PartState::Clarified, _) => DialogueAct::Clarify,
+        (_, DialogueAct::Acknowledge) => DialogueAct::Acknowledge,
+        _ => DialogueAct::Inform,
     }
 }
 

@@ -348,11 +348,12 @@ fn apply_mechanics(text: &str, mechanics: SlotMechanics, original: &TokenStream)
     let mut result = text.to_string();
 
     if mechanics.strip_terminator {
-        // One terminator only. A claim ending in "..." keeps two of them,
+        // One terminator only. A claim ending in "..." keeps all of them,
         // because collapsing an ellipsis would change what the claim said.
-        if result.ends_with('.') && !result.ends_with("..") {
-            result.pop();
-        } else if result.ends_with('!') || result.ends_with('?') {
+        let ends_a_sentence = (result.ends_with('.') && !result.ends_with(".."))
+            || result.ends_with('!')
+            || result.ends_with('?');
+        if ends_a_sentence {
             result.pop();
         }
     }

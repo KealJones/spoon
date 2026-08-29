@@ -530,3 +530,49 @@ fn a_blocked_part_becomes_an_unsupported_claim_rather_than_a_silent_omission() {
     assert_eq!(rendered.text, "Hey.");
     assert_eq!(rendered.omitted_claim_ids.len(), 2);
 }
+
+#[test]
+fn answering_a_question_informs_rather_than_reporting_back_the_users_act() {
+    // A part's act records what the USER did. p1 and p2 are questions, so
+    // their act is Ask. Spoon answering them is an Inform. Copying the part's
+    // act onto the claim would make this plan announce itself as Ask, and a
+    // client reads that as "this turn expects a reply from you".
+    let mut run = run();
+    run.record(PartOutcome::spoken(id("p0"), "Hey.", TextSpan::new(0, 3)));
+    run.record(PartOutcome::executed(
+        id("p1"),
+        Value::Int(4),
+        "2 + 2 is 4.",
+        procedure("add"),
+    ));
+    run.record(PartOutcome::executed(
+        id("p2"),
+        Value::Int(8),
+        "Double that is 8.",
+        procedure("double"),
+    ));
+
+    // The analysis labelled the answered parts as questions.
+    assert_eq!(run.analysis.parts[1].act, DialogueAct::Inform);
+
+    let plan = run.response_plan("turn-1", ResponseTone::Neutral);
+    assert_eq!(plan.dialogue_move.act, DialogueAct::Inform);
+
+    let acts: Vec<Option<DialogueAct>> = plan
+        .claims
+        .iter()
+        .map(|claim| match claim {
+            PlannedClaim::Grounded(claim) => claim.act,
+            PlannedClaim::Unsupported { .. } => None,
+        })
+        .collect();
+    // The greeting stays an acknowledgement; the answers inform.
+    assert_eq!(
+        acts,
+        vec![
+            Some(DialogueAct::Acknowledge),
+            Some(DialogueAct::Inform),
+            Some(DialogueAct::Inform)
+        ]
+    );
+}
