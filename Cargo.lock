@@ -1254,6 +1254,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "spoon-forge"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "spoon-capability",
+ "spoon-core",
+ "spoon-engine",
+ "thiserror",
+]
+
+[[package]]
 name = "spoon-graph"
 version = "0.1.0"
 dependencies = [
@@ -1277,6 +1289,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "spoon-net"
+version = "0.1.0"
+dependencies = [
+ "reqwest",
+ "serde",
+ "serde_json",
+ "spoon-capability",
+ "spoon-core",
+ "thiserror",
+]
+
+[[package]]
 name = "spoon-reason"
 version = "0.1.0"
 dependencies = [
@@ -1286,6 +1310,30 @@ dependencies = [
  "spoon-episode",
  "spoon-graph",
  "thiserror",
+]
+
+[[package]]
+name = "spoon-sandbox"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "spoon-capability",
+ "spoon-core",
+ "thiserror",
+]
+
+[[package]]
+name = "spoon-secret"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2",
+ "spoon-capability",
+ "spoon-core",
+ "thiserror",
+ "uuid",
 ]
 
 [[package]]
