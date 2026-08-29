@@ -18,7 +18,7 @@ use spoon_core::realizer::RealizationProposal;
 use spoon_core::utterance::{
     MentionResolution, PartId, UtteranceAnalysis, UtteranceAnalysisProposal, UtteranceLimits,
 };
-use spoon_core::{Concept, EpisodeId, Expr, IntrinsicOp, MutabilityClass, Param, Procedure, Value};
+use spoon_core::{Concept, EpisodeId, Expr, MutabilityClass, Param, Procedure, Value};
 use spoon_engine::engine::Engine;
 use spoon_engine::parts::{EvidenceOrigin, PartOutcome, PartState, PartsRun, claim_id};
 
@@ -35,7 +35,7 @@ fn analysis() -> UtteranceAnalysis {
 
 /// Admits `add` and `double` so the parts have something real to execute.
 fn engine_with_arithmetic() -> (Engine, spoon_core::ProcedureId, spoon_core::ProcedureId) {
-    let mut engine = Engine::in_memory_with_admin("front-language-admin").unwrap();
+    let engine = Engine::in_memory_with_admin("front-language-admin").unwrap();
 
     let add_concept = Concept::new("ADDITION", MutabilityClass::Definitional);
     engine.admin_insert_concept(&add_concept).unwrap();
