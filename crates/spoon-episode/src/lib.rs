@@ -3,5 +3,5 @@ pub mod store;
 pub use store::{
     CreditAggregateSnapshot, CreditElementAggregate, CreditElementRef, CreditEpisodeContribution,
     CreditPairAggregate, EpisodeFeedback, EpisodeQuery, EpisodeRecallMode, EpisodeStore,
-    FeedbackSource, TeacherInteractionMetrics, VerifiedRegressionCase,
+    FeedbackSource, ProcedureOutcomeCounts, TeacherInteractionMetrics, VerifiedRegressionCase,
 };

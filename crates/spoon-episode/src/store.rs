@@ -275,6 +275,13 @@ pub struct TeacherInteractionMetrics {
     pub teacher_free_successes: u64,
 }
 
+/// How a procedure has actually behaved across finalized episodes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ProcedureOutcomeCounts {
+    pub successes: u32,
+    pub failures: u32,
+}
+
 impl Default for EpisodeQuery {
     fn default() -> Self {
         Self {
@@ -426,6 +433,9 @@ impl EpisodeStore {
 
                 CREATE INDEX IF NOT EXISTS idx_episodes_rung
                     ON episodes(rung_reached);
+
+                CREATE INDEX IF NOT EXISTS idx_episodes_situation
+                    ON episodes(situation, finalized);
 
                 CREATE TABLE IF NOT EXISTS sessions (
                     id TEXT PRIMARY KEY,
@@ -1531,6 +1541,34 @@ impl EpisodeStore {
             .collect()
     }
 
+    /// Returns finalized episodes whose situation is exactly `situation`,
+    /// most recent first.
+    ///
+    /// Recall answers a question it has already answered verbatim, so it needs
+    /// exact string equality rather than similarity. Ranking the whole corpus
+    /// and filtering the top slice for an exact match loses the match as soon
+    /// as the corpus outgrows the slice, which makes recall get worse the more
+    /// the engine learns. An indexed lookup keeps it constant.
+    pub fn find_by_situation(&self, situation: &str) -> Result<Vec<Episode>, SpoonError> {
+        let mut statement = self
+            .conn
+            .prepare(
+                "SELECT data_json
+                 FROM episodes
+                 WHERE situation = ?1 AND finalized = 1
+                 ORDER BY created_at DESC, id",
+            )
+            .map_err(|e| SpoonError::Storage(e.to_string()))?;
+        statement
+            .query_map(params![situation], |row| row.get::<_, String>(0))
+            .map_err(|e| SpoonError::Storage(e.to_string()))?
+            .map(|row| {
+                let json = row.map_err(|e| SpoonError::Storage(e.to_string()))?;
+                serde_json::from_str(&json).map_err(|e| SpoonError::Serialization(e.to_string()))
+            })
+            .collect()
+    }
+
     /// Count episodes by escalation rung. Used for section 38 metric 5
     /// (rung distribution drift).
     pub fn rung_distribution(&self) -> Result<Vec<(String, u32)>, SpoonError> {
@@ -1563,6 +1601,34 @@ impl EpisodeStore {
                 "SELECT COUNT(*) FROM episodes WHERE finalized = 1",
                 [],
                 |row| row.get(0),
+            )
+            .map_err(|e| SpoonError::Storage(e.to_string()))
+    }
+
+    /// Counts finalized episodes that ran a procedure, split by outcome.
+    ///
+    /// Execution history is the only durable record of how a procedure has
+    /// actually behaved, so lifecycle decisions read it here rather than
+    /// keeping a second counter that could drift from the episodes.
+    pub fn procedure_outcome_counts(
+        &self,
+        procedure: ProcedureId,
+    ) -> Result<ProcedureOutcomeCounts, SpoonError> {
+        self.conn
+            .query_row(
+                "SELECT
+                     COALESCE(SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END), 0),
+                     COALESCE(SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END), 0)
+                 FROM episodes
+                 WHERE finalized = 1
+                   AND json_extract(data_json, '$.action') LIKE ?1",
+                params![format!("procedure:{procedure}@%")],
+                |row| {
+                    Ok(ProcedureOutcomeCounts {
+                        successes: row.get(0)?,
+                        failures: row.get(1)?,
+                    })
+                },
             )
             .map_err(|e| SpoonError::Storage(e.to_string()))
     }

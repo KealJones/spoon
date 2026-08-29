@@ -345,9 +345,50 @@ fn fact_digest(episode: &Episode, fact: &ObservedFact) -> Result<String, EngineE
     digest(b"spoon:engine-trust:fact:v1\0", &(episode.id, fact))
 }
 
+/// Hashes evidence by its parsed value rather than by one particular spelling
+/// of that value.
+///
+/// A receipt is issued against a live struct and later checked against the same
+/// evidence loaded back from storage, so the digest only means something if
+/// both passes agree. Serializing directly does not give that: JSON floats do
+/// not survive a parse and re-serialize intact, and `0.9800000190734863` comes
+/// back as `0.9800000190734864`. Every episode carrying an interpreter
+/// confidence therefore failed its own receipt, which silently disabled recall.
+///
+/// Normalizing through one parse settles the value on the spelling storage will
+/// hand back, and sorts object keys on the way, so the digest is stable no
+/// matter which side computes it.
 fn digest(value_domain: &[u8], value: &impl Serialize) -> Result<String, EngineError> {
+    let raw = serde_json::to_vec(value)?;
+    let normalized: serde_json::Value = serde_json::from_slice(&raw)?;
     let mut hasher = Sha256::new();
     hasher.update(value_domain);
-    hasher.update(serde_json::to_vec(value)?);
+    hasher.update(serde_json::to_vec(&normalized)?);
     Ok(format!("sha256:{:x}", hasher.finalize()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::digest;
+
+    #[test]
+    fn a_digest_survives_the_trip_through_storage() {
+        // An interpreter confidence of 0.98 reaches JSON as the f64 widening of
+        // an f32, and that exact value is the one serde_json reparses one ulp
+        // away. Issuing a receipt against a live value and checking it against
+        // the stored copy has to agree, or the receipt attests to nothing.
+        let live = serde_json::json!({ "confidence": 0.98f32 as f64 });
+        let stored = serde_json::to_vec(&live).unwrap();
+        let reloaded: serde_json::Value = serde_json::from_slice(&stored).unwrap();
+
+        assert_ne!(
+            stored,
+            serde_json::to_vec(&reloaded).unwrap(),
+            "the hazard is gone and this test no longer proves anything"
+        );
+        assert_eq!(
+            digest(b"test\0", &live).unwrap(),
+            digest(b"test\0", &reloaded).unwrap()
+        );
+    }
 }
