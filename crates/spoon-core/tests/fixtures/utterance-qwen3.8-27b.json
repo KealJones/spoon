@@ -1,0 +1,125 @@
+{
+    "cleaned": "hey whats 2+2 and then double that",
+    "parts": [
+        {
+            "id": "p0",
+            "sourceTokens": [
+                {
+                    "startToken": 0,
+                    "endToken": 1
+                }
+            ],
+            "template": "hey",
+            "act": "Acknowledge",
+            "intent": {
+                "candidates": [
+                    {
+                        "name": "greeting",
+                        "confidence": 0.95,
+                        "scope": "CurrentTurn"
+                    }
+                ],
+                "disposition": "execute",
+                "selected": 0
+            },
+            "mentions": []
+        },
+        {
+            "id": "p1",
+            "sourceTokens": [
+                {
+                    "startToken": 2,
+                    "endToken": 7
+                }
+            ],
+            "template": "whats {v0}+{v1}",
+            "act": "Ask",
+            "intent": {
+                "candidates": [
+                    {
+                        "name": "arithmetic_addition",
+                        "confidence": 0.95,
+                        "scope": "CurrentTurn"
+                    }
+                ],
+                "disposition": "execute",
+                "selected": 0
+            },
+            "mentions": [
+                {
+                    "key": "v0",
+                    "kind": "value",
+                    "inferred": false,
+                    "resolved": {
+                        "literal": {
+                            "value": 2
+                        }
+                    },
+                    "sourceTokens": [
+                        {
+                            "startToken": 4,
+                            "endToken": 5
+                        }
+                    ]
+                },
+                {
+                    "key": "v1",
+                    "kind": "value",
+                    "inferred": false,
+                    "resolved": {
+                        "literal": {
+                            "value": 2
+                        }
+                    },
+                    "sourceTokens": [
+                        {
+                            "startToken": 6,
+                            "endToken": 7
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "p2",
+            "sourceTokens": [
+                {
+                    "startToken": 8,
+                    "endToken": 15
+                }
+            ],
+            "template": "and then double {x0}",
+            "act": "Inform",
+            "intent": {
+                "candidates": [
+                    {
+                        "name": "arithmetic_multiplication",
+                        "confidence": 0.9,
+                        "scope": "CurrentTurn"
+                    }
+                ],
+                "disposition": "execute",
+                "selected": 0
+            },
+            "mentions": [
+                {
+                    "key": "x0",
+                    "kind": "result",
+                    "inferred": true,
+                    "resolved": {
+                        "part_ref": {
+                            "part": "p1",
+                            "role": "result"
+                        }
+                    },
+                    "sourceTokens": [
+                        {
+                            "startToken": 14,
+                            "endToken": 15
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
