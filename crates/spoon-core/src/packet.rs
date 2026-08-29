@@ -305,6 +305,10 @@ pub enum SupplementalRequest {
     /// Up to four older same-session turn summaries.
     TurnWindow { count: usize },
     /// Terminology for one grounded surface phrase in the current utterance.
+    /// The variant-level rename is required: `rename_all` on an enum renames
+    /// variants, not the fields inside them, so without it this one field
+    /// would arrive snake_case while every sibling type is camelCase.
+    #[serde(rename_all = "camelCase")]
     Terminology { source_tokens: TokenRange },
 }
 

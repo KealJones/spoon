@@ -910,13 +910,7 @@ export interface TeacherRequestWire {
 
 export interface ProposalProvenanceWire {
   provider:
-    | "claude"
-    | "codex"
-    | "cursor"
-    | "cli"
-    | "openai"
-    | "ollama"
-    | "human";
+    "claude" | "codex" | "cursor" | "cli" | "openai" | "ollama" | "human";
   teacher: string;
   model?: string;
   requestId: string;
@@ -969,6 +963,168 @@ export interface InterpretationProposalWire {
   candidates: IntentFrameProposalWire[];
   selected: number | null;
   disposition: "execute" | "clarify" | "abstain";
+}
+
+/**
+ * Utterance-level analysis wire types.
+ *
+ * The SDK mirrors rather than imports these, matching how the intent wire
+ * types above are already handled. Every shape here was checked against real
+ * serde output: mention resolutions are snake_case, residual provenance and
+ * supplemental requests are camelCase, language write kinds are kebab-case,
+ * and dialogue acts keep their Rust spelling.
+ */
+
+export type MentionKindWire = "entity" | "value" | "expression" | "result";
+
+export type PartRefRoleWire = "mention" | "result";
+
+export type MentionResolutionProposalWire =
+  | { literal: { value: JsonValue } }
+  | { part_ref: { part: string; role: PartRefRoleWire } }
+  | { context_ref: { alias: string } }
+  | { unresolved: { ambiguity: string } };
+
+export interface MentionProposalWire {
+  key: string;
+  kind: MentionKindWire;
+  sourceTokens?: IntentTokenRangeWire[];
+  inferred?: boolean;
+  resolved: MentionResolutionProposalWire;
+}
+
+export type ResidualPolarityWire = "assert" | "deny";
+
+export type ResidualProvenanceProposalWire =
+  { utteranceTokens: IntentTokenRangeWire } | { contextAlias: string };
+
+export interface ResidualProposalWire {
+  id: string;
+  predicate: string;
+  value: JsonValue;
+  scope?: Record<string, JsonValue>;
+  polarity: ResidualPolarityWire;
+  provenance: ResidualProvenanceProposalWire;
+}
+
+export type LanguageWriteKindWire = "alias-of" | "termed" | "intent-of";
+
+export interface LanguageWriteProposalWire {
+  kind: LanguageWriteKindWire;
+  surface: string;
+  targetAlias: string;
+  sourceTokens?: IntentTokenRangeWire[];
+}
+
+export interface AlignmentProposalWire {
+  cleanedStart: number;
+  cleanedEnd: number;
+  sourceTokens: IntentTokenRangeWire;
+}
+
+export type DialogueActWire =
+  | "Inform"
+  | "Ask"
+  | "Clarify"
+  | "Confirm"
+  | "Correct"
+  | "Acknowledge"
+  | "Refuse"
+  | "Abstain";
+
+export interface PartProposalWire {
+  id: string;
+  sourceTokens: IntentTokenRangeWire[];
+  template: string;
+  act: DialogueActWire;
+  mentions?: MentionProposalWire[];
+  contextBindings?: MentionProposalWire[];
+  intent: InterpretationProposalWire;
+  residual?: ResidualProposalWire[];
+}
+
+export interface UtteranceAnalysisProposalWire {
+  cleaned: string;
+  alignment?: AlignmentProposalWire[];
+  parts: PartProposalWire[];
+  languageWrites?: LanguageWriteProposalWire[];
+}
+
+export type TurnRoleWire = "user" | "spoon";
+
+export interface PacketFactWire {
+  alias: string;
+  predicate: string;
+  value: JsonValue;
+}
+
+export interface PacketTurnWire {
+  alias: string;
+  role: TurnRoleWire;
+  summary: string;
+  facts?: PacketFactWire[];
+}
+
+export interface PacketSlotWire {
+  name: string;
+  required: boolean;
+  valueKind: string;
+}
+
+export interface PacketCatalogEntryWire {
+  alias: string;
+  key: string;
+  slots: PacketSlotWire[];
+  patterns: string[];
+  bound: boolean;
+}
+
+export interface PacketAliasWire {
+  alias: string;
+  surface: string;
+  refersTo: string;
+}
+
+export interface PacketEnvFactWire {
+  alias: string;
+  predicate: string;
+  value: JsonValue;
+}
+
+export interface TruncationFlagWire {
+  group: string;
+  dropped: number;
+}
+
+export interface LanguageContextPacketWire {
+  utterance: IntentRequestWire["tokenStream"];
+  turns?: PacketTurnWire[];
+  catalog?: PacketCatalogEntryWire[];
+  terminology?: PacketAliasWire[];
+  environment?: PacketEnvFactWire[];
+  truncation?: TruncationFlagWire[];
+}
+
+export type SupplementalRequestWire =
+  | { catalogDetail: { alias: string } }
+  | { turnWindow: { count: number } }
+  | { terminology: { sourceTokens: IntentTokenRangeWire } };
+
+export type ResponseToneWire = "Neutral" | "Direct" | "Warm" | "Formal";
+
+export type RealizationTemplateIdWire =
+  | "join.sentences"
+  | "join.and"
+  | "join.and.list"
+  | "join.then"
+  | "join.lead.ack"
+  | "join.ack.and";
+
+/** No text field, deliberately: the realizer emits no user-visible prose. */
+export interface RealizationProposalWire {
+  templateId: RealizationTemplateIdWire;
+  slotOrder: string[];
+  tone: ResponseToneWire;
 }
 
 export interface IntentProposalWire {

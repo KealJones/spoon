@@ -1,6 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 
-import { LanguageInterpreterError, OllamaLanguageInterpreterError } from "./errors.js";
+import {
+  LanguageInterpreterError,
+  OllamaLanguageInterpreterError,
+} from "./errors.js";
 import type {
   Clock,
   EngineRequest,
@@ -142,6 +145,23 @@ export function reconsiderationProposal(
       requestHash: fingerprintIntentRequest(request),
     },
   };
+}
+
+/**
+ * The structured payload an Ollama generate call produced.
+ *
+ * A thinking model returns its constrained output in `thinking` and leaves
+ * `response` empty, so falling back is required rather than defensive. This
+ * was observed directly: `qwen3.8:27b` returns a complete, schema-valid
+ * proposal in `thinking` and an empty string in `response`.
+ */
+export function ollamaStructuredContent(
+  payload: OllamaGenerateResponse,
+): unknown {
+  if (typeof payload.response === "string" && payload.response.length > 0) {
+    return payload.response;
+  }
+  return payload.thinking ?? payload.response;
 }
 
 export function wireInterpretation(

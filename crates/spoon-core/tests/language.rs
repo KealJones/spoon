@@ -20,6 +20,7 @@ fn claim(id: &str, text: &str) -> PlannedClaim {
         text: text.into(),
         evidence: vec![evidence("check-1")],
         provenance: vec!["procedure:letter-count-v1".into()],
+        act: None,
     })
 }
 
@@ -94,6 +95,7 @@ fn renderer_omits_unsupported_and_rejects_ungrounded_claims() {
         text: "An authority says this is true.".into(),
         evidence: vec![],
         provenance: vec![],
+        act: None,
     })];
     assert!(ResponseRenderer.render(&ungrounded).is_err());
 }
