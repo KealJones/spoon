@@ -111,9 +111,8 @@ export function episodeDetail(value: unknown): EpisodeDetail {
   const selectionReason = teacher
     ? recordAt(teacher, "selectionReason")
     : undefined;
-  const languageInterpreter = teacher
-    ? recordAt(teacher, "languageInterpreter")
-    : undefined;
+  const languageInterpreter = findLanguageInterpreter(teacher);
+  const teacherUsed = teacherWasUsed(teacher, languageInterpreter);
   const reasoningTrace = episode.reasoning_trace ?? episode.reasoningTrace;
   const traceSteps = Array.isArray(
     isRecord(reasoningTrace)
@@ -137,27 +136,22 @@ export function episodeDetail(value: unknown): EpisodeDetail {
         ),
       }),
       decisionPath: traceSteps
-        ? traceSteps
-            .filter(isRecord)
-            .map((step) =>
-              compact({
-                description: stringAt(step, "description"),
-                rung: stringAt(step, "rung"),
-                status:
-                  step.status === "Succeeded" || isRecord(step.status)
-                    ? typeof step.status === "string"
-                      ? step.status
-                      : "Failed"
-                    : step.status,
-                error: isRecord(step.status)
-                  ? stringAt(
-                      step.status as Record<string, unknown>,
-                      "error",
-                    )
-                  : undefined,
-                procedure: stringAt(step, "procedure_used", "procedureUsed"),
-              }),
-            )
+        ? traceSteps.filter(isRecord).map((step) =>
+            compact({
+              description: stringAt(step, "description"),
+              rung: stringAt(step, "rung"),
+              status:
+                step.status === "Succeeded" || isRecord(step.status)
+                  ? typeof step.status === "string"
+                    ? step.status
+                    : "Failed"
+                  : step.status,
+              error: isRecord(step.status)
+                ? stringAt(step.status as Record<string, unknown>, "error")
+                : undefined,
+              procedure: stringAt(step, "procedure_used", "procedureUsed"),
+            }),
+          )
         : undefined,
       selectionReason: selectionReason
         ? compact({
@@ -169,44 +163,13 @@ export function episodeDetail(value: unknown): EpisodeDetail {
             source: stringAt(selectionReason, "source"),
             disposition: stringAt(selectionReason, "disposition"),
             chain: selectionReason.chain,
-            slotBindings: selectionReason.slotBindings ?? selectionReason.inputBindings,
+            slotBindings:
+              selectionReason.slotBindings ?? selectionReason.inputBindings,
           })
         : undefined,
-      interpreter: languageInterpreter
-        ? compact({
-            source: stringAt(languageInterpreter, "source"),
-            status: stringAt(languageInterpreter, "status"),
-            provider: stringAt(
-              recordAt(languageInterpreter, "provenance"),
-              "provider",
-            ),
-            model: stringAt(
-              recordAt(languageInterpreter, "provenance"),
-              "model",
-            ),
-            disposition: stringAt(
-              recordAt(languageInterpreter, "frames"),
-              "disposition",
-            ),
-            candidates: Array.isArray(
-              (recordAt(languageInterpreter, "frames") ?? ({} as Record<string, unknown>))
-                .candidates,
-            )
-              ? (
-                  (recordAt(languageInterpreter, "frames") as Record<string, unknown>)
-                    .candidates as unknown[]
-                )
-                  .filter(isRecord)
-                  .map((c) => ({
-                    name: stringAt(c, "name"),
-                    ambiguities: c.ambiguities,
-                    slots: c.slots,
-                  }))
-              : undefined,
-          })
-        : undefined,
+      interpreter: interpreterNarrative(languageInterpreter),
       teacher: compact({
-        used: Boolean(teacher),
+        used: teacherUsed,
         provider: stringAt(provenance, "provider"),
         model: stringAt(provenance, "model"),
         source: stringAt(teacher, "source") ?? stringAt(provenance, "teacher"),
@@ -616,6 +579,103 @@ function compact(record: JsonRecord): JsonRecord {
   );
 }
 
+/**
+ * Teacher handoff records the interpreter under `priorFailure` so the chain
+ * stays durable. Walk that wrapper or an interpreter-only interaction is
+ * misreported as missing.
+ */
+function findLanguageInterpreter(
+  value: unknown,
+  depth = 0,
+): JsonRecord | undefined {
+  if (!isRecord(value) || depth > 4) return undefined;
+  if (isRecord(value.languageInterpreter)) return value.languageInterpreter;
+  for (const key of ["priorFailure", "rejectedTeacherInteraction"]) {
+    const found = findLanguageInterpreter(value[key], depth + 1);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
+function teacherWasUsed(
+  teacher: JsonRecord | undefined,
+  languageInterpreter: JsonRecord | undefined,
+): boolean {
+  if (!teacher) return false;
+  if (recordAt(teacher, "proposal") || isRecord(teacher.content)) return true;
+  return teacher.request !== undefined && languageInterpreter === undefined;
+}
+
+function interpreterNarrative(
+  languageInterpreter: JsonRecord | undefined,
+): JsonRecord | undefined {
+  if (!languageInterpreter) return undefined;
+  const provenance = recordAt(languageInterpreter, "provenance");
+  const frames = recordAt(languageInterpreter, "frames");
+  const request = recordAt(languageInterpreter, "request");
+  const requestContext = request ? (recordAt(request, "context") ?? {}) : {};
+  const rejected = recordAt(languageInterpreter, "rejectedProposal");
+  const rejectedContent = rejected ? recordAt(rejected, "content") : undefined;
+  const rawContent = rejected
+    ? recordAt(rejected, "rawContent", "raw_content")
+    : undefined;
+  const selected = frames ? valueAt(frames, "selected") : undefined;
+  const frameCandidates = Array.isArray(frames?.candidates)
+    ? (frames.candidates as unknown[])
+    : [];
+  const requestCandidates = requestContext.candidates;
+  const priorTurns = requestContext.priorTurns ?? requestContext.prior_turns;
+
+  return compact({
+    used: true,
+    source: stringAt(languageInterpreter, "source"),
+    status: stringAt(languageInterpreter, "status"),
+    provider: stringAt(provenance, "provider"),
+    model: stringAt(provenance, "model"),
+    disposition: stringAt(frames, "disposition"),
+    selected: typeof selected === "number" ? selected : undefined,
+    candidateCount: Array.isArray(requestCandidates)
+      ? requestCandidates.length
+      : undefined,
+    priorTurnCount: Array.isArray(priorTurns) ? priorTurns.length : undefined,
+    providerError: stringAt(
+      languageInterpreter,
+      "providerError",
+      "provider_error",
+    ),
+    rejection: stringAt(languageInterpreter, "rejection"),
+    candidates: frameCandidates.length
+      ? frameCandidates.filter(isRecord).map((candidate, index) =>
+          compact({
+            name: stringAt(candidate, "name"),
+            confidence: valueAt(candidate, "confidence"),
+            selected: selected === index,
+            ambiguities: candidate.ambiguities,
+            slots: summarizeInterpreterSlots(candidate.slots),
+          }),
+        )
+      : undefined,
+    rejectedProposal: rejected
+      ? compact({
+          disposition: stringAt(rejectedContent, "disposition"),
+          selected: valueAt(rejectedContent, "selected"),
+          modelOutput: stringAt(rawContent, "modelOutput", "model_output"),
+        })
+      : undefined,
+  });
+}
+
+function summarizeInterpreterSlots(slots: unknown): unknown {
+  if (!Array.isArray(slots)) return undefined;
+  return slots.filter(isRecord).map((slot) =>
+    compact({
+      name: stringAt(slot, "name"),
+      value: valueAt(slot, "value", "inferredValue", "inferred_value"),
+      confidence: valueAt(slot, "confidence"),
+    }),
+  );
+}
+
 function summarizeTrace(trace: unknown): string[] | undefined {
   if (!Array.isArray(trace)) return undefined;
   return trace.slice(0, 12).map((step) => {
@@ -737,8 +797,9 @@ const $=sel=>document.getElementById(sel)||document.querySelector(sel),esc=value
 function renderValue(v){if(v===undefined)return'<span class="muted">not recorded</span>';if(v===null)return'<span class="muted">null</span>';if(typeof v!=='object')return'<code>'+esc(String(v))+'</code>';if(Array.isArray(v)){if(!v.length)return'<span class="muted">[]</span>';if(v.every(function(x){return typeof x!=='object'||x===null}))return'<code>'+esc(JSON.stringify(v))+'</code>';return'<div style="margin:4px 0">'+v.map(function(item,i){return'<div style="margin:4px 0;padding:8px 12px;background:#101114;border-radius:8px;border:1px solid #2b2e38">'+renderValue(item)+'</div>'}).join('')+'</div>';}if(v.requires||v.promises||v.fails_when||v.failsWhen)return renderContract(v);if(v.Var||v.Literal||v.BinOp||v.Call||v.Let||v.If||v.Intrinsic||v.ListExpr||v.Index||v.Field||v.UnaryOp||v.CallExact)return'<div style="padding:6px 10px;background:#101114;border-radius:6px;border:1px solid #2b2e38;font-family:ui-monospace,monospace;font-size:13px;line-height:1.6;display:inline-block">'+renderExpr(v)+'</div>';if(v.check&&v.description)return'<div style="color:#c5cad7;font-size:13px">'+esc(v.description)+'</div><div style="font-family:ui-monospace,monospace;font-size:13px">'+renderExpr(v.check)+'</div>';var keys=Object.keys(v);if(!keys.length)return'<span class="muted">{}</span>';return'<dl style="margin:0;font-size:13px">'+keys.filter(function(k){return v[k]!==undefined&&v[k]!==null&&v[k]!==''}).map(function(k){return'<dt style="color:#9aa0ad">'+esc(k.replace(/([A-Z])/g,' $1'))+'</dt><dd style="margin:0 0 6px">'+renderValue(v[k])+'</dd>'}).join('')+'</dl>';}
 function fieldRows(value){return Object.entries(value||{}).filter(function(e){return e[1]!==undefined&&e[1]!==null&&e[1]!==''}).map(function(e){return'<dt>'+esc(e[0].replace(/([A-Z])/g,' $1'))+'</dt><dd>'+renderValue(e[1])+'</dd>'}).join('');}
 function renderProposal(proposal){if(!proposal||typeof proposal!=='object')return pretty(proposal);const p=proposal;let html='';if(p.params||p.parameters){html+='<h4 style="margin-top:12px">Parameters</h4>'+renderParams(p.params||p.parameters);}if(p.body||p.expression){html+='<h4 style="margin-top:12px">Body</h4><div style="padding:10px 14px;background:#101114;border-radius:8px;border:1px solid #2b2e38;font-family:ui-monospace,monospace;font-size:13px;line-height:1.6">'+renderExpr(p.body||p.expression)+'</div>';}if(p.contract){html+='<h4 style="margin-top:12px">Contract</h4>'+renderContract(p.contract);}if(!html)return'<pre>'+esc(JSON.stringify(proposal,null,2))+'</pre>';return html;}
-function renderDecisionPath(n){var steps=n.decisionPath,sel=n.selectionReason,interp=n.interpreter;if(!steps&&!sel&&!interp)return'';var html='<h3>Decision path</h3>';if(steps&&steps.length){html+='<ul class="decision-flow">';for(var i=0;i<steps.length;i++){var s=steps[i],cls=s.status==='Failed'?'step-failed':'step-succeeded';html+='<li class="decision-step '+cls+'"><span class="step-rung">'+esc(s.rung||'?')+'</span>'+esc(s.description||'')+(s.error?' <span class="error">('+esc(s.error)+')</span>':'')+(s.procedure?' <code>'+esc(s.procedure)+'</code>':'')+'</li>';}html+='</ul>';}if(sel){html+='<div class="selection-card"><strong>Why this procedure?</strong><div style="margin-top:6px;color:#c5cad7">'+esc(sel.summary||'')+'</div><dl style="margin:8px 0 0;font-size:13px">';if(sel.path)html+='<dt style="color:#9aa0ad">Path</dt><dd><code>'+esc(sel.path)+'</code></dd>';if(sel.procedure)html+='<dt style="color:#9aa0ad">Procedure</dt><dd><code>'+esc(sel.procedure)+(sel.version!=null?'@'+esc(sel.version):'')+'</code></dd>';if(sel.concept)html+='<dt style="color:#9aa0ad">Concept</dt><dd><code>'+esc(sel.concept)+'</code></dd>';if(sel.source)html+='<dt style="color:#9aa0ad">Source</dt><dd>'+esc(sel.source)+'</dd>';if(sel.disposition)html+='<dt style="color:#9aa0ad">Disposition</dt><dd>'+esc(sel.disposition)+'</dd>';if(sel.chain)html+='<dt style="color:#9aa0ad">Chain</dt><dd>'+esc(Array.isArray(sel.chain)?sel.chain.join(' -> '):sel.chain)+'</dd>';if(sel.slotBindings)html+='<dt style="color:#9aa0ad">Slot bindings</dt><dd>'+renderValue(sel.slotBindings)+'</dd>';html+='</dl></div>';}if(interp){html+='<div class="selection-card" style="border-left-color:#d9ad61"><strong>Language interpreter</strong><dl style="margin:8px 0 0;font-size:13px">';if(interp.source)html+='<dt style="color:#9aa0ad">Source</dt><dd>'+esc(interp.source)+'</dd>';if(interp.provider||interp.model)html+='<dt style="color:#9aa0ad">Provider</dt><dd>'+esc((interp.provider||'')+(interp.model?':'+interp.model:''))+'</dd>';if(interp.disposition)html+='<dt style="color:#9aa0ad">Disposition</dt><dd><code>'+esc(interp.disposition)+'</code></dd>';if(interp.candidates&&interp.candidates.length){html+='<dt style="color:#9aa0ad">Candidates</dt><dd>';for(var j=0;j<interp.candidates.length;j++){var c=interp.candidates[j];html+='<div style="margin:4px 0;padding:6px 10px;background:#101114;border-radius:6px;border:1px solid #2b2e38"><code style="color:#d9ad61">'+esc(c.name||'?')+'</code>';if(c.slots&&c.slots.length)html+=' <span class="muted">('+c.slots.map(function(s){return esc(s.name)+'='+esc(JSON.stringify(s.value))}).join(', ')+')</span>';if(c.ambiguities&&c.ambiguities.length)html+=' <span class="error">ambiguous: '+esc(c.ambiguities.join(', '))+'</span>';html+='</div>';}html+='</dd>';}html+='</dl></div>';}return html;}
-async function showEpisode(id){document.querySelectorAll('[data-episode-id]').forEach(function(r){r.classList.toggle('active',r.dataset.episodeId===id)});$('episode-detail').innerHTML='<p class="muted">Loading episode...</p>';try{const detail=await get('/api/episodes/'+encodeURIComponent(id)),n=detail.narrative||{},teacher=n.teacher||{},validation=teacher.validation||{},proposalObj=teacher.proposal;$('episode-detail').innerHTML='<article class="card narrative"><h3>What happened?</h3><dl>'+fieldRows({request:n.request,prediction:n.prediction,observation:n.observation,evaluation:n.evaluation,cost:n.cost,abstentionReason:n.abstentionReason})+'</dl>'+renderDecisionPath(n)+(teacher.used?'<h3>Teacher and provenance</h3><dl>'+fieldRows({provider:teacher.provider,model:teacher.model,source:teacher.source,proposalKind:teacher.proposalKind,proposalSummary:teacher.proposalSummary,providerError:teacher.providerError,validationStatus:validation.status,validationChecks:validation.checks})+'</dl>':'')+(proposalObj?'<h3>Proposal</h3>'+renderProposal(proposalObj):'')+'<h3>Learning</h3><dl>'+fieldRows(n.learning)+'</dl><button class="secondary" id="replay-button">Replay read-only</button><div id="replay-result"></div><details><summary>Redacted raw JSON</summary><pre>'+esc(JSON.stringify(detail.raw,null,2))+'</pre></details></article>';$('replay-button')?.addEventListener('click',async()=>{const output=$('replay-result');if(!output)return;output.innerHTML='<p class="muted">Replaying...</p>';try{const replay=await get('/api/episodes/'+encodeURIComponent(id)+'/replay');output.innerHTML='<p>Replay result (read-only):</p><pre>'+pretty(replay)+'</pre>'}catch(error){output.innerHTML='<p class="error">'+esc(error.message||error)+'</p>'}})}catch(error){$('episode-detail').innerHTML='<p class="error">'+esc(error.message||error)+'</p>'}}
+function renderDecisionPath(n){var steps=n.decisionPath,sel=n.selectionReason;if(!steps&&!sel)return'';var html='<h3>Decision path</h3>';if(steps&&steps.length){html+='<ul class="decision-flow">';for(var i=0;i<steps.length;i++){var s=steps[i],cls=s.status==='Failed'?'step-failed':'step-succeeded';html+='<li class="decision-step '+cls+'"><span class="step-rung">'+esc(s.rung||'?')+'</span>'+esc(s.description||'')+(s.error?' <span class="error">('+esc(s.error)+')</span>':'')+(s.procedure?' <code>'+esc(s.procedure)+'</code>':'')+'</li>';}html+='</ul>';}if(sel){html+='<div class="selection-card"><strong>Why this procedure?</strong><div style="margin-top:6px;color:#c5cad7">'+esc(sel.summary||'')+'</div><dl style="margin:8px 0 0;font-size:13px">';if(sel.path)html+='<dt style="color:#9aa0ad">Path</dt><dd><code>'+esc(sel.path)+'</code></dd>';if(sel.procedure)html+='<dt style="color:#9aa0ad">Procedure</dt><dd><code>'+esc(sel.procedure)+(sel.version!=null?'@'+esc(sel.version):'')+'</code></dd>';if(sel.concept)html+='<dt style="color:#9aa0ad">Concept</dt><dd><code>'+esc(sel.concept)+'</code></dd>';if(sel.source)html+='<dt style="color:#9aa0ad">Source</dt><dd>'+esc(sel.source)+'</dd>';if(sel.disposition)html+='<dt style="color:#9aa0ad">Disposition</dt><dd>'+esc(sel.disposition)+'</dd>';if(sel.chain)html+='<dt style="color:#9aa0ad">Chain</dt><dd>'+esc(Array.isArray(sel.chain)?sel.chain.join(' -> '):sel.chain)+'</dd>';if(sel.slotBindings)html+='<dt style="color:#9aa0ad">Slot bindings</dt><dd>'+renderValue(sel.slotBindings)+'</dd>';html+='</dl></div>';}return html;}
+function renderInterpreter(interp){if(!interp||!interp.used)return'';var html='<h3>Interpreter</h3><dl>'+fieldRows({source:interp.source,status:interp.status,provider:interp.provider,model:interp.model,disposition:interp.disposition,selected:interp.selected,candidateCount:interp.candidateCount,priorTurnCount:interp.priorTurnCount,providerError:interp.providerError,rejection:interp.rejection})+'</dl>';if(interp.candidates&&interp.candidates.length){html+='<h4 style="margin-top:12px">Candidates</h4>';for(var i=0;i<interp.candidates.length;i++){var c=interp.candidates[i];html+='<div class="selection-card" style="border-left-color:'+(c.selected?'#d9ad61':'#2b2e38')+'"><code style="color:#d9ad61">'+esc(c.name||'?')+'</code>'+(c.selected?' <span class="muted">selected</span>':'')+(c.confidence!=null?' <span class="muted">'+esc(c.confidence)+'</span>':'');if(c.slots&&c.slots.length)html+='<div class="muted" style="margin-top:4px">'+c.slots.map(function(s){return esc(s.name)+'='+esc(JSON.stringify(s.value))}).join(', ')+'</div>';if(c.ambiguities&&c.ambiguities.length)html+='<div class="error" style="margin-top:4px">ambiguous: '+esc(c.ambiguities.join(', '))+'</div>';html+='</div>';}}if(interp.rejectedProposal)html+='<h4 style="margin-top:12px">Rejected proposal</h4><dl>'+fieldRows(interp.rejectedProposal)+'</dl>';return html;}
+async function showEpisode(id){document.querySelectorAll('[data-episode-id]').forEach(function(r){r.classList.toggle('active',r.dataset.episodeId===id)});$('episode-detail').innerHTML='<p class="muted">Loading episode...</p>';try{const detail=await get('/api/episodes/'+encodeURIComponent(id)),n=detail.narrative||{},teacher=n.teacher||{},validation=teacher.validation||{},proposalObj=teacher.proposal;$('episode-detail').innerHTML='<article class="card narrative"><h3>What happened?</h3><dl>'+fieldRows({request:n.request,prediction:n.prediction,observation:n.observation,evaluation:n.evaluation,cost:n.cost,abstentionReason:n.abstentionReason})+'</dl>'+renderDecisionPath(n)+renderInterpreter(n.interpreter)+(teacher.used?'<h3>Teacher and provenance</h3><dl>'+fieldRows({provider:teacher.provider,model:teacher.model,source:teacher.source,proposalKind:teacher.proposalKind,proposalSummary:teacher.proposalSummary,providerError:teacher.providerError,validationStatus:validation.status,validationChecks:validation.checks})+'</dl>':'')+(proposalObj?'<h3>Proposal</h3>'+renderProposal(proposalObj):'')+'<h3>Learning</h3><dl>'+fieldRows(n.learning)+'</dl><button class="secondary" id="replay-button">Replay read-only</button><div id="replay-result"></div><details><summary>Redacted raw JSON</summary><pre>'+esc(JSON.stringify(detail.raw,null,2))+'</pre></details></article>';$('replay-button')?.addEventListener('click',async()=>{const output=$('replay-result');if(!output)return;output.innerHTML='<p class="muted">Replaying...</p>';try{const replay=await get('/api/episodes/'+encodeURIComponent(id)+'/replay');output.innerHTML='<p>Replay result (read-only):</p><pre>'+pretty(replay)+'</pre>'}catch(error){output.innerHTML='<p class="error">'+esc(error.message||error)+'</p>'}})}catch(error){$('episode-detail').innerHTML='<p class="error">'+esc(error.message||error)+'</p>'}}
 function renderExpr(e){if(e==null)return'<span class="muted">null</span>';if(typeof e!=='object')return'<span style="color:#f2c77f">'+esc(JSON.stringify(e))+'</span>';if('Var'in e)return'<span style="color:#9de5b2;font-weight:600">'+esc(e.Var)+'</span>';if('Literal'in e)return'<span style="color:#f2c77f">'+esc(JSON.stringify(e.Literal))+'</span>';if('BinOp'in e){const b=e.BinOp;return'<span class="expr-group">('+renderExpr(b.left)+' <span style="color:#b9c6ff;font-weight:600">'+esc(b.op)+'</span> '+renderExpr(b.right)+')</span>';}if('UnaryOp'in e){const u=e.UnaryOp;return'<span style="color:#b9c6ff">'+esc(u.op)+'</span>('+renderExpr(u.operand)+')';}if('Intrinsic'in e){const i=e.Intrinsic;return'<span style="color:#b9c6ff;font-weight:600">'+esc(i.op)+'</span>('+(i.args||[]).map(renderExpr).join(', ')+')';}if('ListExpr'in e)return'['+e.ListExpr.map(renderExpr).join(', ')+']';if('Index'in e){const x=e.Index;return renderExpr(x.collection)+'['+renderExpr(x.index)+']';}if('Field'in e){const f=e.Field;return renderExpr(f.object)+'.<span style="color:#c5cad7">'+esc(f.field)+'</span>';}if('If'in e){const f=e.If;return'<span style="color:#b9c6ff">if</span> '+renderExpr(f.condition)+' <span style="color:#b9c6ff">then</span> '+renderExpr(f.then||f.consequent)+' <span style="color:#b9c6ff">else</span> '+renderExpr(f.else_||f.alternate||f.otherwise);}if('Let'in e){const l=e.Let;return'<span style="color:#b9c6ff">let</span> <span style="color:#9de5b2">'+esc(l.name)+'</span> = '+renderExpr(l.value)+' <span style="color:#b9c6ff">in</span> '+renderExpr(l.body);}if('Call'in e){const c=e.Call;return'<span style="color:#d9ad61">'+esc(c.procedure||c.alias)+'</span>('+(c.args||c.inputs||[]).map(renderExpr).join(', ')+')';}return'<code>'+esc(JSON.stringify(e,null,1))+'</code>';}
 function renderConditions(label,conditions){if(!conditions||!conditions.length)return'<div style="margin:4px 0"><span class="muted">'+esc(label)+':</span> <span class="muted">none</span></div>';return'<div style="margin:8px 0"><strong style="color:#9aa0ad;font-size:12px;text-transform:uppercase;letter-spacing:.06em">'+esc(label)+'</strong>'+conditions.map(function(c){return'<div style="margin:6px 0;padding:10px 14px;background:#101114;border-radius:8px;border:1px solid #2b2e38"><div style="color:#c5cad7;font-size:13px;margin-bottom:6px">'+esc(c.description)+'</div><div style="font-family:ui-monospace,monospace;font-size:13px;line-height:1.6">'+renderExpr(c.check)+'</div></div>';}).join('')+'</div>';}
 function renderParams(params){if(!Array.isArray(params)||!params.length)return'<span class="muted">none</span>';return'<table style="margin:4px 0"><thead><tr><th>Name</th><th>Type</th><th>Description</th></tr></thead><tbody>'+params.map(function(p){return'<tr><td><code style="color:#9de5b2">'+esc(p.name)+'</code></td><td><code>'+esc(p.valueType||p.value_type||'any')+'</code></td><td>'+esc(p.description||'')+'</td></tr>';}).join('')+'</tbody></table>';}

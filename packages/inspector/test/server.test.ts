@@ -118,6 +118,145 @@ test("episode narrative explains teacher, validation, learning, outcome, and cos
   });
 });
 
+test("episode narrative projects interpreter frames, provenance, and request context", () => {
+  const detail = episodeDetail({
+    id: "episode-interp",
+    situation: "please make 7 twice as large",
+    action: "reuse-procedure",
+    teacher_interaction: {
+      languageInterpreter: {
+        request: {
+          situation: "please make 7 twice as large",
+          context: {
+            candidates: [{ alias: "candidate_0" }],
+            priorTurns: [{ role: "user" }],
+          },
+        },
+        source: "ollama:qwen2.5:0.5b",
+        status: "unverified",
+        provenance: { provider: "ollama", model: "qwen2.5:0.5b" },
+        frames: {
+          disposition: "execute",
+          selected: 0,
+          candidates: [
+            {
+              name: "candidate_0",
+              confidence: 0.98,
+              ambiguities: [],
+              slots: [{ name: "x", value: 7, confidence: 0.99 }],
+            },
+          ],
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(detail.narrative.teacher, { used: false });
+  assert.deepEqual(detail.narrative.interpreter, {
+    used: true,
+    source: "ollama:qwen2.5:0.5b",
+    status: "unverified",
+    provider: "ollama",
+    model: "qwen2.5:0.5b",
+    disposition: "execute",
+    selected: 0,
+    candidateCount: 1,
+    priorTurnCount: 1,
+    candidates: [
+      {
+        name: "candidate_0",
+        confidence: 0.98,
+        selected: true,
+        ambiguities: [],
+        slots: [{ name: "x", value: 7, confidence: 0.99 }],
+      },
+    ],
+  });
+});
+
+test("episode narrative finds interpreter under priorFailure after teacher fallback", () => {
+  const detail = episodeDetail({
+    id: "episode-fallback",
+    situation: "make this bigger somehow",
+    teacher_interaction: {
+      request: { situation: "make this bigger somehow" },
+      proposal: {
+        provenance: { provider: "openai", model: "gpt-test" },
+        content: { proposalKind: "reusable_lesson" },
+      },
+      priorFailure: {
+        languageInterpreter: {
+          request: {
+            context: { candidates: [{}, {}], priorTurns: [] },
+          },
+          source: "ollama:qwen2.5:0.5b",
+          status: "unverified",
+          provenance: { provider: "ollama", model: "qwen2.5:0.5b" },
+          frames: { disposition: "abstain", candidates: [], selected: null },
+        },
+      },
+    },
+  });
+
+  assert.equal(
+    (detail.narrative.interpreter as { used: boolean; disposition: string })
+      .used,
+    true,
+  );
+  assert.equal(
+    (detail.narrative.interpreter as { disposition: string }).disposition,
+    "abstain",
+  );
+  assert.equal(
+    (detail.narrative.interpreter as { candidateCount: number }).candidateCount,
+    2,
+  );
+  assert.equal((detail.narrative.teacher as { used: boolean }).used, true);
+});
+
+test("episode narrative projects interpreter rejection and rejected proposal", () => {
+  const detail = episodeDetail({
+    id: "episode-rejected",
+    situation: "Spell strawberry",
+    teacher_interaction: {
+      languageInterpreter: {
+        request: { context: { candidates: [{}] } },
+        source: "ollama:test",
+        status: "unverified",
+        provenance: { provider: "ollama", model: "test" },
+        rejection:
+          "interpreter selected a procedure without enough language support",
+        providerError: undefined,
+        rejectedProposal: {
+          content: { disposition: "execute", selected: 0 },
+          rawContent: { modelOutput: "count strawberry" },
+        },
+      },
+    },
+  });
+
+  const interpreter = detail.narrative.interpreter as {
+    rejection: string;
+    rejectedProposal: { disposition: string; modelOutput: string };
+  };
+  assert.equal(
+    interpreter.rejection,
+    "interpreter selected a procedure without enough language support",
+  );
+  assert.deepEqual(interpreter.rejectedProposal, {
+    disposition: "execute",
+    selected: 0,
+    modelOutput: "count strawberry",
+  });
+});
+
+test("inspector html renders interpreter data on episode detail", () => {
+  const dashboard = inspectorHtml();
+  assert.match(dashboard, /<h3>Interpreter<\/h3>/);
+  assert.match(dashboard, /n\.interpreter/);
+  assert.match(dashboard, /rejectedProposal/);
+});
+
 test("episode narrative unwraps nested teacher observations", () => {
   const detail = episodeDetail({
     id: "episode-observation",
@@ -214,7 +353,7 @@ test("episode detail endpoint is read-only and returns the redacted projection",
       id: "episode-2",
       request: "inspect me",
       escalation: {},
-      teacher: { used: true },
+      teacher: { used: false },
       learning: {
         action: "no reusable procedure",
         summary: "No reusable procedure was learned.",
