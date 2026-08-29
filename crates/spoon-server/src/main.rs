@@ -13,7 +13,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(|v| v.parse().ok())
         .unwrap_or(4318);
 
-    let database = std::env::var("SPOON_DB").unwrap_or_else(|_| "spoon.db".into());
+    let runtime = spoon_server::config::resolve_from_process()?;
+    let database = runtime.database_path.to_string_lossy().into_owned();
     let mut server = RpcServer::open(&database)?;
     if let Ok(token) = std::env::var("SPOON_ADMIN_TOKEN") {
         server = server.with_admin_token(token)?;
@@ -74,7 +75,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if http_mode {
         let rt = tokio::runtime::Runtime::new()?;
-        rt.block_on(spoon_server::http::serve(server, http_port))?;
+        rt.block_on(spoon_server::http::serve(server, http_port, runtime))?;
     } else {
         run_stdio(
             &mut server,

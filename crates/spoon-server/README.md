@@ -5,14 +5,15 @@ JSON-RPC over stdio, plus an HTTP chat UI.
 ## HTTP chat
 
 ```bash
-SPOON_DB=./spoon.db \
-SPOON_TEACHER_MODEL=qwen3.8:27b \
-  pnpm serve
+pnpm serve
 ```
 
 That runs `cargo run -p spoon-server -- --http --port 4318`. Open
-<http://127.0.0.1:4318>. `SPOON_TEACHER_URL` / `SPOON_OLLAMA_URL` default to
-`http://localhost:11434`.
+<http://127.0.0.1:4318>. The server loads the same `~/.spoon/config.json` (and
+project `.spoon/config.json` / `config.local.json`) as the CLI: database,
+teacher, interpreter, permission mode, recall, and output. Environment
+variables still override file values. `SPOON_TEACHER_URL` / `SPOON_OLLAMA_URL`
+default to `http://localhost:11434` when unset.
 
 ## Stdio JSON-RPC
 

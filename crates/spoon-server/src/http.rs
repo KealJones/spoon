@@ -21,30 +21,7 @@ use spoon_engine::{
 use spoon_episode::EpisodeQuery;
 
 use crate::RpcServer;
-
-// ---------- Teacher / Interpreter LLM config ----------
-
-#[derive(Clone)]
-pub struct TeacherConfig {
-    pub base_url: String,
-    pub model: String,
-    pub api_key: Option<String>,
-}
-
-impl TeacherConfig {
-    pub fn from_env() -> Option<Self> {
-        let base_url = std::env::var("SPOON_TEACHER_URL")
-            .or_else(|_| std::env::var("SPOON_OLLAMA_URL"))
-            .unwrap_or_else(|_| "http://localhost:11434".into());
-        let model = std::env::var("SPOON_TEACHER_MODEL").unwrap_or_else(|_| "qwen2.5:1.5b".into());
-        let api_key = std::env::var("SPOON_TEACHER_API_KEY").ok();
-        Some(Self {
-            base_url,
-            model,
-            api_key,
-        })
-    }
-}
+use crate::config::{ResolvedRuntime, TeacherConfig};
 
 /// Wraps engine access on a dedicated thread since rusqlite::Connection is !Send.
 /// Requests are dispatched via a channel; the engine thread processes them
@@ -85,7 +62,12 @@ enum EngineOp {
 }
 
 impl EngineHandle {
-    fn spawn(mut server: RpcServer, teacher: Option<TeacherConfig>) -> Self {
+    fn spawn(
+        mut server: RpcServer,
+        teacher: Option<TeacherConfig>,
+        interpreter: Option<TeacherConfig>,
+        permission_mode: String,
+    ) -> Self {
         let (tx, mut rx) = tokio::sync::mpsc::channel::<EngineRequest>(256);
         // Build the blocking HTTP client outside the tokio runtime to avoid
         // drop-in-async-context panics (reqwest::blocking creates its own runtime).
@@ -100,14 +82,18 @@ impl EngineHandle {
         std::thread::spawn(move || {
             while let Some(req) = rx.blocking_recv() {
                 let result = match req.op {
-                    EngineOp::Cycle(input) => {
-                        run_engine_cycle(&mut server.engine, input, &teacher, &http_client)
-                            .map_err(|e| e.to_string())
-                    }
+                    EngineOp::Cycle(input) => run_engine_cycle(
+                        &mut server.engine,
+                        input,
+                        &teacher,
+                        &interpreter,
+                        &http_client,
+                    )
+                    .map_err(|e| e.to_string()),
                     EngineOp::Teach {
                         situation,
                         proposal,
-                    } => run_teach(&mut server.engine, situation, proposal)
+                    } => run_teach(&mut server.engine, situation, proposal, &permission_mode)
                         .map_err(|e| e.to_string()),
                     EngineOp::Assist { situation, hints } => {
                         run_assist(&teacher, &http_client, &situation, &hints)
@@ -166,7 +152,7 @@ impl EngineHandle {
 #[derive(Clone)]
 pub struct HttpState {
     engine: EngineHandle,
-    teacher: Option<TeacherConfig>,
+    runtime: ResolvedRuntime,
 }
 
 // ---------- OpenAI-compatible types ----------
@@ -301,16 +287,40 @@ struct ListEpisodesQuery {
 
 // ---------- Router ----------
 
-pub fn router(server: RpcServer) -> Router {
-    let teacher = TeacherConfig::from_env();
-    if let Some(ref t) = teacher {
-        eprintln!("Teacher configured: {} (model: {})", t.base_url, t.model);
+pub fn router(server: RpcServer, runtime: ResolvedRuntime) -> Router {
+    if let Some(ref teacher) = runtime.teacher {
+        eprintln!(
+            "Teacher: {} {} ({})",
+            teacher.provider, teacher.model, teacher.base_url
+        );
+    } else if runtime.teacher_enabled {
+        eprintln!(
+            "Teacher {} is enabled in config but the HTTP server cannot run it; use ollama or set SPOON_TEACHER_URL",
+            runtime.teacher_provider
+        );
     } else {
-        eprintln!("No teacher configured - cycles will abstain when knowledge is missing");
+        eprintln!("Teacher disabled - cycles will abstain when knowledge is missing");
     }
+    if let Some(ref interpreter) = runtime.interpreter {
+        eprintln!(
+            "Interpreter: {} {} ({})",
+            interpreter.provider, interpreter.model, interpreter.base_url
+        );
+    } else {
+        eprintln!("Interpreter: {}", runtime.interpreter_provider);
+    }
+    eprintln!(
+        "Permission {} · recall {} · output {}",
+        runtime.permission_mode, runtime.recall_mode, runtime.output_mode
+    );
     let state = HttpState {
-        engine: EngineHandle::spawn(server, teacher.clone()),
-        teacher,
+        engine: EngineHandle::spawn(
+            server,
+            runtime.teacher.clone(),
+            runtime.interpreter.clone(),
+            runtime.permission_mode.clone(),
+        ),
+        runtime,
     };
     Router::new()
         .route("/", get(chat_page))
@@ -327,8 +337,12 @@ pub fn router(server: RpcServer) -> Router {
         .with_state(state)
 }
 
-pub async fn serve(server: RpcServer, port: u16) -> Result<(), Box<dyn std::error::Error>> {
-    let app = router(server);
+pub async fn serve(
+    server: RpcServer,
+    port: u16,
+    runtime: ResolvedRuntime,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let app = router(server, runtime);
     let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{port}")).await?;
     eprintln!("Spoon HTTP server listening at http://127.0.0.1:{port}");
     eprintln!("Chat UI: http://127.0.0.1:{port}/");
@@ -371,27 +385,24 @@ async fn chat_completions(
             .into_response();
     }
 
-    let recall_mode = match req.spoon_recall_mode.as_deref() {
-        Some("session") => RecallMode::Session,
-        Some("none") => RecallMode::None,
-        _ => RecallMode::Global,
-    };
+    let recall_mode =
+        resolve_recall_mode(req.spoon_recall_mode.as_deref(), &state.runtime.recall_mode);
 
     let input = CycleInput {
         situation,
-        working_directory: None,
+        working_directory: Some(state.runtime.cwd.to_string_lossy().into_owned()),
         environment: BTreeMap::new(),
         assumptions: Vec::new(),
         budget: CycleBudget {
             max_exec_steps: req.max_tokens.unwrap_or(10_000),
-            max_context_items: 64,
+            max_context_items: state.runtime.recall_max_episodes as usize,
             max_teacher_turns: 2,
         },
-        teacher_allowed: true,
-        interpreter_allowed: true,
+        teacher_allowed: state.runtime.teacher.is_some(),
+        interpreter_allowed: state.runtime.interpreter.is_some(),
         session_id: req.spoon_session_id.clone(),
         recall_mode,
-        permission_mode: None,
+        permission_mode: Some(state.runtime.permission_mode.clone()),
     };
 
     let completion_id = format!("chatcmpl-{}", uuid::Uuid::new_v4());
@@ -513,27 +524,27 @@ async fn run_cycle(
     State(state): State<HttpState>,
     Json(req): Json<SpoonCycleRequest>,
 ) -> impl IntoResponse {
-    let recall_mode = match req.recall_mode.as_deref() {
-        Some("session") => RecallMode::Session,
-        Some("none") => RecallMode::None,
-        _ => RecallMode::Global,
-    };
+    let recall_mode = resolve_recall_mode(req.recall_mode.as_deref(), &state.runtime.recall_mode);
 
     let input = CycleInput {
         situation: req.situation,
-        working_directory: None,
+        working_directory: Some(state.runtime.cwd.to_string_lossy().into_owned()),
         environment: req.environment.unwrap_or_default(),
         assumptions: Vec::new(),
         budget: CycleBudget {
             max_exec_steps: req.max_exec_steps.unwrap_or(10_000),
-            max_context_items: 64,
+            max_context_items: state.runtime.recall_max_episodes as usize,
             max_teacher_turns: req.max_teacher_turns.unwrap_or(2),
         },
-        teacher_allowed: req.teacher_allowed.unwrap_or(true),
-        interpreter_allowed: req.interpreter_allowed.unwrap_or(true),
+        teacher_allowed: req
+            .teacher_allowed
+            .unwrap_or(state.runtime.teacher.is_some()),
+        interpreter_allowed: req
+            .interpreter_allowed
+            .unwrap_or(state.runtime.interpreter.is_some()),
         session_id: req.session_id,
         recall_mode,
-        permission_mode: None,
+        permission_mode: Some(state.runtime.permission_mode.clone()),
     };
 
     match state.engine.send(EngineOp::Cycle(input)).await {
@@ -546,25 +557,49 @@ async fn run_cycle(
     }
 }
 
-fn llm_role_status(config: &Option<TeacherConfig>) -> Value {
+fn llm_role_status(config: &Option<TeacherConfig>, provider: &str) -> Value {
     match config {
         Some(config) => json!({
-            "adapter": "ollama",
+            "adapter": config.provider,
             "model": config.model,
             "baseUrl": config.base_url,
         }),
         None => json!({
-            "adapter": "off",
+            "adapter": provider,
             "model": Value::Null,
             "baseUrl": Value::Null,
         }),
     }
 }
 
+fn resolve_recall_mode(requested: Option<&str>, configured: &str) -> RecallMode {
+    match requested.or(Some(configured)) {
+        Some("session") => RecallMode::Session,
+        Some("none") => RecallMode::None,
+        _ => RecallMode::Global,
+    }
+}
+
 async fn runtime_status(State(state): State<HttpState>) -> Json<Value> {
+    let mut teacher = llm_role_status(&state.runtime.teacher, &state.runtime.teacher_provider);
+    if let Value::Object(map) = &mut teacher {
+        map.insert("enabled".into(), json!(state.runtime.teacher_enabled));
+        map.insert("command".into(), json!(state.runtime.teacher_command));
+    }
     Json(json!({
-        "teacher": llm_role_status(&state.teacher),
-        "interpreter": llm_role_status(&state.teacher),
+        "teacher": teacher,
+        "interpreter": llm_role_status(
+            &state.runtime.interpreter,
+            &state.runtime.interpreter_provider,
+        ),
+        "capabilities": { "permissionMode": state.runtime.permission_mode },
+        "recall": {
+            "mode": state.runtime.recall_mode,
+            "lookback": state.runtime.recall_lookback,
+            "maxEpisodes": state.runtime.recall_max_episodes,
+        },
+        "output": { "mode": state.runtime.output_mode },
+        "database": { "path": state.runtime.database_path },
     }))
 }
 
@@ -631,7 +666,10 @@ async fn list_episodes(
                 .into_response();
         }
     }
-    let limit = query.limit.unwrap_or(200).min(1000);
+    let limit = query
+        .limit
+        .unwrap_or(state.runtime.recall_max_episodes.max(1))
+        .min(1000);
     match state
         .engine
         .send(EngineOp::ListEpisodes {
@@ -794,6 +832,7 @@ fn run_teach(
     engine: &mut Engine,
     situation: String,
     proposal: TeacherProposalWire,
+    permission_mode: &str,
 ) -> Result<Value, EngineError> {
     let input = CycleInput {
         situation,
@@ -809,7 +848,7 @@ fn run_teach(
         interpreter_allowed: false,
         session_id: None,
         recall_mode: RecallMode::Global,
-        permission_mode: None,
+        permission_mode: Some(permission_mode.to_string()),
     };
 
     let mut progress = engine.begin_cycle(input)?;
@@ -871,6 +910,7 @@ fn run_engine_cycle(
     engine: &mut Engine,
     input: CycleInput,
     teacher: &Option<TeacherConfig>,
+    interpreter: &Option<TeacherConfig>,
     http_client: &reqwest::blocking::Client,
 ) -> Result<Value, EngineError> {
     let max_teacher_turns = input.budget.max_teacher_turns;
@@ -895,10 +935,10 @@ fn run_engine_cycle(
                 }));
             }
             CycleProgress::NeedIntent { cycle_id, request } => {
-                let Some(config) = teacher else {
+                let Some(config) = interpreter else {
                     progress = engine.skip_intent_with_diagnostic(
                         cycle_id,
-                        "no interpreter LLM configured - set SPOON_TEACHER_URL",
+                        "language interpreter is disabled",
                         None,
                     )?;
                     continue;
@@ -1356,18 +1396,22 @@ mod tests {
 
     #[test]
     fn llm_role_status_omits_secrets_and_labels_ollama() {
-        let on = llm_role_status(&Some(TeacherConfig {
-            base_url: "http://localhost:11434".into(),
-            model: "qwen3.8:27b".into(),
-            api_key: Some("secret".into()),
-        }));
+        let on = llm_role_status(
+            &Some(TeacherConfig {
+                provider: "ollama".into(),
+                base_url: "http://localhost:11434".into(),
+                model: "qwen3.8:27b".into(),
+                api_key: Some("secret".into()),
+            }),
+            "ollama",
+        );
         assert_eq!(on["adapter"], "ollama");
         assert_eq!(on["model"], "qwen3.8:27b");
         assert_eq!(on["baseUrl"], "http://localhost:11434");
         assert!(on.get("apiKey").is_none());
         assert!(on.get("api_key").is_none());
 
-        let off = llm_role_status(&None);
+        let off = llm_role_status(&None, "off");
         assert_eq!(off["adapter"], "off");
         assert!(off["model"].is_null());
     }

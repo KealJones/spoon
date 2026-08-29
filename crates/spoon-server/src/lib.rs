@@ -1,3 +1,4 @@
+pub mod config;
 pub mod http;
 
 use std::collections::BTreeMap;
