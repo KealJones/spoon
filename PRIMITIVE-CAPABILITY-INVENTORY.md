@@ -354,8 +354,12 @@ tracked in section 1.
 - [ ] Candidate workspace with atomic admission/rejection and retained failure evidence.
 - [ ] Capability repair, supersession, migration, rollback, and compatibility negotiation.
 - [ ] Dependency resolver with offline cache, lockfile, conflict explanation, and cycle UI.
-- [ ] Seed forge: teach clean instance, Teacher-OFF test, export, reconstruct in a second
-  clean instance, independently validate, then publish.
+- [x] Seed forge: load a curriculum, teach a clean in-memory instance, run
+  Teacher-OFF gates that abort if the engine asks, inspect expected
+  structures, export under an `exportPrivacy` filter, reconstruct in a
+  second clean instance, and re-run the gates. Publication signing is a
+  documented seam (`ReportSigner`), not implemented here: HMAC in
+  `spoon-secret` is a local identity, not a publisher signature.
 - [ ] Signed seed/capability registry protocol and transparent artifact mirroring.
 
 ## 12. Language and meaning — primarily seeded/acquired
