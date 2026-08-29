@@ -11,15 +11,15 @@ actually ran. No skeletons, no `todo!()`, no deferred work.
 
 | # | Slice | State | Commit |
 |---|---|---|---|
-| 1 | Core IR: UtteranceAnalysis, Part, Mention, ResidualClaim, AlignedDocument, proposal + ground_for, structural validation | TODO | |
-| 2 | ResponsePlan: per-claim `act`, `RenderVariant::Joined`, plan-act derivation, uncertainty merge | TODO | |
-| 3 | LanguageContextPacket: types, bounds, truncation flags, SupplementalRequest | TODO | |
+| 1 | Core IR: UtteranceAnalysis, Part, Mention, ResidualClaim, AlignedDocument, proposal + ground_for, structural validation | DONE | |
+| 2 | ResponsePlan: per-claim `act`, `RenderVariant::Joined`, plan-act derivation, uncertainty merge | DONE | |
+| 3 | LanguageContextPacket: types, bounds, truncation flags, SupplementalRequest | DONE | |
 | 4 | Intent Catalog: tables, skeleton normalization, pattern lifecycle/promotion/demotion | TODO | |
 | 5 | Engine per-part dispatch: toposort, PartOutcome, ResponsePlan build | TODO | |
 | 6 | Suspend/resume: PendingPartsCycle, per-part Teacher, budget exhaustion | TODO | |
 | 7 | Clarify across parts: reply-only analysis, rendered_in_turn | TODO | |
 | 8 | Residual facts: provenance-gated ObservedFact admission | TODO | |
-| 9 | Template realizer: template set, RealizationProposal, validation | TODO | |
+| 9 | Template realizer: template set, RealizationProposal, validation | DONE | |
 | 10 | Graph writes: closed relationship-kind set, alias/termed/intent-of admission | TODO | |
 | 11 | `@spoon/intent` schemas + prompt; SDK wire parity | TODO | |
 | 12 | Test suite: behavioral, catalog, facts, realizer, adversarial | TODO | |

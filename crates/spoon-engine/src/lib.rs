@@ -10,6 +10,7 @@ pub mod cycle;
 pub mod engine;
 pub mod evaluation;
 mod goals;
+pub mod intent_catalog;
 mod lesson;
 mod regression;
 mod runtime;
@@ -38,6 +39,10 @@ pub use engine::{
 pub use goals::{
     CuriosityGap, GapKind, Goal, GoalDerivationRecord, GoalKind, GoalLearningRecord,
     LearningActionKind, ScheduledLearningAction,
+};
+pub use intent_catalog::{
+    IntentCatalogEntry, IntentCatalogPattern, IntentCatalogStore, IntentSlotSchema,
+    MAX_PATTERNS_PER_KEY, PatternAdmission, normalize_skeleton,
 };
 pub use regression::{
     MIN_BROAD_REGRESSION_CASES, RegressionSuiteCaseResult, RegressionSuiteCaseStatus,

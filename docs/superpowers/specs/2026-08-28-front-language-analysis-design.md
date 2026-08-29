@@ -323,6 +323,19 @@ So the worked example realizes as:
 
 via `join.ack.and` with `slot_order = [c0, c1, c2]`.
 
+### Sentence mechanics
+
+Claim text is verbatim in content, but a claim written to stand alone does not compose. `"2 + 2 is 4."` inside `{0}, and {1}` would give `"2 + 2 is 4., and Double that is 8."`
+
+Each template therefore declares two mechanical rules per slot, both Engine-owned and applied to Engine-authored text:
+
+- `strip_terminator`: drop exactly one trailing `.`, `!`, or `?` when the template continues the sentence. An ellipsis is left alone, because collapsing `...` to `..` would change what the claim said.
+- `lowercase_initial`: lowercase the first character of a claim landing mid-sentence, **only when the original utterance itself used that word with a lowercase initial**.
+
+That evidence condition is the whole point of the second rule. `"double"` appears lowercase in `"hey whats 2+2 and then double that"`, so lowercasing it is grounded in what the user typed. `"Pierre"` never appears lowercase, so it keeps its capital even in a slot the template would otherwise lowercase. Decapitalizing a name to make a sentence flow is a worse error than a capital letter mid-sentence.
+
+Neither rule can add, remove, or reorder a word. The model does not select them; they are fixed per template.
+
 ### Validation
 
 Checked before anything reaches the user. Any failure discards the proposal, records a diagnostic on the episode, and renders with `ResponseRenderer`. The stored plan is never modified.

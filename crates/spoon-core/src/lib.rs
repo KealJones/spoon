@@ -7,6 +7,7 @@ pub mod expr;
 pub mod language;
 pub mod packet;
 pub mod procedure;
+pub mod realizer;
 pub mod relationship;
 pub mod spoonlang;
 pub mod utterance;
@@ -37,6 +38,10 @@ pub use packet::{
     TurnRole,
 };
 pub use procedure::{CapabilityDependency, Param, ParamType, Procedure, ProcedureId, TestCase};
+pub use realizer::{
+    ClaimDependencies, Realization, RealizationProposal, RealizationTemplate, TEMPLATES,
+    TemplateArity, TemplateShape,
+};
 pub use relationship::{Relationship, RelationshipId};
 pub use utterance::{
     AlignedDocument, Alignment, AlignmentProposal, LanguageWrite, LanguageWriteKind,

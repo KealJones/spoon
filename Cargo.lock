@@ -1218,6 +1218,7 @@ dependencies = [
  "spoon-intuition",
  "spoon-reason",
  "thiserror",
+ "unicode-normalization",
  "uuid",
 ]
 
