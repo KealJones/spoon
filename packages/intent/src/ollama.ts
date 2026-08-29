@@ -144,11 +144,7 @@ export function reconsiderationProposal(
   };
 }
 
-export     return wireInterpretation(
-      "ollama",
-      this.#source,
-      this.#model,
-      ollamaStructuredContent(payload),
+export function wireInterpretation(
   provider: Exclude<IntentProvider, "spoon">,
   source: string,
   model: string,

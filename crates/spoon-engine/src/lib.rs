@@ -12,6 +12,7 @@ pub mod engine;
 pub mod evaluation;
 mod goals;
 pub mod intent_catalog;
+pub mod language_cycle;
 mod lesson;
 pub mod parts;
 mod regression;
