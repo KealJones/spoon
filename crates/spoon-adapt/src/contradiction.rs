@@ -645,7 +645,7 @@ fn validate_discriminator_episodes(
                 evaluation.tier,
                 spoon_core::VerifiabilityTier::Hard | spoon_core::VerifiabilityTier::Consensus
             )
-            || episode.context.environment.get(&discriminator.feature) != Some(expected_value)
+            || !episode_demonstrates(&episode, &discriminator.feature, expected_value)
         {
             return Err(AdaptError::Unauthorized(
                 "discriminator is not demonstrated by stored verified episode context".into(),
@@ -653,6 +653,26 @@ fn validate_discriminator_episodes(
         }
     }
     Ok(())
+}
+
+/// An episode demonstrates a feature when it records the value the
+/// discriminator claims it ran with. That value lives in one of two places: the
+/// caller-supplied environment, or the scope of an observed fact, which is the
+/// inputs a procedure actually resolved. A discriminator derived from fact
+/// scope has to be checkable against fact scope, or a procedure that earns its
+/// facts by execution can never justify the split it demonstrates.
+fn episode_demonstrates(
+    episode: &spoon_core::Episode,
+    feature: &str,
+    expected_value: &Value,
+) -> bool {
+    if episode.context.environment.get(feature) == Some(expected_value) {
+        return true;
+    }
+    episode
+        .observed_facts
+        .iter()
+        .any(|fact| fact.scope.get(feature) == Some(expected_value))
 }
 
 fn scopes_can_overlap(left: &Claim, right: &Claim) -> bool {

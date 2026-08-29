@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use spoon_adapt::{
@@ -1617,6 +1618,140 @@ fn demonstrated_discriminator_splits_both_claims_without_destroying_history() {
         store.uncertainty_for_claim("claim-a").unwrap(),
         Uncertainty::Certain
     ));
+}
+
+#[test]
+fn a_discriminator_holds_when_the_feature_is_only_recorded_as_executed_input() {
+    // A procedure that earns its facts by running records the inputs it
+    // resolved as the scope of the observed fact, and leaves the caller's
+    // environment empty. The discriminator is derived from that scope, so it
+    // has to be checkable against that scope too.
+    let episodes = EpisodeStore::in_memory().unwrap();
+    let left_episode = EpisodeId::new();
+    let right_episode = EpisodeId::new();
+    for (id, input, output) in [
+        (left_episode, 21_i64, 42_i64),
+        (right_episode, 3_i64, 6_i64),
+    ] {
+        let mut episode = Episode::new("double it");
+        episode.id = id;
+        episode.observed_result = Some(Value::Int(output));
+        episode.observed_facts.push(ObservedFact::new(
+            "double",
+            Value::Int(output),
+            BTreeMap::from([("n".to_string(), Value::Int(input))]),
+        ));
+        episode.evaluation = Some(Evaluation {
+            tier: VerifiabilityTier::Hard,
+            success: true,
+            details: "deterministic validated procedure execution completed".into(),
+            surprise: None,
+        });
+        episodes.insert(&episode).unwrap();
+    }
+    assert!(episodes.get(left_episode).unwrap().context.environment.is_empty());
+
+    let store = ContradictionStore::in_memory().unwrap();
+    let contradiction = store
+        .record(
+            Claim::new(
+                "observed-left",
+                "double = 42",
+                Implication::new("double", Value::Int(42)),
+                vec![left_episode],
+            ),
+            Claim::new(
+                "observed-right",
+                "double = 6",
+                Implication::new("double", Value::Int(6)),
+                vec![right_episode],
+            ),
+            &episodes,
+            600,
+        )
+        .unwrap();
+    let feature = DemonstratedFeature::new(
+        "n",
+        Value::Int(21),
+        left_episode,
+        Value::Int(3),
+        right_episode,
+    )
+    .unwrap();
+
+    let refinement = store
+        .refine(contradiction.id, feature, &episodes, 601)
+        .unwrap();
+
+    assert_eq!(refinement.left.scope[0].feature, "n");
+    assert_eq!(refinement.left.scope[0].value, Value::Int(21));
+    assert_eq!(refinement.right.scope[0].value, Value::Int(3));
+    assert_eq!(
+        store.get(contradiction.id).unwrap().unwrap().status,
+        ContradictionStatus::Refined
+    );
+}
+
+#[test]
+fn a_discriminator_still_needs_the_episode_to_have_run_the_claimed_input() {
+    let episodes = EpisodeStore::in_memory().unwrap();
+    let left_episode = EpisodeId::new();
+    let right_episode = EpisodeId::new();
+    for (id, input, output) in [
+        (left_episode, 21_i64, 42_i64),
+        (right_episode, 3_i64, 6_i64),
+    ] {
+        let mut episode = Episode::new("double it");
+        episode.id = id;
+        episode.observed_result = Some(Value::Int(output));
+        episode.observed_facts.push(ObservedFact::new(
+            "double",
+            Value::Int(output),
+            BTreeMap::from([("n".to_string(), Value::Int(input))]),
+        ));
+        episode.evaluation = Some(Evaluation {
+            tier: VerifiabilityTier::Hard,
+            success: true,
+            details: "deterministic validated procedure execution completed".into(),
+            surprise: None,
+        });
+        episodes.insert(&episode).unwrap();
+    }
+
+    let store = ContradictionStore::in_memory().unwrap();
+    let contradiction = store
+        .record(
+            Claim::new(
+                "observed-left",
+                "double = 42",
+                Implication::new("double", Value::Int(42)),
+                vec![left_episode],
+            ),
+            Claim::new(
+                "observed-right",
+                "double = 6",
+                Implication::new("double", Value::Int(6)),
+                vec![right_episode],
+            ),
+            &episodes,
+            600,
+        )
+        .unwrap();
+    // Nothing ran with n = 99, so the split it would justify is not evidence.
+    let unfounded = DemonstratedFeature::new(
+        "n",
+        Value::Int(99),
+        left_episode,
+        Value::Int(3),
+        right_episode,
+    )
+    .unwrap();
+
+    assert!(
+        store
+            .refine(contradiction.id, unfounded, &episodes, 601)
+            .is_err()
+    );
 }
 
 #[test]
