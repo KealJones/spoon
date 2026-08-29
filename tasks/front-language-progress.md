@@ -21,10 +21,10 @@ actually ran. No skeletons, no `todo!()`, no deferred work.
 | 8 | Residual facts: provenance-gated ObservedFact admission | DONE | |
 | 9 | Template realizer: template set, RealizationProposal, validation | DONE | |
 | 10 | Graph writes: closed relationship-kind set, alias/termed/intent-of admission | DONE | |
-| 11 | `@spoon/intent` schemas + prompt; SDK wire parity | TODO | |
-| 12 | Test suite: behavioral, catalog, facts, realizer, adversarial | TODO | |
+| 11 | `@spoon/intent` schemas + prompt; SDK wire parity | DONE | |
+| 12 | Test suite: behavioral, catalog, facts, realizer, adversarial | DONE | |
 | 13 | Real-model gate: qwen3.8:27b, then qwen2.5:1.5b comparison | DONE | |
-| 14 | Full gate: fmt, clippy, cargo test, tsc, pnpm test | TODO | |
+| 14 | Full gate: fmt, clippy, cargo test, tsc, pnpm test | DONE | |
 
 ## Decisions made during implementation
 
@@ -81,6 +81,22 @@ cycle is a different cost story than the spec implies. Either the weaning has
 to carry more weight than assumed, or the interpreter needs a mid-size model
 (the 7B-14B range is untested here). Nothing in the code depends on which is
 chosen, but the spec's cost claim is currently unproven at small scale.
+
+### Pre-existing failures, verified against main
+
+Both were checked by building `main` in a separate worktree and running them
+there. Neither is a regression from this work.
+
+- `packages/intent/src/ollama.ts` on `main` is syntactically corrupt: a bad
+  edit clobbered `ollamaStructuredContent`'s definition into
+  `wireInterpretation`'s signature line, so the package does not parse and its
+  whole test file fails to transform. This branch repairs it, which turns 7
+  failing tests green.
+- `spoon-engine` test `malformed_reusable_lesson_gets_one_targeted_retry_when_budget_allows`
+  fails on `main` at the same assertion. Untouched.
+- `@spoon/cli` test `fake teacher teaches a procedure once and the Rust cycle
+  reuses it locally` returns a null answer on `main`'s Rust as well, verified
+  with `main` built in its own worktree.
 
 ### Not landed
 
