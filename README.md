@@ -23,17 +23,17 @@ ollama pull qwen3.8:27b
 ## Start the HTTP server (chat UI)
 
 ```bash
-SPOON_DB=./spoon.db \
-SPOON_TEACHER_MODEL=qwen3.8:27b \
-  pnpm serve
+pnpm serve
 ```
 
 Open <http://127.0.0.1:4318>. Named sessions restore episode history. The pinned
 Global chat has no session and does not recall.
 
-`pnpm serve` is `cargo run -p spoon-server -- --http --port 4318`. Override the
-port with `--port` on the binary. `SPOON_TEACHER_URL` / `SPOON_OLLAMA_URL`
-default to `http://localhost:11434`. Without Ollama, unknown questions abstain.
+`pnpm serve` is `cargo run -p spoon-server -- --http --port 4318`. It loads the
+same `~/.spoon/config.json` as the CLI. Override the port with `--port` on the
+binary. Environment variables still override file values. `SPOON_TEACHER_URL` /
+`SPOON_OLLAMA_URL` default to `http://localhost:11434`. Without Ollama, unknown
+questions abstain.
 
 ## CLI
 

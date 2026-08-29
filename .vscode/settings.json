@@ -1,0 +1,8 @@
+{
+  "json.schemas": [
+    {
+      "fileMatch": ["**/.spoon/config.json", "**/.spoon/config.local.json"],
+      "url": "./packages/cli/src/config.schema.json"
+    }
+  ]
+}

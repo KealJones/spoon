@@ -1,0 +1,4 @@
+# Keep debug/test builds from retaining a large incremental object graph.
+# This favors predictable disk usage over the fastest repeated rebuilds.
+[build]
+incremental = false

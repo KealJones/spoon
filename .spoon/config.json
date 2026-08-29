@@ -1,0 +1,10 @@
+{
+  "$schema": "../packages/cli/src/config.schema.json",
+  "version": 1,
+  "language": {
+    "interpreter": {
+      "provider": "ollama",
+      "model": "qwen3:30b-a3b"
+    }
+  }
+}
