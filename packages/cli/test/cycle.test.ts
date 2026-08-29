@@ -409,66 +409,16 @@ class ReusableLessonTeacher implements Pick<
     this.calls.push(request);
     return {
       content: {
-        proposalKind: "reusable_lesson",
+        source: [
+          "kind reusable_lesson",
+          "concept double: procedural",
+          '  "Twice a number"',
+          "proc double(x: number)",
+          '  name "DOUBLE"',
+          "  x * 2",
+          "example double(7) => 14",
+        ].join("\n"),
         interpretations: [],
-        lesson: {
-          primitiveSet: "pure_rpn_v1",
-          concepts: [
-            {
-              key: "double",
-              name: "DOUBLE",
-              description: "Multiply any numeric input by two",
-              mutability: "procedural",
-            },
-          ],
-          relationships: [],
-          procedures: [
-            {
-              key: "double-procedure",
-              name: "DOUBLE",
-              concept: { kind: "new_concept", key: "double" },
-              parameters: [
-                {
-                  name: "x",
-                  description: "numeric input",
-                  valueType: "number",
-                },
-              ],
-              body: {
-                instructions: [
-                  { op: "load_parameter", name: "x" },
-                  { op: "push_literal", value: 2 },
-                  { op: "multiply" },
-                ],
-              },
-              contract: {
-                requires: [],
-                promises: [
-                  {
-                    description: "result is twice x",
-                    check: {
-                      instructions: [
-                        { op: "load_result" },
-                        { op: "load_parameter", name: "x" },
-                        { op: "push_literal", value: 2 },
-                        { op: "multiply" },
-                        { op: "equal" },
-                      ],
-                    },
-                  },
-                ],
-                failsWhen: [],
-              },
-            },
-          ],
-          invocation: {
-            procedureKey: "double-procedure",
-            inputs: [{ name: "x", value: 7 }],
-          },
-        },
-        procedure: null,
-        answer: 14,
-        abstainReason: null,
       },
       source: "human:fake-procedure",
       status: "unverified",
