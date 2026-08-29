@@ -5,6 +5,7 @@ pub mod error;
 pub mod evidence;
 pub mod expr;
 pub mod language;
+pub mod packet;
 pub mod procedure;
 pub mod relationship;
 pub mod spoonlang;
@@ -29,6 +30,11 @@ pub use language::{
     LanguageLimits, NormalizationForm, PlannedClaim, RenderVariant, RenderedResponse, ResponsePlan,
     ResponseRenderer, ResponseTone, TextDocument, TextSpan, Token, TokenKind, TokenRange,
     TokenStream, Uncertainty, UncertaintyLevel, tokenize, tokenize_with_limits,
+};
+pub use packet::{
+    LanguageContextPacket, PacketAlias, PacketCatalogEntry, PacketEnvFact, PacketFact,
+    PacketLimits, PacketSlot, PacketTurn, SupplementalBudget, SupplementalRequest, TruncationFlag,
+    TurnRole,
 };
 pub use procedure::{CapabilityDependency, Param, ParamType, Procedure, ProcedureId, TestCase};
 pub use relationship::{Relationship, RelationshipId};

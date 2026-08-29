@@ -878,7 +878,7 @@ fn reject_durable_ids(proposal: &UtteranceAnalysisProposal) -> Result<(), Langua
     let encoded = serde_json::to_string(proposal).map_err(|error| {
         LanguageError::Invalid(format!("proposal could not be inspected: {error}"))
     })?;
-    if contains_uuid(&encoded) {
+    if contains_durable_id(&encoded) {
         return Err(LanguageError::Invalid(
             "proposal contains a durable identifier; the Engine mints identifiers".into(),
         ));
@@ -886,7 +886,7 @@ fn reject_durable_ids(proposal: &UtteranceAnalysisProposal) -> Result<(), Langua
     Ok(())
 }
 
-fn contains_uuid(text: &str) -> bool {
+pub(crate) fn contains_durable_id(text: &str) -> bool {
     const GROUPS: [usize; 5] = [8, 4, 4, 4, 12];
     let bytes = text.as_bytes();
     let total: usize = GROUPS.iter().sum::<usize>() + GROUPS.len() - 1;
