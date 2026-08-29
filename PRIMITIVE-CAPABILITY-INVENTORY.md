@@ -227,22 +227,33 @@ tracked in section 1.
 
 ## 6. Network mechanism — native effect
 
-- [~] Exact-host permission declarations, local grants/denials, byte bounds, redacted
-  receipts, and an injected host adapter exist.
-- [~] Method and JSON-shaped body reach the adapter; the request model lacks a complete
-  URL/path/query/header/content-type contract.
-- [ ] Scheme, port, path-prefix, method, and redirect scopes.
-- [ ] Typed headers with mandatory secret redaction.
-- [ ] Query parameters, body encodings, response status/headers/body, and content limits.
-- [ ] Connect/read/total timeouts and cancellation.
-- [ ] Redirect count and cross-origin redirect policy.
-- [ ] DNS rebinding/private-network/link-local/loopback protections.
-- [ ] TLS policy and peer/certificate provenance owned by the host adapter.
-- [ ] Streaming upload/download with per-chunk and total budgets.
+- [x] Exact-host permission, scheme/port/method allowlists, byte bounds, and
+  redacted receipts. A caller never supplies a URL: the target is assembled
+  from host policy plus a validated path and query. Not yet reached from a
+  public RPC path.
+- [x] Scheme, port, method, and redirect scopes. `https` only by default;
+  `http` solely for an explicitly configured host. Redirects are off by
+  default, followed by the adapter (not reqwest), revalidated every hop, and
+  only GET/HEAD are followed.
+- [x] Request headers with mandatory secret redaction (`authorization`,
+  `cookie`, `proxy-authorization`, `x-api-key`). Secret-bearing headers never
+  appear in the receipt, the output, or error text.
+- [x] Query parameters, body, response status/headers/body, and a streaming
+  byte cap that aborts mid-download rather than buffering then rejecting.
+- [x] Connect and total timeouts derived from `bounds.max_millis`.
+- [x] DNS rebinding and private-network protections. The adapter resolves,
+  refuses unless every address is public (or explicitly permitted), and
+  hands only that set to the connector. Proven against a `.invalid` host no
+  resolver can answer. An HTTP proxy in the process environment is not
+  covered. The check and connect are still two steps.
+- [~] TLS is rustls via reqwest. Peer/certificate provenance is not surfaced
+  in the output because the blocking client does not expose the chain.
+- [~] Streaming download with a total budget is enforced. Streaming upload
+  with per-chunk budgets is not.
 - [ ] Pagination, retries, backoff, idempotency, and rate-limit handling as seeded
   procedures over the request primitive.
 - [ ] WebSocket/server-sent-event/stream subscription adapter family.
-- [ ] Offline/fake transport that shares the exact production contract for tests.
+- [x] Offline in-memory transport sharing the exact production contract.
 
 ## 7. Filesystem mechanism — native effect
 
