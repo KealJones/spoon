@@ -4,7 +4,7 @@ use serde_json::json;
 use spoon_core::{
     BinOp, Concept, Episode, EscalationRung, Evaluation, Expr, IntentDisposition,
     IntentFrameProposal, IntentScope, IntentSlotProposal, InterpretationProposal, IntrinsicOp,
-    MutabilityClass, Param, ParamType, Procedure, TokenRange, Value, VerifiabilityTier,
+    Lifecycle, MutabilityClass, Param, ParamType, Procedure, TokenRange, Value, VerifiabilityTier,
 };
 use spoon_engine::{
     CycleBudget, CycleDisposition, CycleInput, CycleProgress, Engine, IntentProposalWire,
@@ -651,6 +651,110 @@ fn cycle_persists_working_directory_provenance_on_episode() {
             .as_deref(),
         Some("/workspace/example-repo")
     );
+}
+
+/// A teacher lesson lands as `Provisional`, and only `Active` or `Validated`
+/// procedures are advertised to the Teacher as composable dependencies. If a
+/// procedure can never leave `Provisional`, the engine relearns from scratch
+/// forever, so the escape hatch is exercised here directly.
+#[test]
+fn a_provisional_procedure_is_promoted_after_repeated_clean_execution() {
+    let mut engine = Engine::in_memory_with_admin("promotion-admin").unwrap();
+    let (_, procedure) = seed_provisional_double(&engine);
+
+    for run in 1..=3 {
+        let progress = engine
+            .begin_cycle(cycle_input("DOUBLE 7", false))
+            .unwrap_or_else(|error| panic!("run {run} should execute: {error}"));
+        let CycleProgress::Completed(outcome) = progress else {
+            panic!("run {run} should complete");
+        };
+        assert_eq!(outcome.answer, Some(Value::Int(14)));
+    }
+
+    let promoted = engine
+        .graph()
+        .get_procedure(procedure.id)
+        .unwrap()
+        .expect("the procedure is still on record");
+    assert_eq!(promoted.lifecycle, Lifecycle::Active);
+}
+
+#[test]
+fn two_clean_executions_are_not_enough_to_promote() {
+    let mut engine = Engine::in_memory_with_admin("promotion-threshold-admin").unwrap();
+    let (_, procedure) = seed_provisional_double(&engine);
+
+    for _ in 0..2 {
+        engine.begin_cycle(cycle_input("DOUBLE 7", false)).unwrap();
+    }
+
+    let still_provisional = engine
+        .graph()
+        .get_procedure(procedure.id)
+        .unwrap()
+        .expect("the procedure is still on record");
+    assert_eq!(still_provisional.lifecycle, Lifecycle::Provisional);
+}
+
+/// Promotion reads execution history, so a procedure that has ever failed must
+/// stay provisional no matter how many later runs succeed.
+#[test]
+fn a_recorded_failure_holds_a_procedure_back_from_promotion() {
+    let mut engine = Engine::in_memory_with_admin("promotion-failure-admin").unwrap();
+    let (_, procedure) = seed_provisional_divide(&engine);
+
+    // Division by zero fails and is recorded against this procedure.
+    engine.begin_cycle(cycle_input("DIVIDE 8 0", false)).unwrap();
+    for _ in 0..4 {
+        engine.begin_cycle(cycle_input("DIVIDE 8 2", false)).unwrap();
+    }
+
+    let held_back = engine
+        .graph()
+        .get_procedure(procedure.id)
+        .unwrap()
+        .expect("the procedure is still on record");
+    assert_eq!(held_back.lifecycle, Lifecycle::Provisional);
+}
+
+fn seed_provisional_double(engine: &Engine) -> (Concept, Procedure) {
+    let concept = Concept::new("DOUBLE", MutabilityClass::Definitional);
+    engine.admin_insert_concept(&concept).unwrap();
+    let mut procedure = Procedure::new(
+        "DOUBLE",
+        vec![Param::typed("x", ParamType::Number)],
+        Expr::BinOp {
+            op: BinOp::Mul,
+            left: Box::new(Expr::Var("x".into())),
+            right: Box::new(Expr::Literal(Value::Int(2))),
+        },
+    )
+    .with_concept(concept.id);
+    procedure.lifecycle = Lifecycle::Provisional;
+    engine.admin_insert_procedure(&procedure).unwrap();
+    (concept, procedure)
+}
+
+fn seed_provisional_divide(engine: &Engine) -> (Concept, Procedure) {
+    let concept = Concept::new("DIVIDE", MutabilityClass::Definitional);
+    engine.admin_insert_concept(&concept).unwrap();
+    let mut procedure = Procedure::new(
+        "DIVIDE",
+        vec![
+            Param::typed("a", ParamType::Number),
+            Param::typed("b", ParamType::Number),
+        ],
+        Expr::BinOp {
+            op: BinOp::Div,
+            left: Box::new(Expr::Var("a".into())),
+            right: Box::new(Expr::Var("b".into())),
+        },
+    )
+    .with_concept(concept.id);
+    procedure.lifecycle = Lifecycle::Provisional;
+    engine.admin_insert_procedure(&procedure).unwrap();
+    (concept, procedure)
 }
 
 fn seed_double(engine: &Engine) -> (Concept, Procedure) {
@@ -1930,20 +2034,65 @@ fn run_matches_a_linked_procedure_without_domain_special_cases() {
 }
 
 #[test]
-fn interpreter_validates_a_locally_resolvable_procedure_when_enabled() {
+fn an_enabled_interpreter_does_not_get_asked_to_confirm_what_the_engine_already_resolved() {
     let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
     seed_double(&engine);
     let mut input = cycle_input("what is double 7?", false);
     input.interpreter_allowed = true;
 
-    let CycleProgress::NeedIntent { request, .. } = engine.begin_cycle(input).unwrap() else {
-        panic!("an enabled interpreter should validate even a local procedure match");
+    let CycleProgress::Completed(outcome) = engine.begin_cycle(input).unwrap() else {
+        panic!("a uniquely resolved procedure should not need a model to confirm it");
     };
-    assert_eq!(request.situation, "what is double 7?");
-    assert_eq!(
-        request.context["candidates"][0]["procedure"]["name"],
-        "DOUBLE"
-    );
+    assert_eq!(outcome.disposition, CycleDisposition::Verified);
+    assert_eq!(outcome.answer, Some(Value::Int(14)));
+}
+
+#[test]
+fn an_enabled_interpreter_is_still_consulted_when_nothing_resolves_locally() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    seed_double(&engine);
+    // DOUBLE must not be stretched over "triple"; the wording does not support
+    // it, so this is exactly the case the interpreter exists for.
+    let mut input = cycle_input("what is triple 7?", false);
+    input.interpreter_allowed = true;
+
+    let CycleProgress::NeedIntent { request, .. } = engine.begin_cycle(input).unwrap() else {
+        panic!("an unresolvable situation should reach the interpreter");
+    };
+    assert_eq!(request.situation, "what is triple 7?");
+}
+
+#[test]
+fn a_procedure_whose_parameters_the_wording_cannot_fill_does_not_run_locally() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    let concept = Concept::new("SUM_THEN_DOUBLE", MutabilityClass::Definitional);
+    engine.admin_insert_concept(&concept).unwrap();
+    let procedure = Procedure::new(
+        "SUM_THEN_DOUBLE",
+        vec![
+            Param::typed("a", ParamType::Number),
+            Param::typed("b", ParamType::Number),
+        ],
+        Expr::BinOp {
+            op: BinOp::Mul,
+            left: Box::new(Expr::BinOp {
+                op: BinOp::Add,
+                left: Box::new(Expr::Var("a".into())),
+                right: Box::new(Expr::Var("b".into())),
+            }),
+            right: Box::new(Expr::Literal(Value::Int(2))),
+        },
+    )
+    .with_concept(concept.id);
+    engine.admin_insert_procedure(&procedure).unwrap();
+    let mut input = cycle_input("what is double 7?", false);
+    input.interpreter_allowed = true;
+
+    // One literal cannot fill two required numeric slots, so the engine must
+    // not invent a second value to make the match work.
+    let CycleProgress::NeedIntent { .. } = engine.begin_cycle(input).unwrap() else {
+        panic!("an unsatisfiable parameter list must not execute locally");
+    };
 }
 
 #[test]
@@ -2345,6 +2494,47 @@ fn exact_verified_history_resolves_at_recall() {
 }
 
 #[test]
+fn recall_still_resolves_when_history_dwarfs_any_candidate_window() {
+    let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+    let concept = Concept::new("recall arithmetic", MutabilityClass::Definitional);
+    engine.admin_insert_concept(&concept).unwrap();
+
+    // Bury the answer under a corpus far larger than any bounded candidate
+    // slice, using near-identical names so a similarity ranker cannot keep the
+    // target on top. Recall matches situations exactly, so corpus size must not
+    // decide whether it finds one.
+    for index in 0..200 {
+        let filler = Procedure::new(
+            format!("RECALL DOUBLE {index:03}"),
+            Vec::new(),
+            Expr::Literal(Value::Int(14)),
+        )
+        .with_concept(concept.id);
+        engine.admin_insert_procedure(&filler).unwrap();
+        engine
+            .execute_procedure(filler.id, BTreeMap::new(), Some(Value::Int(14)))
+            .unwrap();
+    }
+
+    let procedure = Procedure::new("RECALL DOUBLE", Vec::new(), Expr::Literal(Value::Int(14)))
+        .with_concept(concept.id);
+    engine.admin_insert_procedure(&procedure).unwrap();
+    engine
+        .execute_procedure(procedure.id, BTreeMap::new(), Some(Value::Int(14)))
+        .unwrap();
+
+    let progress = engine
+        .begin_cycle(cycle_input("execute RECALL DOUBLE", true))
+        .unwrap();
+    let CycleProgress::Completed(outcome) = progress else {
+        panic!("verified history should recall regardless of corpus size");
+    };
+
+    assert_eq!(outcome.answer, Some(Value::Int(14)));
+    assert_eq!(outcome.episode.cost.rung_reached as u8, 1);
+}
+
+#[test]
 fn a_teacher_continuation_can_only_be_consumed_once() {
     let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
     let start = engine.begin_cycle(cycle_input("unknown", true)).unwrap();
@@ -2361,6 +2551,42 @@ fn a_teacher_continuation_can_only_be_consumed_once() {
 
     assert!(second.unwrap_err().to_string().contains("cycle"));
     assert_eq!(engine.episodes().count().unwrap(), 1);
+}
+
+#[test]
+fn a_second_engine_opening_the_database_does_not_seize_a_live_cycle() {
+    let path = std::env::temp_dir().join(format!(
+        "spoon-cycle-ownership-{}.sqlite",
+        uuid::Uuid::new_v4()
+    ));
+    let path_text = path.to_string_lossy().into_owned();
+
+    let mut owner = Engine::open(&path_text).unwrap();
+    let CycleProgress::NeedTeacher { cycle_id, .. } = owner
+        .begin_cycle(cycle_input("durable unknown", true))
+        .unwrap()
+    else {
+        panic!("unknown input should persist a teacher continuation");
+    };
+
+    // A background server sharing the database used to claim every pending
+    // cycle the moment it opened, which left the original owner unable to
+    // finish its own conversation.
+    let _bystander = Engine::open(&path_text).unwrap();
+
+    let completed = owner
+        .resume_cycle(
+            cycle_id,
+            proposal(
+                "durable unknown",
+                json!({ "interpretations": [], "answer": "still mine" }),
+            ),
+        )
+        .unwrap();
+    let CycleProgress::Completed(outcome) = completed else {
+        panic!("the original owner should still be able to resume");
+    };
+    assert_eq!(outcome.answer, Some(Value::Text("still mine".into())));
 }
 
 #[test]

@@ -524,7 +524,7 @@ impl IntuitionStore {
         candidate_limit: usize,
         track_retrieval: bool,
     ) -> Result<Vec<RecallCandidate>, IntuitionError> {
-        self.candidates_for_query_mode(query, candidate_limit, track_retrieval, true)
+        self.candidates_for_query_mode(query, candidate_limit, track_retrieval, true, None)
     }
 
     fn candidates_for_query_mode(
@@ -533,6 +533,7 @@ impl IntuitionStore {
         candidate_limit: usize,
         track_retrieval: bool,
         include_semantic_expansion: bool,
+        only_kind: Option<RecallKind>,
     ) -> Result<Vec<RecallCandidate>, IntuitionError> {
         if candidate_limit == 0 || candidate_limit > 1_024 {
             return Err(IntuitionError::Invalid(
@@ -549,6 +550,7 @@ impl IntuitionStore {
             candidate_limit,
             track_retrieval,
             semantic_features,
+            only_kind,
         )
     }
 
@@ -558,6 +560,7 @@ impl IntuitionStore {
         candidate_limit: usize,
         track_retrieval: bool,
         semantic_features: BTreeMap<String, f64>,
+        only_kind: Option<RecallKind>,
     ) -> Result<Vec<RecallCandidate>, IntuitionError> {
         if semantic_features.is_empty() {
             return Ok(Vec::new());
@@ -571,12 +574,21 @@ impl IntuitionStore {
             .map(|term| format!("'{term}'"))
             .collect::<Vec<_>>()
             .join(",");
+        // The kind filter belongs inside the query, not in the caller. A caller
+        // that wants procedures and filters the result afterwards spends its
+        // whole limit on whatever kind happens to match the wording best, and
+        // episodes always win that contest because they contain the user's own
+        // phrasing verbatim.
+        let kind_clause = match only_kind {
+            Some(kind) => format!(" AND d.kind = '{}'", kind.as_str()),
+            None => String::new(),
+        };
         let sql = format!(
             "SELECT d.id, d.kind, d.text, d.created_at,
                     d.retrieval_count, COUNT(DISTINCT t.term)
              FROM recall_terms t
              JOIN recall_documents d ON d.id = t.document_id
-             WHERE t.term IN ({terms_json})
+             WHERE t.term IN ({terms_json}){kind_clause}
              GROUP BY d.id
              ORDER BY COUNT(DISTINCT t.term) DESC, d.retrieval_count DESC, d.created_at DESC
              LIMIT ?1"
@@ -640,7 +652,30 @@ impl IntuitionStore {
         query: &str,
         candidate_limit: usize,
     ) -> Result<Vec<RecallCandidate>, IntuitionError> {
-        let mut candidates = self.candidates_for_query(query, candidate_limit, true)?;
+        self.rank_within(query, candidate_limit, None)
+    }
+
+    /// Ranks only documents of one kind. Callers that need procedures or
+    /// concepts must use this rather than filtering the mixed result, because
+    /// the candidate pool is capped during retrieval and a discarded kind has
+    /// already cost the caller its budget by then.
+    pub fn rank_of_kind(
+        &self,
+        query: &str,
+        kind: RecallKind,
+        candidate_limit: usize,
+    ) -> Result<Vec<RecallCandidate>, IntuitionError> {
+        self.rank_within(query, candidate_limit, Some(kind))
+    }
+
+    fn rank_within(
+        &self,
+        query: &str,
+        candidate_limit: usize,
+        only_kind: Option<RecallKind>,
+    ) -> Result<Vec<RecallCandidate>, IntuitionError> {
+        let mut candidates =
+            self.candidates_for_query_mode(query, candidate_limit, true, true, only_kind)?;
         let model = self.fitted_ranking_model_before(i64::MAX)?;
         for candidate in &mut candidates {
             let outcome = self.candidate_success_rate(query, &candidate.id)?;
@@ -906,12 +941,12 @@ impl IntuitionStore {
         let mut pools = BTreeMap::new();
         for query in &held_out_queries {
             let lexical = self
-                .candidates_for_query_mode(query, candidate_limit, false, false)?
+                .candidates_for_query_mode(query, candidate_limit, false, false, None)?
                 .into_iter()
                 .map(|candidate| candidate.id)
                 .collect::<BTreeSet<_>>();
             let semantic = self
-                .candidates_for_query_mode(query, candidate_limit, false, true)?
+                .candidates_for_query_mode(query, candidate_limit, false, true, None)?
                 .into_iter()
                 .map(|candidate| candidate.id)
                 .collect::<BTreeSet<_>>();
@@ -1137,9 +1172,9 @@ impl IntuitionStore {
             let mut candidate_features = self.unmodified_semantic_features(query)?;
             self.apply_representation_model(&mut candidate_features, &model);
             let baseline =
-                self.candidates_for_query_with_features(query, 128, false, baseline_features)?;
+                self.candidates_for_query_with_features(query, 128, false, baseline_features, None)?;
             let candidate =
-                self.candidates_for_query_with_features(query, 128, false, candidate_features)?;
+                self.candidates_for_query_with_features(query, 128, false, candidate_features, None)?;
             if let Some(rank) = baseline.iter().position(|item| &item.id == candidate_id) {
                 baseline_scored_successes += 1;
                 baseline_rank_total += rank as u64 + 1;
@@ -2014,6 +2049,51 @@ mod tests {
     }
 
     #[test]
+    fn a_procedure_survives_a_history_of_episodes_that_echo_the_question() {
+        // Episodes record the user's own wording, so they match a question far
+        // better than the procedure that answers it. Ranking a mixed pool and
+        // filtering afterwards therefore loses the procedure entirely once the
+        // history outgrows the caller's limit.
+        let store = IntuitionStore::in_memory().unwrap();
+        store
+            .index_document(&document(
+                "procedure:double",
+                RecallKind::Procedure,
+                "Double a number Doubling Multiply a number by 2",
+                1,
+            ))
+            .unwrap();
+        for index in 0..80 {
+            store
+                .index_document(&document(
+                    &format!("episode:{index}"),
+                    RecallKind::Episode,
+                    &format!("what is double {index}? procedure:something"),
+                    2 + index,
+                ))
+                .unwrap();
+        }
+
+        let mixed = store.rank("what is double 44?", 16).unwrap();
+        assert!(
+            !mixed
+                .iter()
+                .any(|candidate| candidate.id == "procedure:double"),
+            "expected episodes to crowd out the procedure in a mixed pool"
+        );
+
+        let procedures = store
+            .rank_of_kind("what is double 44?", RecallKind::Procedure, 16)
+            .unwrap();
+        assert_eq!(procedures[0].id, "procedure:double");
+        assert!(
+            procedures
+                .iter()
+                .all(|candidate| candidate.kind == RecallKind::Procedure)
+        );
+    }
+
+    #[test]
     fn inverted_recall_returns_relevant_candidates_with_a_bounded_pool() {
         let store = IntuitionStore::in_memory().unwrap();
         store
@@ -2067,7 +2147,7 @@ mod tests {
             .unwrap();
 
         let lexical = store
-            .candidates_for_query_mode("feline", 4, false, false)
+            .candidates_for_query_mode("feline", 4, false, false, None)
             .unwrap();
         assert!(lexical.iter().all(|candidate| candidate.id != "cat-care"));
         let semantic = store.retrieve("feline", 4).unwrap();

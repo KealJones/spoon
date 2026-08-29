@@ -333,27 +333,17 @@ impl RuntimeStore {
         Ok(())
     }
 
-    pub fn pending_cycles(&self) -> Result<Vec<(CycleId, String)>, EngineError> {
-        let mut statement = self.conn.prepare(
-            "SELECT cycle_id, pending_json FROM engine_active_cycles
-             WHERE state = 'pending_teacher' ORDER BY created_at, cycle_id",
-        )?;
-        let rows = statement.query_map([], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-        })?;
-        let mut pending = Vec::new();
-        for row in rows {
-            let (cycle_id, pending_json) = row?;
-            pending.push((
-                CycleId(Uuid::parse_str(&cycle_id).map_err(|error| {
-                    EngineError::InvalidInput(format!(
-                        "invalid durable cycle identity {cycle_id}: {error}"
-                    ))
-                })?),
-                pending_json,
-            ));
-        }
-        Ok(pending)
+    /// Reads one pending continuation without taking ownership of it.
+    pub fn pending_cycle(&self, cycle_id: CycleId) -> Result<Option<String>, EngineError> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT pending_json FROM engine_active_cycles
+                 WHERE cycle_id = ?1 AND state = 'pending_teacher'",
+                params![cycle_id.to_string()],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?)
     }
 
     pub fn claim_pending_cycle(&self, cycle_id: CycleId, owner: Uuid) -> Result<(), EngineError> {

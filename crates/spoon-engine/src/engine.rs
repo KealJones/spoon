@@ -343,7 +343,9 @@ impl Engine {
         // Finish those exact staged requests before accepting new work.
         engine.recover_pending_episode_sagas()?;
         engine.recover_pending_feedback_sagas()?;
-        engine.recover_pending_cycles()?;
+        // Pending cycles are deliberately not swept here. They are adopted one
+        // at a time when a caller resumes them, so opening a second engine on
+        // the same database cannot take work the first one is still doing.
         engine.recover_pending_lessons()?;
         engine.recover_pending_adaptations()?;
         engine.reconcile_observed_fact_contradictions()?;
@@ -435,6 +437,18 @@ impl Engine {
         candidate_limit: usize,
     ) -> Result<Vec<RecallCandidate>, EngineError> {
         Ok(self.intuition.rank(query, candidate_limit)?)
+    }
+
+    /// Ranks recall candidates of a single kind. Retrieval caps its pool before
+    /// ranking, so asking for the kind you need is not the same as filtering
+    /// the mixed list afterwards.
+    pub fn rank_recall_candidates_of_kind(
+        &self,
+        query: &str,
+        kind: RecallKind,
+        candidate_limit: usize,
+    ) -> Result<Vec<RecallCandidate>, EngineError> {
+        Ok(self.intuition.rank_of_kind(query, kind, candidate_limit)?)
     }
 
     /// Runs a bounded time-split ranking evaluation. The held-out outcomes are
@@ -2073,10 +2087,7 @@ impl Engine {
         self.intuition.index_document(&RecallDocument {
             id: format!("procedure:{}:{}", procedure.id, procedure.version),
             kind: RecallKind::Procedure,
-            text: format!(
-                "{} {} {:?} {:?} {:?}",
-                procedure.name, concept_text, procedure.params, procedure.contract, procedure.body
-            ),
+            text: procedure_search_text(procedure, &concept_text),
             concept_ids: procedure
                 .concept
                 .map(|id| vec![id.to_string()])
@@ -3150,6 +3161,40 @@ fn phase6_evidence_metrics(
     metrics
 }
 
+/// The words worth searching a procedure by.
+///
+/// Debug formatting the parameters, contract, and body used to be included
+/// here, which put `Param`, `Some`, `Contract`, `Condition`, `BinOp`, and
+/// friends into the index of every single procedure. Those tokens match each
+/// other across unrelated procedures and, because relevance is normalised by
+/// document length, they dilute the words a person would actually search for.
+/// The structure is still searchable, but through the fields that carry
+/// meaning: parameter names and descriptions, contract prose, and the names of
+/// the intrinsics the body calls.
+fn procedure_search_text(procedure: &Procedure, concept_text: &str) -> String {
+    let mut parts = vec![procedure.name.clone()];
+    if !concept_text.trim().is_empty() {
+        parts.push(concept_text.to_string());
+    }
+    for param in &procedure.params {
+        parts.push(param.name.clone());
+        if let Some(description) = param.description.as_deref() {
+            parts.push(description.to_string());
+        }
+    }
+    for condition in procedure
+        .contract
+        .requires
+        .iter()
+        .chain(&procedure.contract.promises)
+        .chain(&procedure.contract.fails_when)
+    {
+        parts.push(condition.description.clone());
+    }
+    parts.extend(crate::cycle::procedure_intrinsic_names(&procedure.body));
+    parts.join(" ")
+}
+
 fn claim_from_observed_fact(episode: &Episode, fact: &ObservedFact) -> spoon_adapt::Claim {
     spoon_adapt::Claim::new(
         format!("observed:{}", fact.id),
@@ -3450,7 +3495,7 @@ fn upgrade_legacy_parameters(procedure: &mut Procedure) -> bool {
     changed
 }
 
-fn unix_now() -> i64 {
+pub(crate) fn unix_now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()

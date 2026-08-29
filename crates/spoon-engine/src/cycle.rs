@@ -5,10 +5,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value as JsonValue, json};
 use sha2::{Digest, Sha256};
 use spoon_core::{
-    Assumption, BinOp, Concept, ConceptId, Condition, Contract, Episode, EpisodeCost, EpisodeId,
+    Assumption, BinOp, Concept, ConceptId, Condition, Contract, Episode, EpisodeCost,
     EscalationRung, Evaluation, Expr, IntentDisposition, InterpretationProposal, IntrinsicOp,
     KnowledgeCandidate, LessonIntrinsicOp, Lifecycle, MutabilityClass, Param, ParamType, Procedure,
-    ProcedureId, ReasoningTrace, Relationship, SessionId, SessionVisibility, SpoonError, TokenKind,
+    ProcedureId, ReasoningTrace, Relationship, SessionId, SessionVisibility, TokenKind,
     TokenRange, TokenStream, TraceStep, TraceStepStatus, UnOp, Value, VerifiabilityTier, tokenize,
 };
 use spoon_episode::EpisodeRecallMode;
@@ -21,7 +21,9 @@ use uuid::Uuid;
 
 use crate::engine::{
     Engine, EngineError, bind_inputs, is_current_executable, reasoning_trace, routing_description,
+    unix_now,
 };
+use spoon_graph::{LifecycleChange, LifecycleChangeSet};
 use crate::lesson::DurableLessonStage;
 use spoon_intuition::RecallKind;
 
@@ -31,6 +33,17 @@ const MAX_TEACHER_VALUE_DEPTH: usize = 8;
 const MAX_TEACHER_CONTEXT_NODES: usize = 8_192;
 const MAX_TEACHER_CONTEXT_CHARS: usize = 262_144;
 const MAX_INTERPRETER_PRIOR_TURNS: usize = 8;
+/// How many procedures the interpreter may choose between in one turn. The
+/// candidate list is the largest part of both the prompt and the schema that
+/// constrains decoding, and it grows with everything the engine has ever
+/// learned, so an unbounded list makes every turn slower as knowledge
+/// accumulates.
+const MAX_INTERPRETER_CANDIDATES: usize = 16;
+/// How far down the ranked concepts local resolution will look for a candidate
+/// it can actually execute. The ranker's first pick is frequently a procedure
+/// whose parameters the wording cannot fill, and giving up there hands an
+/// answerable request to a model for no reason.
+const MAX_LOCAL_RESOLUTION_CANDIDATES: usize = 16;
 const MAX_ROUTING_RECALL_CANDIDATES: usize = 1_024;
 const MAX_LESSON_CONCEPTS: usize = 8;
 const MAX_LESSON_RELATIONSHIPS: usize = 16;
@@ -46,6 +59,10 @@ const MAX_LESSON_EXPR_CHILDREN: usize = 64;
 const MAX_LESSON_VALUE_ITEMS: usize = 64;
 const MAX_LESSON_VALUE_DEPTH: usize = 8;
 const MAX_LESSON_DEPENDENCIES: usize = 16;
+/// Clean executions a provisional procedure must accumulate before it is
+/// promoted to `Active`. One success is the worked example the lesson shipped
+/// with, so the threshold sits above that and requires held-out reuse.
+const PROMOTION_SUCCESS_THRESHOLD: u32 = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CycleId(pub Uuid);
@@ -535,23 +552,37 @@ enum KnowledgeToLearn {
 }
 
 impl Engine {
-    pub(crate) fn recover_pending_cycles(&mut self) -> Result<(), EngineError> {
-        for (cycle_id, pending_json) in self.runtime.pending_cycles()? {
-            self.runtime
-                .claim_pending_cycle(cycle_id, self.instance_id)?;
-            match serde_json::from_str::<PersistedPendingCycle>(&pending_json) {
-                Ok(PersistedPendingCycle::Teacher(pending)) => {
-                    self.pending_cycles.insert(cycle_id, pending);
-                }
-                Ok(PersistedPendingCycle::Intent(pending)) => {
-                    self.pending_intents.insert(cycle_id, pending);
-                }
-                Err(_) => {
-                    // Backward compatibility for pending Teacher continuations
-                    // written before the continuation kind was explicit.
-                    let pending: PendingCycle = serde_json::from_str(&pending_json)?;
-                    self.pending_cycles.insert(cycle_id, pending);
-                }
+    /// Takes over one durable continuation so this instance can resume it.
+    ///
+    /// Ownership is taken per cycle, at the moment a caller asks to resume it,
+    /// rather than for every pending cycle at startup. Claiming the whole table
+    /// on open meant any second process sharing the database seized the first
+    /// one's in-flight work, and the original then failed its next resume being
+    /// told its own cycle belonged to another instance. A cycle id only reaches
+    /// the client that owns the conversation, so claiming on demand is enough.
+    pub(crate) fn adopt_pending_cycle(&mut self, cycle_id: CycleId) -> Result<(), EngineError> {
+        if self.pending_cycles.contains_key(&cycle_id)
+            || self.pending_intents.contains_key(&cycle_id)
+        {
+            return Ok(());
+        }
+        let Some(pending_json) = self.runtime.pending_cycle(cycle_id)? else {
+            return Ok(());
+        };
+        self.runtime
+            .claim_pending_cycle(cycle_id, self.instance_id)?;
+        match serde_json::from_str::<PersistedPendingCycle>(&pending_json) {
+            Ok(PersistedPendingCycle::Teacher(pending)) => {
+                self.pending_cycles.insert(cycle_id, pending);
+            }
+            Ok(PersistedPendingCycle::Intent(pending)) => {
+                self.pending_intents.insert(cycle_id, pending);
+            }
+            Err(_) => {
+                // Backward compatibility for pending Teacher continuations
+                // written before the continuation kind was explicit.
+                let pending: PendingCycle = serde_json::from_str(&pending_json)?;
+                self.pending_cycles.insert(cycle_id, pending);
             }
         }
         Ok(())
@@ -692,28 +723,13 @@ impl Engine {
         }
 
         let interpretations = self.local_interpretations(&input.situation)?;
-        // When an interpreter is enabled, keep the local match as a
-        // request-local candidate and require independent language grounding
-        // before execution. The deterministic fast path remains available to
-        // hosts that explicitly disable interpretation.
-        if !input.interpreter_allowed
-            && let Some(resolved) = uniquely_resolved(&interpretations)
-            && let Some(procedure) = self.procedure_for(resolved.concept.id, &input.environment)?
-            && let Some(inputs) = complete_inputs(
-                &procedure,
-                &input.environment,
-                &resolved.inputs,
-                &extract_literals(&input.situation),
-            )
-            && procedure_has_language_support(
-                &input.situation,
-                &IntentCandidateBinding {
-                    alias: "local".into(),
-                    concept: resolved.concept.clone(),
-                    procedure: procedure.clone(),
-                },
-            )
-        {
+        // The engine resolves what it can resolve on its own. Every condition
+        // below is decidable from stored structure: one concept outscores the
+        // rest, it has a procedure, that procedure's parameters are fully
+        // satisfied by the literals actually present, and the wording supports
+        // it. A model asked to confirm that can only agree or be wrong, so it
+        // is consulted for what remains ambiguous instead.
+        if let Some((procedure, inputs)) = self.locally_executable_procedure(&input)? {
             return self.execute_cycle_procedure(
                 cycle_id,
                 &input,
@@ -863,27 +879,26 @@ impl Engine {
             }
         }
         bindings = unique_bindings;
-        bindings.sort_by(
-            |(left_concept, left_procedure), (right_concept, right_procedure)| {
-                left_concept
-                    .name
-                    .cmp(&right_concept.name)
-                    .then_with(|| left_procedure.name.cmp(&right_procedure.name))
-                    .then_with(|| left_procedure.version.cmp(&right_procedure.version))
-            },
-        );
-        let routing_strategy = if bindings.len() <= input.budget.max_context_items {
+        bindings.sort_by(by_candidate_name);
+        let candidate_limit = input
+            .budget
+            .max_context_items
+            .min(MAX_INTERPRETER_CANDIDATES);
+        let routing_strategy = if bindings.len() <= candidate_limit {
             "all"
         } else {
             let recall_limit = bindings
                 .len()
                 .saturating_mul(3)
-                .max(input.budget.max_context_items)
+                .max(candidate_limit)
                 .min(MAX_ROUTING_RECALL_CANDIDATES);
-            let ranked = self.rank_recall_candidates(&input.situation, recall_limit)?;
+            let ranked = self.rank_recall_candidates_of_kind(
+                &input.situation,
+                RecallKind::Procedure,
+                recall_limit,
+            )?;
             let ranks = ranked
                 .into_iter()
-                .filter(|candidate| candidate.kind == RecallKind::Procedure)
                 .enumerate()
                 .map(|(rank, candidate)| (candidate.id, rank))
                 .collect::<BTreeMap<_, _>>();
@@ -907,7 +922,13 @@ impl Engine {
             );
             "hybrid"
         };
-        bindings.truncate(input.budget.max_context_items);
+        bindings.truncate(candidate_limit);
+        // Retrieval selects which procedures the interpreter may choose
+        // between; it does not get to nominate a favourite. A ranked
+        // presentation order does exactly that, because position is a signal a
+        // language model reads whether or not the prompt says to ignore it, so
+        // the surviving candidates are handed over in a stable order instead.
+        bindings.sort_by(by_candidate_name);
         let mut bindings = bindings
             .into_iter()
             .enumerate()
@@ -1073,7 +1094,7 @@ impl Engine {
             },
             "literalCandidates": literal_ranges,
             "truncation": {
-                "candidateLimit": input.budget.max_context_items,
+                "candidateLimit": candidate_limit,
                 "priorTurnLimit": MAX_INTERPRETER_PRIOR_TURNS,
             },
         });
@@ -1097,6 +1118,7 @@ impl Engine {
         cycle_id: CycleId,
         proposal: IntentProposalWire,
     ) -> Result<CycleProgress, EngineError> {
+        self.adopt_pending_cycle(cycle_id)?;
         self.runtime
             .assert_cycle_owner(cycle_id, self.instance_id)?;
         let result = self.resume_intent_inner(cycle_id, proposal);
@@ -1118,6 +1140,7 @@ impl Engine {
         reason: impl Into<String>,
         diagnostic: Option<JsonValue>,
     ) -> Result<CycleProgress, EngineError> {
+        self.adopt_pending_cycle(cycle_id)?;
         self.runtime
             .assert_cycle_owner(cycle_id, self.instance_id)?;
         let pending = self.pending_intents.remove(&cycle_id).ok_or_else(|| {
@@ -1449,6 +1472,7 @@ impl Engine {
         cycle_id: CycleId,
         proposal: TeacherProposalWire,
     ) -> Result<CycleProgress, EngineError> {
+        self.adopt_pending_cycle(cycle_id)?;
         self.runtime
             .assert_cycle_owner(cycle_id, self.instance_id)?;
         let result = self.resume_cycle_inner(cycle_id, proposal);
@@ -1737,6 +1761,7 @@ impl Engine {
         cycle_id: CycleId,
         reason: impl Into<String>,
     ) -> Result<CycleProgress, EngineError> {
+        self.adopt_pending_cycle(cycle_id)?;
         self.runtime
             .assert_cycle_owner(cycle_id, self.instance_id)?;
         let result = self.abort_cycle_inner(cycle_id, reason.into());
@@ -1808,13 +1833,8 @@ impl Engine {
                 // Preserve an existing pending continuation after a transient
                 // resume failure. A failed initial running cycle is safe to
                 // release because no continuation was exposed to the caller.
-                if self
-                    .runtime
-                    .pending_cycles()?
-                    .iter()
-                    .any(|(id, _)| *id == cycle_id)
-                {
-                    self.recover_pending_cycles()?;
+                if self.runtime.pending_cycle(cycle_id)?.is_some() {
+                    self.adopt_pending_cycle(cycle_id)?;
                 } else {
                     self.runtime.complete_cycle(cycle_id)?;
                 }
@@ -1833,21 +1853,8 @@ impl Engine {
             .map(|value| Uuid::parse_str(value).map(SessionId))
             .transpose()
             .map_err(|_| EngineError::InvalidInput("session_id is not a UUID".into()))?;
-        let candidates = self.recall_candidates(&input.situation, 64)?;
-        for candidate in candidates {
-            let Some(id) = candidate.id.strip_prefix("episode:") else {
-                continue;
-            };
-            let Ok(uuid) = Uuid::parse_str(id) else {
-                continue;
-            };
-            let episode = match self.episodes.get(EpisodeId(uuid)) {
-                Ok(episode) => episode,
-                Err(SpoonError::NotFound(_)) => continue,
-                Err(error) => return Err(error.into()),
-            };
-            if episode.situation != input.situation
-                || episode.context.environment != input.environment
+        for episode in self.episodes.find_by_situation(&input.situation)? {
+            if episode.context.environment != input.environment
                 || (input.recall_mode == RecallMode::Global
                     && episode.session_visibility == SessionVisibility::Isolated)
                 || (input.recall_mode == RecallMode::Session && episode.session_id != session_id)
@@ -1880,15 +1887,14 @@ impl Engine {
         Ok(None)
     }
 
-    fn local_interpretations(
+    /// Concepts that could apply to the situation, best first. Ranking is
+    /// relevance only; nothing here has decided anything yet.
+    fn ranked_usable_concepts(
         &self,
         situation: &str,
-    ) -> Result<Vec<ResolvedInterpretation>, EngineError> {
+    ) -> Result<Vec<(Concept, f64)>, EngineError> {
         let mut matches = Vec::new();
-        for candidate in self.rank_recall_candidates(situation, 64)? {
-            if candidate.kind != RecallKind::Concept {
-                continue;
-            }
+        for candidate in self.rank_recall_candidates_of_kind(situation, RecallKind::Concept, 64)? {
             let Some(id) = candidate.id.strip_prefix("concept:") else {
                 continue;
             };
@@ -1908,6 +1914,61 @@ impl Engine {
                 .unwrap_or(Ordering::Equal)
                 .then_with(|| left_concept.name.cmp(&right_concept.name))
         });
+        Ok(matches)
+    }
+
+    /// Resolves the situation against stored structure alone.
+    ///
+    /// Relevance picks the order to consider candidates in, but it does not get
+    /// to decide: a candidate counts only if the wording supports it and its
+    /// parameters are fully satisfied by literals actually present, which is
+    /// what stops a two-argument procedure from claiming a one-argument
+    /// request. If exactly one candidate survives that, the engine knows the
+    /// answer and nothing is left for a model to contribute. If several do, the
+    /// request is genuinely ambiguous and escalation is the honest response.
+    fn locally_executable_procedure(
+        &self,
+        input: &CycleInput,
+    ) -> Result<Option<(Procedure, BTreeMap<String, Value>)>, EngineError> {
+        let literals = extract_literals(&input.situation);
+        let mut executable = Vec::new();
+        for (concept, _) in self
+            .ranked_usable_concepts(&input.situation)?
+            .into_iter()
+            .take(MAX_LOCAL_RESOLUTION_CANDIDATES)
+        {
+            let Some(procedure) = self.procedure_for(concept.id, &input.environment)? else {
+                continue;
+            };
+            let binding = IntentCandidateBinding {
+                alias: "local".into(),
+                concept,
+                procedure,
+            };
+            if !procedure_has_language_support(&input.situation, &binding) {
+                continue;
+            }
+            let Some(inputs) = complete_inputs(
+                &binding.procedure,
+                &input.environment,
+                &BTreeMap::new(),
+                &literals,
+            ) else {
+                continue;
+            };
+            executable.push((binding.procedure, inputs));
+            if executable.len() > 1 {
+                return Ok(None);
+            }
+        }
+        Ok(executable.pop())
+    }
+
+    fn local_interpretations(
+        &self,
+        situation: &str,
+    ) -> Result<Vec<ResolvedInterpretation>, EngineError> {
+        let matches = self.ranked_usable_concepts(situation)?;
         let best = matches.first().map(|(_, score)| *score);
         let matches = matches
             .into_iter()
@@ -2752,6 +2813,57 @@ impl Engine {
 
     /// Candidate Laboratory (P0F.4): try to compose known procedures
     /// into a sequential chain and execute it in quarantine.
+    /// Promotes a provisional procedure to `Active` once its own execution
+    /// history has earned it.
+    ///
+    /// A teacher lesson is admitted as `Provisional` because a proposal is not
+    /// evidence. Repeated clean execution is, so this is the only place a
+    /// procedure escapes that state. Promotion matters beyond bookkeeping:
+    /// only an `Active` or `Validated` procedure is advertised to the Teacher
+    /// as a composable dependency, so without it the engine relearns from
+    /// scratch instead of building on what it already has.
+    ///
+    /// Any recorded failure holds the procedure back. A lifecycle change is a
+    /// normal audited revision, so this bumps the version through the same
+    /// change-set path everything else uses.
+    fn promote_procedure_on_earned_evidence(
+        &mut self,
+        procedure: &Procedure,
+    ) -> Result<(), EngineError> {
+        if procedure.lifecycle != Lifecycle::Provisional {
+            return Ok(());
+        }
+        let counts = self.episodes.procedure_outcome_counts(procedure.id)?;
+        if counts.failures > 0 || counts.successes < PROMOTION_SUCCESS_THRESHOLD {
+            return Ok(());
+        }
+        // Re-read rather than trusting the caller's copy: the version must be
+        // the one currently on record for the change set to apply.
+        let Some(current) = self.graph.get_procedure(procedure.id)? else {
+            return Ok(());
+        };
+        if current.lifecycle != Lifecycle::Provisional {
+            return Ok(());
+        }
+        let change_set = LifecycleChangeSet {
+            idempotency_key: format!(
+                "promote:procedure:{}@{}:{}",
+                current.id, current.version, counts.successes
+            ),
+            updated_at: unix_now(),
+            changes: vec![LifecycleChange::Procedure {
+                id: current.id,
+                expected_version: current.version,
+                lifecycle: Lifecycle::Active,
+            }],
+        };
+        self.graph.apply_lifecycle_change_set(&change_set)?;
+        if let Some(promoted) = self.graph.get_procedure(current.id)? {
+            self.index_procedure(&promoted)?;
+        }
+        Ok(())
+    }
+
     fn attempt_compose_and_execute(
         &mut self,
         cycle_id: CycleId,
@@ -3118,6 +3230,7 @@ impl Engine {
                 if let Some(stage) = &durable_lesson_stage {
                     self.lesson_stages.complete(stage)?;
                 }
+                self.promote_procedure_on_earned_evidence(procedure)?;
                 Ok(CycleProgress::Completed(Box::new(CycleOutcome {
                     cycle_id,
                     disposition: if semantic_verified {
@@ -4660,7 +4773,7 @@ fn interpreter_capability_catalog() -> Vec<JsonValue> {
     .collect()
 }
 
-fn procedure_intrinsic_names(expr: &Expr) -> Vec<String> {
+pub(crate) fn procedure_intrinsic_names(expr: &Expr) -> Vec<String> {
     fn visit(expr: &Expr, names: &mut BTreeSet<String>) {
         match expr {
             Expr::Literal(_) | Expr::Var(_) => {}
@@ -4955,6 +5068,19 @@ fn validate_lesson_value(value: &Value, depth: usize) -> Result<(), EngineError>
         }
         _ => Ok(()),
     }
+}
+
+/// Orders interpreter candidates by name, so the list the interpreter sees
+/// does not depend on how it was assembled.
+fn by_candidate_name(
+    left: &(Concept, Procedure),
+    right: &(Concept, Procedure),
+) -> std::cmp::Ordering {
+    left.0
+        .name
+        .cmp(&right.0.name)
+        .then_with(|| left.1.name.cmp(&right.1.name))
+        .then_with(|| left.1.version.cmp(&right.1.version))
 }
 
 fn bootstrap_reference_lifecycle(lifecycle: Lifecycle) -> bool {
