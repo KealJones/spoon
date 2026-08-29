@@ -6,8 +6,9 @@ pub mod evidence;
 pub mod expr;
 pub mod language;
 pub mod procedure;
-pub mod spoonlang;
 pub mod relationship;
+pub mod spoonlang;
+pub mod utterance;
 pub mod value;
 
 pub use concept::{Concept, ConceptId, Lifecycle, MutabilityClass};
@@ -31,4 +32,11 @@ pub use language::{
 };
 pub use procedure::{CapabilityDependency, Param, ParamType, Procedure, ProcedureId, TestCase};
 pub use relationship::{Relationship, RelationshipId};
+pub use utterance::{
+    AlignedDocument, Alignment, AlignmentProposal, LanguageWrite, LanguageWriteKind,
+    LanguageWriteProposal, Mention, MentionKind, MentionProposal, MentionResolution,
+    MentionResolutionProposal, Part, PartId, PartProposal, PartRefRole, ResidualClaim,
+    ResidualPolarity, ResidualProposal, ResidualProvenance, ResidualProvenanceProposal,
+    UtteranceAnalysis, UtteranceAnalysisProposal, UtteranceLimits,
+};
 pub use value::Value;

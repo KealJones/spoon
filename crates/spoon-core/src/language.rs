@@ -388,6 +388,13 @@ impl TokenRange {
             stream.tokens[self.end_token - 1].span.end_byte,
         ))
     }
+
+    /// Grounds a model-supplied token range into a byte span. Utterance-level
+    /// analysis crosses the same trust boundary as intent proposals, so it
+    /// needs this conversion outside this module.
+    pub fn ground(&self, stream: &TokenStream) -> Result<TextSpan, LanguageError> {
+        self.ground_for(stream)
+    }
 }
 
 /// One untrusted slot emitted at the provider boundary. A slot is either
@@ -667,6 +674,38 @@ impl DialogueMove {
     }
 }
 
+impl DialogueAct {
+    /// Derives the single plan-level act for a multi-part utterance from the
+    /// acts its parts performed.
+    ///
+    /// Precedence follows what the turn demands of the user rather than what
+    /// Spoon did: a pending question dominates an answer, because the client
+    /// uses this to decide whether the turn expects a reply. `grounded` is the
+    /// number of claims that will actually render, which separates "answered
+    /// nothing" from "answered and also asked".
+    pub fn plan_act(part_acts: &[DialogueAct], grounded: usize) -> DialogueAct {
+        if part_acts.contains(&DialogueAct::Clarify) {
+            return DialogueAct::Clarify;
+        }
+        if part_acts.contains(&DialogueAct::Ask) {
+            return DialogueAct::Ask;
+        }
+        if part_acts.contains(&DialogueAct::Refuse) {
+            return DialogueAct::Refuse;
+        }
+        if grounded == 0 {
+            return DialogueAct::Abstain;
+        }
+        if part_acts
+            .iter()
+            .all(|act| matches!(act, DialogueAct::Acknowledge))
+        {
+            return DialogueAct::Acknowledge;
+        }
+        DialogueAct::Inform
+    }
+}
+
 /// A durable pointer to evidence, not evidence text. Rendering a plan cannot
 /// turn an ID into a new claim or disclose a source that the plan did not hold.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -686,6 +725,20 @@ pub struct GroundedClaim {
     pub evidence: Vec<EvidenceReference>,
     /// Procedure/observation/knowledge references that produced the claim.
     pub provenance: Vec<String>,
+    /// The speech act this individual claim performs. One utterance can be a
+    /// greeting followed by two answers, so a single plan-level act cannot
+    /// describe every claim in the plan. `None` inherits the plan-level act,
+    /// which keeps every previously serialized plan valid.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub act: Option<DialogueAct>,
+}
+
+impl GroundedClaim {
+    /// The act actually performed by this claim, resolving inheritance from the
+    /// plan-level move.
+    pub fn effective_act(&self, plan_act: DialogueAct) -> DialogueAct {
+        self.act.unwrap_or(plan_act)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -698,11 +751,19 @@ pub enum PlannedClaim {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum UncertaintyLevel {
     Certain,
     Qualified,
     Unknown,
+}
+
+impl UncertaintyLevel {
+    /// The weakest level wins when several parts of one utterance disagree, so
+    /// a confident answer never launders an uncertain sibling.
+    pub fn merge(levels: impl IntoIterator<Item = Self>) -> Self {
+        levels.into_iter().max().unwrap_or(Self::Certain)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -718,6 +779,30 @@ impl Uncertainty {
         Self {
             level: UncertaintyLevel::Certain,
             disclosure: None,
+        }
+    }
+
+    /// Folds the per-part uncertainties of one multi-part utterance into the
+    /// single value a `ResponsePlan` carries. Disclosures are concatenated in
+    /// the caller's order, which the Engine keeps as source order.
+    pub fn merge(parts: impl IntoIterator<Item = Self>) -> Self {
+        let mut level = UncertaintyLevel::Certain;
+        let mut disclosures = Vec::new();
+        for part in parts {
+            level = level.max(part.level);
+            if let Some(disclosure) = part.disclosure
+                && !disclosure.is_empty()
+            {
+                disclosures.push(disclosure);
+            }
+        }
+        Self {
+            level,
+            disclosure: if disclosures.is_empty() {
+                None
+            } else {
+                Some(disclosures.join(" "))
+            },
         }
     }
 }
@@ -736,6 +821,9 @@ pub enum ResponseTone {
 pub enum RenderVariant {
     Plain,
     Bulleted,
+    /// Joins claims with a single space so a multi-part answer reads as one
+    /// line. `Plain` keeps its newline join for existing callers.
+    Joined,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -845,6 +933,7 @@ impl ResponseRenderer {
 
         let text = match plan.variant {
             RenderVariant::Plain => texts.join("\n"),
+            RenderVariant::Joined => texts.join(" "),
             RenderVariant::Bulleted => texts
                 .into_iter()
                 .map(|claim| format!("- {claim}"))
