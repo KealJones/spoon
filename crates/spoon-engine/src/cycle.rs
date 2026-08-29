@@ -7,9 +7,9 @@ use sha2::{Digest, Sha256};
 use spoon_core::{
     Assumption, BinOp, Concept, ConceptId, Condition, Contract, Episode, EpisodeCost, EpisodeId,
     EscalationRung, Evaluation, Expr, IntentDisposition, InterpretationProposal, IntrinsicOp,
-    KnowledgeCandidate, Lifecycle, MutabilityClass, Param, ParamType, Procedure, ProcedureId,
-    ReasoningTrace, Relationship, SessionId, SessionVisibility, SpoonError, TokenKind, TokenRange,
-    TokenStream, TraceStep, TraceStepStatus, UnOp, Value, VerifiabilityTier, tokenize,
+    KnowledgeCandidate, LessonIntrinsicOp, Lifecycle, MutabilityClass, Param, ParamType, Procedure,
+    ProcedureId, ReasoningTrace, Relationship, SessionId, SessionVisibility, SpoonError, TokenKind,
+    TokenRange, TokenStream, TraceStep, TraceStepStatus, UnOp, Value, VerifiabilityTier, tokenize,
 };
 use spoon_episode::EpisodeRecallMode;
 use spoon_exec::ExecTrace;
@@ -441,7 +441,7 @@ enum ExprDraft {
     },
     Intrinsic {
         version: u16,
-        op: IntrinsicOpDraft,
+        op: LessonIntrinsicOp,
         args: Vec<ExprDraft>,
     },
     Dependency {
@@ -485,82 +485,6 @@ enum UnaryOpDraft {
     #[serde(alias = "neg")]
     Negate,
     Not,
-}
-
-#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-enum IntrinsicOpDraft {
-    Length,
-    TextByteLength,
-    TextScalarLength,
-    TextGraphemeLength,
-    TextTokenize,
-    TextSplit,
-    TextJoin,
-    TextTrim,
-    TextLowercase,
-    TextUppercase,
-    TextContains,
-    TextStartsWith,
-    TextEndsWith,
-    TextReplace,
-    TextUrlEncode,
-    TextRegexCapture,
-    CollectionContains,
-    CollectionFindIndex,
-    CountEqual,
-    MapKeys,
-    MapValues,
-    JsonParse,
-    JsonStringify,
-    PathGet,
-    PathGetOptional,
-    JsonPointerGet,
-    JsonPointerGetOptional,
-    JsonPointerSet,
-    JsonPointerDelete,
-    Coalesce,
-    TextNormalizeNfc,
-    TextNormalizeNfd,
-    TextNormalizeNfkc,
-    TextNormalizeNfkd,
-    TextTrimStart,
-    TextTrimEnd,
-    TextGraphemeSubstring,
-    TextIndexOf,
-    TextCount,
-    TextRepeat,
-    TextConcatMany,
-    MapEntries,
-    MapFromEntries,
-    MapSet,
-    MapDelete,
-    MapMerge,
-    CollectionSlice,
-    CollectionReverse,
-    CollectionSort,
-    CollectionUnique,
-    CollectionFlatten,
-    CollectionZip,
-    Range,
-    TypeName,
-    ParseInt,
-    ParseFloat,
-    ParseBool,
-    ToText,
-    NumericAbs,
-    NumericSign,
-    NumericMin,
-    NumericMax,
-    NumericClamp,
-    NumericFloor,
-    NumericCeil,
-    NumericRound,
-    NumericTruncate,
-    NumericPowInt,
-    NumericPowFloat,
-    IntegerQuotient,
-    IntegerRemainder,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -4491,7 +4415,7 @@ fn compile_expr_node(
             validate_expr_children(args.len())?;
             Ok(Expr::Intrinsic {
                 version: 1,
-                op: compile_intrinsic_op(*op),
+                op: op.0,
                 args: args
                     .iter()
                     .map(|arg| compile_expr_node(arg, state, depth + 1))
@@ -4829,82 +4753,6 @@ fn snake_case_variant(value: &str) -> String {
         }
     }
     result
-}
-
-fn compile_intrinsic_op(op: IntrinsicOpDraft) -> IntrinsicOp {
-    match op {
-        IntrinsicOpDraft::Length => IntrinsicOp::Length,
-        IntrinsicOpDraft::TextByteLength => IntrinsicOp::TextByteLength,
-        IntrinsicOpDraft::TextScalarLength => IntrinsicOp::TextScalarLength,
-        IntrinsicOpDraft::TextGraphemeLength => IntrinsicOp::TextGraphemeLength,
-        IntrinsicOpDraft::TextTokenize => IntrinsicOp::TextTokenize,
-        IntrinsicOpDraft::TextSplit => IntrinsicOp::TextSplit,
-        IntrinsicOpDraft::TextJoin => IntrinsicOp::TextJoin,
-        IntrinsicOpDraft::TextTrim => IntrinsicOp::TextTrim,
-        IntrinsicOpDraft::TextLowercase => IntrinsicOp::TextLowercase,
-        IntrinsicOpDraft::TextUppercase => IntrinsicOp::TextUppercase,
-        IntrinsicOpDraft::TextContains => IntrinsicOp::TextContains,
-        IntrinsicOpDraft::TextStartsWith => IntrinsicOp::TextStartsWith,
-        IntrinsicOpDraft::TextEndsWith => IntrinsicOp::TextEndsWith,
-        IntrinsicOpDraft::TextReplace => IntrinsicOp::TextReplace,
-        IntrinsicOpDraft::TextUrlEncode => IntrinsicOp::TextUrlEncode,
-        IntrinsicOpDraft::TextRegexCapture => IntrinsicOp::TextRegexCapture,
-        IntrinsicOpDraft::CollectionContains => IntrinsicOp::CollectionContains,
-        IntrinsicOpDraft::CollectionFindIndex => IntrinsicOp::CollectionFindIndex,
-        IntrinsicOpDraft::CountEqual => IntrinsicOp::CountEqual,
-        IntrinsicOpDraft::MapKeys => IntrinsicOp::MapKeys,
-        IntrinsicOpDraft::MapValues => IntrinsicOp::MapValues,
-        IntrinsicOpDraft::JsonParse => IntrinsicOp::JsonParse,
-        IntrinsicOpDraft::JsonStringify => IntrinsicOp::JsonStringify,
-        IntrinsicOpDraft::PathGet => IntrinsicOp::PathGet,
-        IntrinsicOpDraft::PathGetOptional => IntrinsicOp::PathGetOptional,
-        IntrinsicOpDraft::JsonPointerGet => IntrinsicOp::JsonPointerGet,
-        IntrinsicOpDraft::JsonPointerGetOptional => IntrinsicOp::JsonPointerGetOptional,
-        IntrinsicOpDraft::JsonPointerSet => IntrinsicOp::JsonPointerSet,
-        IntrinsicOpDraft::JsonPointerDelete => IntrinsicOp::JsonPointerDelete,
-        IntrinsicOpDraft::Coalesce => IntrinsicOp::Coalesce,
-        IntrinsicOpDraft::TextNormalizeNfc => IntrinsicOp::TextNormalizeNfc,
-        IntrinsicOpDraft::TextNormalizeNfd => IntrinsicOp::TextNormalizeNfd,
-        IntrinsicOpDraft::TextNormalizeNfkc => IntrinsicOp::TextNormalizeNfkc,
-        IntrinsicOpDraft::TextNormalizeNfkd => IntrinsicOp::TextNormalizeNfkd,
-        IntrinsicOpDraft::TextTrimStart => IntrinsicOp::TextTrimStart,
-        IntrinsicOpDraft::TextTrimEnd => IntrinsicOp::TextTrimEnd,
-        IntrinsicOpDraft::TextGraphemeSubstring => IntrinsicOp::TextGraphemeSubstring,
-        IntrinsicOpDraft::TextIndexOf => IntrinsicOp::TextIndexOf,
-        IntrinsicOpDraft::TextCount => IntrinsicOp::TextCount,
-        IntrinsicOpDraft::TextRepeat => IntrinsicOp::TextRepeat,
-        IntrinsicOpDraft::TextConcatMany => IntrinsicOp::TextConcatMany,
-        IntrinsicOpDraft::MapEntries => IntrinsicOp::MapEntries,
-        IntrinsicOpDraft::MapFromEntries => IntrinsicOp::MapFromEntries,
-        IntrinsicOpDraft::MapSet => IntrinsicOp::MapSet,
-        IntrinsicOpDraft::MapDelete => IntrinsicOp::MapDelete,
-        IntrinsicOpDraft::MapMerge => IntrinsicOp::MapMerge,
-        IntrinsicOpDraft::CollectionSlice => IntrinsicOp::CollectionSlice,
-        IntrinsicOpDraft::CollectionReverse => IntrinsicOp::CollectionReverse,
-        IntrinsicOpDraft::CollectionSort => IntrinsicOp::CollectionSort,
-        IntrinsicOpDraft::CollectionUnique => IntrinsicOp::CollectionUnique,
-        IntrinsicOpDraft::CollectionFlatten => IntrinsicOp::CollectionFlatten,
-        IntrinsicOpDraft::CollectionZip => IntrinsicOp::CollectionZip,
-        IntrinsicOpDraft::Range => IntrinsicOp::Range,
-        IntrinsicOpDraft::TypeName => IntrinsicOp::TypeName,
-        IntrinsicOpDraft::ParseInt => IntrinsicOp::ParseInt,
-        IntrinsicOpDraft::ParseFloat => IntrinsicOp::ParseFloat,
-        IntrinsicOpDraft::ParseBool => IntrinsicOp::ParseBool,
-        IntrinsicOpDraft::ToText => IntrinsicOp::ToText,
-        IntrinsicOpDraft::NumericAbs => IntrinsicOp::NumericAbs,
-        IntrinsicOpDraft::NumericSign => IntrinsicOp::NumericSign,
-        IntrinsicOpDraft::NumericMin => IntrinsicOp::NumericMin,
-        IntrinsicOpDraft::NumericMax => IntrinsicOp::NumericMax,
-        IntrinsicOpDraft::NumericClamp => IntrinsicOp::NumericClamp,
-        IntrinsicOpDraft::NumericFloor => IntrinsicOp::NumericFloor,
-        IntrinsicOpDraft::NumericCeil => IntrinsicOp::NumericCeil,
-        IntrinsicOpDraft::NumericRound => IntrinsicOp::NumericRound,
-        IntrinsicOpDraft::NumericTruncate => IntrinsicOp::NumericTruncate,
-        IntrinsicOpDraft::NumericPowInt => IntrinsicOp::NumericPowInt,
-        IntrinsicOpDraft::NumericPowFloat => IntrinsicOp::NumericPowFloat,
-        IntrinsicOpDraft::IntegerQuotient => IntrinsicOp::IntegerQuotient,
-        IntrinsicOpDraft::IntegerRemainder => IntrinsicOp::IntegerRemainder,
-    }
 }
 
 fn compile_lesson_program(
@@ -5503,187 +5351,6 @@ pub fn proposal_schema() -> JsonValue {
             },
         },
         "required": ["source", "interpretations"],
-    })
-}
-
-#[allow(dead_code)]
-fn expr_lesson_schema() -> JsonValue {
-    let structured_value =
-        json!({ "type": ["null", "boolean", "number", "string", "array", "object"] });
-    let expression = expr_program_schema();
-    let condition = json!({
-        "type": "object", "additionalProperties": false,
-        "properties": { "description": { "type": "string" }, "check": expression },
-        "required": ["description", "check"]
-    });
-    let concept_reference = json!({
-        "anyOf": [
-            { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "new_concept" }, "key": { "type": "string" } }, "required": ["kind", "key"] },
-            { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "existing_concept" }, "id": { "type": "string" } }, "required": ["kind", "id"] }
-        ]
-    });
-    let parameter_type = json!({
-        "type": "string",
-        "enum": ["any", "null", "bool", "number", "text", "list", "map"],
-    });
-    json!({
-        "type": "object", "additionalProperties": false,
-        "properties": {
-            "primitiveSet": { "type": "string", "const": "pure_expr_v2" },
-            "concepts": { "type": "array", "minItems": 1, "maxItems": MAX_LESSON_CONCEPTS, "items": { "type": "object", "additionalProperties": false, "properties": { "key": { "type": "string" }, "name": { "type": "string" }, "description": { "type": "string" }, "mutability": { "type": "string", "enum": ["definitional", "defeasible_general", "procedural"] } }, "required": ["key", "name", "description", "mutability"] } },
-            "relationships": { "type": "array", "maxItems": MAX_LESSON_RELATIONSHIPS, "items": { "type": "object", "additionalProperties": false, "properties": { "source": concept_reference.clone(), "target": concept_reference, "kind": { "type": "string" }, "strength": { "type": "number", "minimum": 0, "maximum": 1 } }, "required": ["source", "target", "kind", "strength"] } },
-            "procedures": { "type": "array", "minItems": 1, "maxItems": MAX_LESSON_PROCEDURES, "items": { "type": "object", "additionalProperties": false, "properties": { "key": { "type": "string" }, "name": { "type": "string" }, "concept": concept_reference, "parameters": { "type": "array", "minItems": 1, "maxItems": MAX_LESSON_PARAMETERS, "items": { "type": "object", "additionalProperties": false, "properties": { "name": { "type": "string" }, "description": { "type": "string" }, "valueType": parameter_type.clone() }, "required": ["name", "description", "valueType"] } }, "body": expression, "contract": { "type": "object", "additionalProperties": false, "properties": { "requires": { "type": "array", "maxItems": MAX_LESSON_CONDITIONS, "items": condition.clone() }, "promises": { "type": "array", "maxItems": MAX_LESSON_CONDITIONS, "items": condition.clone() }, "failsWhen": { "type": "array", "maxItems": MAX_LESSON_CONDITIONS, "items": condition } }, "required": ["requires", "promises", "failsWhen"] } }, "required": ["key", "name", "concept", "parameters", "body", "contract"] } },
-            "invocation": { "type": "object", "additionalProperties": false, "properties": { "procedureKey": { "type": "string" }, "inputs": { "type": "array", "maxItems": MAX_LESSON_PARAMETERS, "items": { "type": "object", "additionalProperties": false, "properties": { "name": { "type": "string" }, "value": structured_value }, "required": ["name", "value"] } } }, "required": ["procedureKey", "inputs"] }
-        },
-        "required": ["primitiveSet", "concepts", "relationships", "procedures", "invocation"]
-    })
-}
-
-#[allow(dead_code)]
-fn expr_program_schema() -> JsonValue {
-    json!({ "$ref": "#/$defs/pureExprV2" })
-}
-
-#[allow(dead_code)]
-fn expr_definition_schema(value: JsonValue) -> JsonValue {
-    let expression = json!({ "$ref": "#/$defs/pureExprV2" });
-    let leaf = |kind: &str| json!({ "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": kind } }, "required": ["kind"] });
-    let named = |kind: &str| json!({ "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": kind }, "name": { "type": "string" } }, "required": ["kind", "name"] });
-    let binary_ops = [
-        "add",
-        "subtract",
-        "multiply",
-        "divide",
-        "modulo",
-        "equal",
-        "not_equal",
-        "less_than",
-        "less_or_equal",
-        "greater_than",
-        "greater_or_equal",
-        "and",
-        "or",
-    ];
-    let unary_ops = ["negate", "not"];
-    json!({
-        "anyOf": [
-                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "literal" }, "value": value }, "required": ["kind", "value"] },
-                    named("parameter"), leaf("result"),
-                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "binary" }, "op": { "type": "string", "enum": binary_ops }, "left": expression.clone(), "right": expression.clone() }, "required": ["kind", "op", "left", "right"] },
-                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "unary" }, "op": { "type": "string", "enum": unary_ops }, "operand": expression.clone() }, "required": ["kind", "op", "operand"] },
-                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "if" }, "condition": expression.clone(), "then": expression.clone(), "else": expression.clone() }, "required": ["kind", "condition", "then", "else"] },
-                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "let" }, "name": { "type": "string" }, "value": expression.clone(), "body": expression.clone() }, "required": ["kind", "name", "value", "body"] },
-                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "list" }, "items": { "type": "array", "maxItems": MAX_LESSON_EXPR_CHILDREN, "items": expression.clone() } }, "required": ["kind", "items"] },
-                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "index" }, "collection": expression.clone(), "index": expression.clone() }, "required": ["kind", "collection", "index"] },
-                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "field" }, "object": expression.clone(), "field": { "type": "string" } }, "required": ["kind", "object", "field"] },
-                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "map" }, "collection": expression.clone(), "var": { "type": "string" }, "body": expression.clone() }, "required": ["kind", "collection", "var", "body"] },
-                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "filter" }, "collection": expression.clone(), "var": { "type": "string" }, "predicate": expression.clone() }, "required": ["kind", "collection", "var", "predicate"] },
-                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "reduce" }, "collection": expression.clone(), "init": expression.clone(), "acc": { "type": "string" }, "var": { "type": "string" }, "body": expression.clone() }, "required": ["kind", "collection", "init", "acc", "var", "body"] },
-                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "dependency" }, "alias": { "type": "string" }, "args": { "type": "array", "maxItems": MAX_LESSON_EXPR_CHILDREN, "items": expression.clone() } }, "required": ["kind", "alias", "args"] },
-                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "capability_call" }, "contentId": { "type": "string", "minLength": 1, "maxLength": MAX_TEACHER_TEXT_CHARS }, "procedureId": { "type": "string", "minLength": 1, "maxLength": MAX_LESSON_KEY_CHARS }, "input": expression.clone() }, "required": ["kind", "contentId", "procedureId", "input"] },
-                    { "type": "object", "additionalProperties": false, "properties": { "kind": { "type": "string", "const": "intrinsic" }, "version": { "type": "integer", "const": 1 }, "op": { "type": "string", "enum": [
-                        "length", "text_byte_length", "text_scalar_length", "text_grapheme_length", "text_tokenize",
-                        "text_split", "text_join", "text_trim", "text_lowercase", "text_uppercase",
-                        "text_contains", "text_starts_with", "text_ends_with", "text_replace", "text_url_encode",
-                        "text_regex_capture", "text_normalize_nfc", "text_normalize_nfd", "text_normalize_nfkc", "text_normalize_nfkd",
-                        "text_trim_start", "text_trim_end", "text_grapheme_substring", "text_index_of", "text_count",
-                        "text_repeat", "text_concat_many",
-                        "text_pad_start", "text_pad_end", "text_substring", "text_char_at", "text_format",
-                        "text_matches_regex", "text_regex_replace_all", "text_base64_encode", "text_base64_decode",
-                        "text_url_decode", "text_hex_encode", "text_hex_decode", "text_reverse",
-                        "text_char_code", "text_from_char_code", "text_levenshtein",
-                        "collection_contains", "collection_find_index", "count_equal",
-                        "collection_slice", "collection_reverse", "collection_sort", "collection_unique",
-                        "collection_flatten", "collection_zip", "range",
-                        "collection_group_by", "collection_sort_by", "collection_min_by", "collection_max_by",
-                        "collection_chunk", "collection_enumerate", "collection_any", "collection_all",
-                        "collection_take", "collection_drop", "collection_first", "collection_last",
-                        "collection_partition", "collection_repeat_value", "collection_window",
-                        "map_keys", "map_values", "map_entries", "map_from_entries", "map_set", "map_delete", "map_merge",
-                        "map_has_key", "map_get_default", "map_size", "map_filter_keys",
-                        "json_parse", "json_stringify", "path_get", "path_get_optional",
-                        "json_pointer_get", "json_pointer_get_optional", "json_pointer_set", "json_pointer_delete",
-                        "coalesce", "assert", "default_if_null",
-                        "numeric_abs", "numeric_sign", "numeric_min", "numeric_max", "numeric_clamp",
-                        "numeric_floor", "numeric_ceil", "numeric_round", "numeric_truncate",
-                        "numeric_pow_int", "numeric_pow_float", "integer_quotient", "integer_remainder",
-                        "math_sqrt", "math_log", "math_log10", "math_log2", "math_exp",
-                        "math_sin", "math_cos", "math_tan", "math_asin", "math_acos", "math_atan", "math_atan2",
-                        "math_pi", "math_e", "math_is_nan", "math_is_infinite",
-                        "math_gcd", "math_lcm", "math_hypot",
-                        "random_int", "random_float", "random_choice", "random_shuffle", "random_sample", "random_uuid",
-                        "date_now", "date_from_parts", "date_get_part", "date_add", "date_diff", "date_format",
-                        "type_name", "is_null", "is_bool", "is_int", "is_float", "is_text", "is_list", "is_map", "is_numeric",
-                        "to_int", "to_float", "to_bool", "to_text", "parse_int", "parse_float", "parse_bool",
-                        "set_union", "set_intersect", "set_difference", "set_is_subset",
-                        "bit_and", "bit_or", "bit_xor", "bit_not", "bit_shift_left", "bit_shift_right",
-                        "hash_sha256", "hash_md5",
-                        "numeric_to_fixed", "numeric_to_hex", "numeric_from_hex", "numeric_to_binary", "numeric_from_binary"
-                    ] }, "args": { "type": "array", "maxItems": MAX_LESSON_EXPR_CHILDREN, "items": expression } }, "required": ["kind", "version", "op", "args"] }
-        ]
-    })
-}
-
-#[allow(dead_code)]
-fn lesson_program_schema() -> JsonValue {
-    let scalar = json!({ "type": ["null", "boolean", "number", "string"] });
-    let named = |op: &str| {
-        json!({
-            "type": "object",
-            "additionalProperties": false,
-            "properties": { "op": { "type": "string", "const": op }, "name": { "type": "string" } },
-            "required": ["op", "name"],
-        })
-    };
-    let unit = |op: &str| {
-        json!({
-            "type": "object",
-            "additionalProperties": false,
-            "properties": { "op": { "type": "string", "const": op } },
-            "required": ["op"],
-        })
-    };
-    let mut instructions = vec![
-        named("load_parameter"),
-        unit("load_result"),
-        json!({
-            "type": "object",
-            "additionalProperties": false,
-            "properties": { "op": { "type": "string", "const": "push_literal" }, "value": scalar },
-            "required": ["op", "value"],
-        }),
-    ];
-    for op in [
-        "add",
-        "subtract",
-        "multiply",
-        "divide",
-        "modulo",
-        "equal",
-        "not_equal",
-        "less_than",
-        "less_or_equal",
-        "greater_than",
-        "greater_or_equal",
-        "and",
-        "or",
-        "negate",
-        "not",
-    ] {
-        instructions.push(unit(op));
-    }
-    json!({
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-            "instructions": {
-                "type": "array",
-                "minItems": 1,
-                "maxItems": MAX_LESSON_INSTRUCTIONS,
-                "items": { "anyOf": instructions },
-            },
-        },
-        "required": ["instructions"],
     })
 }
 

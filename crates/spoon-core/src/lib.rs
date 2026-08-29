@@ -23,7 +23,7 @@ pub use episode::{
 };
 pub use error::SpoonError;
 pub use evidence::{Confidence, Evidence, ScopeCondition, Source, SourceKind, VerifiabilityTier};
-pub use expr::{BinOp, Expr, IntrinsicOp, UnOp};
+pub use expr::{BinOp, Expr, IntrinsicOp, LessonIntrinsicOp, UnOp};
 pub use language::{
     DEFAULT_MAX_INTENT_CANDIDATES, DEFAULT_MAX_SLOTS, DialogueAct, DialogueMove, EvidenceReference,
     GroundedClaim, IntentDisposition, IntentFrame, IntentFrameProposal, IntentFrameSet,

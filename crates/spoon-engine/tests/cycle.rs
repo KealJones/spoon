@@ -1540,6 +1540,61 @@ fn pure_expr_v2_numeric_intrinsic_is_teacher_authorable_and_reusable() {
     assert_eq!(outcome.answer, Some(Value::Int(9)));
 }
 
+/// Every intrinsic the Teacher is told about must survive lesson admission.
+///
+/// `packages/teacher/src/prompt.ts` advertises the operation vocabulary, and
+/// the compiler decides what a lesson may actually name. When those two
+/// disagree the Teacher authors a lesson in good faith, admission rejects the
+/// draft, and the cycle completes having learned nothing. That failure is
+/// silent, so it needs a test rather than a code reading.
+#[test]
+fn every_intrinsic_advertised_to_the_teacher_is_admissible_in_a_lesson() {
+    for (op, input, answer) in [
+        ("math_sqrt", json!(9), Value::Float(3.0)),
+        ("bit_and", json!(12), Value::Int(8)),
+        ("is_numeric", json!(9), Value::Bool(true)),
+        ("to_text", json!(9), Value::Text("9".to_string())),
+    ] {
+        let mut engine = Engine::in_memory_with_admin("test-admin").unwrap();
+        let cycle_id = begin_teacher_cycle(&mut engine, "advertised intrinsic");
+        let mut lesson = reusable_count_occurrences_lesson(json!([input]), input.clone());
+        lesson["lesson"]["procedures"][0]["parameters"] = json!([
+            { "name": "x", "description": "numeric input", "valueType": "number" }
+        ]);
+        // `bit_and` is the only binary operation in the sample, so it takes a
+        // second literal argument while the rest are unary.
+        let args = if op == "bit_and" {
+            json!([
+                { "kind": "parameter", "name": "x" },
+                { "kind": "literal", "value": 10 }
+            ])
+        } else {
+            json!([{ "kind": "parameter", "name": "x" }])
+        };
+        lesson["lesson"]["procedures"][0]["body"] =
+            json!({ "kind": "intrinsic", "version": 1, "op": op, "args": args });
+        lesson["lesson"]["invocation"]["inputs"] = json!([{ "name": "x", "value": input }]);
+        lesson["answer"] = json!(null);
+
+        let progress = engine
+            .resume_cycle(cycle_id, proposal("advertised intrinsic", lesson))
+            .unwrap();
+        let CycleProgress::Completed(outcome) = progress else {
+            panic!("{op}: lesson should reach a completed cycle");
+        };
+        assert_eq!(
+            outcome.answer,
+            Some(answer),
+            "{op} is advertised to the Teacher but did not execute in a lesson"
+        );
+        assert_eq!(
+            engine.graph().list_procedures().unwrap().len(),
+            1,
+            "{op} is advertised to the Teacher but admission retained no procedure"
+        );
+    }
+}
+
 #[test]
 fn unsafe_pure_expr_v2_drafts_do_not_mutate_knowledge() {
     for body in [
@@ -1836,12 +1891,10 @@ fn malformed_reusable_lesson_gets_one_targeted_retry_when_budget_allows() {
         panic!("unsafe reusable lesson should receive a bounded retry");
     };
     assert_eq!(retry_id, cycle_id);
+    let question = request.specific_question.as_deref().unwrap();
     assert!(
-        request
-            .specific_question
-            .as_deref()
-            .unwrap()
-            .contains("could not be safely compiled")
+        question.contains("not valid spoonlang"),
+        "the retry must tell the Teacher what was wrong, got: {question}"
     );
     assert!(engine.graph().list_procedures().unwrap().is_empty());
 
