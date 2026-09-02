@@ -24,7 +24,7 @@ use spoon_core::types::episode::Pair;
 
 use crate::ears::induce::induce_phrasings;
 use crate::ears::lexicon::Lexicon;
-use crate::ears::llm::{build_prompt, call_llm_normalizer, strip_non_sce};
+use crate::ears::llm::{build_prompt, build_repair_prompt, call_llm_normalizer, strip_non_sce};
 use crate::ears::normalize::normalize;
 use crate::ears::phrasings::{tokenize_for_bm25, PhrasingStore};
 use crate::ears::values::spot_values;
@@ -287,12 +287,8 @@ impl Ears {
                         });
                     }
                     Err(parser_err) => {
-                        // ONE repair retry including the error
-                        let repair_prompt_extra = format!(
-                            "{}\n\nThe previous attempt produced this SCE which failed to parse: {}\nParser error: {}\nPlease correct the SCE.",
-                            text, sce, parser_err
-                        );
-                        let msgs2 = build_prompt(&self.normalizer_prompt, &vocab, &[], &repair_prompt_extra);
+                        // ONE repair retry: tight system prompt with the error message
+                        let msgs2 = build_repair_prompt(text, &sce, &parser_err, &vocab);
                         if let Ok(raw2) = call_llm_normalizer(client, cfg, msgs2).await {
                             let sce2 = strip_non_sce(&raw2);
                             if let Ok(clauses2) = gate.parse(&sce2) {

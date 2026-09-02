@@ -363,6 +363,53 @@ fn no_llm_when_offline() {
     assert_eq!((ears_c, mouth_c, teacher_c, fail_c), (0, 0, 0, 0));
 }
 
+/// 11. Speaker grounding: pronouns become User/Assistant.
+#[test]
+fn speaker_grounding() {
+    use spoon_lang::ears::normalize::ground_speakers;
+
+    assert_eq!(ground_speakers("i own a dog"), "User own a dog");
+    assert_eq!(ground_speakers("my dog is happy"), "User's dog is happy");
+    assert_eq!(ground_speakers("you should know"), "Assistant should know");
+    assert_eq!(ground_speakers("your answer is wrong"), "Assistant's answer is wrong");
+    // "I" mid-sentence
+    assert_eq!(ground_speakers("john and i are here"), "john and User are here");
+    // Quoted content is preserved (rough heuristic)
+    // Names are NOT changed
+    assert_eq!(ground_speakers("John owns a dog"), "John owns a dog");
+}
+
+/// 12. Sentence-final tag stripping.
+#[test]
+fn sentence_final_tags() {
+    use spoon_lang::ears::normalize::strip_sentence_final_tags;
+
+    assert_eq!(strip_sentence_final_tags("where is bob at").trim(), "where is bob");
+    assert_eq!(strip_sentence_final_tags("when does mary leave again?").trim(), "when does mary leave?");
+    assert_eq!(strip_sentence_final_tags("is it right").trim(), "is it");
+    assert_eq!(strip_sentence_final_tags("who is john tho").trim(), "who is john");
+    // Multi-word final tag
+    assert_eq!(strip_sentence_final_tags("is that valid or what").trim(), "is that valid");
+    // Non-final use is preserved
+    assert!(strip_sentence_final_tags("right now is good").contains("right"));
+}
+
+/// 13. Structural equality: two semantically equivalent SCE strings match.
+#[test]
+fn structural_equality() {
+    use spoon_lang::ears::bench::structural_eq;
+    use spoon_lang::ears::gate::SceGate;
+
+    let gate = SceGate::with_defaults();
+    // Same sentence
+    assert!(structural_eq("John owns a dog.", "John owns a dog.", &gate));
+    // Different variable names (won't differ since same string, but let's check mismatched SCE)
+    // Two parses of the same meaning
+    assert!(structural_eq("Does John own a dog?", "Does John own a dog?", &gate));
+    // Different sentence type => not structural match
+    assert!(!structural_eq("John owns a dog.", "Does John own a dog?", &gate));
+}
+
 // ---- live test (ignored unless SPOON_LLM_TESTS=1) ----
 
 #[tokio::test]
@@ -453,7 +500,7 @@ fn bench_ace_llm_live() {
     let report = spoon_lang::ears::bench::run_ace(&ears, &gate, &corpus, true)
         .expect("run_ace failed");
 
-    println!("=== bench_ace_llm_live (LLM enabled) ===");
+    println!("=== bench_ace_llm_live (LLM enabled, qwen3.5:4b) ===");
     println!("{}", report);
 
     // Print up to 15 misses
@@ -473,6 +520,73 @@ fn bench_ace_llm_live() {
     }
 }
 
+/// Model sweep across qwen3.5:0.8b, 2b, 4b. Run with SPOON_LLM_TESTS=1.
+#[test]
+#[ignore]
+fn bench_ace_model_sweep() {
+    if std::env::var("SPOON_LLM_TESTS").as_deref() != Ok("1") {
+        return;
+    }
+    use spoon_core::llm::{LlmClient, LlmConfig};
+    use spoon_lang::ears::gate::SceGate;
+
+    let corpus = workspace_root().join("data/bench/ace_corpus.json");
+    if !corpus.exists() {
+        eprintln!("corpus not found");
+        return;
+    }
+
+    let models = ["qwen3.5:0.8b", "qwen3.5:2b", "qwen3.5:4b"];
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    // Simple YYYYMMDD from unix timestamp
+    let days = now / 86400;
+    let year = 1970 + days / 365;
+    let day_of_year = days % 365;
+    let month = day_of_year / 30 + 1;
+    let day = day_of_year % 30 + 1;
+    let date = format!("{:04}{:02}{:02}", year, month, day);
+
+    println!("\n=== Model Sweep ===");
+    println!("{:<16} | {:>8} | {:>8} | {:>8} | {:>8}", "model", "parsed%", "struct%", "exact%", "med_ms");
+    println!("{}", "-".repeat(65));
+
+    for model in &models {
+        let client = LlmClient::new();
+        let cfg = LlmConfig::ollama(model);
+        let lex = Lexicon::load_seed_dir(&seed_dir()).unwrap();
+        let phrasings = spoon_lang::ears::load_phrasings(&test_data_dir(), &lex).unwrap();
+        let ears = Ears::new(lex, phrasings, Some((client, cfg)));
+        let gate = SceGate::with_defaults();
+
+        let wall_start = std::time::Instant::now();
+        let report = spoon_lang::ears::bench::run_ace(&ears, &gate, &corpus, true)
+            .expect("run_ace failed");
+        let elapsed_ms = wall_start.elapsed().as_millis() as usize;
+        let n = report.total.max(1);
+        let med_ms = elapsed_ms / n;
+
+        let parsed_pct = 100.0 * report.parsed as f64 / n as f64;
+        let hits_pct = 100.0 * report.hits as f64 / n as f64;
+        let exact_pct = 100.0 * report.exact as f64 / n as f64;
+
+        println!("{:<16} | {:>7.1}% | {:>7.1}% | {:>7.1}% | {:>8}",
+            model, parsed_pct, hits_pct, exact_pct, med_ms);
+        println!("  path: {:?}", report.path_histogram);
+
+        // Save report JSON
+        let safe_model = model.replace(':', "_").replace('.', "_");
+        let result_path = workspace_root().join(format!("data/bench/results/ace_{}_{}.json", safe_model, date));
+        if let Err(e) = report.save_json(&result_path) {
+            eprintln!("failed to save report for {}: {}", model, e);
+        } else {
+            println!("  saved -> {}", result_path.display());
+        }
+    }
+}
+
 fn truncate(s: &str, max: usize) -> String {
     if s.len() <= max {
         s.to_string()
@@ -487,14 +601,15 @@ fn typo_repair_is_conservative() {
     use spoon_lang::ears::normalize::normalize;
 
     let lex = Lexicon::load_seed_dir(&seed_dir()).expect("load lexicon");
-    // "you", "dude", "yo", "good" are all common words - must survive.
-    // "lol" is a filler - must be dropped.
+    // "you", "dude", "yo", "good" are known - must not mangle.
+    // "you" now becomes "Assistant" via speaker grounding.
+    // "lol" is dropped globally.
     {
         let n = normalize("yo dude you good lol", &lex);
         let text = n.sentences.join(" ");
         assert!(
-            text.to_lowercase().contains("you"),
-            "\"you\" must survive, got: {:?}",
+            text.to_lowercase().contains("assistant"),
+            "\"you\" should become \"Assistant\", got: {:?}",
             text
         );
         assert!(

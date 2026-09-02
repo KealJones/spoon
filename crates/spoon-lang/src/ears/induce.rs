@@ -107,6 +107,7 @@ pub fn induce_word_map(pairs: &[Pair], lexicon: &Lexicon) -> Vec<(String, String
 struct SharedValue {
     utt_start: usize,
     utt_end: usize,
+    #[allow(dead_code)]
     utt_text: String,
     sce_start: usize,
     sce_end: usize,

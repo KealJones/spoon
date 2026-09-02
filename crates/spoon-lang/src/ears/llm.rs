@@ -78,7 +78,41 @@ fn truncate_base(base: &str, max_chars: usize) -> String {
     format!("{}...[truncated]", &base[..max_chars])
 }
 
-/// Strip common LLM output artifacts that are not SCE sentences.
+/// Build the repair messages for a failed parse.
+/// Sends: original utterance, the failing SCE, the parser error, and a tight repair hint.
+pub fn build_repair_prompt(
+    utterance: &str,
+    bad_sce: &str,
+    parse_error: &str,
+    vocab: &[String],
+) -> Vec<ChatMessage> {
+    let repair_system = "\
+Fix ONE SCE parse error. Output only the corrected SCE text.\n\
+Key rules:\n\
+- Every command ends with `!` (Assistant, VERB PHRASE!)\n\
+- No `if` inside an embedded question - use `Does X know the answer?`\n\
+- Every noun needs a determiner (a/the/every/some/no/N)\n\
+- Conditionals need `if ... then ...` with no comma before `then`\n\
+- No `tell X that Y says/believes that` - split into two sentences\n\
+- Phrasal verbs hyphenated: `looks-for`, `knocks-out`\n\
+Fix ONLY what the error names. Output one line.";
+
+    let vocab_block = if vocab.is_empty() {
+        String::new()
+    } else {
+        format!("\nVocabulary: {}", vocab[..vocab.len().min(20)].join(", "))
+    };
+
+    let user_msg = format!(
+        "Original utterance: {}\nFailing SCE: {}\nParser error: {}{}\nCorrected SCE:",
+        utterance, bad_sce, parse_error, vocab_block
+    );
+
+    vec![
+        ChatMessage::system(repair_system.to_string()),
+        ChatMessage::user(user_msg),
+    ]
+}
 /// Removes: markdown code fences, "Output:" / "Result:" prefixes, leading/trailing whitespace.
 pub fn strip_non_sce(raw: &str) -> String {
     let mut s = raw.trim().to_string();

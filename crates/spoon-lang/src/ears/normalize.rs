@@ -30,11 +30,17 @@ pub fn normalize(text: &str, lexicon: &Lexicon) -> Normalized {
     // 3. Elongation squash (3+ same consecutive chars -> 1)
     let squashed = squash_elongation(&expanded);
 
+    // 3b. Speaker grounding: first-person -> User, second-person -> Assistant
+    let grounded = ground_speakers(&squashed);
+
+    // 3c. Drop sentence-final filler tags ("at", "right", "again", etc.)
+    let definal = strip_sentence_final_tags(&grounded);
+
     // 4. Spot values before case-folding (so arithmetic is preserved)
-    let protected = spot_values(&squashed);
+    let protected = spot_values(&definal);
 
     // 5. Lowercase everything except: tokens inside protected spans OR tokens recognized as names
-    let lowered = lowercase_except_names(&squashed, lexicon, &protected);
+    let lowered = lowercase_except_names(&definal, lexicon, &protected);
 
     // 6. Strip fillers at sentence/clause starts
     let defilled = strip_fillers(&lowered, &lexicon.fillers);
@@ -156,6 +162,167 @@ fn squash_elongation(text: &str) -> String {
         i += count;
     }
     out
+}
+
+// ---- speaker grounding ----
+
+/// Replace first-person and second-person standalone pronouns with User/Assistant.
+/// Runs after slang expansion so "u" has already become "you" and "ur" -> "your".
+/// Does NOT apply inside quoted strings (very rough heuristic: skip tokens after an
+/// open quote that has no matching close quote yet).
+pub fn ground_speakers(text: &str) -> String {
+    // Work on lowercased copy for matching; preserve original case for non-pronoun tokens.
+    let tokens: Vec<&str> = text.split_whitespace().collect();
+    let mut out: Vec<String> = Vec::with_capacity(tokens.len());
+    let mut in_quote = false;
+
+    for token in &tokens {
+        // Very rough quote tracking (just count unescaped double-quotes)
+        let quote_count = token.chars().filter(|&c| c == '"').count();
+        if quote_count % 2 != 0 {
+            in_quote = !in_quote;
+        }
+
+        if in_quote {
+            out.push(token.to_string());
+            continue;
+        }
+
+        // Strip trailing punctuation for comparison
+        let stripped = token.trim_end_matches(|c: char| matches!(c, '.' | '?' | '!' | ',' | ';' | ':'));
+        let suffix = &token[stripped.len()..];
+        let lower = stripped.to_lowercase();
+
+        let replacement = match lower.as_str() {
+            // First-person -> User
+            "i" | "me" => Some("User"),
+            "my" | "mine" => Some("User's"),
+            // Second-person -> Assistant
+            "you" => Some("Assistant"),
+            "your" => Some("Assistant's"),
+            _ => None,
+        };
+
+        if let Some(r) = replacement {
+            out.push(format!("{}{}", r, suffix));
+        } else {
+            out.push(token.to_string());
+        }
+    }
+    out.join(" ")
+}
+
+// ---- sentence-final tag dropping ----
+
+/// Words/phrases that are meaningless when they are the last token(s) before a sentence
+/// terminator (or before end-of-string if no terminator).
+static FINAL_TAGS: &[&str] = &[
+    "or something", "or what",
+    "you know", "you know what i mean", "you know what i'm saying",
+    "right",
+    "though", "tho",
+    "again",
+    "even",
+    "at",
+    "lol",
+];
+
+/// Drop sentence-final filler tags (e.g. "where is bob at" -> "where is bob").
+/// Also drops clause-initial "like" and "you know".
+pub fn strip_sentence_final_tags(text: &str) -> String {
+    // Sort by length desc so multi-word tags match first.
+    let mut tags: Vec<&str> = FINAL_TAGS.to_vec();
+    tags.sort_by(|a, b| b.len().cmp(&a.len()));
+
+    // Process sentence by sentence (split on . ? !)
+    let mut result = String::new();
+    let mut remaining = text;
+    loop {
+        // Find next sentence terminator
+        let term_pos = remaining
+            .char_indices()
+            .find(|(_, c)| matches!(c, '.' | '?' | '!'));
+
+        let (sentence, terminator, rest) = match term_pos {
+            Some((pos, ch)) => (&remaining[..pos], Some(ch), &remaining[pos+1..]),
+            None => (remaining, None, ""),
+        };
+
+        let trimmed = strip_final_tags_from_segment(sentence, &tags);
+        result.push_str(trimmed.trim_end());
+        if let Some(t) = terminator {
+            result.push(t);
+        }
+        remaining = rest.trim_start();
+        if remaining.is_empty() && terminator.is_none() {
+            break;
+        }
+        if remaining.is_empty() {
+            break;
+        }
+    }
+
+    // Also drop clause-initial "like " (after punctuation or at start)
+    let result = drop_clause_initial_like(&result);
+
+    result
+}
+
+fn strip_final_tags_from_segment(segment: &str, tags: &[&str]) -> String {
+    let mut s = segment.trim().to_string();
+    // Repeatedly strip tags from the end
+    let mut changed = true;
+    while changed {
+        changed = false;
+        let lower = s.to_lowercase();
+        for tag in tags {
+            let tl = tag.to_lowercase();
+            // Match tag at end, preceded by whitespace or beginning
+            if lower.ends_with(tl.as_str()) {
+                let end_pos = s.len() - tag.len();
+                // Check that it's at a word boundary (preceded by space or is whole string)
+                let before = &s[..end_pos];
+                if before.is_empty() || before.ends_with(' ') {
+                    s = before.trim_end().to_string();
+                    changed = true;
+                    break;
+                }
+            }
+        }
+    }
+    if s.is_empty() { s } else { format!("{} ", s) }
+}
+
+fn drop_clause_initial_like(text: &str) -> String {
+    // Drop "like " at the start of the text or right after a sentence terminator + space
+    let mut result = String::new();
+    let mut remaining = text;
+
+    // Drop at very start
+    while let Some(rest) = remaining.strip_prefix("like ").or_else(|| {
+        let lower = remaining.to_lowercase();
+        if lower.starts_with("like ") { Some(&remaining[5..]) } else { None }
+    }) {
+        remaining = rest;
+    }
+
+    for ch in remaining.chars() {
+        result.push(ch);
+        // After a sentence terminator + space, try to strip "like "
+        if matches!(ch, '.' | '?' | '!') {
+            // peek: if next chars are " like ", skip them
+        }
+    }
+
+    // Simpler: just replace sentence-boundary + "like " patterns
+    let result = remaining.to_string();
+    let terminators = [". like ", "? like ", "! like ", ". Like ", "? Like ", "! Like "];
+    let mut cleaned = result;
+    for pat in &terminators {
+        let repl = &pat[..1]; // just the terminator + space
+        cleaned = cleaned.replace(pat, &format!("{} ", repl));
+    }
+    cleaned
 }
 
 // ---- lowercase except names ----
