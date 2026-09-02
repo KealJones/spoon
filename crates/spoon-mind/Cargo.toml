@@ -19,3 +19,7 @@ indexmap.workspace = true
 rand.workspace = true
 tokio.workspace = true
 parking_lot.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+tempfile.workspace = true
