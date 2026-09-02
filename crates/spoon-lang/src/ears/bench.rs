@@ -1,6 +1,5 @@
-//! ACE benchmark runner.
-//! Scores the ears against the 158-item messy-English corpus.
-//! `allow_llm=false` runs fully offline using `hear_native`.
+//! Benchmark runners: ACE (158 messy-English items) and convo20 (20 turns of
+//! conversation). `allow_llm=false` runs fully offline using `hear_offline`;
 //! `allow_llm=true` creates a tokio runtime and calls the async `hear`.
 
 use std::collections::HashMap;
@@ -8,7 +7,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use spoon_core::types::clause::{Act, Clause, EarsPath, Quant};
+use spoon_core::types::clause::{Act, Clause, EarsResult, Quant};
 
 use crate::ears::{Ears, Gate};
 
@@ -161,10 +160,43 @@ pub fn structural_eq(expected: &str, got: &str, gate: &dyn Gate) -> bool {
     exp_canons == got_canons
 }
 
+/// `direct*` is the last-resort direct parse that carries unknown words.
+fn path_label(result: &EarsResult) -> String {
+    let path = format!("{:?}", result.path).to_lowercase();
+    if result.path == spoon_core::types::clause::EarsPath::Direct && result.confidence < 1.0 {
+        format!("{path}*")
+    } else {
+        path
+    }
+}
+
+/// Exact match after whitespace/case normalization.
+fn exact_eq(expected: &str, got: &str) -> bool {
+    let norm = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
+    norm(expected) == norm(got)
+}
+
+/// One `hear` per item, timed. Offline runs use `hear_offline` (the same
+/// pipeline minus the LLM seat); LLM runs block on the async `hear`.
+fn hear_each<'a, I>(ears: &Ears, gate: &dyn Gate, inputs: I, allow_llm: bool) -> anyhow::Result<Vec<(EarsResult, u128)>>
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    let rt = if allow_llm { Some(tokio::runtime::Runtime::new()?) } else { None };
+    Ok(inputs
+        .into_iter()
+        .map(|input| {
+            let start = std::time::Instant::now();
+            let result = match &rt {
+                Some(rt) => rt.block_on(ears.hear(input, gate)),
+                None => ears.hear_offline(input, gate),
+            };
+            (result, start.elapsed().as_millis())
+        })
+        .collect())
+}
+
 /// Run the ACE benchmark.
-///
-/// When `allow_llm=false`, `hear_native` is used (sync, no LLM required).
-/// When `allow_llm=true`, a tokio `Runtime` is created to call the async `hear`.
 ///
 /// The `gate` should be the production SCE parser; for tests a `FakeGate` is fine.
 pub fn run_ace(
@@ -177,12 +209,6 @@ pub fn run_ace(
         .map_err(|e| anyhow::anyhow!("cannot read corpus {}: {e}", corpus.display()))?;
     let items: Vec<CorpusItem> = serde_json::from_str(&text)?;
 
-    let rt = if allow_llm {
-        Some(tokio::runtime::Runtime::new()?)
-    } else {
-        None
-    };
-
     let mut report = AceReport {
         total: items.len(),
         hits: 0,
@@ -194,38 +220,23 @@ pub fn run_ace(
         misses: vec![],
     };
 
-    for item in &items {
-        let result = if let Some(rt) = &rt {
-            rt.block_on(ears.hear(&item.input, gate))
-        } else {
-            ears.hear_native(&item.input, gate).unwrap_or_else(|| {
-                spoon_core::types::clause::EarsResult {
-                    clauses: vec![],
-                    path: EarsPath::Failed,
-                    sce: item.input.clone(),
-                    confidence: 0.0,
-                    unknown_words: vec![],
-                }
-            })
-        };
+    let (_, repairs_before, _) = ears.stats().snapshot();
+    let results = hear_each(ears, gate, items.iter().map(|i| i.input.as_str()), allow_llm)?;
+    let (_, repairs_after, _) = ears.stats().snapshot();
+    report.repairs = (repairs_after - repairs_before) as usize;
 
-        let path_name = format!("{:?}", result.path).to_lowercase();
-        *report.path_histogram.entry(path_name).or_default() += 1;
+    for (item, (result, _ms)) in items.iter().zip(results) {
+        *report.path_histogram.entry(path_label(&result)).or_default() += 1;
 
         let cat = report.category_breakdown.entry(item.category.clone()).or_default();
         cat.total += 1;
 
-        let parsed = !result.clauses.is_empty();
-        if parsed {
+        if !result.clauses.is_empty() {
             report.parsed += 1;
             cat.parsed += 1;
         }
 
-        // Exact match after whitespace/case normalization
-        let got_norm = result.sce.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
-        let exp_norm = item.expected_ace.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
-        let is_exact = got_norm == exp_norm;
-
+        let is_exact = exact_eq(&item.expected_ace, &result.sce);
         // Structural match (compare parsed clauses, ignoring variable names)
         let is_structural = is_exact || structural_eq(&item.expected_ace, &result.sce, gate);
 
@@ -240,8 +251,103 @@ pub fn run_ace(
                 got: result.sce.clone(),
             });
         }
-        let _ = item.id;
     }
 
+    Ok(report)
+}
+
+// ---- convo20 ----
+
+#[derive(Deserialize)]
+pub struct ConvoItem {
+    pub input: String,
+    pub sce: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ConvoRow {
+    pub input: String,
+    pub expected: String,
+    pub got: String,
+    pub path: String,
+    pub ms: u128,
+    pub hit: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ConvoReport {
+    pub total: usize,
+    pub hits: usize,
+    pub exact: usize,
+    pub llm_calls: u32,
+    pub repairs: u32,
+    pub rows: Vec<ConvoRow>,
+}
+
+impl std::fmt::Display for ConvoReport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "{:<3} {:<44} | {:<44} | {:<44} | {:<9} | {:>6}", "", "input", "expected", "got", "path", "ms")?;
+        writeln!(f, "{}", "-".repeat(165))?;
+        for row in &self.rows {
+            writeln!(
+                f,
+                "{:<3} {:<44} | {:<44} | {:<44} | {:<9} | {:>6}",
+                if row.hit { "ok" } else { "MISS" },
+                clip(&row.input, 44),
+                clip(&row.expected, 44),
+                clip(&row.got, 44),
+                row.path,
+                row.ms
+            )?;
+        }
+        writeln!(
+            f,
+            "convo: {}/{} structural hits, {} exact, {} llm calls, {} repairs (direct* = last-resort parse with unknown words)",
+            self.hits, self.total, self.exact, self.llm_calls, self.repairs
+        )
+    }
+}
+
+fn clip(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        let head: String = s.chars().take(max.saturating_sub(3)).collect();
+        format!("{head}...")
+    }
+}
+
+/// Run the conversation benchmark (`data/bench/convo20.json`).
+pub fn run_convo(ears: &Ears, gate: &dyn Gate, corpus: &Path, allow_llm: bool) -> anyhow::Result<ConvoReport> {
+    let text = std::fs::read_to_string(corpus)
+        .map_err(|e| anyhow::anyhow!("cannot read corpus {}: {e}", corpus.display()))?;
+    let items: Vec<ConvoItem> = serde_json::from_str(&text)?;
+
+    let (calls_before, repairs_before, _) = ears.stats().snapshot();
+    let results = hear_each(ears, gate, items.iter().map(|i| i.input.as_str()), allow_llm)?;
+    let (calls_after, repairs_after, _) = ears.stats().snapshot();
+
+    let mut report = ConvoReport {
+        total: items.len(),
+        hits: 0,
+        exact: 0,
+        llm_calls: calls_after - calls_before,
+        repairs: repairs_after - repairs_before,
+        rows: vec![],
+    };
+    for (item, (result, ms)) in items.iter().zip(results) {
+        let exact = exact_eq(&item.sce, &result.sce);
+        let hit = exact || structural_eq(&item.sce, &result.sce, gate);
+        report.exact += exact as usize;
+        report.hits += hit as usize;
+        report.rows.push(ConvoRow {
+            input: item.input.clone(),
+            expected: item.sce.clone(),
+            got: result.sce.clone(),
+            path: path_label(&result),
+            ms,
+            hit,
+        });
+    }
     Ok(report)
 }

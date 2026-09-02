@@ -441,6 +441,11 @@ async fn llm_normalizer_live() {
         "i dont know what to do",
         "ok so john has this dog right and like the dog is brown",
         "can u remind me what marys phone number is",
+        "heyyyy whats going on",
+        "which customer bought the red thing?",
+        "no cats are dogs",
+        "if its raining then bob stays home",
+        "divide 100 by 4 pls",
     ];
 
     for input in &inputs {
@@ -503,10 +508,9 @@ fn bench_ace_llm_live() {
     println!("=== bench_ace_llm_live (LLM enabled, qwen3.5:4b) ===");
     println!("{}", report);
 
-    // Print up to 15 misses
-    let misses: Vec<_> = report.misses.iter().take(15).collect();
+    let misses: Vec<_> = report.misses.iter().collect();
     if !misses.is_empty() {
-        println!("\n--- Misses (up to 15) ---");
+        println!("\n--- Misses ({}) ---", misses.len());
         println!("{:<50} | {:<40} | {}", "input", "expected", "got");
         println!("{}", "-".repeat(130));
         for m in &misses {
@@ -595,6 +599,122 @@ fn truncate(s: &str, max: usize) -> String {
     }
 }
 
+// ---- direct-path policy (real gate) ----
+
+fn real_gate() -> spoon_lang::ears::gate::SceGate {
+    let mut gate = spoon_lang::ears::gate::SceGate::with_defaults();
+    gate.add_names(&["John", "Mary", "Bob"]);
+    gate
+}
+
+/// Junk that the strict parser would accept as Names must not sneak in as a
+/// clean direct parse; the greeting phrasing gets its turn.
+#[test]
+fn junk_greeting_resolves_via_phrasing() {
+    let ears = make_ears();
+    let gate = real_gate();
+    let result = ears.hear_offline("yo whats up", &gate);
+    assert_eq!(result.path, EarsPath::Phrasing, "got {:?} / {:?}", result.path, result.sce);
+    assert_eq!(result.sce, "User greets Assistant.");
+}
+
+#[test]
+fn capitalized_junk_is_never_a_clean_direct() {
+    let ears = make_ears();
+    let gate = real_gate();
+    let result = ears.hear_offline("Hello whats up.", &gate);
+    assert!(
+        !(result.path == EarsPath::Direct && result.confidence >= 1.0),
+        "clean Direct for junk: {:?}",
+        result
+    );
+    // The gate accepts it (Hello as a Name), so the last resort still yields
+    // the dirty parse with the unknown words reported, or the phrasing wins.
+    if result.path == EarsPath::Direct {
+        assert!(result.confidence <= 0.3);
+        assert!(!result.unknown_words.is_empty(), "unknown words must be reported: {:?}", result);
+    }
+    // `who owns a dog` is a question, not an assertion about a dog owner.
+    let q = ears.hear_offline("who owns a dog", &gate);
+    assert_eq!(q.sce, "Who owns a dog?", "{:?}", q);
+}
+
+/// A command whose only unknown word is its verb is still a clean Direct
+/// parse: that is how new verbs reach the learner.
+#[test]
+fn unknown_verb_command_is_direct() {
+    let ears = make_ears();
+    let gate = real_gate();
+    let result = ears.hear_offline("Assistant, double 21!", &gate);
+    assert_eq!(result.path, EarsPath::Direct, "{:?}", result);
+    assert!(result.confidence >= 1.0, "{:?}", result);
+    assert!(matches!(result.clauses[0].act, Act::Command));
+
+    // A verb nobody has ever seen is still clean in a command, and reported.
+    let result = ears.hear_offline("Assistant, frobnicate 21!", &gate);
+    assert_eq!(result.path, EarsPath::Direct, "{:?}", result);
+    assert!(result.confidence >= 1.0, "{:?}", result);
+    assert_eq!(result.unknown_words, vec!["frobnicate".to_string()]);
+    // ... but not in an assertion.
+    let result = ears.hear_offline("John frobnicates a dog.", &gate);
+    assert!(result.path != EarsPath::Direct || result.confidence < 1.0, "{:?}", result);
+
+    // Same command reached through an indirect request.
+    let result = ears.hear_offline("can u double 21 for me", &gate);
+    assert_eq!(result.sce, "Assistant, double 21!", "{:?}", result);
+    assert_eq!(result.path, EarsPath::Direct);
+}
+
+// ---- convo20 ----
+
+fn convo_corpus() -> std::path::PathBuf {
+    workspace_root().join("data/bench/convo20.json")
+}
+
+/// Every expected SCE in convo20 must parse with the real gate, otherwise the
+/// bench measures the corpus instead of the ears.
+#[test]
+fn convo20_expected_parses() {
+    let text = std::fs::read_to_string(convo_corpus()).expect("convo20.json");
+    let items: Vec<spoon_lang::ears::bench::ConvoItem> = serde_json::from_str(&text).unwrap();
+    assert_eq!(items.len(), 20);
+    let gate = real_gate();
+    let bad: Vec<String> = items
+        .iter()
+        .filter_map(|i| gate.parse(&i.sce).err().map(|e| format!("{} -> {e}", i.sce)))
+        .collect();
+    assert!(bad.is_empty(), "expected SCE that does not parse:\n{}", bad.join("\n"));
+}
+
+/// Offline conversation bench: no LLM, at least half the turns must land.
+#[test]
+fn convo20_native() {
+    let ears = make_ears();
+    let gate = real_gate();
+    let report = spoon_lang::ears::bench::run_convo(&ears, &gate, &convo_corpus(), false).expect("run_convo");
+    println!("=== convo20_native (no LLM) ===\n{report}");
+    assert_eq!(report.llm_calls, 0);
+    assert!(report.hits >= 10, "native hits {}/{} < 10", report.hits, report.total);
+}
+
+/// Conversation bench with the LLM seat. Run with SPOON_LLM_TESTS=1.
+#[test]
+#[ignore]
+fn convo20_llm_live() {
+    if std::env::var("SPOON_LLM_TESTS").as_deref() != Ok("1") {
+        return;
+    }
+    use spoon_core::llm::{LlmClient, LlmConfig};
+    let mut lex = Lexicon::load_seed_dir(&seed_dir()).unwrap();
+    lex.add_names(&["John", "Mary", "Ben", "Bob"]);
+    let phrasings = spoon_lang::ears::load_phrasings(&test_data_dir(), &lex).unwrap();
+    let ears = Ears::new(lex, phrasings, Some((LlmClient::new(), LlmConfig::ollama("qwen3.5:4b"))));
+    let gate = real_gate();
+    let report = spoon_lang::ears::bench::run_convo(&ears, &gate, &convo_corpus(), true).expect("run_convo");
+    println!("=== convo20_llm_live (qwen3.5:4b) ===\n{report}");
+    assert!(report.hits >= 17, "live hits {}/{} < 17", report.hits, report.total);
+}
+
 /// Conservative typo repair: known words must survive, garbled words still repair.
 #[test]
 fn typo_repair_is_conservative() {
@@ -619,14 +739,17 @@ fn typo_repair_is_conservative() {
         );
     }
     // "hell" is a common English word - must NOT be repaired to "help".
+    // (As a wh-expletive, `where the hell` -> `where`, so use it as a noun.)
     {
-        let n = normalize("where the hell is bob at", &lex);
+        let n = normalize("hell is a hot place", &lex);
         let text = n.sentences.join(" ");
         assert!(
             text.to_lowercase().contains("hell"),
             "\"hell\" must survive, got: {:?}",
             text
         );
+        let n = normalize("where the hell is bob at", &lex);
+        assert_eq!(n.sentences, vec!["Where is Bob?"]);
     }
     // Genuine typos still get repaired: "jhon" -> "john", "dgo" -> "dog".
     {

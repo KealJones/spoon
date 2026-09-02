@@ -72,6 +72,15 @@ pub struct Lexicon {
     pub fillers: Vec<String>,
     /// number words "one" -> 1
     pub number_words: HashMap<String, f64>,
+    /// past form -> third person present ("bought" -> "buys"), from the seed verbs
+    pub present_of: HashMap<String, String>,
+    /// plural -> singular ("cats" -> "cat"), from the seed nouns
+    pub singular_of: HashMap<String, String>,
+    /// every seed verb lemma, even when a noun of the same spelling shadows
+    /// it in `words` ("wait", "help")
+    pub verb_lemmas: HashSet<String>,
+    /// every seed adjective lemma, even when a noun shadows it ("good")
+    pub adjective_lemmas: HashSet<String>,
 }
 
 impl Lexicon {
@@ -82,6 +91,10 @@ impl Lexicon {
             replacements: vec![],
             fillers: vec![],
             number_words: HashMap::new(),
+            present_of: HashMap::new(),
+            singular_of: HashMap::new(),
+            verb_lemmas: HashSet::new(),
+            adjective_lemmas: HashSet::new(),
         }
     }
 
@@ -98,19 +111,28 @@ impl Lexicon {
             lex.insert_word(&n.lemma, WordKind::Noun, 1);
             if let Some(p) = &n.plural {
                 lex.insert_word(p, WordKind::Noun, 1);
+                if p != &n.lemma {
+                    lex.singular_of.entry(p.to_lowercase()).or_insert_with(|| n.lemma.to_lowercase());
+                }
             }
         }
         for v in &seed.verbs {
             lex.insert_word(&v.lemma, WordKind::Verb, 1);
+            lex.verb_lemmas.insert(v.lemma.to_lowercase());
             if let Some(t) = &v.third {
                 lex.insert_word(t, WordKind::Verb, 1);
             }
             if let Some(p) = &v.past {
                 lex.insert_word(p, WordKind::Verb, 1);
+                let third = v.third.clone().unwrap_or_else(|| format!("{}s", v.lemma));
+                if p != &third && p != &v.lemma {
+                    lex.present_of.entry(p.to_lowercase()).or_insert(third.to_lowercase());
+                }
             }
         }
         for a in &seed.adjectives {
             lex.insert_word(&a.lemma, WordKind::Adjective, 1);
+            lex.adjective_lemmas.insert(a.lemma.to_lowercase());
         }
         for fw in &seed.function_words {
             lex.insert_word(fw, WordKind::Function, 1);
@@ -189,8 +211,7 @@ impl Lexicon {
         for concept in can.concepts() {
             for noun in &concept.nouns {
                 if noun.chars().next().is_some_and(|c| c.is_uppercase()) {
-                    self.names.insert(noun.clone());
-                    self.insert_word(&noun.to_lowercase(), WordKind::Name, 5);
+                    self.insert_name(noun, 5);
                 }
             }
         }
@@ -199,9 +220,17 @@ impl Lexicon {
     /// Register a list of proper names (for tests and custom entity lists).
     pub fn add_names(&mut self, names: &[&str]) {
         for n in names {
-            self.names.insert(n.to_string());
-            self.insert_word(&n.to_lowercase(), WordKind::Name, 10);
+            self.insert_name(n, 10);
         }
+    }
+
+    /// An explicitly registered name wins over a same-spelled common word
+    /// ("mary" is in the common list; Mary the entity is still a name).
+    fn insert_name(&mut self, name: &str, freq: u32) {
+        self.names.insert(name.to_string());
+        let entry = self.words.entry(name.to_lowercase()).or_insert(WordEntry { freq: 0, kind: WordKind::Name });
+        entry.kind = WordKind::Name;
+        entry.freq += freq;
     }
 
     /// Learn a user-taught word (canonical form). Freq = 10 overrides seed defaults.
@@ -227,6 +256,46 @@ impl Lexicon {
     pub fn canonical_name(&self, word: &str) -> Option<&str> {
         let lower = word.to_lowercase();
         self.names.iter().find(|n| n.to_lowercase() == lower).map(|s| s.as_str())
+    }
+
+    /// Canonical name for a lowercase `word` when the word is *only* a name:
+    /// "john" -> "John", but "mark" (also a verb) and "may" (function word)
+    /// stay untouched so ordinary words are never capitalized into names.
+    pub fn name_case(&self, word: &str) -> Option<&str> {
+        let lower = word.to_lowercase();
+        match self.words.get(&lower) {
+            Some(entry) if entry.kind == WordKind::Name => self.canonical_name(&lower),
+            _ => None,
+        }
+    }
+
+    /// True if `word` is registered as a verb (and not shadowed by a noun).
+    pub fn is_verb(&self, word: &str) -> bool {
+        matches!(self.words.get(&word.to_lowercase()), Some(e) if e.kind == WordKind::Verb)
+    }
+
+    /// True if `word` is a seed adjective, even one a noun shadows ("good").
+    pub fn is_adjective(&self, word: &str) -> bool {
+        self.adjective_lemmas.contains(&word.to_lowercase())
+    }
+
+    /// True if `word` is a noun, verb or adjective the ears know (seed lexicon
+    /// or CAN). Common-list words and function words do not count: they are
+    /// known spellings, not vocabulary the interior can place.
+    pub fn is_content_word(&self, word: &str) -> bool {
+        matches!(
+            self.words.get(&word.to_lowercase()),
+            Some(e) if matches!(e.kind, WordKind::Noun | WordKind::Verb | WordKind::Adjective)
+        )
+    }
+
+    /// True if `word` is a noun, a name or a function word: something that
+    /// cannot open an imperative.
+    pub fn is_non_verb(&self, word: &str) -> bool {
+        matches!(
+            self.words.get(&word.to_lowercase()),
+            Some(e) if matches!(e.kind, WordKind::Noun | WordKind::Function | WordKind::Name)
+        )
     }
 
     /// Typo-repair candidates for `word`: (candidate_canonical, similarity_0_to_1).

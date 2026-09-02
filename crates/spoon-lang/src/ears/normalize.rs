@@ -1,9 +1,16 @@
 //! Text normalization: unicode cleanup, slang expansion, elongation squash,
-//! typo repair, filler removal, sentence splitting.
+//! speaker grounding, typo repair, filler removal, sentence splitting, and
+//! the deterministic rewrite rules in `rules.rs`.
 
 use std::collections::HashSet;
 
 use crate::ears::lexicon::{Lexicon, should_protect};
+use crate::ears::rules::{
+    arithmetic_verbs, conjugate_fixed_subjects, convert_operator_words, digits, expand_contractions, fix_agreement,
+    modals_and_quantities, possession, present_tense, progressive, quote_mentions, self_correction,
+    singular_quantifiers, split_coordinated, strip_expletives, weather,
+};
+use crate::ears::sentence::apply_sentence_rules;
 use crate::ears::values::{spot_values, Spotted};
 
 // ---- public output type ----
@@ -27,32 +34,55 @@ pub fn normalize(text: &str, lexicon: &Lexicon) -> Normalized {
     // 2. Apply slang replacements (multi-word first, already sorted by length desc in Lexicon)
     let expanded = expand_slang(&cleaned, &lexicon.replacements);
 
-    // 3. Elongation squash (3+ same consecutive chars -> 1)
-    let squashed = squash_elongation(&expanded);
+    // 2b. Contractions: whats/what's -> what is, i'm -> i am, don't -> do not;
+    //     a self-correction (`wait no`, `i mean`) keeps only what follows it
+    let uncontracted = self_correction(&expand_contractions(&expanded));
 
-    // 3b. Speaker grounding: first-person -> User, second-person -> Assistant
-    let grounded = ground_speakers(&squashed);
+    // 3. Elongation squash (3+ same consecutive chars -> 1), expletives, weather-it
+    let squashed = weather(&strip_expletives(&squash_elongation(&uncontracted)));
 
-    // 3c. Drop sentence-final filler tags ("at", "right", "again", etc.)
-    let definal = strip_sentence_final_tags(&grounded);
+    // 3b. Speaker grounding: first-person -> User, second-person -> Assistant,
+    //     then tense, modality, agreement, possession, counting and mention
+    //     rules that depend on the grounded words
+    let grounded = fix_agreement(&ground_speakers(&squashed));
+    let present = progressive(&present_tense(&modals_and_quantities(&grounded), lexicon), lexicon);
+    let owned = conjugate_fixed_subjects(&possession(&present), lexicon);
+    let quantified = singular_quantifiers(&owned, lexicon);
+    let counted = arithmetic_verbs(&quote_mentions(&digits(&quantified, lexicon)));
+
+    // 3c. `S1 and S2` -> two sentences when S2 is a new clause
+    let coordinated = split_coordinated(&counted, lexicon);
+
+    // 3d. Drop sentence-final filler tags ("at", "right", "again", etc.)
+    let definal = strip_sentence_final_tags(&coordinated);
+
+    // 3e. `3 times 4` -> `3 * 4` so the value spotter sees one expression
+    let operators = convert_operator_words(&definal);
 
     // 4. Spot values before case-folding (so arithmetic is preserved)
-    let protected = spot_values(&definal);
+    let protected = spot_values(&operators);
 
     // 5. Lowercase everything except: tokens inside protected spans OR tokens recognized as names
-    let lowered = lowercase_except_names(&definal, lexicon, &protected);
+    let lowered = lowercase_except_names(&operators, lexicon, &protected);
 
     // 6. Strip fillers at sentence/clause starts
     let defilled = strip_fillers(&lowered, &lexicon.fillers);
 
-    // 7. Tokenize and typo-repair non-protected words
+    // 7. Tokenize, typo-repair non-protected words, restore name casing
     let (repaired, unknown_words) = repair_tokens(&defilled, lexicon, &protected);
 
     // 8. Re-spot values after repair (some numbers/arith may have changed position)
     let protected_final = spot_values(&repaired);
 
-    // 9. Split into sentences
-    let sentences = split_sentences(&repaired, &protected_final);
+    // 9. Split into sentences, then apply the sentence rules (greetings,
+    //    requests, feelings, corrections, question restoration)
+    let sentences = split_sentences(&repaired, &protected_final)
+        .iter()
+        .flat_map(|s| {
+            let term = s.chars().last().unwrap_or('.');
+            apply_sentence_rules(&s[..s.len() - term.len_utf8()], term, lexicon)
+        })
+        .collect();
 
     Normalized { sentences, unknown_words, protected: protected_final }
 }
@@ -80,7 +110,9 @@ fn unicode_cleanup(text: &str) -> String {
 // ---- slang expansion ----
 
 fn expand_slang(text: &str, replacements: &[(String, String)]) -> String {
-    let mut result = text.to_lowercase();
+    // Case is preserved here (matching is case-insensitive); `lowercase_except_names`
+    // decides later which capitals are names or SCE symbols and which are noise.
+    let mut result = text.to_string();
     for (from, to) in replacements {
         if from.is_empty() {
             continue;
@@ -171,6 +203,8 @@ fn squash_elongation(text: &str) -> String {
 /// Does NOT apply inside quoted strings (very rough heuristic: skip tokens after an
 /// open quote that has no matching close quote yet).
 pub fn ground_speakers(text: &str) -> String {
+    // "the assistant" is the fixed name Assistant.
+    let text = replace_word_boundary(text, "the assistant", "Assistant");
     // Work on lowercased copy for matching; preserve original case for non-pronoun tokens.
     let tokens: Vec<&str> = text.split_whitespace().collect();
     let mut out: Vec<String> = Vec::with_capacity(tokens.len());
@@ -195,11 +229,11 @@ pub fn ground_speakers(text: &str) -> String {
 
         let replacement = match lower.as_str() {
             // First-person -> User
-            "i" | "me" => Some("User"),
+            "i" | "me" | "myself" => Some("User"),
             "my" | "mine" => Some("User's"),
             // Second-person -> Assistant
-            "you" => Some("Assistant"),
-            "your" => Some("Assistant's"),
+            "you" | "yourself" => Some("Assistant"),
+            "your" | "yours" => Some("Assistant's"),
             _ => None,
         };
 
@@ -228,6 +262,7 @@ static FINAL_TAGS: &[&str] = &[
     "obviously",
     "literally",
     "basically",
+    "in there", "in here", "over there", "out there",
 ];
 
 /// Drop sentence-final filler tags (e.g. "where is bob at" -> "where is bob").
@@ -257,6 +292,9 @@ pub fn strip_sentence_final_tags(text: &str) -> String {
             result.push(t);
         }
         remaining = rest.trim_start();
+        if !remaining.is_empty() && rest.starts_with(char::is_whitespace) {
+            result.push(' ');
+        }
         if remaining.is_empty() && terminator.is_none() {
             break;
         }
@@ -340,11 +378,16 @@ fn lowercase_except_names(text: &str, lexicon: &Lexicon, protected: &[Spotted]) 
         if in_protected {
             out.push_str(word);
         } else if word.chars().next().is_some_and(|c| c.is_uppercase()) {
-            // If it's a recognized name, keep capitalized; else lowercase
-            if lexicon.is_name(word) || lexicon.canonical_name(word).is_some() {
-                // Use the canonical capitalized form
-                let canonical = lexicon.canonical_name(word).unwrap_or(word);
+            // Look the word up without its punctuation / possessive suffix.
+            let core = word.trim_end_matches(|c: char| matches!(c, '.' | '?' | '!' | ',' | ';' | ':'));
+            let core = core.strip_suffix("'s").unwrap_or(core);
+            let suffix = &word[core.len()..];
+            if let Some(canonical) = lexicon.canonical_name(core) {
                 out.push_str(canonical);
+                out.push_str(suffix);
+            } else if is_sce_symbol(core) {
+                // Variables (X, Y1) and minted names (Object-X) are SCE syntax, not English.
+                out.push_str(word);
             } else {
                 // Not a known name - lowercase it
                 out.push_str(&word.to_lowercase());
@@ -356,6 +399,16 @@ fn lowercase_except_names(text: &str, lexicon: &Lexicon, protected: &[Spotted]) 
         let _ = word_end;
     }
     out.trim_end().to_string()
+}
+
+/// `X`, `Y1`, `Object-X`, `New-York`: capitalized tokens that are SCE syntax.
+fn is_sce_symbol(word: &str) -> bool {
+    let mut chars = word.chars();
+    let is_var = matches!(chars.next(), Some(c) if c.is_uppercase()) && chars.all(|c| c.is_ascii_digit());
+    let hyphen_name = word
+        .split_once('-')
+        .is_some_and(|(_, after)| after.starts_with(|c: char| c.is_uppercase()));
+    is_var || hyphen_name
 }
 
 /// Yields (byte_start, token) for word-like tokens in `text`,
@@ -384,12 +437,14 @@ fn strip_fillers(text: &str, fillers: &[String]) -> String {
     let mut changed = true;
     while changed {
         changed = false;
-        // Strip fillers from the very start
+        // Strip fillers from the very start (whole words only: "so" must not eat "some")
         for filler in &sorted {
             let lower = result.to_lowercase();
             let lower_filler = filler.to_lowercase();
-            if lower.starts_with(lower_filler.as_str()) {
-                let rest = result[filler.len()..].trim_start();
+            let at_boundary = lower.len() == lower_filler.len()
+                || lower.as_bytes().get(lower_filler.len()).is_some_and(|&b| b == b' ' || b == b',');
+            if lower.starts_with(lower_filler.as_str()) && at_boundary {
+                let rest = result[filler.len()..].trim_start_matches(|c: char| c == ' ' || c == ',');
                 result = rest.to_string();
                 changed = true;
                 break;
@@ -450,20 +505,36 @@ fn repair_tokens(text: &str, lexicon: &Lexicon, protected: &[Spotted]) -> (Strin
         let word_start = byte_offset;
         byte_offset += word.len() + 1; // +1 for space
 
-        // Strip trailing punctuation for lookup
+        // Strip trailing punctuation (and a possessive 's) for lookup
         let stripped = word.trim_end_matches(|c: char| matches!(c, '.' | '?' | '!' | ',' | ';' | ':'));
+        let stripped = stripped.strip_suffix("'s").unwrap_or(stripped);
         let punct_suffix = &word[stripped.len()..];
 
         // Is this word inside a protected span?
         let in_protected = protected.iter().any(|s| word_start >= s.start && word_start < s.end);
 
-        if in_protected || stripped.is_empty() || should_protect(stripped) || lexicon.is_known(stripped) {
+        if in_protected || stripped.is_empty() || should_protect(stripped) {
             if i > 0 { out.push(' '); }
             out.push_str(word);
+        } else if lexicon.is_known(stripped) {
+            if i > 0 { out.push(' '); }
+            // Known names get their canonical casing back: "john" -> "John".
+            match lexicon.name_case(stripped) {
+                Some(canonical) => {
+                    out.push_str(canonical);
+                    out.push_str(punct_suffix);
+                }
+                None => out.push_str(word),
+            }
         } else {
-            // Try typo repair
+            // Try typo repair. After a copula or an intensifier the word is a
+            // state, so a verb is never the right repair (`not sleepy` must not
+            // become `not sleeps`).
+            let prev = if i > 0 { words[i - 1].to_lowercase() } else { String::new() };
+            let wants_state = matches!(prev.as_str(), "is" | "am" | "are" | "not" | "very" | "so" | "really" | "quite");
             let candidates = lexicon.candidates(stripped);
-            if let Some((best, _)) = candidates.first() {
+            let best = candidates.iter().find(|(c, _)| !(wants_state && lexicon.is_verb(c)));
+            if let Some((best, _)) = best {
                 if i > 0 { out.push(' '); }
                 // Check if best is a name - capitalize it
                 if lexicon.is_name(best) {
@@ -536,6 +607,13 @@ mod tests {
     #[test]
     fn unicode_cleanup_works() {
         assert_eq!(unicode_cleanup("\u{201C}hi\u{201D}"), "\"hi\"");
+    }
+
+    #[test]
+    fn final_tags_keep_sentence_spacing() {
+        assert_eq!(strip_sentence_final_tags("john is a doctor. mary is a nurse"), "john is a doctor. mary is a nurse");
+        assert_eq!(strip_sentence_final_tags("every dog is an animal right"), "every dog is an animal");
+        assert_eq!(strip_sentence_final_tags("the value is 3.5 right"), "the value is 3.5");
     }
 
     #[test]

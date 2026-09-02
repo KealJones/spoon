@@ -1,0 +1,22 @@
+[
+  {"input": "yo whats up", "sce": "User greets Assistant."},
+  {"input": "ok so john has this dog right and like the dog is brown", "sce": "John owns a dog. The dog is brown."},
+  {"input": "who owns a dog", "sce": "Who owns a dog?"},
+  {"input": "can u double 21 for me", "sce": "Assistant, double 21!"},
+  {"input": "whats the double of 100", "sce": "What is the double of 100?"},
+  {"input": "im feeling kinda down today", "sce": "User is sad."},
+  {"input": "what do you think about dogs", "sce": "What does Assistant think about dogs?"},
+  {"input": "no i meant mary", "sce": "User means Mary."},
+  {"input": "pup means dog", "sce": "\"pup\" means \"dog\"."},
+  {"input": "whats 3 times 4", "sce": "Assistant, calculate 3 * 4!"},
+  {"input": "is john happy", "sce": "Is John happy?"},
+  {"input": "john is a doctor and mary is a nurse", "sce": "John is a doctor. Mary is a nurse."},
+  {"input": "hey can you tell me what the name of the assistant is", "sce": "User greets Assistant. What is the name of Assistant?"},
+  {"input": "i own two cats", "sce": "User owns 2 cats."},
+  {"input": "does mary own a cat", "sce": "Does Mary own a cat?"},
+  {"input": "reverse the word hello", "sce": "Assistant, reverse \"hello\"!"},
+  {"input": "thanks!", "sce": "User thanks Assistant."},
+  {"input": "bye", "sce": "User says-goodbye-to Assistant."},
+  {"input": "if john owns a dog then john is happy", "sce": "If John owns a dog then John is happy."},
+  {"input": "every dog is an animal right", "sce": "Every dog is an animal."}
+]

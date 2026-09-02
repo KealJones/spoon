@@ -54,8 +54,10 @@ impl SceGate {
 
 impl Gate for SceGate {
     fn parse(&self, sce: &str) -> Result<Vec<Clause>, String> {
-        sce::parse_text(sce, &self.lex)
-            .map(|(clauses, _unknowns)| clauses)
-            .map_err(|(idx, e)| format!("sentence {idx}: {e}"))
+        self.parse_reported(sce).map(|(clauses, _unknowns)| clauses)
+    }
+
+    fn parse_reported(&self, sce: &str) -> Result<(Vec<Clause>, Vec<String>), String> {
+        sce::parse_text(sce, &self.lex).map_err(|(idx, e)| format!("sentence {idx}: {e}"))
     }
 }

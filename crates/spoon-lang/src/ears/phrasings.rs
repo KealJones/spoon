@@ -172,12 +172,21 @@ impl PhrasingStore {
         query_tokens: &[String],
         spotted: &[Spotted],
     ) -> Option<String> {
+        self.exact_matches(query_tokens, spotted).into_iter().next()
+    }
+
+    /// Every stored phrasing that aligns with `query_tokens`, in store order,
+    /// so a caller can skip an SCE the gate rejects and take the next.
+    pub fn exact_matches(&self, query_tokens: &[String], spotted: &[Spotted]) -> Vec<String> {
+        let mut out = vec![];
         for p in &self.phrasings {
             if let Some(sce) = try_align(query_tokens, spotted, p) {
-                return Some(sce);
+                if !out.contains(&sce) {
+                    out.push(sce);
+                }
             }
         }
-        None
+        out
     }
 
     /// BM25 retrieval: return top-k (phrasing_index, score) pairs.

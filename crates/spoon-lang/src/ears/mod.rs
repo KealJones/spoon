@@ -1,8 +1,13 @@
 //! Ears: messy text -> `EarsResult` (SCE clauses).
 //!
-//! Path order: normalize -> native recognizer (phrasings + retrieval) ->
-//! LLM normalizer -> parser gate. Every LLM hit is stored as a `Pair` so the
-//! native recognizer can learn the phrasing and the LLM is needed less.
+//! Per utterance: normalize (rules) -> whole-utterance phrasing -> pristine
+//! SCE -> per sentence: learned phrasing (aligned, slots filled), clean
+//! direct parse -> LLM normalizer for the sentences that are still open ->
+//! dirty direct parse as the last resort. A direct parse is "clean" only when
+//! the parser and the lexicon place every word; the one exception is a command
+//! whose only unknown word is its verb, which is how new verbs reach the learner.
+//! Every LLM hit is stored as a `Pair` so the native recognizer can learn the
+//! phrasing and the LLM is needed less.
 //!
 //! Owned by the ears subagent. The SCE parser is reached only through the
 //! `Gate` trait so this module compiles independently of `sce/`.
@@ -14,18 +19,21 @@ pub mod lexicon;
 pub mod llm;
 pub mod normalize;
 pub mod phrasings;
+pub mod rules;
+pub mod sentence;
 pub mod values;
 
 use std::path::Path;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use spoon_core::llm::{LlmClient, LlmConfig};
-use spoon_core::types::clause::{EarsPath, EarsResult};
+use spoon_core::types::clause::{Act, Clause, EarsPath, EarsResult, Quant, Term};
 use spoon_core::types::episode::Pair;
 
 use crate::ears::induce::induce_phrasings;
 use crate::ears::lexicon::Lexicon;
 use crate::ears::llm::{build_prompt, build_repair_prompt, call_llm_normalizer, strip_non_sce};
-use crate::ears::normalize::normalize;
+use crate::ears::normalize::{normalize, Normalized};
 use crate::ears::phrasings::{tokenize_for_bm25, PhrasingStore};
 use crate::ears::values::spot_values;
 
@@ -36,7 +44,13 @@ use crate::ears::values::spot_values;
 pub trait Gate: Send + Sync {
     /// Parse one or more SCE sentences into clauses.
     /// Returns `Err(human_readable_message)` if parsing fails.
-    fn parse(&self, sce: &str) -> Result<Vec<spoon_core::types::clause::Clause>, String>;
+    fn parse(&self, sce: &str) -> Result<Vec<Clause>, String>;
+
+    /// `parse` plus the words the parser placed by position only (unknown
+    /// verbs, nouns, adjectives). Gates without that information report none.
+    fn parse_reported(&self, sce: &str) -> Result<(Vec<Clause>, Vec<String>), String> {
+        self.parse(sce).map(|clauses| (clauses, Vec::new()))
+    }
 }
 
 // ---- EarsConfig ----
@@ -55,6 +69,27 @@ impl Default for EarsConfig {
     }
 }
 
+/// Counters for the LLM seat, read by the bench.
+#[derive(Default, Debug)]
+pub struct EarsStats {
+    pub llm_calls: AtomicU32,
+    pub repairs: AtomicU32,
+    pub repairs_ok: AtomicU32,
+}
+
+impl EarsStats {
+    pub fn snapshot(&self) -> (u32, u32, u32) {
+        (
+            self.llm_calls.load(Ordering::Relaxed),
+            self.repairs.load(Ordering::Relaxed),
+            self.repairs_ok.load(Ordering::Relaxed),
+        )
+    }
+}
+
+/// Confidence of a direct parse that carries unknown words (the last resort).
+const DIRTY_DIRECT_CONFIDENCE: f32 = 0.3;
+
 // ---- Ears ----
 
 pub struct Ears {
@@ -64,6 +99,24 @@ pub struct Ears {
     config: EarsConfig,
     /// Contents of normalizer_base.md, loaded once.
     normalizer_prompt: String,
+    stats: EarsStats,
+}
+
+/// One resolved sentence (or whole utterance).
+#[derive(Debug, Clone)]
+struct Resolved {
+    sce: String,
+    clauses: Vec<Clause>,
+    path: EarsPath,
+    confidence: f32,
+    unknown: Vec<String>,
+}
+
+/// A sentence after the native paths: resolved, or still open for the LLM.
+#[derive(Debug, Clone)]
+enum Outcome {
+    Done(Resolved),
+    Open(String),
 }
 
 impl Ears {
@@ -82,6 +135,7 @@ impl Ears {
             llm,
             config: EarsConfig::default(),
             normalizer_prompt,
+            stats: EarsStats::default(),
         }
     }
 
@@ -98,236 +152,292 @@ impl Ears {
         Ok(Ears::new(lexicon, phrasings, None))
     }
 
+    pub fn stats(&self) -> &EarsStats {
+        &self.stats
+    }
+
     // ---- public API ----
 
     /// Full pipeline including LLM fallback (async).
     pub async fn hear(&self, text: &str, gate: &dyn Gate) -> EarsResult {
-        // Path 1 + 2 + 3 (native)
-        if let Some(result) = self.hear_native(text, gate) {
-            return result;
-        }
+        let normed = normalize(text, &self.lexicon);
+        let mut outcomes = match self.resolve_native(text, &normed, gate) {
+            Ok(whole) => return self.finish(vec![Outcome::Done(whole)], &normed, text),
+            Err(outcomes) => outcomes,
+        };
 
-        // Path 4: LLM normalizer.
-        // Pass the pre-normalized text (slang expanded, speaker grounded, filler stripped)
-        // so the LLM sees clean input rather than raw typos and internet casuals.
+        // Any open sentence sends the whole normalized utterance to the LLM
+        // normalizer: the few-shot examples are whole utterances, and a small
+        // model rewrites "hello. What is going on?" better than the fragment.
         if let Some((client, cfg)) = &self.llm {
-            let normed = normalize(text, &self.lexicon);
-            let normed_text = if normed.sentences.is_empty() {
-                text.to_string()
-            } else {
-                normed.sentences.join(" ")
-            };
-            let llm_input = if normed_text.trim().is_empty() { text } else { &normed_text };
-            if let Some(result) = self.hear_llm(llm_input, gate, client, cfg).await {
-                return result;
+            if outcomes.iter().any(|o| matches!(o, Outcome::Open(_))) {
+                let joined = normed.sentences.join(" ");
+                let llm_input = if joined.trim().is_empty() { text } else { joined.as_str() };
+                if let Some(resolved) = self.hear_llm(llm_input, gate, client, cfg).await {
+                    return self.finish(vec![Outcome::Done(resolved)], &normed, text);
+                }
             }
         }
 
-        // Path 5: Failed
-        self.failed_result(text)
+        self.close_with_last_resort(&mut outcomes, gate);
+        self.finish(outcomes, &normed, text)
     }
 
-    /// Synchronous paths only (Direct + Normalize + Native). No LLM.
-    /// Returns None if no native path succeeded (caller should try LLM or return Failed).
+    /// Synchronous paths only (phrasings, clean direct parses, retrieval). No LLM.
+    /// Returns None if any sentence needs the LLM (caller should try LLM or
+    /// fall back to `hear_offline`).
     pub fn hear_native(&self, text: &str, gate: &dyn Gate) -> Option<EarsResult> {
-        // Path 1: Try the original text directly.
-        if let Ok(clauses) = gate.parse(text) {
-            return Some(EarsResult {
-                clauses,
-                path: EarsPath::Direct,
-                sce: text.to_string(),
-                confidence: 1.0,
-                unknown_words: vec![],
-            });
-        }
-
-        // Normalize the whole text.
         let normed = normalize(text, &self.lexicon);
-        let normalized_text = normed.sentences.join(" ");
+        match self.resolve_native(text, &normed, gate) {
+            Ok(whole) => Some(self.finish(vec![Outcome::Done(whole)], &normed, text)),
+            Err(outcomes) => {
+                if outcomes.iter().all(|o| matches!(o, Outcome::Done(_))) {
+                    Some(self.finish(outcomes, &normed, text))
+                } else {
+                    None
+                }
+            }
+        }
+    }
 
-        // Path 2: Try the normalized text (still "Direct" semantically).
-        if !normalized_text.is_empty() && normalized_text != text {
-            if let Ok(clauses) = gate.parse(&normalized_text) {
-                return Some(EarsResult {
-                    clauses,
-                    path: EarsPath::Direct,
-                    sce: normalized_text.clone(),
-                    confidence: 1.0,
-                    unknown_words: normed.unknown_words,
-                });
+    /// Everything `hear` does without an LLM: native paths, then the dirty
+    /// direct parse as the last resort, then `Failed`.
+    pub fn hear_offline(&self, text: &str, gate: &dyn Gate) -> EarsResult {
+        let normed = normalize(text, &self.lexicon);
+        let mut outcomes = match self.resolve_native(text, &normed, gate) {
+            Ok(whole) => return self.finish(vec![Outcome::Done(whole)], &normed, text),
+            Err(outcomes) => outcomes,
+        };
+        self.close_with_last_resort(&mut outcomes, gate);
+        self.finish(outcomes, &normed, text)
+    }
+
+    // ---- native resolution ----
+
+    /// Native paths. `Ok` is a whole-utterance hit (phrasing or pristine
+    /// SCE); `Err` carries the per-sentence outcomes.
+    fn resolve_native(&self, text: &str, normed: &Normalized, gate: &dyn Gate) -> Result<Resolved, Vec<Outcome>> {
+        let sentences: Vec<String> = if normed.sentences.is_empty() {
+            vec![text.trim().to_string()]
+        } else {
+            normed.sentences.clone()
+        };
+
+        // (1) The whole utterance as one learned phrasing ("hey how's it going").
+        let joined = sentences.join(" ");
+        if sentences.len() > 1 {
+            if let Some(r) = self.phrasing(&joined, gate) {
+                return Ok(r);
             }
         }
 
-        // Path 3: Native recognizer per sentence.
-        let sentences = if normed.sentences.is_empty() { vec![normalized_text.clone()] } else { normed.sentences.clone() };
-        let mut all_clauses = vec![];
-        let mut worst_path = EarsPath::Direct;
-        let mut all_sce = vec![];
-        let mut min_confidence = 1.0f32;
-
-        for sentence in &sentences {
-            let sentence_stripped = sentence.trim_end_matches(|c: char| matches!(c, '.' | '?' | '!')).trim();
-
-            // Spot values in this sentence for slot matching
-            let spotted = spot_values(sentence);
-            let query_tokens = tokenize_for_bm25(sentence_stripped);
-
-            // Try exact phrasing match first
-            if let Some(sce) = self.phrasings.exact_match(&query_tokens, &spotted) {
-                match gate.parse(&sce) {
-                    Ok(clauses) => {
-                        worst_path = worse_path(worst_path, EarsPath::Phrasing);
-                        all_clauses.extend(clauses);
-                        all_sce.push(sce);
-                        continue;
-                    }
-                    Err(_) => {}
-                }
+        // (2) Pristine SCE typed by the user: capitalized, terminated, and
+        // parsed with every word placed. Anything else is normalized first
+        // (the grammar happens to accept `which customer bought the thing?`).
+        if looks_pristine(text) {
+            if let Some(r) = self.clean_direct(text, gate) {
+                return Ok(r);
             }
+        }
 
-            // Try BM25 retrieval + slot alignment
-            let threshold = self.config.threshold;
-            if let Some((sce, score)) =
-                self.phrasings.retrieve_and_align(&query_tokens, &spotted, 8, 0.0)
-            {
-                match gate.parse(&sce) {
-                    Ok(clauses) => {
-                        let path = if score >= threshold {
-                            EarsPath::Phrasing
-                        } else {
-                            EarsPath::Retrieval
-                        };
-                        worst_path = worse_path(worst_path, path);
-                        min_confidence = min_confidence.min(score);
-                        all_clauses.extend(clauses);
-                        all_sce.push(sce);
-                        continue;
-                    }
-                    Err(_) => {}
-                }
-            }
+        let outcomes = sentences
+            .iter()
+            .map(|sentence| match self.resolve_sentence(sentence, gate) {
+                Some(r) => Outcome::Done(r),
+                None => Outcome::Open(sentence.clone()),
+            })
+            .collect();
+        Err(outcomes)
+    }
 
-            // Try direct gate.parse on the sentence (last resort before failure).
-            // Also try with the first letter capitalized (normalization lowercases,
-            // but SCE parsers expect proper case for sentence-initial words).
-            let capitalized = {
-                let mut chars = sentence.chars();
-                match chars.next() {
-                    None => String::new(),
-                    Some(c) => c.to_uppercase().to_string() + chars.as_str(),
-                }
-            };
-            let direct_ok = [sentence.as_str(), capitalized.as_str()].iter().find_map(|candidate| {
-                gate.parse(candidate).ok().map(|clauses| (clauses, candidate.to_string()))
-            });
-            if let Some((clauses, sce_str)) = direct_ok {
-                worst_path = worse_path(worst_path, EarsPath::Direct);
-                all_clauses.extend(clauses);
-                all_sce.push(sce_str);
-                continue;
-            }
+    /// One sentence: learned phrasing, then a clean direct parse.
+    fn resolve_sentence(&self, sentence: &str, gate: &dyn Gate) -> Option<Resolved> {
+        self.phrasing(sentence, gate).or_else(|| self.clean_direct(sentence, gate))
+    }
 
-            // This sentence failed native
+    /// Phrasing alignment: every stored pattern whose words match the text,
+    /// slots filled from the spotted values; the first one the gate accepts wins.
+    /// Alignment must consume the whole text, so this is exact matching with
+    /// slots, not fuzzy retrieval.
+    fn phrasing(&self, text: &str, gate: &dyn Gate) -> Option<Resolved> {
+        let stripped = text.trim_end_matches(|c: char| matches!(c, '.' | '?' | '!'));
+        let spotted = spot_values(text);
+        let tokens = tokenize_for_bm25(stripped);
+        if tokens.is_empty() {
             return None;
         }
+        for sce in self.phrasings.exact_matches(&tokens, &spotted) {
+            if let Ok((clauses, unknown)) = gate.parse_reported(&sce) {
+                return Some(Resolved { sce, clauses, path: EarsPath::Phrasing, confidence: 1.0, unknown });
+            }
+        }
+        None
+    }
 
-        let combined_sce = all_sce.join(" ");
-        Some(EarsResult {
-            clauses: all_clauses,
-            path: worst_path,
-            sce: combined_sce,
-            confidence: min_confidence,
-            unknown_words: normed.unknown_words,
+    /// Direct parse accepted only when every word is placed (see module docs).
+    fn clean_direct(&self, text: &str, gate: &dyn Gate) -> Option<Resolved> {
+        let (clauses, unknown) = self.parse_with_unknowns(text, gate)?;
+        if !is_clean(&clauses, &unknown) {
+            return None;
+        }
+        Some(Resolved { sce: text.trim().to_string(), clauses, path: EarsPath::Direct, confidence: 1.0, unknown })
+    }
+
+    /// Direct parse that tolerates unknown words: the last resort.
+    fn dirty_direct(&self, text: &str, gate: &dyn Gate) -> Option<Resolved> {
+        let (clauses, unknown) = self.parse_with_unknowns(text, gate)?;
+        Some(Resolved {
+            sce: text.trim().to_string(),
+            clauses,
+            path: EarsPath::Direct,
+            confidence: DIRTY_DIRECT_CONFIDENCE,
+            unknown,
         })
     }
 
-    /// LLM path (path 4). Only called when native fails.
-    async fn hear_llm(
-        &self,
-        text: &str,
-        gate: &dyn Gate,
-        client: &LlmClient,
-        cfg: &LlmConfig,
-    ) -> Option<EarsResult> {
-        // Build vocabulary: known words that overlap with input stems
+    /// Words nobody knows: parser-reported unknowns that are not ordinary
+    /// vocabulary in the ears lexicon, plus proper names the lexicon has never
+    /// seen. (`nurse` is unknown to the SCE grammar but a fine noun; `whats`
+    /// and `Hello`-the-Name are junk.)
+    fn parse_with_unknowns(&self, text: &str, gate: &dyn Gate) -> Option<(Vec<Clause>, Vec<String>)> {
+        let (clauses, mut unknown) = gate.parse_reported(text).ok()?;
+        if clauses.is_empty() {
+            return None;
+        }
+        unknown.retain(|w| !self.lexicon.is_content_word(w));
+        for name in unknown_names(&clauses, &self.lexicon) {
+            if !unknown.contains(&name) {
+                unknown.push(name);
+            }
+        }
+        Some((clauses, unknown))
+    }
+
+    fn close_with_last_resort(&self, outcomes: &mut [Outcome], gate: &dyn Gate) {
+        for outcome in outcomes.iter_mut() {
+            if let Outcome::Open(sentence) = outcome {
+                if let Some(r) = self.dirty_direct(sentence, gate) {
+                    *outcome = Outcome::Done(r);
+                }
+            }
+        }
+    }
+
+    /// Combine outcomes into the result. Any sentence still open means the
+    /// whole utterance failed: the interior must not act on half of it.
+    fn finish(&self, outcomes: Vec<Outcome>, normed: &Normalized, text: &str) -> EarsResult {
+        let mut resolved = Vec::with_capacity(outcomes.len());
+        for outcome in outcomes {
+            match outcome {
+                Outcome::Done(r) => resolved.push(r),
+                Outcome::Open(_) => return self.failed_from(normed, text),
+            }
+        }
+        let mut clauses: Vec<Clause> = vec![];
+        let mut parts: Vec<String> = vec![];
+        let mut path = EarsPath::Direct;
+        let mut confidence = 1.0f32;
+        let mut unknown: Vec<String> = vec![];
+        for r in resolved {
+            let sce = r.sce.trim().to_string();
+            // "hi whats up" is one greeting, not two.
+            if parts.last().is_some_and(|prev| *prev == sce) {
+                continue;
+            }
+            path = worse_path(path, r.path);
+            confidence = confidence.min(r.confidence);
+            for u in r.unknown {
+                if !unknown.contains(&u) {
+                    unknown.push(u);
+                }
+            }
+            clauses.extend(r.clauses);
+            parts.push(sce);
+        }
+        for u in &normed.unknown_words {
+            if !unknown.contains(u) {
+                unknown.push(u.clone());
+            }
+        }
+        EarsResult { clauses, path, sce: parts.join(" "), confidence, unknown_words: unknown }
+    }
+
+    fn failed_from(&self, normed: &Normalized, text: &str) -> EarsResult {
+        let sce = if normed.sentences.is_empty() { text.to_string() } else { normed.sentences.join(" ") };
+        EarsResult {
+            clauses: vec![],
+            path: EarsPath::Failed,
+            sce,
+            confidence: 0.0,
+            unknown_words: normed.unknown_words.clone(),
+        }
+    }
+
+    // ---- LLM path ----
+
+    /// LLM normalizer over the normalized utterance. One repair retry on parse failure.
+    async fn hear_llm(&self, text: &str, gate: &dyn Gate, client: &LlmClient, cfg: &LlmConfig) -> Option<Resolved> {
+        // Vocabulary: known words that overlap with input stems
         let input_tokens = tokenize_for_bm25(text);
         let mut vocab: Vec<String> = self
             .lexicon
             .verb_lemmas()
             .into_iter()
             .chain(self.lexicon.noun_lemmas())
-            .filter(|w| {
-                input_tokens.iter().any(|t| {
-                    t.starts_with(w.as_str()) || w.starts_with(t.as_str())
-                })
-            })
+            .filter(|w| input_tokens.iter().any(|t| t.starts_with(w.as_str()) || w.starts_with(t.as_str())))
             .take(60)
             .collect();
         vocab.sort();
         vocab.dedup();
 
-        // Build few-shot examples from phrasing store (top-8 by BM25)
-        let shots: Vec<(String, String)> = {
-            let retrieved = self.phrasings.retrieve(&input_tokens, 8);
-            // We can't access the raw utterance from the store directly,
-            // but we have the SCE. Use the phrasing pattern words as the "utterance".
-            // This is an approximation - the real implementation would store original utterances.
-            retrieved
-                .into_iter()
-                .take(8)
-                .map(|(_, _)| (String::new(), String::new())) // placeholder
-                .filter(|(u, s)| !u.is_empty() && !s.is_empty())
-                .collect()
-        };
-
-        let msgs = build_prompt(&self.normalizer_prompt, &vocab, &shots, text);
-
-        match call_llm_normalizer(client, cfg, msgs).await {
-            Ok(raw) => {
-                let sce = strip_non_sce(&raw);
-                match gate.parse(&sce) {
-                    Ok(clauses) => {
-                        return Some(EarsResult {
-                            clauses,
-                            path: EarsPath::Llm,
-                            sce,
-                            confidence: 0.8,
-                            unknown_words: vec![],
-                        });
-                    }
-                    Err(parser_err) => {
-                        // ONE repair retry: tight system prompt with the error message
-                        let msgs2 = build_repair_prompt(text, &sce, &parser_err, &vocab);
-                        if let Ok(raw2) = call_llm_normalizer(client, cfg, msgs2).await {
-                            let sce2 = strip_non_sce(&raw2);
-                            if let Ok(clauses2) = gate.parse(&sce2) {
-                                return Some(EarsResult {
-                                    clauses: clauses2,
-                                    path: EarsPath::Llm,
-                                    sce: sce2,
-                                    confidence: 0.7,
-                                    unknown_words: vec![],
-                                });
-                            }
-                        }
-                    }
-                }
+        let msgs = build_prompt(&self.normalizer_prompt, &vocab, &[], text);
+        self.stats.llm_calls.fetch_add(1, Ordering::Relaxed);
+        let raw = call_llm_normalizer(client, cfg, msgs).await.ok()?;
+        let sce = strip_non_sce(&raw);
+        let parser_err = match self.parse_with_unknowns(&sce, gate) {
+            Some((clauses, unknown)) => {
+                return Some(Resolved { sce, clauses, path: EarsPath::Llm, confidence: 0.8, unknown });
             }
-            Err(_) => {}
+            None => gate.parse(&sce).err().unwrap_or_else(|| "no clauses".to_string()),
+        };
+        if std::env::var("SPOON_EARS_DEBUG").is_ok() {
+            eprintln!("DBG llm input={text:?} raw={raw:?} err={parser_err:?}");
         }
-        None
+
+        // ONE repair retry: tight system prompt with the error message
+        self.stats.repairs.fetch_add(1, Ordering::Relaxed);
+        self.stats.llm_calls.fetch_add(1, Ordering::Relaxed);
+        let msgs2 = build_repair_prompt(text, &sce, &parser_err, &vocab);
+        let raw2 = call_llm_normalizer(client, cfg, msgs2).await.ok()?;
+        let sce2 = strip_non_sce(&raw2);
+        if std::env::var("SPOON_EARS_DEBUG").is_ok() {
+            eprintln!("DBG repair raw={raw2:?} err={:?}", gate.parse(&sce2).err());
+        }
+        let (clauses, unknown) = self.parse_with_unknowns(&sce2, gate)?;
+        self.stats.repairs_ok.fetch_add(1, Ordering::Relaxed);
+        Some(Resolved { sce: sce2, clauses, path: EarsPath::Llm, confidence: 0.7, unknown })
     }
 
     // ---- mutation API ----
 
     /// Feed new (utterance, SCE) pairs to the phrasing store and induction engine.
+    /// Utterances are normalized first so learned patterns live in the same
+    /// token space the recognizer queries.
     pub fn add_pairs(&mut self, pairs: &[Pair]) {
-        let new_phrasings = induce_phrasings(pairs);
+        let normalized: Vec<Pair> = pairs
+            .iter()
+            .map(|p| {
+                let normed = normalize(&p.utterance, &self.lexicon);
+                let utterance = if normed.sentences.is_empty() { p.utterance.clone() } else { normed.sentences.join(" ") };
+                Pair { utterance, ..p.clone() }
+            })
+            .collect();
+        let new_phrasings = induce_phrasings(&normalized);
         if !new_phrasings.is_empty() {
             self.phrasings.add_many(new_phrasings);
         }
         // Also add pairs as literal phrasings (with normalized tokens)
-        for pair in pairs {
+        for pair in &normalized {
             let tokens = tokenize_for_bm25(&pair.utterance);
             if tokens.is_empty() {
                 continue;
@@ -351,19 +461,74 @@ impl Ears {
 
     pub fn failed_result(&self, text: &str) -> EarsResult {
         let normed = normalize(text, &self.lexicon);
-        EarsResult {
-            clauses: vec![],
-            path: EarsPath::Failed,
-            sce: normed.sentences.join(" "),
-            confidence: 0.0,
-            unknown_words: normed.unknown_words,
-        }
+        self.failed_from(&normed, text)
     }
 
     /// Access to the lexicon (for tests).
     pub fn lexicon_mut(&mut self) -> &mut Lexicon {
         &mut self.lexicon
     }
+}
+
+// ---- clean-parse policy ----
+
+/// Starts with a capital (or a quote) and ends with an SCE terminator.
+fn looks_pristine(text: &str) -> bool {
+    let t = text.trim();
+    t.starts_with(|c: char| c.is_uppercase() || c == '"') && t.ends_with(['.', '?', '!'])
+}
+
+/// No unknown words, or a single command whose only unknown word is its verb.
+fn is_clean(clauses: &[Clause], unknown: &[String]) -> bool {
+    if unknown.is_empty() {
+        return true;
+    }
+    match clauses {
+        [c] if matches!(c.act, Act::Command) => {
+            unknown.iter().all(|u| c.conditions.iter().any(|p| p.pred.eq_ignore_ascii_case(u)))
+        }
+        _ => false,
+    }
+}
+
+/// Proper names in the clauses that the lexicon does not know. Reserved names,
+/// variables (`X`, `Y1`) and minted names (`Object-X`) are SCE syntax and never
+/// count as unknown.
+fn unknown_names(clauses: &[Clause], lexicon: &Lexicon) -> Vec<String> {
+    fn walk(clause: &Clause, lexicon: &Lexicon, out: &mut Vec<String>) {
+        for r in clause.referents.iter().chain(clause.then_referents.iter()) {
+            if let Quant::Named(name) = &r.quant {
+                if is_unknown_name(name, lexicon) && !out.contains(name) {
+                    out.push(name.clone());
+                }
+            }
+        }
+        for pred in clause.conditions.iter().chain(clause.then.iter()) {
+            for term in &pred.args {
+                if let Term::Sub { clause } = term {
+                    walk(clause, lexicon, out);
+                }
+            }
+        }
+    }
+    let mut out = vec![];
+    for c in clauses {
+        walk(c, lexicon, &mut out);
+    }
+    out
+}
+
+fn is_unknown_name(name: &str, lexicon: &Lexicon) -> bool {
+    if matches!(name, "User" | "Assistant" | "Spoon" | "It") {
+        return false;
+    }
+    let mut chars = name.chars();
+    let is_var = matches!(chars.next(), Some(c) if c.is_uppercase()) && chars.all(|c| c.is_ascii_digit());
+    let minted = name.split_once('-').is_some_and(|(_, after)| after.starts_with(|c: char| c.is_uppercase()));
+    if is_var || minted {
+        return false;
+    }
+    !lexicon.is_name(name) && lexicon.canonical_name(name).is_none()
 }
 
 // ---- path ordering ----
@@ -387,10 +552,8 @@ fn path_rank(p: &EarsPath) -> u8 {
 pub fn load_phrasings(data_dir: &Path, lexicon: &Lexicon) -> anyhow::Result<PhrasingStore> {
     let path = data_dir.join("seed/dialog_phrasings.json");
     PhrasingStore::load(&path, |utterance| {
-        // Normalize the utterance using slang/elongation but NOT typo repair or name-casing
-        // (we want a stable normalized form for matching)
+        // Same normalization as a live query, so patterns and queries share one token space.
         let normed = normalize(utterance, lexicon);
-        // Return all tokens from all sentences joined
         let combined = normed.sentences.join(" ");
         tokenize_for_bm25(&combined)
     })
