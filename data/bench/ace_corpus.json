@@ -1,0 +1,1068 @@
+[
+  {
+    "id": 1,
+    "category": "greeting",
+    "input": "Yoooo wasup girl? How you doin?",
+    "expected_ace": "User greets Assistant. What is the wellbeing of Assistant?"
+  },
+  {
+    "id": 2,
+    "category": "greeting",
+    "input": "yo dude you good lol",
+    "expected_ace": "User greets Assistant. Is Assistant well?"
+  },
+  {
+    "id": 3,
+    "category": "greeting",
+    "input": "heyyyy whats going on",
+    "expected_ace": "User greets Assistant. What happens?"
+  },
+  {
+    "id": 4,
+    "category": "simple_question",
+    "input": "who even is john?",
+    "expected_ace": "Who is John?"
+  },
+  {
+    "id": 5,
+    "category": "simple_question",
+    "input": "where the hell is bob at",
+    "expected_ace": "Where is Bob?"
+  },
+  {
+    "id": 6,
+    "category": "simple_question",
+    "input": "when does mary leave again?",
+    "expected_ace": "When does Mary leave?"
+  },
+  {
+    "id": 7,
+    "category": "simple_question",
+    "input": "which customer bought the red thing?",
+    "expected_ace": "Which customer buys the red thing?"
+  },
+  {
+    "id": 8,
+    "category": "simple_question",
+    "input": "whats the main city of new york lol",
+    "expected_ace": "What is the main city of New-York?"
+  },
+  {
+    "id": 9,
+    "category": "simple_question",
+    "input": "is that card actually valid or nah",
+    "expected_ace": "Is the card valid?"
+  },
+  {
+    "id": 10,
+    "category": "simple_question",
+    "input": "does john own a dog?",
+    "expected_ace": "Does John own a dog?"
+  },
+  {
+    "id": 11,
+    "category": "simple_fact",
+    "input": "john has a dog",
+    "expected_ace": "John owns a dog."
+  },
+  {
+    "id": 12,
+    "category": "simple_fact",
+    "input": "john doesnt have a dog",
+    "expected_ace": "John does not own a dog."
+  },
+  {
+    "id": 13,
+    "category": "simple_fact",
+    "input": "all dogs are animals obviously",
+    "expected_ace": "Every dog is an animal."
+  },
+  {
+    "id": 14,
+    "category": "simple_fact",
+    "input": "no cats are dogs",
+    "expected_ace": "No cat is a dog."
+  },
+  {
+    "id": 15,
+    "category": "simple_fact",
+    "input": "some dude is sleeping",
+    "expected_ace": "A man sleeps."
+  },
+  {
+    "id": 16,
+    "category": "simple_fact",
+    "input": "theres like at least 3 cats in there",
+    "expected_ace": "There are at least 3 cats."
+  },
+  {
+    "id": 17,
+    "category": "simple_fact",
+    "input": "mary is smarter than john",
+    "expected_ace": "Mary is smarter than John."
+  },
+  {
+    "id": 18,
+    "category": "simple_fact",
+    "input": "john can swim but he cant fly",
+    "expected_ace": "John can swim. John cannot fly."
+  },
+  {
+    "id": 19,
+    "category": "simple_fact",
+    "input": "bob should probably wait",
+    "expected_ace": "Bob should wait."
+  },
+  {
+    "id": 20,
+    "category": "simple_fact",
+    "input": "maybe mary is home",
+    "expected_ace": "It is possible that Mary is at home."
+  },
+  {
+    "id": 21,
+    "category": "math_request",
+    "input": "add 5 and 7",
+    "expected_ace": "Assistant, calculate 5 + 7!"
+  },
+  {
+    "id": 22,
+    "category": "math_request",
+    "input": "whats 9 times 12",
+    "expected_ace": "Assistant, calculate 9 * 12!"
+  },
+  {
+    "id": 23,
+    "category": "math_request",
+    "input": "divide 100 by 4 pls",
+    "expected_ace": "Assistant, calculate 100 / 4!"
+  },
+  {
+    "id": 24,
+    "category": "math_request",
+    "input": "take 20 subtract 3 then multiply it by 8",
+    "expected_ace": "Assistant, calculate (20 - 3) * 8!"
+  },
+  {
+    "id": 25,
+    "category": "math_request",
+    "input": "Can you quickly add 599 and 32 then divide that by 0 and times it by 6?",
+    "expected_ace": "Assistant, calculate ((599 + 32) / 0) * 6!"
+  },
+  {
+    "id": 26,
+    "category": "math_request",
+    "input": "square 12 then add 5 to it",
+    "expected_ace": "Assistant, calculate 12 * 12 + 5!"
+  },
+  {
+    "id": 27,
+    "category": "math_request",
+    "input": "what is half of 90 plus 10",
+    "expected_ace": "Assistant, calculate 90 / 2 + 10!"
+  },
+  {
+    "id": 28,
+    "category": "math_request",
+    "input": "take the sum of 2 and 3 and divide 20 by that",
+    "expected_ace": "Assistant, calculate 20 / (2 + 3)!"
+  },
+  {
+    "id": 29,
+    "category": "math_request",
+    "input": "five less than twice 9",
+    "expected_ace": "Assistant, calculate 2 * 9 - 5!"
+  },
+  {
+    "id": 30,
+    "category": "math_request",
+    "input": "do 1 plus 2 times 3 but i mean add first",
+    "expected_ace": "Assistant, calculate (1 + 2) * 3!"
+  },
+  {
+    "id": 31,
+    "category": "conditional",
+    "input": "if john owns a dog he feeds it",
+    "expected_ace": "If John owns a dog then John feeds the dog."
+  },
+  {
+    "id": 32,
+    "category": "conditional",
+    "input": "if its raining then bob stays home",
+    "expected_ace": "If the weather is rainy then Bob stays at home."
+  },
+  {
+    "id": 33,
+    "category": "conditional",
+    "input": "if mary calls john and john answers then mary is happy",
+    "expected_ace": "If John answers a call that Mary makes then Mary is happy."
+  },
+  {
+    "id": 34,
+    "category": "conditional",
+    "input": "if a customer has a card the machine accepts it",
+    "expected_ace": "If a customer owns a card then the machine accepts the card."
+  },
+  {
+    "id": 35,
+    "category": "conditional",
+    "input": "when a dog is hungry it eats",
+    "expected_ace": "If a dog is hungry then the dog eats."
+  },
+  {
+    "id": 36,
+    "category": "conditional",
+    "input": "any employee who manages somebody should have access",
+    "expected_ace": "Every employee that manages a person should have some access."
+  },
+  {
+    "id": 37,
+    "category": "conditional",
+    "input": "every dog that barks is annoying",
+    "expected_ace": "Every dog that barks is annoying."
+  },
+  {
+    "id": 38,
+    "category": "conditional",
+    "input": "nobody gets in unless they have a badge",
+    "expected_ace": "If a person does not own a badge then the person does not enter."
+  },
+  {
+    "id": 39,
+    "category": "conditional",
+    "input": "if there is a red card every clerk checks it",
+    "expected_ace": "If there is a red card then every clerk checks the card."
+  },
+  {
+    "id": 40,
+    "category": "conditional",
+    "input": "if john doesnt wait the machine rejects his card",
+    "expected_ace": "If John does not wait then the machine rejects John's card."
+  },
+  {
+    "id": 41,
+    "category": "quantifier",
+    "input": "every customer owns at least two cards",
+    "expected_ace": "Every customer owns at least 2 cards."
+  },
+  {
+    "id": 42,
+    "category": "quantifier",
+    "input": "there are no more than 2 managers",
+    "expected_ace": "There are at most 2 managers."
+  },
+  {
+    "id": 43,
+    "category": "quantifier",
+    "input": "exactly three people are waiting",
+    "expected_ace": "Exactly 3 people wait."
+  },
+  {
+    "id": 44,
+    "category": "quantifier",
+    "input": "at least one dog likes every cat",
+    "expected_ace": "A dog likes every cat."
+  },
+  {
+    "id": 45,
+    "category": "quantifier",
+    "input": "not every employee is happy",
+    "expected_ace": "Not every employee is happy."
+  },
+  {
+    "id": 46,
+    "category": "negation",
+    "input": "it is absolutely not true that john owns a cat",
+    "expected_ace": "It is false that John owns a cat."
+  },
+  {
+    "id": 47,
+    "category": "modality",
+    "input": "john has to leave",
+    "expected_ace": "John must leave."
+  },
+  {
+    "id": 48,
+    "category": "modality",
+    "input": "john doesnt have to leave",
+    "expected_ace": "John does not have to leave."
+  },
+  {
+    "id": 49,
+    "category": "modality",
+    "input": "it might be the case that mary waits",
+    "expected_ace": "It is possible that Mary waits."
+  },
+  {
+    "id": 50,
+    "category": "modality",
+    "input": "bob is allowed to enter",
+    "expected_ace": "Bob may enter."
+  },
+  {
+    "id": 51,
+    "category": "messy_runon",
+    "input": "ok so john has this dog right and like the dog is brown and i think john feeds him every morning but idk maybe not on sundays whatever the main point is john owns the dog",
+    "expected_ace": "John owns a brown dog. User believes that John usually feeds the dog in the morning. It is possible that John does not feed the dog on Sunday."
+  },
+  {
+    "id": 52,
+    "category": "messy_runon",
+    "input": "so basically mary works at the bank except i mean not works there like she owns it no wait she manages it thats what i mean",
+    "expected_ace": "Mary manages a bank."
+  },
+  {
+    "id": 53,
+    "category": "messy_runon",
+    "input": "john was at home and then bob called him and then john left but like only after mary got there",
+    "expected_ace": "John is at home. Bob calls John. Mary arrives. John leaves. Mary's arrival precedes John's departure."
+  },
+  {
+    "id": 54,
+    "category": "messy_runon",
+    "input": "i need you to take every file and if its empty delete it otherwise keep it and yeah dont touch folders",
+    "expected_ace": "Assistant, delete every empty file! Assistant, keep every file that is not empty! Assistant, do not touch a folder!"
+  },
+  {
+    "id": 55,
+    "category": "messy_runon",
+    "input": "look if theres a customer and they have a card and the card is expired then reject it unless the customer is an admin in which case accept it",
+    "expected_ace": "If a customer owns an expired card and the customer is not an admin then Assistant rejects the card. If a customer owns an expired card and the customer is an admin then Assistant accepts the card."
+  },
+  {
+    "id": 56,
+    "category": "messy_runon",
+    "input": "okay i know this sounds dumb but every time bob sees a dog he pets it unless the dog is angry and if its angry he just leaves",
+    "expected_ace": "If Bob sees a dog and the dog is not angry then Bob pets the dog. If Bob sees an angry dog then Bob leaves."
+  },
+  {
+    "id": 57,
+    "category": "messy_runon",
+    "input": "so there are like five servers but only two of them are active and every active one needs a backup and no backup can be the same server",
+    "expected_ace": "There are 5 servers. Exactly 2 servers are active. Every active server owns a backup. No server is its own backup."
+  },
+  {
+    "id": 58,
+    "category": "messy_runon",
+    "input": "dude i swear if one more build fails and the tests are green somehow then just rerun it but only once and if it fails again stop",
+    "expected_ace": "If a build fails and the tests are green then Assistant reruns the build. If a build fails after a rerun then Assistant stops."
+  },
+  {
+    "id": 59,
+    "category": "messy_runon",
+    "input": "okay so i want the cheapest thing that is still faster than option a but not if it has less memory than option b you know what i mean",
+    "expected_ace": "User wants a cheapest option that is faster than Option-A and that has-at-least-as-much-memory-as Option-B."
+  },
+  {
+    "id": 60,
+    "category": "messy_runon",
+    "input": "im trying to figure out whether john or mary should own the task but john is already busy and mary knows the system better so like who should get it",
+    "expected_ace": "John is busy. Mary knows the system. Which person should own the task?"
+  },
+  {
+    "id": 61,
+    "category": "context_math",
+    "prior_utterances": [
+      "Can you quickly add 599 and 32 then divide that by 0 and times it by 6?"
+    ],
+    "input": "Now double it?",
+    "expected_ace": "Assistant, calculate 2 * (((599 + 32) / 0) * 6)!"
+  },
+  {
+    "id": 62,
+    "category": "context_math",
+    "prior_utterances": [
+      "What's 20 minus 4?"
+    ],
+    "input": "times that by 3",
+    "expected_ace": "Assistant, calculate (20 - 4) * 3!"
+  },
+  {
+    "id": 63,
+    "category": "context_math",
+    "prior_utterances": [
+      "Add 10 and 5.",
+      "Then divide the result by 3."
+    ],
+    "input": "square it",
+    "expected_ace": "Assistant, calculate ((10 + 5) / 3) * ((10 + 5) / 3)!"
+  },
+  {
+    "id": 64,
+    "category": "context_reference",
+    "prior_utterances": [
+      "John owns a dog."
+    ],
+    "input": "does he feed it?",
+    "expected_ace": "Does John feed the dog?"
+  },
+  {
+    "id": 65,
+    "category": "context_reference",
+    "prior_utterances": [
+      "Mary owns a red car."
+    ],
+    "input": "is it fast?",
+    "expected_ace": "Is Mary's red car fast?"
+  },
+  {
+    "id": 66,
+    "category": "context_reference",
+    "prior_utterances": [
+      "Bob gives a card to Mary."
+    ],
+    "input": "does she keep it?",
+    "expected_ace": "Does Mary keep the card?"
+  },
+  {
+    "id": 67,
+    "category": "context_reference",
+    "prior_utterances": [
+      "A dog enters the garden.",
+      "John sees the dog."
+    ],
+    "input": "then he pets it",
+    "expected_ace": "John pets the dog."
+  },
+  {
+    "id": 68,
+    "category": "context_reference",
+    "prior_utterances": [
+      "John buys a telescope.",
+      "John watches birds."
+    ],
+    "input": "then john saw the guy with the telescope",
+    "expected_ace": "John sees a man with a telescope."
+  },
+  {
+    "id": 69,
+    "category": "context_reference",
+    "prior_utterances": [
+      "Mary sees a man.",
+      "The man owns a telescope."
+    ],
+    "input": "john saw the guy with the telescope too",
+    "expected_ace": "John sees the man who owns a telescope."
+  },
+  {
+    "id": 70,
+    "category": "context_reference",
+    "prior_utterances": [
+      "Job-A pays more money than Job-B.",
+      "Job-B is less stressful than Job-A."
+    ],
+    "input": "which one do you think i should take?",
+    "expected_ace": "Job-A is a job. Job-B is a job. Which job should User take?"
+  },
+  {
+    "id": 71,
+    "category": "context_conversation",
+    "prior_utterances": [
+      "User says that User feels tired."
+    ],
+    "input": "yeah but im not sleepy",
+    "expected_ace": "User is not sleepy."
+  },
+  {
+    "id": 72,
+    "category": "context_conversation",
+    "prior_utterances": [
+      "User says that User wants a new job."
+    ],
+    "input": "mostly because my manager sucks",
+    "expected_ace": "User's manager is bad."
+  },
+  {
+    "id": 73,
+    "category": "context_conversation",
+    "prior_utterances": [
+      "User is considering Job-A and Job-B."
+    ],
+    "input": "A pays more but B sounds way more fun",
+    "expected_ace": "Job-A pays-more-than Job-B. User prefers Job-B."
+  },
+  {
+    "id": 74,
+    "category": "context_conversation",
+    "prior_utterances": [
+      "John owns a dog.",
+      "Mary owns a cat."
+    ],
+    "input": "which one is bigger?",
+    "expected_ace": "Is John's dog bigger than Mary's cat?"
+  },
+  {
+    "id": 75,
+    "category": "context_conversation",
+    "prior_utterances": [
+      "Bob enters a bank.",
+      "Bob sees Mary."
+    ],
+    "input": "did she see him too?",
+    "expected_ace": "Does Mary see Bob?"
+  },
+  {
+    "id": 76,
+    "category": "context_conversation",
+    "prior_utterances": [
+      "A red card is on a table."
+    ],
+    "input": "move it under the box",
+    "expected_ace": "Assistant, move the red card under the box!"
+  },
+  {
+    "id": 77,
+    "category": "context_conversation",
+    "prior_utterances": [
+      "User asks Assistant to calculate 40 / 5."
+    ],
+    "input": "add two to the answer",
+    "expected_ace": "Assistant, calculate 40 / 5 + 2!"
+  },
+  {
+    "id": 78,
+    "category": "context_conversation",
+    "prior_utterances": [
+      "Mary manages Project-A.",
+      "John manages Project-B."
+    ],
+    "input": "have him give his project to her",
+    "expected_ace": "Assistant, tell John that John should give Project-B to Mary!"
+  },
+  {
+    "id": 79,
+    "category": "context_conversation",
+    "prior_utterances": [
+      "A customer inserts a card.",
+      "The machine rejects the card."
+    ],
+    "input": "why did it do that?",
+    "expected_ace": "What is the reason?"
+  },
+  {
+    "id": 80,
+    "category": "context_conversation",
+    "prior_utterances": [
+      "User owns Car-A.",
+      "User owns Car-B.",
+      "Car-A is faster than Car-B."
+    ],
+    "input": "sell the slower one",
+    "expected_ace": "Assistant, sell Car-B!"
+  },
+  {
+    "id": 81,
+    "category": "loop_like_logic",
+    "input": "for every user if they are inactive disable their account",
+    "expected_ace": "For every user X if X is inactive then Assistant disables X's account."
+  },
+  {
+    "id": 82,
+    "category": "loop_like_logic",
+    "input": "go through every card and reject the expired ones",
+    "expected_ace": "Every expired card is rejected by Assistant."
+  },
+  {
+    "id": 83,
+    "category": "loop_like_logic",
+    "input": "for each customer give them a receipt if they bought something",
+    "expected_ace": "For every customer X if X buys something then Assistant gives a receipt to X."
+  },
+  {
+    "id": 84,
+    "category": "loop_like_logic",
+    "input": "every time a build fails retry it and if it fails again mark it broken",
+    "expected_ace": "If a build fails then Assistant retries the build. If a build fails after a retry then Assistant marks the build as broken."
+  },
+  {
+    "id": 85,
+    "category": "loop_like_logic",
+    "input": "check every file, if its empty delete it, if its not empty archive it",
+    "expected_ace": "Assistant deletes every empty file. Assistant archives every file that is not empty."
+  },
+  {
+    "id": 86,
+    "category": "loop_like_logic",
+    "input": "for each server that is down ping it and if the ping fails restart it",
+    "expected_ace": "If a server fails then Assistant pings the server. If a ping fails then Assistant restarts the server."
+  },
+  {
+    "id": 87,
+    "category": "loop_like_logic",
+    "input": "keep processing orders as long as there are pending ones and never process a cancelled order",
+    "expected_ace": "Assistant processes every pending order. Assistant processes no cancelled order."
+  },
+  {
+    "id": 88,
+    "category": "loop_like_logic",
+    "input": "if any task has more than 3 failures stop retrying that task",
+    "expected_ace": "If a task owns more than 3 failures then Assistant stops retrying the task."
+  },
+  {
+    "id": 89,
+    "category": "loop_like_logic",
+    "input": "for every number greater than zero subtract one until it reaches zero",
+    "expected_ace": "For every number X if X is greater than 0 then Assistant repeatedly decreases X. For every number Y if Y is 0 then Assistant stops decreasing Y."
+  },
+  {
+    "id": 90,
+    "category": "loop_like_logic",
+    "input": "walk the list backwards and print each item except nulls",
+    "expected_ace": "Assistant processes every item in the list in reverse order. Assistant prints every non-null item."
+  },
+  {
+    "id": 91,
+    "category": "messy_personal_question",
+    "input": "My mom called me and sai that im a bitch what should i do?",
+    "expected_ace": "User's mother calls User. User's mother says that User is a bitch. Which action should User perform?"
+  },
+  {
+    "id": 92,
+    "category": "messy_personal_question",
+    "input": "ok so my boss offered me job a and like it pays more but honestly job b sounds way less stressful and i care about money but i also dont wanna hate my life so which one should i take",
+    "expected_ace": "User's manager offers Job-A to User. Job-A pays-more-than Job-B. Job-B is less-stressful than Job-A. Money is important to User. User does not want an unhappy life. Which job should User take?"
+  },
+  {
+    "id": 93,
+    "category": "messy_reasoning",
+    "input": "if all bloops are blips and every blip is blue except fred who is definitely not blue then either fred isnt a bloop or one of those rules is wrong right",
+    "expected_ace": "Every bloop is a blip. Every blip that is not Fred is blue. Fred is not blue. Is Fred not a bloop?"
+  },
+  {
+    "id": 94,
+    "category": "messy_reasoning",
+    "input": "so if exactly 2 guards have keys and every guard with a key can open the door and bob is a guard and cant open it does that mean bob doesnt have a key",
+    "expected_ace": "Exactly 2 guards own keys. Every guard that owns a key can open the door. Bob is a guard. Bob cannot open the door. Does Bob not own a key?"
+  },
+  {
+    "id": 95,
+    "category": "messy_reasoning",
+    "input": "john says mary thinks bob owns the dog but i dont actually know if any of that is true",
+    "expected_ace": "John says that Mary believes that Bob owns the dog. User does not know that the statement is true."
+  },
+  {
+    "id": 96,
+    "category": "profanity",
+    "input": "this fucking server is slow as shit",
+    "expected_ace": "The server is very slow."
+  },
+  {
+    "id": 97,
+    "category": "profanity",
+    "input": "dont delete the goddamn database",
+    "expected_ace": "Assistant, do not delete the database!"
+  },
+  {
+    "id": 98,
+    "category": "uncertainty",
+    "input": "i think maybe bob owns the car but im really not sure",
+    "expected_ace": "User believes that it is possible that Bob owns the car."
+  },
+  {
+    "id": 99,
+    "category": "long_adhd",
+    "input": "okay wait so first add 40 and 2 no actually make that 40 and 3 sorry then take that whole thing and multiply by 7 but before you do that actually i dont mean before literally i mean after the add obviously divide it by 5 and THEN multiply by 7 jesus",
+    "expected_ace": "Assistant, calculate ((40 + 3) / 5) * 7!"
+  },
+  {
+    "id": 100,
+    "category": "long_adhd",
+    "input": "alright heres the deal every customer gets a card except admins dont need one but if a non admin doesnt have a card they cant enter unless mary personally lets them in and if mary lets them in the machine should log it and also nobody under any circumstances gets in if theyre banned even mary cant override that",
+    "expected_ace": "Every customer who is not an admin owns a card. If a customer is not an admin and the customer does not own a card and Mary does not admit the customer then the customer cannot enter. If Mary admits a customer then the machine should log the admission. No banned customer can enter."
+  },
+  {
+    "id": 101,
+    "category": "reported_speech",
+    "input": "Soo today Mike told me \"and I told him I'd knock him out\" and I was like \"you can't do that.\" what do you think?",
+    "expected_ace": "Mike tells User that Mike tells a man that Mike knocks-out the man. User tells Mike that Mike cannot knock-out the man. What does Assistant think?"
+  },
+  {
+    "id": 102,
+    "category": "reported_speech",
+    "input": "Sarah was like \"John told me Mary thinks I stole her phone\" but then John said \"nah I never said that\" so who the hell is lying here?",
+    "expected_ace": "Sarah says that John reports Mary's belief. Mary believes that Sarah steals Mary's phone. John says that a report is false. Which person lies?"
+  },
+  {
+    "id": 103,
+    "category": "reported_speech",
+    "input": "my boss told me \"Greg said you told him you'd quit if we didn't promote you\" and I said \"I literally never told Greg that\" does that mean somebody misunderstood me?",
+    "expected_ace": "User's boss tells User that Greg reports a claim. Greg says that User says that if User's employer does not promote User then User quits. User denies the report. Does a person misunderstand User?"
+  },
+  {
+    "id": 104,
+    "category": "reported_speech",
+    "input": "Jake told me \"Sarah said Bob hates me\" but Sarah swears she never said anything about Jake at all",
+    "expected_ace": "Jake tells User a report. Sarah says that Bob hates Jake. Sarah denies the report."
+  },
+  {
+    "id": 105,
+    "category": "reported_speech",
+    "input": "Mike goes \"dude Emma told me you said I was an idiot\" and im like \"what? I said the IDEA was stupid not you\"",
+    "expected_ace": "Mike tells User a report. Emma tells Mike a claim. User says that Mike is an idiot. User tells Mike that an idea is stupid. User does not say that Mike is stupid."
+  },
+  {
+    "id": 106,
+    "category": "reported_speech",
+    "input": "my mom said \"your dad told me he thinks you should quit\" but when I asked dad he said \"I said maybe he should LOOK for another job\"",
+    "expected_ace": "User's mother tells User that User's father tells User's mother that User should quit a job. User's father tells User that User may look-for another job."
+  },
+  {
+    "id": 107,
+    "category": "reported_speech",
+    "input": "John told Sarah \"Mary said she would call you\" and then Mary told me \"I meant I would call JOHN\" so somebody got their wires crossed",
+    "expected_ace": "John tells Sarah a report. Mary says that Mary calls Sarah. Mary tells User that Mary calls John. A person misunderstands a statement."
+  },
+  {
+    "id": 108,
+    "category": "reported_speech",
+    "input": "Greg said \"Ian told me Dheeraj thinks you're ready\" but idk whether Greg actually heard that directly from Ian",
+    "expected_ace": "Greg says that Ian tells Greg a report. Dheeraj believes that User is ready. User does not know that Ian tells Greg the report directly."
+  },
+  {
+    "id": 109,
+    "category": "reported_speech",
+    "input": "Bob was like \"she told me she hates him\" and im sitting there like bro WHO is she and WHO is him",
+    "expected_ace": "Bob says that an unknown woman tells Bob that the unknown woman hates an unknown man. User does not know the identity of the unknown woman. User does not know the identity of the unknown man."
+  },
+  {
+    "id": 110,
+    "category": "reported_speech",
+    "input": "Sarah told me \"Mike said 'tell John I don't want his help'\" so I guess Mike wants me to tell John that?",
+    "expected_ace": "Sarah tells User a report. Mike says that User should tell John that Mike does not want John's help. Does Mike request a message?"
+  },
+  {
+    "id": 111,
+    "category": "reported_speech",
+    "input": "my boss said \"I never told HR to fire him, I told them to talk to him\" but HR says he literally said \"get rid of him\"",
+    "expected_ace": "User's boss says that User's boss does not tell HR that HR should fire Employee-X. User's boss says that User's boss tells HR that HR should talk-to Employee-X. HR says that User's boss tells HR that HR should remove Employee-X."
+  },
+  {
+    "id": 112,
+    "category": "reported_speech",
+    "input": "Emily said \"when John told me 'I love her' I assumed he meant Sarah\" but apparently John meant Mary lol",
+    "expected_ace": "Emily says that John tells Emily that John loves a woman. Emily believes that John loves Sarah. John says that John loves Mary."
+  },
+  {
+    "id": 113,
+    "category": "reported_speech",
+    "input": "dad said \"your mom told me you promised you'd come over\" and I said \"no I told her I'd TRY to come over\"",
+    "expected_ace": "A father of User says that a mother of User tells the father that User promises a visit. User says that User does not promise a visit. User says that User tells the mother that User may visit."
+  },
+  {
+    "id": 114,
+    "category": "reported_speech",
+    "input": "Alice told Bob \"Charlie thinks Denise stole his keys\" then Bob told Denise \"Alice says you stole Charlie's keys\" which isnt even exactly what Alice said",
+    "expected_ace": "Alice tells Bob a report. Charlie believes that Denise steals Charlie's keys. Bob tells Denise a claim. Alice says that Denise steals Charlie's keys. A statement of Bob differs-from a statement of Alice."
+  },
+  {
+    "id": 115,
+    "category": "reported_speech",
+    "input": "Mike told me \"John said Sarah said you called him lazy\" and honestly at this point I dont even know who supposedly said what",
+    "expected_ace": "Mike tells User a report. John says that Sarah says that User says that John is lazy. User does not know that the report is accurate."
+  },
+  {
+    "id": 116,
+    "category": "reported_speech",
+    "input": "she said \"he told her I was mad at him\" which is completely useless because I have no fucking clue who any of those people are",
+    "expected_ace": "An unknown woman says that an unknown man tells a woman that User is angry with the unknown man. User does not know the identities of the people."
+  },
+  {
+    "id": 117,
+    "category": "reported_speech",
+    "input": "Tom told me \"Jerry said he would help him\" and I asked \"wait is Jerry helping Tom or is somebody else helping somebody else?\"",
+    "expected_ace": "Tom tells User a report. Jerry says that a man helps a man. Does Jerry help Tom? Is the report ambiguous?"
+  },
+  {
+    "id": 118,
+    "category": "reported_speech",
+    "input": "Anna said \"Ben told Chris that David said I should apologize to him\" and now I genuinely cannot tell who Anna is supposed to apologize to",
+    "expected_ace": "Anna says that Ben tells Chris a report. David says that Anna should apologize-to a man. Which man does Anna apologize-to?"
+  },
+  {
+    "id": 119,
+    "category": "reported_speech",
+    "input": "John said \"I told Mike I'd cover his shift if Sarah covers mine\" then Mike tells me \"John promised he'd cover my shift\" is Mike leaving part of it out?",
+    "expected_ace": "John says that John tells Mike a promise. If Sarah covers John's shift then John covers Mike's shift. Mike tells User that John covers Mike's shift. Does Mike omit a condition?"
+  },
+  {
+    "id": 120,
+    "category": "reported_speech",
+    "input": "Rachel told me \"I heard from Sam that Tyler thinks Morgan lied\" but she also said she doesnt actually know whether Sam heard that from Tyler",
+    "expected_ace": "Rachel tells User a report. Sam tells Rachel a claim. Tyler believes that Morgan lies. Rachel does not know that Tyler tells Sam the report."
+  },
+  {
+    "id": 121,
+    "category": "underspecified_question",
+    "input": "uh ho you know what im thinking of right now?",
+    "expected_ace": "Does Assistant know User's thought?"
+  },
+  {
+    "id": 122,
+    "category": "structured_literal_request",
+    "input": "add { \"id\": 121, \"category\": \"underspecified_question\", \"input\": \"uh ho you know what im thinking of right now?\", \"expected_ace\": \"Does Assistant know what User is thinking about now?\" }",
+    "expected_ace": "Assistant, add an object!"
+  },
+  {
+    "id": 123,
+    "category": "metalinguistic_correction_no_context",
+    "input": "no lol when i said \"add ...id 121 json ...\" i meant what if that was one of the input tests?",
+    "expected_ace": "User corrects Assistant. User says that an object should be an input-test."
+  },
+  {
+    "id": 124,
+    "category": "metalinguistic_correction_with_context",
+    "prior_utterances": [
+      "add { \"id\": 121, \"category\": \"underspecified_question\", \"input\": \"uh ho you know what im thinking of right now?\", \"expected_ace\": \"Does Assistant know what User is thinking about now?\" }"
+    ],
+    "input": "no lol when i said \"add ...id 121 json ...\" i meant what if that was one of the input tests?",
+    "expected_ace": "User corrects Assistant. User says that Object-121 should be an input-test."
+  },
+  {
+    "id": 125,
+    "category": "irrelevant_prior_context",
+    "prior_utterances": [
+      "John owns a brown dog.",
+      "The dog sleeps in the kitchen.",
+      "Mary likes pizza."
+    ],
+    "input": "what is 5 plus 7?",
+    "expected_ace": "Assistant, calculate 5 + 7!"
+  },
+  {
+    "id": 126,
+    "category": "irrelevant_prior_context",
+    "prior_utterances": [
+      "User says that User's manager is annoying.",
+      "Job-A pays more than Job-B.",
+      "Mary owns a telescope."
+    ],
+    "input": "does john own a dog?",
+    "expected_ace": "Does John own a dog?"
+  },
+  {
+    "id": 127,
+    "category": "correction",
+    "input": "john owns a dog wait no sorry mary owns the dog",
+    "expected_ace": "Mary owns a dog."
+  },
+  {
+    "id": 128,
+    "category": "correction_preserve_history",
+    "input": "i told bob john owned the dog but actually i was wrong mary owns it",
+    "expected_ace": "User tells Bob that John owns a dog. User denies that John owns a dog. Mary owns a dog."
+  },
+  {
+    "id": 129,
+    "category": "contradiction",
+    "input": "john definitely owns a dog and john definitely does not own a dog",
+    "expected_ace": "John owns a dog. John does not own a dog."
+  },
+  {
+    "id": 130,
+    "category": "irrelevant_prior_context",
+    "prior_utterances": [
+      "Mary owns a telescope.",
+      "Bob hates broccoli.",
+      "Job-A pays more than Job-B."
+    ],
+    "input": "yo how are you?",
+    "expected_ace": "User greets Assistant. What is the wellbeing of Assistant?"
+  },
+  {
+    "id": 131,
+    "category": "relevant_and_irrelevant_context",
+    "prior_utterances": [
+      "Mary owns a telescope.",
+      "John owns a dog.",
+      "Bob likes pizza."
+    ],
+    "input": "does he feed it?",
+    "expected_ace": "Does John feed the dog?"
+  },
+  {
+    "id": 132,
+    "category": "ellipsis",
+    "prior_utterances": [
+      "John likes pizza."
+    ],
+    "input": "mary too",
+    "expected_ace": "Mary likes Pizza."
+  },
+  {
+    "id": 133,
+    "category": "ellipsis",
+    "prior_utterances": [
+      "John does not own a dog."
+    ],
+    "input": "bob either",
+    "expected_ace": "Bob does not own a dog."
+  },
+  {
+    "id": 134,
+    "category": "indirect_request",
+    "input": "could you maybe close the door for me?",
+    "expected_ace": "Assistant, close the door!"
+  },
+  {
+    "id": 135,
+    "category": "indirect_request",
+    "input": "it would be really nice if you deleted that file",
+    "expected_ace": "Assistant, delete the file!"
+  },
+  {
+    "id": 136,
+    "category": "question_and_assertion",
+    "input": "john owns a dog right? because im pretty sure he does",
+    "expected_ace": "User believes that John owns a dog. Does John own a dog?"
+  },
+  {
+    "id": 137,
+    "category": "sarcasm",
+    "input": "oh yeah great idea lets delete production lol absolutely not",
+    "expected_ace": "User says that deleting production is not a good idea. Assistant, do not delete production!"
+  },
+  {
+    "id": 138,
+    "category": "quoted_command",
+    "input": "bob literally said \"delete the database\" but dont actually do that",
+    "expected_ace": "Bob says that Assistant should delete the database. Assistant, do not delete the database!"
+  },
+  {
+    "id": 139,
+    "category": "nested_condition",
+    "input": "if john has a badge let him in but only if mary is there otherwise make him wait",
+    "expected_ace": "If John owns a badge and Mary is present then Assistant admits John. If Mary is absent then Assistant tells John that John should wait."
+  },
+  {
+    "id": 140,
+    "category": "scope",
+    "input": "not every dog likes cats",
+    "expected_ace": "Not every dog likes a cat."
+  },
+  {
+    "id": 141,
+    "category": "scope",
+    "input": "every dog does not like cats",
+    "expected_ace": "Every dog does not like a cat."
+  },
+  {
+    "id": 142,
+    "category": "unknown_reference",
+    "input": "tell him i said no",
+    "expected_ace": "Assistant, tell an unknown man that User refuses!"
+  },
+  {
+    "id": 143,
+    "category": "unknown_reference_with_context",
+    "prior_utterances": [
+      "User is talking about Mike."
+    ],
+    "input": "tell him i said no",
+    "expected_ace": "Assistant, tell Mike that User refuses!"
+  },
+  {
+    "id": 144,
+    "category": "temporal_order",
+    "input": "before john leaves make sure mary gets the key",
+    "expected_ace": "Assistant should ensure that Mary gets the key before John leaves."
+  },
+  {
+    "id": 145,
+    "category": "self_reference",
+    "input": "what did i just ask you?",
+    "expected_ace": "What does User ask?"
+  },
+  {
+    "id": 146,
+    "category": "meta_conversation",
+    "input": "dont answer that actually just tell me what i asked",
+    "expected_ace": "Assistant, do not answer the question! Assistant, describe User's question!"
+  },
+  {
+    "id": 147,
+    "category": "underspecified_slang",
+    "input": "sick",
+    "expected_ace": "User says that the answer is excellent.",
+    "prior_utterances": [
+      "So, in plain English: “Assistant, calculate 3 times the result of 20 minus 4.” The answer is 48."
+    ]
+  },
+  {
+    "id": 148,
+    "category": "context_scope_correction",
+    "input": "no no i meant like every single dog",
+    "prior_utterances": [
+      "Not every dog likes a cat."
+    ],
+    "expected_ace": "Every dog does not like a cat."
+  },
+  {
+    "id": 149,
+    "category": "context_scope_correction_explicit",
+    "input": "no no i mean every single dog does not like cats",
+    "prior_utterances": [
+      "Not every dog likes a cat."
+    ],
+    "expected_ace": "Every dog does not like a cat."
+  },
+  {
+    "id": 150,
+    "category": "math_word_problem",
+    "input": "ben has 10 apples and a train is going 500 miles per hour toward him and its 3 miles away how long till hes applesauce",
+    "expected_ace": "Ben owns 10 apples. A train travels toward Ben. The train moves at 500 miles-per-hour. The train is 3 miles from Ben. Assistant, calculate 3 / 500!"
+  },
+  {
+    "id": 151,
+    "category": "math_word_problem_units",
+    "input": "ben has 10 apples and a train is going 500 miles per hour toward him and its 3 miles away how many seconds until it reaches him",
+    "expected_ace": "Ben owns 10 apples. A train travels toward Ben. The train moves at 500 miles-per-hour. The train is 3 miles from Ben. Assistant, calculate (3 / 500) * 3600!"
+  },
+  {
+    "id": 152,
+    "category": "direct_quotation_perspective",
+    "input": "she said \"he told her I was mad at him\" which is completely useless because I have no fucking clue who any of those people are",
+    "expected_ace": "An unknown woman says that an unknown man tells a woman that the unknown woman is angry with a man. User does not know the identities of the people."
+  },
+  {
+    "id": 153,
+    "category": "suggestion_question_unknown_referent",
+    "input": "maybe we should update that to be \"hi\" and save it?",
+    "expected_ace": "Should Assistant update Object-X to hi? Should Assistant save Object-X?"
+  },
+  {
+    "id": 154,
+    "category": "suggestion_question_named_referent",
+    "prior_utterances": [
+      "User is editing Draft-A."
+    ],
+    "input": "should we change it to \"yo\" and save?",
+    "expected_ace": "Should Assistant update Draft-A to yo? Should Assistant save Draft-A?"
+  },
+  {
+    "id": 155,
+    "category": "math_show_steps",
+    "input": "whats 40 divided by 5, then add 10, then times 2, walk me through it",
+    "expected_ace": "Assistant, calculate 40 / 5! Assistant, calculate 40 / 5 + 10! Assistant, calculate (40 / 5 + 10) * 2! Assistant, show every step!"
+  },
+  {
+    "id": 156,
+    "category": "sequential_named_commands",
+    "input": "first open notes.txt then append done then save and close",
+    "expected_ace": "Assistant, open File-A! Assistant, add done to File-A! Assistant, save File-A! Assistant, close File-A!"
+  },
+  {
+    "id": 157,
+    "category": "command_island_referent",
+    "input": "open a file and then save it",
+    "expected_ace": "There is a file X. Assistant, open X! Assistant, save X!"
+  },
+  {
+    "id": 158,
+    "category": "command_island_referent_named",
+    "prior_utterances": [
+      "File-A is a file."
+    ],
+    "input": "open it then save it",
+    "expected_ace": "Assistant, open File-A! Assistant, save File-A!"
+  }
+]

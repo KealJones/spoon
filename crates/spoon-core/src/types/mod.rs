@@ -6,6 +6,7 @@ pub mod episode;
 pub mod intent;
 pub mod ir;
 pub mod response;
+pub mod spec;
 pub mod value;
 
 pub use can::{
@@ -20,6 +21,7 @@ pub use episode::{Episode, Pair, TurnMetrics};
 pub use intent::{Goal, Intent, Plan, PlanNode, PlanOutcome, Signal};
 pub use ir::{Expr, Lambda, Program};
 pub use response::{AdviceOption, Move, ResponsePlan, Tone};
+pub use spec::{Example, Spec};
 pub use value::{Type, Value};
 
 pub fn now_ms() -> i64 {

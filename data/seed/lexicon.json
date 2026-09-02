@@ -1,0 +1,7918 @@
+{
+  "nouns": [
+    {
+      "lemma": "person",
+      "plural": "persons",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "man",
+      "plural": "men",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "woman",
+      "plural": "women",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "child",
+      "plural": "children",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "boy",
+      "plural": "boys",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "girl",
+      "plural": "girls",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "people",
+      "plural": "people",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "human",
+      "plural": "humans",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "user",
+      "plural": "users",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "customer",
+      "plural": "customers",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "student",
+      "plural": "students",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "teacher",
+      "plural": "teachers",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "doctor",
+      "plural": "doctors",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "worker",
+      "plural": "workers",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "player",
+      "plural": "players",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "friend",
+      "plural": "friends",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "family",
+      "plural": "families",
+      "hypernym": "group",
+      "source": "common"
+    },
+    {
+      "lemma": "parent",
+      "plural": "parents",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "mother",
+      "plural": "mothers",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "father",
+      "plural": "fathers",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "brother",
+      "plural": "brothers",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "sister",
+      "plural": "sisters",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "baby",
+      "plural": "babies",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "adult",
+      "plural": "adults",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "kid",
+      "plural": "kids",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "boss",
+      "plural": "bosses",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "manager",
+      "plural": "managers",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "owner",
+      "plural": "owners",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "member",
+      "plural": "members",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "admin",
+      "plural": "admins",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "guest",
+      "plural": "guests",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "agent",
+      "plural": "agents",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "actor",
+      "plural": "actors",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "author",
+      "plural": "authors",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "artist",
+      "plural": "artists",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "driver",
+      "plural": "drivers",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "officer",
+      "plural": "officers",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "leader",
+      "plural": "leaders",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "expert",
+      "plural": "experts",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "partner",
+      "plural": "partners",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "neighbor",
+      "plural": "neighbors",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "stranger",
+      "plural": "strangers",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "victim",
+      "plural": "victims",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "soldier",
+      "plural": "soldiers",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "king",
+      "plural": "kings",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "queen",
+      "plural": "queens",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "scientist",
+      "plural": "scientists",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "engineer",
+      "plural": "engineers",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "programmer",
+      "plural": "programmers",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "clerk",
+      "plural": "clerks",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "nurse",
+      "plural": "nurses",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "lawyer",
+      "plural": "lawyers",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "athlete",
+      "plural": "athletes",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "musician",
+      "plural": "musicians",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "chef",
+      "plural": "chefs",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "pilot",
+      "plural": "pilots",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "police",
+      "plural": "police",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "judge",
+      "plural": "judges",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "president",
+      "plural": "presidents",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "mayor",
+      "plural": "mayors",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "citizen",
+      "plural": "citizens",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "volunteer",
+      "plural": "volunteers",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "vendor",
+      "plural": "vendors",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "tenant",
+      "plural": "tenants",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "subscriber",
+      "plural": "subscribers",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "trainer",
+      "plural": "trainers",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "animal",
+      "plural": "animals",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "dog",
+      "plural": "dogs",
+      "hypernym": "animal",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "cat",
+      "plural": "cats",
+      "hypernym": "animal",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "bird",
+      "plural": "birds",
+      "hypernym": "animal",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "fish",
+      "plural": "fish",
+      "hypernym": "animal",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "horse",
+      "plural": "horses",
+      "hypernym": "animal",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "cow",
+      "plural": "cows",
+      "hypernym": "animal",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "pig",
+      "plural": "pigs",
+      "hypernym": "animal",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "sheep",
+      "plural": "sheep",
+      "hypernym": "animal",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "rabbit",
+      "plural": "rabbits",
+      "hypernym": "animal",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "mouse",
+      "plural": "mice",
+      "hypernym": "animal",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "rat",
+      "plural": "rats",
+      "hypernym": "animal",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "bear",
+      "plural": "bears",
+      "hypernym": "animal",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "wolf",
+      "plural": "wolves",
+      "hypernym": "animal",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "fox",
+      "plural": "foxes",
+      "hypernym": "animal",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "deer",
+      "plural": "deer",
+      "hypernym": "animal",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "lion",
+      "plural": "lions",
+      "hypernym": "animal",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "tiger",
+      "plural": "tigers",
+      "hypernym": "animal",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "elephant",
+      "plural": "elephants",
+      "hypernym": "animal",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "monkey",
+      "plural": "monkeys",
+      "hypernym": "animal",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "snake",
+      "plural": "snakes",
+      "hypernym": "animal",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "frog",
+      "plural": "frogs",
+      "hypernym": "animal",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "whale",
+      "plural": "whales",
+      "hypernym": "mammal",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "dolphin",
+      "plural": "dolphins",
+      "hypernym": "mammal",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "shark",
+      "plural": "sharks",
+      "hypernym": "fish",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "eagle",
+      "plural": "eagles",
+      "hypernym": "bird",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "duck",
+      "plural": "ducks",
+      "hypernym": "bird",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "parrot",
+      "plural": "parrots",
+      "hypernym": "bird",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "penguin",
+      "plural": "penguins",
+      "hypernym": "bird",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "bee",
+      "plural": "bees",
+      "hypernym": "insect",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "ant",
+      "plural": "ants",
+      "hypernym": "insect",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "butterfly",
+      "plural": "butterflies",
+      "hypernym": "insect",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "insect",
+      "plural": "insects",
+      "hypernym": "animal",
+      "source": "common"
+    },
+    {
+      "lemma": "mammal",
+      "plural": "mammals",
+      "hypernym": "animal",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "reptile",
+      "plural": "reptiles",
+      "hypernym": "animal",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "creature",
+      "plural": "creatures",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "thing",
+      "plural": "things",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "object",
+      "plural": "objects",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "item",
+      "plural": "items",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "part",
+      "plural": "parts",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "piece",
+      "plural": "pieces",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "set",
+      "plural": "sets",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "group",
+      "plural": "groups",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "kind",
+      "plural": "kinds",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "type",
+      "plural": "types",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "form",
+      "plural": "forms",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "example",
+      "plural": "examples",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "case",
+      "plural": "cases",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "instance",
+      "plural": "instances",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "class",
+      "plural": "classes",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "category",
+      "plural": "categories",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "name",
+      "plural": "names",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "number",
+      "plural": "numbers",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "amount",
+      "plural": "amounts",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "size",
+      "plural": "sizes",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "level",
+      "plural": "levels",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "order",
+      "plural": "orders",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "line",
+      "plural": "lines",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "list",
+      "plural": "lists",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "record",
+      "plural": "records",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "result",
+      "plural": "results",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "value",
+      "plural": "values",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "point",
+      "plural": "points",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "step",
+      "plural": "steps",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "stage",
+      "plural": "stages",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "state",
+      "plural": "states",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "status",
+      "plural": "statuses",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "version",
+      "plural": "versions",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "mode",
+      "plural": "modes",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "place",
+      "plural": "places",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "room",
+      "plural": "rooms",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "house",
+      "plural": "houses",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "home",
+      "plural": "homes",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "city",
+      "plural": "cities",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "town",
+      "plural": "towns",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "country",
+      "plural": "countries",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "world",
+      "plural": "worlds",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "area",
+      "plural": "areas",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "region",
+      "plural": "regions",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "street",
+      "plural": "streets",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "road",
+      "plural": "roads",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "park",
+      "plural": "parks",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "garden",
+      "plural": "gardens",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "kitchen",
+      "plural": "kitchens",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "bathroom",
+      "plural": "bathrooms",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "bedroom",
+      "plural": "bedrooms",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "office",
+      "plural": "offices",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "school",
+      "plural": "schools",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "hospital",
+      "plural": "hospitals",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "library",
+      "plural": "libraries",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "store",
+      "plural": "stores",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "market",
+      "plural": "markets",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "bank",
+      "plural": "banks",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "restaurant",
+      "plural": "restaurants",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "hotel",
+      "plural": "hotels",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "airport",
+      "plural": "airports",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "station",
+      "plural": "stations",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "building",
+      "plural": "buildings",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "floor",
+      "plural": "floors",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "wall",
+      "plural": "walls",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "door",
+      "plural": "doors",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "window",
+      "plural": "windows",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "yard",
+      "plural": "yards",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "field",
+      "plural": "fields",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "forest",
+      "plural": "forests",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "mountain",
+      "plural": "mountains",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "river",
+      "plural": "rivers",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "lake",
+      "plural": "lakes",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "ocean",
+      "plural": "oceans",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "sea",
+      "plural": "seas",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "beach",
+      "plural": "beaches",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "island",
+      "plural": "islands",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "desert",
+      "plural": "deserts",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "hall",
+      "plural": "halls",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "pantry",
+      "plural": "pantries",
+      "hypernym": "location",
+      "source": "common"
+    },
+    {
+      "lemma": "food",
+      "plural": "food",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "water",
+      "plural": "water",
+      "hypernym": "substance",
+      "source": "common"
+    },
+    {
+      "lemma": "milk",
+      "plural": "milk",
+      "hypernym": "substance",
+      "source": "common"
+    },
+    {
+      "lemma": "bread",
+      "plural": "bread",
+      "hypernym": "food",
+      "source": "common"
+    },
+    {
+      "lemma": "meat",
+      "plural": "meat",
+      "hypernym": "food",
+      "source": "common"
+    },
+    {
+      "lemma": "fruit",
+      "plural": "fruits",
+      "hypernym": "food",
+      "source": "common"
+    },
+    {
+      "lemma": "vegetable",
+      "plural": "vegetables",
+      "hypernym": "food",
+      "source": "common"
+    },
+    {
+      "lemma": "apple",
+      "plural": "apples",
+      "hypernym": "fruit",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "orange",
+      "plural": "oranges",
+      "hypernym": "fruit",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "banana",
+      "plural": "bananas",
+      "hypernym": "fruit",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "cake",
+      "plural": "cakes",
+      "hypernym": "food",
+      "source": "common"
+    },
+    {
+      "lemma": "pizza",
+      "plural": "pizza",
+      "hypernym": "food",
+      "source": "common"
+    },
+    {
+      "lemma": "soup",
+      "plural": "soup",
+      "hypernym": "food",
+      "source": "common"
+    },
+    {
+      "lemma": "rice",
+      "plural": "rice",
+      "hypernym": "food",
+      "source": "common"
+    },
+    {
+      "lemma": "egg",
+      "plural": "eggs",
+      "hypernym": "food",
+      "source": "common"
+    },
+    {
+      "lemma": "coffee",
+      "plural": "coffee",
+      "hypernym": "beverage",
+      "source": "common"
+    },
+    {
+      "lemma": "tea",
+      "plural": "tea",
+      "hypernym": "beverage",
+      "source": "common"
+    },
+    {
+      "lemma": "juice",
+      "plural": "juice",
+      "hypernym": "beverage",
+      "source": "common"
+    },
+    {
+      "lemma": "beer",
+      "plural": "beer",
+      "hypernym": "beverage",
+      "source": "common"
+    },
+    {
+      "lemma": "wine",
+      "plural": "wine",
+      "hypernym": "beverage",
+      "source": "common"
+    },
+    {
+      "lemma": "meal",
+      "plural": "meals",
+      "hypernym": "food",
+      "source": "common"
+    },
+    {
+      "lemma": "snack",
+      "plural": "snacks",
+      "hypernym": "food",
+      "source": "common"
+    },
+    {
+      "lemma": "candy",
+      "plural": "candy",
+      "hypernym": "food",
+      "source": "common"
+    },
+    {
+      "lemma": "body",
+      "plural": "bodies",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "hand",
+      "plural": "hands",
+      "hypernym": "body-part",
+      "source": "common"
+    },
+    {
+      "lemma": "eye",
+      "plural": "eyes",
+      "hypernym": "body-part",
+      "source": "common"
+    },
+    {
+      "lemma": "head",
+      "plural": "heads",
+      "hypernym": "body-part",
+      "source": "common"
+    },
+    {
+      "lemma": "face",
+      "plural": "faces",
+      "hypernym": "body-part",
+      "source": "common"
+    },
+    {
+      "lemma": "arm",
+      "plural": "arms",
+      "hypernym": "body-part",
+      "source": "common"
+    },
+    {
+      "lemma": "leg",
+      "plural": "legs",
+      "hypernym": "body-part",
+      "source": "common"
+    },
+    {
+      "lemma": "foot",
+      "plural": "feet",
+      "hypernym": "body-part",
+      "source": "common"
+    },
+    {
+      "lemma": "heart",
+      "plural": "hearts",
+      "hypernym": "organ",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "brain",
+      "plural": "brains",
+      "hypernym": "organ",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "blood",
+      "plural": "blood",
+      "hypernym": "substance",
+      "source": "common"
+    },
+    {
+      "lemma": "car",
+      "plural": "cars",
+      "hypernym": "vehicle",
+      "source": "common"
+    },
+    {
+      "lemma": "bus",
+      "plural": "buses",
+      "hypernym": "vehicle",
+      "source": "common"
+    },
+    {
+      "lemma": "train",
+      "plural": "trains",
+      "hypernym": "vehicle",
+      "source": "common"
+    },
+    {
+      "lemma": "plane",
+      "plural": "planes",
+      "hypernym": "vehicle",
+      "source": "common"
+    },
+    {
+      "lemma": "ship",
+      "plural": "ships",
+      "hypernym": "vehicle",
+      "source": "common"
+    },
+    {
+      "lemma": "bike",
+      "plural": "bikes",
+      "hypernym": "vehicle",
+      "source": "common"
+    },
+    {
+      "lemma": "truck",
+      "plural": "trucks",
+      "hypernym": "vehicle",
+      "source": "common"
+    },
+    {
+      "lemma": "vehicle",
+      "plural": "vehicles",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "book",
+      "plural": "books",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "paper",
+      "plural": "papers",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "pen",
+      "plural": "pens",
+      "hypernym": "tool",
+      "source": "common"
+    },
+    {
+      "lemma": "bag",
+      "plural": "bags",
+      "hypernym": "container",
+      "source": "common"
+    },
+    {
+      "lemma": "box",
+      "plural": "boxes",
+      "hypernym": "container",
+      "source": "common"
+    },
+    {
+      "lemma": "bottle",
+      "plural": "bottles",
+      "hypernym": "container",
+      "source": "common"
+    },
+    {
+      "lemma": "cup",
+      "plural": "cups",
+      "hypernym": "container",
+      "source": "common"
+    },
+    {
+      "lemma": "table",
+      "plural": "tables",
+      "hypernym": "furniture",
+      "source": "common"
+    },
+    {
+      "lemma": "chair",
+      "plural": "chairs",
+      "hypernym": "furniture",
+      "source": "common"
+    },
+    {
+      "lemma": "bed",
+      "plural": "beds",
+      "hypernym": "furniture",
+      "source": "common"
+    },
+    {
+      "lemma": "desk",
+      "plural": "desks",
+      "hypernym": "furniture",
+      "source": "common"
+    },
+    {
+      "lemma": "key",
+      "plural": "keys",
+      "hypernym": "tool",
+      "source": "common"
+    },
+    {
+      "lemma": "coin",
+      "plural": "coins",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "card",
+      "plural": "cards",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "ticket",
+      "plural": "tickets",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "phone",
+      "plural": "phones",
+      "hypernym": "device",
+      "source": "common"
+    },
+    {
+      "lemma": "computer",
+      "plural": "computers",
+      "hypernym": "device",
+      "source": "common"
+    },
+    {
+      "lemma": "screen",
+      "plural": "screens",
+      "hypernym": "device",
+      "source": "common"
+    },
+    {
+      "lemma": "camera",
+      "plural": "cameras",
+      "hypernym": "device",
+      "source": "common"
+    },
+    {
+      "lemma": "tool",
+      "plural": "tools",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "machine",
+      "plural": "machines",
+      "hypernym": "device",
+      "source": "common"
+    },
+    {
+      "lemma": "button",
+      "plural": "buttons",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "lamp",
+      "plural": "lamps",
+      "hypernym": "device",
+      "source": "common"
+    },
+    {
+      "lemma": "clock",
+      "plural": "clocks",
+      "hypernym": "device",
+      "source": "common"
+    },
+    {
+      "lemma": "map",
+      "plural": "maps",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "message",
+      "plural": "messages",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "letter",
+      "plural": "letters",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "note",
+      "plural": "notes",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "report",
+      "plural": "reports",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "story",
+      "plural": "stories",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "sign",
+      "plural": "signs",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "picture",
+      "plural": "pictures",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "photo",
+      "plural": "photos",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "video",
+      "plural": "videos",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "music",
+      "plural": "music",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "song",
+      "plural": "songs",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "word",
+      "plural": "words",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "sentence",
+      "plural": "sentences",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "question",
+      "plural": "questions",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "answer",
+      "plural": "answers",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "idea",
+      "plural": "ideas",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "plan",
+      "plural": "plans",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "goal",
+      "plural": "goals",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "problem",
+      "plural": "problems",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "solution",
+      "plural": "solutions",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "fact",
+      "plural": "facts",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "truth",
+      "plural": "truth",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "reason",
+      "plural": "reasons",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "cause",
+      "plural": "causes",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "effect",
+      "plural": "effects",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "rule",
+      "plural": "rules",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "law",
+      "plural": "laws",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "condition",
+      "plural": "conditions",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "task",
+      "plural": "tasks",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "job",
+      "plural": "jobs",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "work",
+      "plural": "work",
+      "hypernym": "activity",
+      "source": "common"
+    },
+    {
+      "lemma": "action",
+      "plural": "actions",
+      "hypernym": "activity",
+      "source": "common"
+    },
+    {
+      "lemma": "activity",
+      "plural": "activities",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "event",
+      "plural": "events",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "game",
+      "plural": "games",
+      "hypernym": "activity",
+      "source": "common"
+    },
+    {
+      "lemma": "sport",
+      "plural": "sports",
+      "hypernym": "activity",
+      "source": "common"
+    },
+    {
+      "lemma": "test",
+      "plural": "tests",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "exam",
+      "plural": "exams",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "error",
+      "plural": "errors",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "warning",
+      "plural": "warnings",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "request",
+      "plural": "requests",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "response",
+      "plural": "responses",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "command",
+      "plural": "commands",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "system",
+      "plural": "systems",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "program",
+      "plural": "programs",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "file",
+      "plural": "files",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "folder",
+      "plural": "folders",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "document",
+      "plural": "documents",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "data",
+      "plural": "data",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "database",
+      "plural": "databases",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "network",
+      "plural": "networks",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "server",
+      "plural": "servers",
+      "hypernym": "device",
+      "source": "common"
+    },
+    {
+      "lemma": "account",
+      "plural": "accounts",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "password",
+      "plural": "passwords",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "address",
+      "plural": "addresses",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "log",
+      "plural": "logs",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "batch",
+      "plural": "batches",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "queue",
+      "plural": "queues",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "widget",
+      "plural": "widgets",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "token",
+      "plural": "tokens",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "resource",
+      "plural": "resources",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "module",
+      "plural": "modules",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "function",
+      "plural": "functions",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "method",
+      "plural": "methods",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "interface",
+      "plural": "interfaces",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "output",
+      "plural": "outputs",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "input",
+      "plural": "inputs",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "time",
+      "plural": "time",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "day",
+      "plural": "days",
+      "hypernym": "time",
+      "source": "common"
+    },
+    {
+      "lemma": "night",
+      "plural": "nights",
+      "hypernym": "time",
+      "source": "common"
+    },
+    {
+      "lemma": "morning",
+      "plural": "mornings",
+      "hypernym": "time",
+      "source": "common"
+    },
+    {
+      "lemma": "week",
+      "plural": "weeks",
+      "hypernym": "time",
+      "source": "common"
+    },
+    {
+      "lemma": "month",
+      "plural": "months",
+      "hypernym": "time",
+      "source": "common"
+    },
+    {
+      "lemma": "year",
+      "plural": "years",
+      "hypernym": "time",
+      "source": "common"
+    },
+    {
+      "lemma": "hour",
+      "plural": "hours",
+      "hypernym": "time",
+      "source": "common"
+    },
+    {
+      "lemma": "minute",
+      "plural": "minutes",
+      "hypernym": "time",
+      "source": "common"
+    },
+    {
+      "lemma": "second",
+      "plural": "seconds",
+      "hypernym": "time",
+      "source": "common"
+    },
+    {
+      "lemma": "moment",
+      "plural": "moments",
+      "hypernym": "time",
+      "source": "common"
+    },
+    {
+      "lemma": "season",
+      "plural": "seasons",
+      "hypernym": "time",
+      "source": "common"
+    },
+    {
+      "lemma": "sun",
+      "plural": "suns",
+      "hypernym": "celestial-body",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "moon",
+      "plural": "moons",
+      "hypernym": "satellite",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "star",
+      "plural": "stars",
+      "hypernym": "celestial-body",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "sky",
+      "plural": "skies",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "air",
+      "plural": "air",
+      "hypernym": "substance",
+      "source": "common"
+    },
+    {
+      "lemma": "fire",
+      "plural": "fires",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "earth",
+      "plural": "earth",
+      "hypernym": "planet",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "planet",
+      "plural": "planets",
+      "hypernym": "celestial-body",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "land",
+      "plural": "land",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "nature",
+      "plural": "nature",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "weather",
+      "plural": "weather",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "rain",
+      "plural": "rain",
+      "hypernym": "weather",
+      "source": "common"
+    },
+    {
+      "lemma": "snow",
+      "plural": "snow",
+      "hypernym": "weather",
+      "source": "common"
+    },
+    {
+      "lemma": "wind",
+      "plural": "wind",
+      "hypernym": "weather",
+      "source": "common"
+    },
+    {
+      "lemma": "light",
+      "plural": "lights",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "color",
+      "plural": "colors",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "sound",
+      "plural": "sounds",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "energy",
+      "plural": "energy",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "power",
+      "plural": "power",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "space",
+      "plural": "space",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "force",
+      "plural": "forces",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "matter",
+      "plural": "matter",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "heat",
+      "plural": "heat",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "weight",
+      "plural": "weight",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "speed",
+      "plural": "speed",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "distance",
+      "plural": "distance",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "direction",
+      "plural": "directions",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "life",
+      "plural": "life",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "death",
+      "plural": "death",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "health",
+      "plural": "health",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "mind",
+      "plural": "minds",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "thought",
+      "plural": "thoughts",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "feeling",
+      "plural": "feelings",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "emotion",
+      "plural": "emotions",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "mood",
+      "plural": "moods",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "love",
+      "plural": "love",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "fear",
+      "plural": "fear",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "hope",
+      "plural": "hope",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "trust",
+      "plural": "trust",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "belief",
+      "plural": "beliefs",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "knowledge",
+      "plural": "knowledge",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "memory",
+      "plural": "memories",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "opinion",
+      "plural": "opinions",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "choice",
+      "plural": "choices",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "change",
+      "plural": "changes",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "difference",
+      "plural": "differences",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "information",
+      "plural": "information",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "language",
+      "plural": "languages",
+      "hypernym": "entity",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "history",
+      "plural": "history",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "future",
+      "plural": "future",
+      "hypernym": "time",
+      "source": "common"
+    },
+    {
+      "lemma": "past",
+      "plural": "past",
+      "hypernym": "time",
+      "source": "common"
+    },
+    {
+      "lemma": "present",
+      "plural": "present",
+      "hypernym": "time",
+      "source": "common"
+    },
+    {
+      "lemma": "society",
+      "plural": "societies",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "culture",
+      "plural": "cultures",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "community",
+      "plural": "communities",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "government",
+      "plural": "governments",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "money",
+      "plural": "money",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "price",
+      "plural": "prices",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "cost",
+      "plural": "costs",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "profit",
+      "plural": "profits",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "tax",
+      "plural": "taxes",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "war",
+      "plural": "wars",
+      "hypernym": "event",
+      "source": "common"
+    },
+    {
+      "lemma": "peace",
+      "plural": "peace",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "science",
+      "plural": "science",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "technology",
+      "plural": "technology",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "art",
+      "plural": "art",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "education",
+      "plural": "education",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "religion",
+      "plural": "religion",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "politics",
+      "plural": "politics",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "element",
+      "plural": "elements",
+      "hypernym": "substance",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "molecule",
+      "plural": "molecules",
+      "hypernym": "substance",
+      "source": "common"
+    },
+    {
+      "lemma": "atom",
+      "plural": "atoms",
+      "hypernym": "substance",
+      "source": "common"
+    },
+    {
+      "lemma": "cell",
+      "plural": "cells",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "gene",
+      "plural": "genes",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "organ",
+      "plural": "organs",
+      "hypernym": "body-part",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "plant",
+      "plural": "plants",
+      "hypernym": "organism",
+      "source": "common"
+    },
+    {
+      "lemma": "tree",
+      "plural": "trees",
+      "hypernym": "plant",
+      "source": "common"
+    },
+    {
+      "lemma": "flower",
+      "plural": "flowers",
+      "hypernym": "plant",
+      "source": "common"
+    },
+    {
+      "lemma": "leaf",
+      "plural": "leaves",
+      "hypernym": "plant",
+      "source": "common"
+    },
+    {
+      "lemma": "seed",
+      "plural": "seeds",
+      "hypernym": "plant",
+      "source": "common"
+    },
+    {
+      "lemma": "root",
+      "plural": "roots",
+      "hypernym": "plant",
+      "source": "common"
+    },
+    {
+      "lemma": "grass",
+      "plural": "grass",
+      "hypernym": "plant",
+      "source": "common"
+    },
+    {
+      "lemma": "soil",
+      "plural": "soil",
+      "hypernym": "substance",
+      "source": "common"
+    },
+    {
+      "lemma": "rock",
+      "plural": "rocks",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "metal",
+      "plural": "metals",
+      "hypernym": "substance",
+      "source": "common"
+    },
+    {
+      "lemma": "iron",
+      "plural": "iron",
+      "hypernym": "element",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "gold",
+      "plural": "gold",
+      "hypernym": "element",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "oxygen",
+      "plural": "oxygen",
+      "hypernym": "element",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "carbon",
+      "plural": "carbon",
+      "hypernym": "element",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "hydrogen",
+      "plural": "hydrogen",
+      "hypernym": "element",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "shape",
+      "plural": "shapes",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "circle",
+      "plural": "circles",
+      "hypernym": "shape",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "square",
+      "plural": "squares",
+      "hypernym": "shape",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "triangle",
+      "plural": "triangles",
+      "hypernym": "shape",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "rectangle",
+      "plural": "rectangles",
+      "hypernym": "shape",
+      "source": "common"
+    },
+    {
+      "lemma": "angle",
+      "plural": "angles",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "volume",
+      "plural": "volumes",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "way",
+      "plural": "ways",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "side",
+      "plural": "sides",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "end",
+      "plural": "ends",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "start",
+      "plural": "starts",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "center",
+      "plural": "centers",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "top",
+      "plural": "tops",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "bottom",
+      "plural": "bottoms",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "front",
+      "plural": "fronts",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "back",
+      "plural": "backs",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "left",
+      "plural": "left",
+      "hypernym": "direction",
+      "source": "common"
+    },
+    {
+      "lemma": "right",
+      "plural": "right",
+      "hypernym": "direction",
+      "source": "common"
+    },
+    {
+      "lemma": "north",
+      "plural": "north",
+      "hypernym": "direction",
+      "source": "common"
+    },
+    {
+      "lemma": "south",
+      "plural": "south",
+      "hypernym": "direction",
+      "source": "common"
+    },
+    {
+      "lemma": "east",
+      "plural": "east",
+      "hypernym": "direction",
+      "source": "common"
+    },
+    {
+      "lemma": "west",
+      "plural": "west",
+      "hypernym": "direction",
+      "source": "common"
+    },
+    {
+      "lemma": "access",
+      "plural": "access",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "permission",
+      "plural": "permissions",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "role",
+      "plural": "roles",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "profile",
+      "plural": "profiles",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "session",
+      "plural": "sessions",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "connection",
+      "plural": "connections",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "link",
+      "plural": "links",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "path",
+      "plural": "paths",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "layer",
+      "plural": "layers",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "component",
+      "plural": "components",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "service",
+      "plural": "services",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "process",
+      "plural": "processes",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "thread",
+      "plural": "threads",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "trigger",
+      "plural": "triggers",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "flag",
+      "plural": "flags",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "option",
+      "plural": "options",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "setting",
+      "plural": "settings",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "config",
+      "plural": "configs",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "parameter",
+      "plural": "parameters",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "argument",
+      "plural": "arguments",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "variable",
+      "plural": "variables",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "string",
+      "plural": "strings",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "integer",
+      "plural": "integers",
+      "hypernym": "number",
+      "source": "common"
+    },
+    {
+      "lemma": "array",
+      "plural": "arrays",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "index",
+      "plural": "indices",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "node",
+      "plural": "nodes",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "edge",
+      "plural": "edges",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "graph",
+      "plural": "graphs",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "cache",
+      "plural": "caches",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "stack",
+      "plural": "stacks",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "buffer",
+      "plural": "buffers",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "archive",
+      "plural": "archives",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "backup",
+      "plural": "backups",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "staging",
+      "plural": "staging",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "anger",
+      "plural": "anger",
+      "hypernym": "emotion",
+      "source": "common"
+    },
+    {
+      "lemma": "joy",
+      "plural": "joy",
+      "hypernym": "emotion",
+      "source": "common"
+    },
+    {
+      "lemma": "sadness",
+      "plural": "sadness",
+      "hypernym": "emotion",
+      "source": "common"
+    },
+    {
+      "lemma": "surprise",
+      "plural": "surprise",
+      "hypernym": "emotion",
+      "source": "common"
+    },
+    {
+      "lemma": "frustration",
+      "plural": "frustration",
+      "hypernym": "emotion",
+      "source": "common"
+    },
+    {
+      "lemma": "anxiety",
+      "plural": "anxiety",
+      "hypernym": "emotion",
+      "source": "common"
+    },
+    {
+      "lemma": "happiness",
+      "plural": "happiness",
+      "hypernym": "emotion",
+      "source": "common"
+    },
+    {
+      "lemma": "worry",
+      "plural": "worry",
+      "hypernym": "emotion",
+      "source": "common"
+    },
+    {
+      "lemma": "pride",
+      "plural": "pride",
+      "hypernym": "emotion",
+      "source": "common"
+    },
+    {
+      "lemma": "shame",
+      "plural": "shame",
+      "hypernym": "emotion",
+      "source": "common"
+    },
+    {
+      "lemma": "loneliness",
+      "plural": "loneliness",
+      "hypernym": "emotion",
+      "source": "common"
+    },
+    {
+      "lemma": "stress",
+      "plural": "stress",
+      "hypernym": "emotion",
+      "source": "common"
+    },
+    {
+      "lemma": "identity",
+      "plural": "identity",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "wellbeing",
+      "plural": "wellbeing",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "perspective",
+      "plural": "perspectives",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "attitude",
+      "plural": "attitudes",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "behavior",
+      "plural": "behaviors",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "habit",
+      "plural": "habits",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "relationship",
+      "plural": "relationships",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "marriage",
+      "plural": "marriages",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "friendship",
+      "plural": "friendships",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "girlfriend",
+      "plural": "girlfriends",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "boyfriend",
+      "plural": "boyfriends",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "spouse",
+      "plural": "spouses",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "ex",
+      "plural": "exes",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "colleague",
+      "plural": "colleagues",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "enemy",
+      "plural": "enemies",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "kayak",
+      "plural": "kayaks",
+      "hypernym": "vehicle",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "ladder",
+      "plural": "ladders",
+      "hypernym": "tool",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "crate",
+      "plural": "crates",
+      "hypernym": "container",
+      "source": "common"
+    },
+    {
+      "lemma": "gate",
+      "plural": "gates",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "voucher",
+      "plural": "vouchers",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "ledger",
+      "plural": "ledgers",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "museum",
+      "plural": "museums",
+      "hypernym": "location",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "printer",
+      "plural": "printers",
+      "hypernym": "device",
+      "source": "common"
+    },
+    {
+      "lemma": "courier",
+      "plural": "couriers",
+      "hypernym": "person",
+      "source": "common"
+    },
+    {
+      "lemma": "subscription",
+      "plural": "subscriptions",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "notification",
+      "plural": "notifications",
+      "hypernym": "entity",
+      "source": "common"
+    },
+    {
+      "lemma": "go",
+      "plural": "gos",
+      "hypernym": "shift",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "come",
+      "plural": "comes",
+      "hypernym": "substance",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "take",
+      "plural": "takes",
+      "hypernym": "income",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "give",
+      "plural": "gives",
+      "hypernym": "elasticity",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "make",
+      "plural": "makes",
+      "hypernym": "kind",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "get",
+      "plural": "gets",
+      "hypernym": "return",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "put",
+      "plural": "puts",
+      "hypernym": "option",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "see",
+      "plural": "sees",
+      "hypernym": "seat",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "look",
+      "plural": "looks",
+      "hypernym": "countenance",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "find",
+      "plural": "finds",
+      "hypernym": "insight",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "know",
+      "plural": "knows",
+      "hypernym": "knowing",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "think",
+      "plural": "thinks",
+      "hypernym": "deliberation",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "say",
+      "plural": "says",
+      "hypernym": "opportunity",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "tell",
+      "plural": "tells",
+      "hypernym": "entity",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "use",
+      "plural": "uses",
+      "hypernym": "activity",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "try",
+      "plural": "trys",
+      "hypernym": "activity",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "need",
+      "plural": "needs",
+      "hypernym": "condition",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "want",
+      "plural": "wants",
+      "hypernym": "poverty",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "like",
+      "plural": "likes",
+      "hypernym": "kind",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "hate",
+      "plural": "hates",
+      "hypernym": "emotion",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "feel",
+      "plural": "feels",
+      "hypernym": "awareness",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "show",
+      "plural": "shows",
+      "hypernym": "entertainment",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "turn",
+      "plural": "turns",
+      "hypernym": "curve",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "move",
+      "plural": "moves",
+      "hypernym": "decision",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "run",
+      "plural": "runs",
+      "hypernym": "score",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "walk",
+      "plural": "walks",
+      "hypernym": "locomotion",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "stand",
+      "plural": "stands",
+      "hypernym": "support",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "fall",
+      "plural": "falls",
+      "hypernym": "season",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "hold",
+      "plural": "holds",
+      "hypernym": "grasping",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "keep",
+      "plural": "keeps",
+      "hypernym": "resource",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "let",
+      "plural": "lets",
+      "hypernym": "entity",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "begin",
+      "plural": "begins",
+      "hypernym": "entity",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "stop",
+      "plural": "stops",
+      "hypernym": "ending",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "open",
+      "plural": "opens",
+      "hypernym": "area",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "close",
+      "plural": "closes",
+      "hypernym": "end",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "read",
+      "plural": "reads",
+      "hypernym": "publication",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "teach",
+      "plural": "teachs",
+      "hypernym": "entity",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "play",
+      "plural": "plays",
+      "hypernym": "composition",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "drink",
+      "plural": "drinks",
+      "hypernym": "helping",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "sleep",
+      "plural": "sleeps",
+      "hypernym": "condition",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "wake",
+      "plural": "wakes",
+      "hypernym": "consequence",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "buy",
+      "plural": "buys",
+      "hypernym": "purchase",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "sell",
+      "plural": "sells",
+      "hypernym": "sale",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "pay",
+      "plural": "pays",
+      "hypernym": "payment",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "carry",
+      "plural": "carrys",
+      "hypernym": "transportation",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "pick",
+      "plural": "picks",
+      "hypernym": "making",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "drop",
+      "plural": "drops",
+      "hypernym": "sphere",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "push",
+      "plural": "pushs",
+      "hypernym": "propulsion",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "pull",
+      "plural": "pulls",
+      "hypernym": "propulsion",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "cut",
+      "plural": "cuts",
+      "hypernym": "share",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "break",
+      "plural": "breaks",
+      "hypernym": "happening",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "build",
+      "plural": "builds",
+      "hypernym": "property",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "leave",
+      "plural": "leaves",
+      "hypernym": "off",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "wait",
+      "plural": "waits",
+      "hypernym": "pause",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "help",
+      "plural": "helps",
+      "hypernym": "activity",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "call",
+      "plural": "calls",
+      "hypernym": "telephone",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "talk",
+      "plural": "talks",
+      "hypernym": "conversation",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "watch",
+      "plural": "watchs",
+      "hypernym": "timepiece",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "red",
+      "plural": "reds",
+      "hypernym": "color",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "blue",
+      "plural": "blues",
+      "hypernym": "color",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "green",
+      "plural": "greens",
+      "hypernym": "color",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "white",
+      "plural": "whites",
+      "hypernym": "person",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "black",
+      "plural": "blacks",
+      "hypernym": "color",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "yellow",
+      "plural": "yellows",
+      "hypernym": "color",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "small",
+      "plural": "smalls",
+      "hypernym": "part",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "short",
+      "plural": "shorts",
+      "hypernym": "tract",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "old",
+      "plural": "olds",
+      "hypernym": "past",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "young",
+      "plural": "youngs",
+      "hypernym": "animal",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "good",
+      "plural": "goods",
+      "hypernym": "advantage",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "bad",
+      "plural": "bads",
+      "hypernym": "quality",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "cold",
+      "plural": "colds",
+      "hypernym": "disease",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "fast",
+      "plural": "fasts",
+      "hypernym": "abstinence",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "dark",
+      "plural": "darks",
+      "hypernym": "illumination",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "high",
+      "plural": "highs",
+      "hypernym": "degree",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "low",
+      "plural": "lows",
+      "hypernym": "mass",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "first",
+      "plural": "firsts",
+      "hypernym": "rank",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "last",
+      "plural": "lasts",
+      "hypernym": "end",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "same",
+      "plural": "sames",
+      "hypernym": "European",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "few",
+      "plural": "fews",
+      "hypernym": "elite",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "rich",
+      "plural": "richs",
+      "hypernym": "people",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "poor",
+      "plural": "poors",
+      "hypernym": "people",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "clean",
+      "plural": "cleans",
+      "hypernym": "weightlift",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "quiet",
+      "plural": "quiets",
+      "hypernym": "calmness",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "still",
+      "plural": "stills",
+      "hypernym": "photograph",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "enough",
+      "plural": "enoughs",
+      "hypernym": "quantity",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "here",
+      "plural": "heres",
+      "hypernym": "location",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "there",
+      "plural": "theres",
+      "hypernym": "location",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "now",
+      "plural": "nows",
+      "hypernym": "present",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "today",
+      "plural": "todays",
+      "hypernym": "present",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "tomorrow",
+      "plural": "tomorrows",
+      "hypernym": "day",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "yesterday",
+      "plural": "yesterdays",
+      "hypernym": "day",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "above",
+      "plural": "aboves",
+      "hypernym": "section",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "behind",
+      "plural": "behinds",
+      "hypernym": "part",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "inside",
+      "plural": "insides",
+      "hypernym": "region",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "outside",
+      "plural": "outsides",
+      "hypernym": "region",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "far",
+      "plural": "fars",
+      "hypernym": "entity",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "down",
+      "plural": "downs",
+      "hypernym": "feather",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "hello",
+      "plural": "hellos",
+      "hypernym": "greeting",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "goodbye",
+      "plural": "goodbyes",
+      "hypernym": "farewell",
+      "source": "wordnet"
+    },
+    {
+      "lemma": "welcome",
+      "plural": "welcomes",
+      "hypernym": "acceptance",
+      "source": "wordnet"
+    }
+  ],
+  "verbs": [
+    {
+      "lemma": "own",
+      "third": "owns",
+      "past": "owned",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "have",
+        "possess"
+      ]
+    },
+    {
+      "lemma": "say",
+      "third": "says",
+      "past": "said",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "tell",
+        "claim",
+        "state"
+      ]
+    },
+    {
+      "lemma": "believe",
+      "third": "believes",
+      "past": "believed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "think",
+        "suppose"
+      ]
+    },
+    {
+      "lemma": "know",
+      "third": "knows",
+      "past": "knew",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "realize",
+        "understand"
+      ]
+    },
+    {
+      "lemma": "tell",
+      "third": "tells",
+      "past": "told",
+      "arity": 3,
+      "source": "wordnet+common",
+      "synonyms": [
+        "inform",
+        "notify"
+      ]
+    },
+    {
+      "lemma": "refuse",
+      "third": "refuses",
+      "past": "refused",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "decline",
+        "reject"
+      ]
+    },
+    {
+      "lemma": "greet",
+      "third": "greets",
+      "past": "greeted",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "welcome",
+        "salute"
+      ]
+    },
+    {
+      "lemma": "calculate",
+      "third": "calculates",
+      "past": "calculated",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "compute",
+        "evaluate"
+      ]
+    },
+    {
+      "lemma": "open",
+      "third": "opens",
+      "past": "opened",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "unlock"
+      ]
+    },
+    {
+      "lemma": "save",
+      "third": "saves",
+      "past": "saved",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "store",
+        "preserve"
+      ]
+    },
+    {
+      "lemma": "update",
+      "third": "updates",
+      "past": "updated",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "modify",
+        "change",
+        "edit"
+      ]
+    },
+    {
+      "lemma": "close",
+      "third": "closes",
+      "past": "closed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "shut",
+        "seal"
+      ]
+    },
+    {
+      "lemma": "enter",
+      "third": "enters",
+      "past": "entered",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "go-into",
+        "access"
+      ]
+    },
+    {
+      "lemma": "admit",
+      "third": "admits",
+      "past": "admited",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "allow",
+        "permit"
+      ]
+    },
+    {
+      "lemma": "log",
+      "third": "logs",
+      "past": "loged",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "record",
+        "register"
+      ]
+    },
+    {
+      "lemma": "check",
+      "third": "checks",
+      "past": "checked",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "verify",
+        "inspect",
+        "validate"
+      ]
+    },
+    {
+      "lemma": "accept",
+      "third": "accepts",
+      "past": "accepted",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "approve",
+        "receive"
+      ]
+    },
+    {
+      "lemma": "like",
+      "third": "likes",
+      "past": "liked",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "enjoy",
+        "appreciate"
+      ]
+    },
+    {
+      "lemma": "pet",
+      "third": "pets",
+      "past": "peted",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "stroke",
+        "pat"
+      ]
+    },
+    {
+      "lemma": "see",
+      "third": "sees",
+      "past": "saw",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "observe",
+        "watch",
+        "notice"
+      ]
+    },
+    {
+      "lemma": "travel",
+      "third": "travels",
+      "past": "traveled",
+      "arity": 1,
+      "source": "common",
+      "synonyms": [
+        "go",
+        "move",
+        "journey"
+      ]
+    },
+    {
+      "lemma": "move",
+      "third": "moves",
+      "past": "moved",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "go",
+        "shift",
+        "transfer"
+      ]
+    },
+    {
+      "lemma": "steal",
+      "third": "steals",
+      "past": "stole",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "take",
+        "rob"
+      ]
+    },
+    {
+      "lemma": "lie",
+      "third": "lies",
+      "past": "lay",
+      "arity": 1,
+      "source": "common",
+      "synonyms": [
+        "deceive",
+        "mislead"
+      ]
+    },
+    {
+      "lemma": "report",
+      "third": "reports",
+      "past": "reported",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "describe",
+        "notify",
+        "announce"
+      ]
+    },
+    {
+      "lemma": "wait",
+      "third": "waits",
+      "past": "waited",
+      "arity": 1,
+      "source": "wordnet+common",
+      "synonyms": [
+        "stay",
+        "remain",
+        "pause"
+      ]
+    },
+    {
+      "lemma": "answer",
+      "third": "answers",
+      "past": "answered",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "reply",
+        "respond",
+        "address"
+      ]
+    },
+    {
+      "lemma": "describe",
+      "third": "describes",
+      "past": "described",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "explain",
+        "depict"
+      ]
+    },
+    {
+      "lemma": "think",
+      "third": "thinks",
+      "past": "thought",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "believe",
+        "consider",
+        "ponder"
+      ]
+    },
+    {
+      "lemma": "want",
+      "third": "wants",
+      "past": "wanted",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "desire",
+        "wish",
+        "need"
+      ]
+    },
+    {
+      "lemma": "need",
+      "third": "needs",
+      "past": "needed",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "require",
+        "demand"
+      ]
+    },
+    {
+      "lemma": "get",
+      "third": "gets",
+      "past": "got",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "obtain",
+        "acquire",
+        "receive"
+      ]
+    },
+    {
+      "lemma": "give",
+      "third": "gives",
+      "past": "gave",
+      "arity": 3,
+      "source": "wordnet+common",
+      "synonyms": [
+        "provide",
+        "offer",
+        "supply"
+      ]
+    },
+    {
+      "lemma": "make",
+      "third": "makes",
+      "past": "made",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "create",
+        "build",
+        "produce",
+        "do"
+      ]
+    },
+    {
+      "lemma": "take",
+      "third": "takes",
+      "past": "took",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "grab",
+        "pick-up",
+        "carry"
+      ]
+    },
+    {
+      "lemma": "send",
+      "third": "sends",
+      "past": "sent",
+      "arity": 3,
+      "source": "wordnet+common",
+      "synonyms": [
+        "transmit",
+        "dispatch",
+        "deliver"
+      ]
+    },
+    {
+      "lemma": "find",
+      "third": "finds",
+      "past": "found",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "discover",
+        "locate",
+        "detect"
+      ]
+    },
+    {
+      "lemma": "show",
+      "third": "shows",
+      "past": "showed",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "display",
+        "reveal",
+        "present"
+      ]
+    },
+    {
+      "lemma": "list",
+      "third": "lists",
+      "past": "listed",
+      "arity": 1,
+      "source": "common",
+      "synonyms": [
+        "enumerate",
+        "display"
+      ]
+    },
+    {
+      "lemma": "read",
+      "third": "reads",
+      "past": "read",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "parse",
+        "scan",
+        "load"
+      ]
+    },
+    {
+      "lemma": "write",
+      "third": "writes",
+      "past": "wrote",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "compose",
+        "produce",
+        "generate"
+      ]
+    },
+    {
+      "lemma": "delete",
+      "third": "deletes",
+      "past": "deleted",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "remove",
+        "erase",
+        "destroy"
+      ]
+    },
+    {
+      "lemma": "create",
+      "third": "creates",
+      "past": "created",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "make",
+        "build",
+        "generate",
+        "produce"
+      ]
+    },
+    {
+      "lemma": "remember",
+      "third": "remembers",
+      "past": "remembered",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "recall",
+        "retain"
+      ]
+    },
+    {
+      "lemma": "forget",
+      "third": "forgets",
+      "past": "forgeted",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "lose",
+        "misplace"
+      ]
+    },
+    {
+      "lemma": "mean",
+      "third": "means",
+      "past": "meant",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "signify",
+        "indicate",
+        "represent"
+      ]
+    },
+    {
+      "lemma": "ask",
+      "third": "asks",
+      "past": "asked",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "query",
+        "request",
+        "question"
+      ]
+    },
+    {
+      "lemma": "help",
+      "third": "helps",
+      "past": "helped",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "assist",
+        "support",
+        "aid"
+      ]
+    },
+    {
+      "lemma": "go",
+      "third": "goes",
+      "past": "went",
+      "arity": 1,
+      "source": "wordnet+common",
+      "synonyms": [
+        "travel",
+        "move",
+        "proceed"
+      ]
+    },
+    {
+      "lemma": "come",
+      "third": "comes",
+      "past": "came",
+      "arity": 1,
+      "source": "wordnet+common",
+      "synonyms": [
+        "arrive",
+        "approach",
+        "appear"
+      ]
+    },
+    {
+      "lemma": "use",
+      "third": "uses",
+      "past": "used",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "employ",
+        "apply",
+        "utilize"
+      ]
+    },
+    {
+      "lemma": "look",
+      "third": "looks",
+      "past": "looked",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "see",
+        "watch",
+        "examine"
+      ]
+    },
+    {
+      "lemma": "seem",
+      "third": "seems",
+      "past": "seemed",
+      "arity": 1,
+      "source": "common",
+      "synonyms": [
+        "appear",
+        "look"
+      ]
+    },
+    {
+      "lemma": "feel",
+      "third": "feels",
+      "past": "felt",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "sense",
+        "experience"
+      ]
+    },
+    {
+      "lemma": "become",
+      "third": "becomes",
+      "past": "became",
+      "arity": 1,
+      "source": "common",
+      "synonyms": [
+        "turn",
+        "grow"
+      ]
+    },
+    {
+      "lemma": "leave",
+      "third": "leaves",
+      "past": "left",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "exit",
+        "depart",
+        "quit"
+      ]
+    },
+    {
+      "lemma": "put",
+      "third": "puts",
+      "past": "put",
+      "arity": 3,
+      "source": "wordnet+common",
+      "synonyms": [
+        "place",
+        "set",
+        "position"
+      ]
+    },
+    {
+      "lemma": "keep",
+      "third": "keeps",
+      "past": "kept",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "maintain",
+        "retain",
+        "preserve"
+      ]
+    },
+    {
+      "lemma": "let",
+      "third": "lets",
+      "past": "let",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "allow",
+        "permit",
+        "enable"
+      ]
+    },
+    {
+      "lemma": "begin",
+      "third": "begins",
+      "past": "began",
+      "arity": 1,
+      "source": "wordnet+common",
+      "synonyms": [
+        "start",
+        "commence",
+        "initiate"
+      ]
+    },
+    {
+      "lemma": "hear",
+      "third": "hears",
+      "past": "heard",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "listen",
+        "perceive"
+      ]
+    },
+    {
+      "lemma": "play",
+      "third": "plays",
+      "past": "played",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "perform",
+        "participate"
+      ]
+    },
+    {
+      "lemma": "run",
+      "third": "runs",
+      "past": "ran",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "execute",
+        "operate",
+        "manage"
+      ]
+    },
+    {
+      "lemma": "live",
+      "third": "lives",
+      "past": "lived",
+      "arity": 1,
+      "source": "common",
+      "synonyms": [
+        "exist",
+        "reside",
+        "stay"
+      ]
+    },
+    {
+      "lemma": "hold",
+      "third": "holds",
+      "past": "held",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "contain",
+        "keep",
+        "carry"
+      ]
+    },
+    {
+      "lemma": "bring",
+      "third": "brings",
+      "past": "brought",
+      "arity": 3,
+      "source": "wordnet+common",
+      "synonyms": [
+        "carry",
+        "transport",
+        "deliver"
+      ]
+    },
+    {
+      "lemma": "happen",
+      "third": "happens",
+      "past": "happened",
+      "arity": 1,
+      "source": "common",
+      "synonyms": [
+        "occur",
+        "arise",
+        "take-place"
+      ]
+    },
+    {
+      "lemma": "turn",
+      "third": "turns",
+      "past": "turned",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "rotate",
+        "change",
+        "become"
+      ]
+    },
+    {
+      "lemma": "start",
+      "third": "starts",
+      "past": "started",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "begin",
+        "launch",
+        "initiate"
+      ]
+    },
+    {
+      "lemma": "end",
+      "third": "ends",
+      "past": "ended",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "finish",
+        "complete",
+        "stop",
+        "terminate"
+      ]
+    },
+    {
+      "lemma": "follow",
+      "third": "follows",
+      "past": "followed",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "track",
+        "pursue",
+        "obey"
+      ]
+    },
+    {
+      "lemma": "stop",
+      "third": "stops",
+      "past": "stoped",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "halt",
+        "pause",
+        "cease",
+        "terminate"
+      ]
+    },
+    {
+      "lemma": "set",
+      "third": "sets",
+      "past": "seted",
+      "arity": 3,
+      "source": "common",
+      "synonyms": [
+        "configure",
+        "assign",
+        "place"
+      ]
+    },
+    {
+      "lemma": "try",
+      "third": "tries",
+      "past": "tried",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "attempt",
+        "test",
+        "test"
+      ]
+    },
+    {
+      "lemma": "call",
+      "third": "calls",
+      "past": "called",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "phone",
+        "contact",
+        "name"
+      ]
+    },
+    {
+      "lemma": "add",
+      "third": "adds",
+      "past": "added",
+      "arity": 3,
+      "source": "common",
+      "synonyms": [
+        "append",
+        "insert",
+        "include",
+        "attach"
+      ]
+    },
+    {
+      "lemma": "remove",
+      "third": "removes",
+      "past": "removed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "delete",
+        "eliminate",
+        "exclude"
+      ]
+    },
+    {
+      "lemma": "return",
+      "third": "returns",
+      "past": "returned",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "give-back",
+        "restore",
+        "respond"
+      ]
+    },
+    {
+      "lemma": "build",
+      "third": "builds",
+      "past": "built",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "construct",
+        "create",
+        "compile"
+      ]
+    },
+    {
+      "lemma": "work",
+      "third": "works",
+      "past": "worked",
+      "arity": 1,
+      "source": "wordnet+common",
+      "synonyms": [
+        "operate",
+        "function",
+        "labor"
+      ]
+    },
+    {
+      "lemma": "change",
+      "third": "changes",
+      "past": "changed",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "modify",
+        "alter",
+        "transform",
+        "adjust"
+      ]
+    },
+    {
+      "lemma": "enable",
+      "third": "enables",
+      "past": "enabled",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "activate",
+        "turn-on",
+        "allow"
+      ]
+    },
+    {
+      "lemma": "disable",
+      "third": "disables",
+      "past": "disabled",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "deactivate",
+        "turn-off",
+        "block"
+      ]
+    },
+    {
+      "lemma": "buy",
+      "third": "buys",
+      "past": "bought",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "purchase",
+        "acquire"
+      ]
+    },
+    {
+      "lemma": "sell",
+      "third": "sells",
+      "past": "sold",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "trade",
+        "offer"
+      ]
+    },
+    {
+      "lemma": "pay",
+      "third": "pays",
+      "past": "paid",
+      "arity": 3,
+      "source": "wordnet+common",
+      "synonyms": [
+        "compensate",
+        "fund",
+        "cover"
+      ]
+    },
+    {
+      "lemma": "eat",
+      "third": "eats",
+      "past": "ate",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "consume",
+        "feed"
+      ]
+    },
+    {
+      "lemma": "drink",
+      "third": "drinks",
+      "past": "drinked",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "consume",
+        "ingest"
+      ]
+    },
+    {
+      "lemma": "sleep",
+      "third": "sleeps",
+      "past": "slept",
+      "arity": 1,
+      "source": "wordnet+common",
+      "synonyms": [
+        "rest",
+        "nap"
+      ]
+    },
+    {
+      "lemma": "walk",
+      "third": "walks",
+      "past": "walked",
+      "arity": 1,
+      "source": "wordnet+common",
+      "synonyms": [
+        "go",
+        "step",
+        "stride"
+      ]
+    },
+    {
+      "lemma": "stand",
+      "third": "stands",
+      "past": "stood",
+      "arity": 1,
+      "source": "wordnet+common",
+      "synonyms": [
+        "wait",
+        "remain",
+        "stay"
+      ]
+    },
+    {
+      "lemma": "sit",
+      "third": "sits",
+      "past": "sat",
+      "arity": 1,
+      "source": "wordnet+common",
+      "synonyms": [
+        "rest",
+        "settle"
+      ]
+    },
+    {
+      "lemma": "fall",
+      "third": "falls",
+      "past": "fell",
+      "arity": 1,
+      "source": "wordnet+common",
+      "synonyms": [
+        "drop",
+        "descend",
+        "collapse"
+      ]
+    },
+    {
+      "lemma": "jump",
+      "third": "jumps",
+      "past": "jumped",
+      "arity": 1,
+      "source": "common",
+      "synonyms": [
+        "leap",
+        "hop"
+      ]
+    },
+    {
+      "lemma": "push",
+      "third": "pushes",
+      "past": "pushed",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "press",
+        "force",
+        "shove"
+      ]
+    },
+    {
+      "lemma": "pull",
+      "third": "pulls",
+      "past": "pulled",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "draw",
+        "tug",
+        "drag"
+      ]
+    },
+    {
+      "lemma": "hit",
+      "third": "hits",
+      "past": "hited",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "strike",
+        "beat",
+        "attack"
+      ]
+    },
+    {
+      "lemma": "break",
+      "third": "breaks",
+      "past": "broke",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "destroy",
+        "smash",
+        "crack"
+      ]
+    },
+    {
+      "lemma": "kill",
+      "third": "kills",
+      "past": "killed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "destroy",
+        "eliminate"
+      ]
+    },
+    {
+      "lemma": "die",
+      "third": "dies",
+      "past": "died",
+      "arity": 1,
+      "source": "common",
+      "synonyms": [
+        "perish",
+        "expire"
+      ]
+    },
+    {
+      "lemma": "grow",
+      "third": "grows",
+      "past": "growed",
+      "arity": 1,
+      "source": "wordnet+common",
+      "synonyms": [
+        "expand",
+        "increase",
+        "develop"
+      ]
+    },
+    {
+      "lemma": "learn",
+      "third": "learns",
+      "past": "learned",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "study",
+        "understand",
+        "acquire"
+      ]
+    },
+    {
+      "lemma": "teach",
+      "third": "teaches",
+      "past": "teached",
+      "arity": 3,
+      "source": "wordnet+common",
+      "synonyms": [
+        "instruct",
+        "educate",
+        "train"
+      ]
+    },
+    {
+      "lemma": "speak",
+      "third": "speaks",
+      "past": "speaked",
+      "arity": 1,
+      "source": "wordnet+common",
+      "synonyms": [
+        "talk",
+        "say",
+        "communicate"
+      ]
+    },
+    {
+      "lemma": "listen",
+      "third": "listens",
+      "past": "listened",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "hear",
+        "attend"
+      ]
+    },
+    {
+      "lemma": "watch",
+      "third": "watches",
+      "past": "watched",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "observe",
+        "monitor",
+        "view"
+      ]
+    },
+    {
+      "lemma": "understand",
+      "third": "understands",
+      "past": "understanded",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "know",
+        "grasp",
+        "comprehend"
+      ]
+    },
+    {
+      "lemma": "care",
+      "third": "cares",
+      "past": "cared",
+      "arity": 1,
+      "source": "common",
+      "synonyms": [
+        "mind",
+        "worry-about",
+        "be-concerned"
+      ]
+    },
+    {
+      "lemma": "love",
+      "third": "loves",
+      "past": "loved",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "adore",
+        "cherish"
+      ]
+    },
+    {
+      "lemma": "hate",
+      "third": "hates",
+      "past": "hated",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "dislike",
+        "despise"
+      ]
+    },
+    {
+      "lemma": "agree",
+      "third": "agrees",
+      "past": "agreed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "approve",
+        "accept",
+        "consent"
+      ]
+    },
+    {
+      "lemma": "disagree",
+      "third": "disagrees",
+      "past": "disagreed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "object",
+        "oppose",
+        "refuse"
+      ]
+    },
+    {
+      "lemma": "decide",
+      "third": "decides",
+      "past": "decided",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "choose",
+        "determine",
+        "resolve"
+      ]
+    },
+    {
+      "lemma": "choose",
+      "third": "chooses",
+      "past": "choosed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "select",
+        "pick",
+        "opt"
+      ]
+    },
+    {
+      "lemma": "allow",
+      "third": "allows",
+      "past": "allowed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "permit",
+        "let",
+        "enable"
+      ]
+    },
+    {
+      "lemma": "block",
+      "third": "blocks",
+      "past": "blocked",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "prevent",
+        "stop",
+        "restrict"
+      ]
+    },
+    {
+      "lemma": "protect",
+      "third": "protects",
+      "past": "protected",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "guard",
+        "secure",
+        "defend"
+      ]
+    },
+    {
+      "lemma": "attack",
+      "third": "attacks",
+      "past": "attacked",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "assault",
+        "target"
+      ]
+    },
+    {
+      "lemma": "fight",
+      "third": "fights",
+      "past": "fighted",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "battle",
+        "struggle",
+        "oppose"
+      ]
+    },
+    {
+      "lemma": "win",
+      "third": "wins",
+      "past": "won",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "succeed",
+        "defeat",
+        "beat"
+      ]
+    },
+    {
+      "lemma": "lose",
+      "third": "loses",
+      "past": "lost",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "fail",
+        "drop",
+        "miss"
+      ]
+    },
+    {
+      "lemma": "fail",
+      "third": "fails",
+      "past": "failed",
+      "arity": 1,
+      "source": "common",
+      "synonyms": [
+        "crash",
+        "break",
+        "error"
+      ]
+    },
+    {
+      "lemma": "pass",
+      "third": "passes",
+      "past": "passed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "proceed",
+        "succeed",
+        "transfer"
+      ]
+    },
+    {
+      "lemma": "test",
+      "third": "tests",
+      "past": "tested",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "evaluate",
+        "check",
+        "verify"
+      ]
+    },
+    {
+      "lemma": "manage",
+      "third": "manages",
+      "past": "managed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "handle",
+        "control",
+        "administer"
+      ]
+    },
+    {
+      "lemma": "control",
+      "third": "controls",
+      "past": "controled",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "manage",
+        "regulate",
+        "operate"
+      ]
+    },
+    {
+      "lemma": "contain",
+      "third": "contains",
+      "past": "contained",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "hold",
+        "include",
+        "store"
+      ]
+    },
+    {
+      "lemma": "produce",
+      "third": "produces",
+      "past": "produced",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "generate",
+        "create",
+        "output"
+      ]
+    },
+    {
+      "lemma": "apply",
+      "third": "applies",
+      "past": "applied",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "use",
+        "employ",
+        "submit"
+      ]
+    },
+    {
+      "lemma": "search",
+      "third": "searches",
+      "past": "searched",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "look-for",
+        "query",
+        "find"
+      ]
+    },
+    {
+      "lemma": "connect",
+      "third": "connects",
+      "past": "connected",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "link",
+        "join",
+        "attach"
+      ]
+    },
+    {
+      "lemma": "disconnect",
+      "third": "disconnects",
+      "past": "disconnected",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "unlink",
+        "detach",
+        "remove"
+      ]
+    },
+    {
+      "lemma": "restart",
+      "third": "restarts",
+      "past": "restarted",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "reboot",
+        "reset",
+        "reload"
+      ]
+    },
+    {
+      "lemma": "reset",
+      "third": "resets",
+      "past": "reseted",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "clear",
+        "restore",
+        "initialize"
+      ]
+    },
+    {
+      "lemma": "install",
+      "third": "installs",
+      "past": "installed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "deploy",
+        "setup",
+        "configure"
+      ]
+    },
+    {
+      "lemma": "deploy",
+      "third": "deploys",
+      "past": "deployed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "release",
+        "launch",
+        "publish"
+      ]
+    },
+    {
+      "lemma": "configure",
+      "third": "configures",
+      "past": "configured",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "set",
+        "adjust",
+        "setup"
+      ]
+    },
+    {
+      "lemma": "upload",
+      "third": "uploads",
+      "past": "uploaded",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "send",
+        "transfer",
+        "push"
+      ]
+    },
+    {
+      "lemma": "download",
+      "third": "downloads",
+      "past": "downloaded",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "fetch",
+        "pull",
+        "receive"
+      ]
+    },
+    {
+      "lemma": "print",
+      "third": "prints",
+      "past": "printed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "output",
+        "display",
+        "render"
+      ]
+    },
+    {
+      "lemma": "export",
+      "third": "exports",
+      "past": "exported",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "save",
+        "output",
+        "generate"
+      ]
+    },
+    {
+      "lemma": "import",
+      "third": "imports",
+      "past": "imported",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "load",
+        "read",
+        "receive"
+      ]
+    },
+    {
+      "lemma": "merge",
+      "third": "merges",
+      "past": "merged",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "combine",
+        "join",
+        "integrate"
+      ]
+    },
+    {
+      "lemma": "split",
+      "third": "splits",
+      "past": "splited",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "divide",
+        "separate",
+        "partition"
+      ]
+    },
+    {
+      "lemma": "sort",
+      "third": "sorts",
+      "past": "sorted",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "order",
+        "arrange",
+        "rank"
+      ]
+    },
+    {
+      "lemma": "filter",
+      "third": "filters",
+      "past": "filtered",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "select",
+        "exclude",
+        "restrict"
+      ]
+    },
+    {
+      "lemma": "process",
+      "third": "processes",
+      "past": "processed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "handle",
+        "execute",
+        "compute"
+      ]
+    },
+    {
+      "lemma": "execute",
+      "third": "executes",
+      "past": "executed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "run",
+        "perform",
+        "do"
+      ]
+    },
+    {
+      "lemma": "perform",
+      "third": "performs",
+      "past": "performed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "do",
+        "execute",
+        "run"
+      ]
+    },
+    {
+      "lemma": "compute",
+      "third": "computes",
+      "past": "computed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "calculate",
+        "process",
+        "determine"
+      ]
+    },
+    {
+      "lemma": "evaluate",
+      "third": "evaluates",
+      "past": "evaluated",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "assess",
+        "test",
+        "judge"
+      ]
+    },
+    {
+      "lemma": "assign",
+      "third": "assigns",
+      "past": "assigned",
+      "arity": 3,
+      "source": "common",
+      "synonyms": [
+        "give",
+        "set",
+        "allocate"
+      ]
+    },
+    {
+      "lemma": "release",
+      "third": "releases",
+      "past": "released",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "free",
+        "publish",
+        "launch"
+      ]
+    },
+    {
+      "lemma": "lock",
+      "third": "locks",
+      "past": "locked",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "secure",
+        "block",
+        "restrict"
+      ]
+    },
+    {
+      "lemma": "unlock",
+      "third": "unlocks",
+      "past": "unlocked",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "open",
+        "enable",
+        "allow"
+      ]
+    },
+    {
+      "lemma": "register",
+      "third": "registers",
+      "past": "registered",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "add",
+        "record",
+        "signup"
+      ]
+    },
+    {
+      "lemma": "login",
+      "third": "logins",
+      "past": "logined",
+      "arity": 1,
+      "source": "common",
+      "synonyms": [
+        "authenticate",
+        "access",
+        "signin"
+      ]
+    },
+    {
+      "lemma": "logout",
+      "third": "logouts",
+      "past": "logouted",
+      "arity": 1,
+      "source": "common",
+      "synonyms": [
+        "signout",
+        "exit",
+        "disconnect"
+      ]
+    },
+    {
+      "lemma": "subscribe",
+      "third": "subscribes",
+      "past": "subscribed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "register",
+        "enroll",
+        "join"
+      ]
+    },
+    {
+      "lemma": "unsubscribe",
+      "third": "unsubscribes",
+      "past": "unsubscribed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "cancel",
+        "leave",
+        "remove"
+      ]
+    },
+    {
+      "lemma": "notify",
+      "third": "notifies",
+      "past": "notified",
+      "arity": 3,
+      "source": "common",
+      "synonyms": [
+        "alert",
+        "inform",
+        "warn"
+      ]
+    },
+    {
+      "lemma": "ping",
+      "third": "pings",
+      "past": "pinged",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "check",
+        "test",
+        "probe"
+      ]
+    },
+    {
+      "lemma": "reboot",
+      "third": "reboots",
+      "past": "rebooted",
+      "arity": 1,
+      "source": "common",
+      "synonyms": [
+        "restart",
+        "reset",
+        "reload"
+      ]
+    },
+    {
+      "lemma": "groom",
+      "third": "grooms",
+      "past": "groomed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "clean",
+        "brush",
+        "maintain"
+      ]
+    },
+    {
+      "lemma": "ski",
+      "third": "skis",
+      "past": "skied",
+      "arity": 1,
+      "source": "common",
+      "synonyms": [
+        "slide",
+        "glide"
+      ]
+    },
+    {
+      "lemma": "dive",
+      "third": "dives",
+      "past": "dived",
+      "arity": 1,
+      "source": "common",
+      "synonyms": [
+        "plunge",
+        "descend"
+      ]
+    },
+    {
+      "lemma": "reject",
+      "third": "rejects",
+      "past": "rejected",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "refuse",
+        "deny",
+        "decline"
+      ]
+    },
+    {
+      "lemma": "approve",
+      "third": "approves",
+      "past": "approved",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "accept",
+        "confirm",
+        "authorize"
+      ]
+    },
+    {
+      "lemma": "authorize",
+      "third": "authorizes",
+      "past": "authorized",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "permit",
+        "allow",
+        "grant"
+      ]
+    },
+    {
+      "lemma": "revoke",
+      "third": "revokes",
+      "past": "revoked",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "remove",
+        "cancel",
+        "deny"
+      ]
+    },
+    {
+      "lemma": "verify",
+      "third": "verifies",
+      "past": "verified",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "confirm",
+        "check",
+        "validate"
+      ]
+    },
+    {
+      "lemma": "confirm",
+      "third": "confirms",
+      "past": "confirmed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "verify",
+        "acknowledge",
+        "accept"
+      ]
+    },
+    {
+      "lemma": "acknowledge",
+      "third": "acknowledges",
+      "past": "acknowledged",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "confirm",
+        "recognize",
+        "admit"
+      ]
+    },
+    {
+      "lemma": "apologize-to",
+      "third": "apologizes",
+      "past": "apologized",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "sorry",
+        "regret"
+      ]
+    },
+    {
+      "lemma": "looks-for",
+      "third": "lookses",
+      "past": "looksed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "search",
+        "seek",
+        "find"
+      ]
+    },
+    {
+      "lemma": "knocks-out",
+      "third": "knockses",
+      "past": "knocksed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "defeat",
+        "eliminate"
+      ]
+    },
+    {
+      "lemma": "pays-more-than",
+      "third": "payses",
+      "past": "paysed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "exceed",
+        "surpass"
+      ]
+    },
+    {
+      "lemma": "care-about",
+      "third": "cares",
+      "past": "cared",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "value",
+        "prioritize"
+      ]
+    },
+    {
+      "lemma": "look-for",
+      "third": "looks",
+      "past": "looked",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "search",
+        "seek"
+      ]
+    },
+    {
+      "lemma": "go-into",
+      "third": "goes",
+      "past": "goed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "enter",
+        "access"
+      ]
+    },
+    {
+      "lemma": "pick-up",
+      "third": "picks",
+      "past": "picked",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "collect",
+        "grab",
+        "take"
+      ]
+    },
+    {
+      "lemma": "give-back",
+      "third": "gives",
+      "past": "gived",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "return",
+        "restore"
+      ]
+    },
+    {
+      "lemma": "turn-on",
+      "third": "turns",
+      "past": "turned",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "enable",
+        "activate",
+        "start"
+      ]
+    },
+    {
+      "lemma": "turn-off",
+      "third": "turns",
+      "past": "turned",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "disable",
+        "deactivate",
+        "stop"
+      ]
+    },
+    {
+      "lemma": "log-in",
+      "third": "logs",
+      "past": "loged",
+      "arity": 1,
+      "source": "common",
+      "synonyms": [
+        "authenticate",
+        "access"
+      ]
+    },
+    {
+      "lemma": "log-out",
+      "third": "logs",
+      "past": "loged",
+      "arity": 1,
+      "source": "common",
+      "synonyms": [
+        "exit",
+        "disconnect"
+      ]
+    },
+    {
+      "lemma": "sign-in",
+      "third": "signs",
+      "past": "signed",
+      "arity": 1,
+      "source": "common",
+      "synonyms": [
+        "login",
+        "authenticate"
+      ]
+    },
+    {
+      "lemma": "sign-out",
+      "third": "signs",
+      "past": "signed",
+      "arity": 1,
+      "source": "common",
+      "synonyms": [
+        "logout",
+        "exit"
+      ]
+    },
+    {
+      "lemma": "sign-up",
+      "third": "signs",
+      "past": "signed",
+      "arity": 1,
+      "source": "common",
+      "synonyms": [
+        "register",
+        "enroll"
+      ]
+    },
+    {
+      "lemma": "check-in",
+      "third": "checks",
+      "past": "checked",
+      "arity": 1,
+      "source": "common",
+      "synonyms": [
+        "arrive",
+        "register"
+      ]
+    },
+    {
+      "lemma": "check-out",
+      "third": "checks",
+      "past": "checked",
+      "arity": 1,
+      "source": "common",
+      "synonyms": [
+        "leave",
+        "depart",
+        "review"
+      ]
+    },
+    {
+      "lemma": "back-up",
+      "third": "backs",
+      "past": "backed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "save",
+        "copy",
+        "archive"
+      ]
+    },
+    {
+      "lemma": "set-up",
+      "third": "sets",
+      "past": "seted",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "configure",
+        "initialize",
+        "install"
+      ]
+    },
+    {
+      "lemma": "clean-up",
+      "third": "cleans",
+      "past": "cleaned",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "clear",
+        "remove",
+        "delete"
+      ]
+    },
+    {
+      "lemma": "sum-up",
+      "third": "sums",
+      "past": "sumed",
+      "arity": 2,
+      "source": "common",
+      "synonyms": [
+        "summarize",
+        "total"
+      ]
+    },
+    {
+      "lemma": "wake",
+      "third": "wakes",
+      "past": "waked",
+      "arity": 2,
+      "source": "wordnet+common"
+    },
+    {
+      "lemma": "carry",
+      "third": "carries",
+      "past": "carried",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "transport"
+      ]
+    },
+    {
+      "lemma": "pick",
+      "third": "picks",
+      "past": "picked",
+      "arity": 2,
+      "source": "wordnet+common"
+    },
+    {
+      "lemma": "drop",
+      "third": "drops",
+      "past": "droped",
+      "arity": 2,
+      "source": "wordnet+common"
+    },
+    {
+      "lemma": "cut",
+      "third": "cuts",
+      "past": "cuted",
+      "arity": 2,
+      "source": "wordnet+common"
+    },
+    {
+      "lemma": "talk",
+      "third": "talks",
+      "past": "talked",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "speak"
+      ]
+    },
+    {
+      "lemma": "people",
+      "third": "peoples",
+      "past": "peopled",
+      "arity": 2,
+      "source": "wordnet+common"
+    },
+    {
+      "lemma": "man",
+      "third": "mans",
+      "past": "maned",
+      "arity": 2,
+      "source": "wordnet+common"
+    },
+    {
+      "lemma": "baby",
+      "third": "babies",
+      "past": "babied",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "pamper",
+        "featherbed",
+        "cosset"
+      ]
+    },
+    {
+      "lemma": "name",
+      "third": "names",
+      "past": "named",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "call"
+      ]
+    },
+    {
+      "lemma": "house",
+      "third": "houses",
+      "past": "housed",
+      "arity": 2,
+      "source": "wordnet+common"
+    },
+    {
+      "lemma": "room",
+      "third": "rooms",
+      "past": "roomed",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "board"
+      ]
+    },
+    {
+      "lemma": "table",
+      "third": "tables",
+      "past": "tabled",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "postpone",
+        "prorogue",
+        "shelve"
+      ]
+    },
+    {
+      "lemma": "chair",
+      "third": "chairs",
+      "past": "chaired",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "chairman"
+      ]
+    },
+    {
+      "lemma": "bed",
+      "third": "beds",
+      "past": "beded",
+      "arity": 2,
+      "source": "wordnet+common"
+    },
+    {
+      "lemma": "floor",
+      "third": "floors",
+      "past": "floored",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "shock"
+      ]
+    },
+    {
+      "lemma": "wall",
+      "third": "walls",
+      "past": "walled",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "palisade",
+        "fence",
+        "surround"
+      ]
+    },
+    {
+      "lemma": "water",
+      "third": "waters",
+      "past": "watered",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "irrigate"
+      ]
+    },
+    {
+      "lemma": "bread",
+      "third": "breads",
+      "past": "breaded",
+      "arity": 2,
+      "source": "wordnet+common"
+    },
+    {
+      "lemma": "milk",
+      "third": "milks",
+      "past": "milked",
+      "arity": 2,
+      "source": "wordnet+common"
+    },
+    {
+      "lemma": "dog",
+      "third": "dogs",
+      "past": "doged",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "chase",
+        "trail",
+        "tail"
+      ]
+    },
+    {
+      "lemma": "cat",
+      "third": "cats",
+      "past": "cated",
+      "arity": 2,
+      "source": "wordnet+common"
+    },
+    {
+      "lemma": "bird",
+      "third": "birds",
+      "past": "birded",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "birdwatch"
+      ]
+    },
+    {
+      "lemma": "fish",
+      "third": "fishes",
+      "past": "fished",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "angle"
+      ]
+    },
+    {
+      "lemma": "tree",
+      "third": "trees",
+      "past": "treed",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "corner"
+      ]
+    },
+    {
+      "lemma": "flower",
+      "third": "flowers",
+      "past": "flowered",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "bloom",
+        "blossom"
+      ]
+    },
+    {
+      "lemma": "place",
+      "third": "places",
+      "past": "placed",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "put",
+        "set",
+        "pose"
+      ]
+    },
+    {
+      "lemma": "school",
+      "third": "schools",
+      "past": "schooled",
+      "arity": 2,
+      "source": "wordnet+common"
+    },
+    {
+      "lemma": "book",
+      "third": "books",
+      "past": "booked",
+      "arity": 2,
+      "source": "wordnet+common"
+    },
+    {
+      "lemma": "paper",
+      "third": "papers",
+      "past": "papered",
+      "arity": 2,
+      "source": "wordnet+common"
+    },
+    {
+      "lemma": "hand",
+      "third": "hands",
+      "past": "handed",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "pass",
+        "reach",
+        "give"
+      ]
+    },
+    {
+      "lemma": "head",
+      "third": "heads",
+      "past": "headed",
+      "arity": 2,
+      "source": "wordnet+common"
+    },
+    {
+      "lemma": "eye",
+      "third": "eyes",
+      "past": "eyed",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "eyeball"
+      ]
+    },
+    {
+      "lemma": "face",
+      "third": "faces",
+      "past": "faced",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "confront"
+      ]
+    },
+    {
+      "lemma": "body",
+      "third": "bodies",
+      "past": "bodied",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "personify"
+      ]
+    },
+    {
+      "lemma": "mind",
+      "third": "minds",
+      "past": "minded",
+      "arity": 2,
+      "source": "wordnet+common"
+    },
+    {
+      "lemma": "time",
+      "third": "times",
+      "past": "timed",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "clock"
+      ]
+    },
+    {
+      "lemma": "sun",
+      "third": "suns",
+      "past": "suned",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "sunbathe"
+      ]
+    },
+    {
+      "lemma": "moon",
+      "third": "moons",
+      "past": "mooned",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "daydream"
+      ]
+    },
+    {
+      "lemma": "star",
+      "third": "stars",
+      "past": "stared",
+      "arity": 2,
+      "source": "wordnet+common"
+    },
+    {
+      "lemma": "sky",
+      "third": "skies",
+      "past": "skied",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "flip",
+        "toss",
+        "pitch"
+      ]
+    },
+    {
+      "lemma": "rain",
+      "third": "rains",
+      "past": "rained",
+      "arity": 2,
+      "source": "wordnet+common"
+    },
+    {
+      "lemma": "wind",
+      "third": "winds",
+      "past": "winded",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "weave",
+        "thread",
+        "meander"
+      ]
+    },
+    {
+      "lemma": "fire",
+      "third": "fires",
+      "past": "fired",
+      "arity": 2,
+      "source": "wordnet+common"
+    },
+    {
+      "lemma": "earth",
+      "third": "earths",
+      "past": "earthed",
+      "arity": 2,
+      "source": "wordnet+common"
+    },
+    {
+      "lemma": "color",
+      "third": "colors",
+      "past": "colored",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "colorize",
+        "colorise",
+        "colourise"
+      ]
+    },
+    {
+      "lemma": "blue",
+      "third": "blues",
+      "past": "blued",
+      "arity": 2,
+      "source": "wordnet+common"
+    },
+    {
+      "lemma": "green",
+      "third": "greens",
+      "past": "greened",
+      "arity": 2,
+      "source": "wordnet+common"
+    },
+    {
+      "lemma": "white",
+      "third": "whites",
+      "past": "whited",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "whiten"
+      ]
+    },
+    {
+      "lemma": "black",
+      "third": "blacks",
+      "past": "blacked",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "blacken",
+        "melanize",
+        "melanise"
+      ]
+    },
+    {
+      "lemma": "yellow",
+      "third": "yellows",
+      "past": "yellowed",
+      "arity": 2,
+      "source": "wordnet+common"
+    },
+    {
+      "lemma": "long",
+      "third": "longs",
+      "past": "longed",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "hanker",
+        "yearn"
+      ]
+    },
+    {
+      "lemma": "slow",
+      "third": "slows",
+      "past": "slowed",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "decelerate",
+        "retard"
+      ]
+    },
+    {
+      "lemma": "dirty",
+      "third": "dirties",
+      "past": "dirtied",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "soil",
+        "begrime",
+        "grime"
+      ]
+    },
+    {
+      "lemma": "near",
+      "third": "nears",
+      "past": "neared",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "approach"
+      ]
+    },
+    {
+      "lemma": "up",
+      "third": "ups",
+      "past": "uped",
+      "arity": 2,
+      "source": "wordnet+common"
+    },
+    {
+      "lemma": "front",
+      "third": "fronts",
+      "past": "fronted",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "look",
+        "face"
+      ]
+    },
+    {
+      "lemma": "please",
+      "third": "pleases",
+      "past": "pleased",
+      "arity": 2,
+      "source": "wordnet+common",
+      "synonyms": [
+        "delight"
+      ]
+    },
+    {
+      "lemma": "welcome",
+      "third": "welcomes",
+      "past": "welcomed",
+      "arity": 2,
+      "source": "wordnet+common"
+    }
+  ],
+  "adjectives": [
+    {
+      "lemma": "good",
+      "comparative": "better"
+    },
+    {
+      "lemma": "bad",
+      "comparative": "worse"
+    },
+    {
+      "lemma": "big",
+      "comparative": "bigger"
+    },
+    {
+      "lemma": "small",
+      "comparative": "smaller"
+    },
+    {
+      "lemma": "large",
+      "comparative": "larger"
+    },
+    {
+      "lemma": "little",
+      "comparative": "less"
+    },
+    {
+      "lemma": "great",
+      "comparative": "greater"
+    },
+    {
+      "lemma": "high",
+      "comparative": "higher"
+    },
+    {
+      "lemma": "low",
+      "comparative": "lower"
+    },
+    {
+      "lemma": "long",
+      "comparative": "longer"
+    },
+    {
+      "lemma": "short",
+      "comparative": "shorter"
+    },
+    {
+      "lemma": "old",
+      "comparative": "older"
+    },
+    {
+      "lemma": "new",
+      "comparative": "newer"
+    },
+    {
+      "lemma": "young",
+      "comparative": "younger"
+    },
+    {
+      "lemma": "early",
+      "comparative": "earlier"
+    },
+    {
+      "lemma": "late",
+      "comparative": "later"
+    },
+    {
+      "lemma": "hard",
+      "comparative": "harder"
+    },
+    {
+      "lemma": "easy",
+      "comparative": "easier"
+    },
+    {
+      "lemma": "fast",
+      "comparative": "faster"
+    },
+    {
+      "lemma": "slow",
+      "comparative": "slower"
+    },
+    {
+      "lemma": "hot",
+      "comparative": "hotter"
+    },
+    {
+      "lemma": "cold",
+      "comparative": "colder"
+    },
+    {
+      "lemma": "warm",
+      "comparative": "warmer"
+    },
+    {
+      "lemma": "cool",
+      "comparative": "cooler"
+    },
+    {
+      "lemma": "full",
+      "comparative": "fuller"
+    },
+    {
+      "lemma": "empty",
+      "comparative": "emptier"
+    },
+    {
+      "lemma": "open",
+      "comparative": "wider"
+    },
+    {
+      "lemma": "close",
+      "comparative": "closer"
+    },
+    {
+      "lemma": "right",
+      "comparative": "righter"
+    },
+    {
+      "lemma": "wrong",
+      "comparative": "more-wrong"
+    },
+    {
+      "lemma": "true",
+      "comparative": "truer"
+    },
+    {
+      "lemma": "false",
+      "comparative": "more-false"
+    },
+    {
+      "lemma": "real",
+      "comparative": "more-real"
+    },
+    {
+      "lemma": "free",
+      "comparative": "freer"
+    },
+    {
+      "lemma": "sure",
+      "comparative": "surer"
+    },
+    {
+      "lemma": "clear",
+      "comparative": "clearer"
+    },
+    {
+      "lemma": "dark",
+      "comparative": "darker"
+    },
+    {
+      "lemma": "light",
+      "comparative": "lighter"
+    },
+    {
+      "lemma": "white",
+      "comparative": "whiter"
+    },
+    {
+      "lemma": "black",
+      "comparative": "blacker"
+    },
+    {
+      "lemma": "red",
+      "comparative": "redder"
+    },
+    {
+      "lemma": "blue",
+      "comparative": "bluer"
+    },
+    {
+      "lemma": "green",
+      "comparative": "greener"
+    },
+    {
+      "lemma": "yellow",
+      "comparative": "yellower"
+    },
+    {
+      "lemma": "wide",
+      "comparative": "wider"
+    },
+    {
+      "lemma": "narrow",
+      "comparative": "narrower"
+    },
+    {
+      "lemma": "deep",
+      "comparative": "deeper"
+    },
+    {
+      "lemma": "shallow",
+      "comparative": "shallower"
+    },
+    {
+      "lemma": "rich",
+      "comparative": "richer"
+    },
+    {
+      "lemma": "poor",
+      "comparative": "poorer"
+    },
+    {
+      "lemma": "strong",
+      "comparative": "stronger"
+    },
+    {
+      "lemma": "weak",
+      "comparative": "weaker"
+    },
+    {
+      "lemma": "thick",
+      "comparative": "thicker"
+    },
+    {
+      "lemma": "thin",
+      "comparative": "thinner"
+    },
+    {
+      "lemma": "heavy",
+      "comparative": "heavier"
+    },
+    {
+      "lemma": "sharp",
+      "comparative": "sharper"
+    },
+    {
+      "lemma": "soft",
+      "comparative": "softer"
+    },
+    {
+      "lemma": "smooth",
+      "comparative": "smoother"
+    },
+    {
+      "lemma": "rough",
+      "comparative": "rougher"
+    },
+    {
+      "lemma": "clean",
+      "comparative": "cleaner"
+    },
+    {
+      "lemma": "dirty",
+      "comparative": "dirtier"
+    },
+    {
+      "lemma": "wet",
+      "comparative": "wetter"
+    },
+    {
+      "lemma": "dry",
+      "comparative": "drier"
+    },
+    {
+      "lemma": "safe",
+      "comparative": "safer"
+    },
+    {
+      "lemma": "dangerous",
+      "comparative": "more-dangerous"
+    },
+    {
+      "lemma": "healthy",
+      "comparative": "healthier"
+    },
+    {
+      "lemma": "sick",
+      "comparative": "sicker"
+    },
+    {
+      "lemma": "happy",
+      "comparative": "happier"
+    },
+    {
+      "lemma": "sad",
+      "comparative": "sadder"
+    },
+    {
+      "lemma": "angry",
+      "comparative": "angrier"
+    },
+    {
+      "lemma": "calm",
+      "comparative": "calmer"
+    },
+    {
+      "lemma": "busy",
+      "comparative": "busier"
+    },
+    {
+      "lemma": "quiet",
+      "comparative": "quieter"
+    },
+    {
+      "lemma": "loud",
+      "comparative": "louder"
+    },
+    {
+      "lemma": "fresh",
+      "comparative": "fresher"
+    },
+    {
+      "lemma": "bright",
+      "comparative": "brighter"
+    },
+    {
+      "lemma": "smart",
+      "comparative": "smarter"
+    },
+    {
+      "lemma": "clever",
+      "comparative": "cleverer"
+    },
+    {
+      "lemma": "stupid",
+      "comparative": "more-stupid"
+    },
+    {
+      "lemma": "simple",
+      "comparative": "simpler"
+    },
+    {
+      "lemma": "complex",
+      "comparative": "more-complex"
+    },
+    {
+      "lemma": "special",
+      "comparative": "more-special"
+    },
+    {
+      "lemma": "normal",
+      "comparative": "more-normal"
+    },
+    {
+      "lemma": "common",
+      "comparative": "more-common"
+    },
+    {
+      "lemma": "rare",
+      "comparative": "rarer"
+    },
+    {
+      "lemma": "popular",
+      "comparative": "more-popular"
+    },
+    {
+      "lemma": "important",
+      "comparative": "more-important"
+    },
+    {
+      "lemma": "different",
+      "comparative": "more-different"
+    },
+    {
+      "lemma": "similar",
+      "comparative": "more-similar"
+    },
+    {
+      "lemma": "same",
+      "comparative": "same"
+    },
+    {
+      "lemma": "other",
+      "comparative": "other"
+    },
+    {
+      "lemma": "main",
+      "comparative": "more-main"
+    },
+    {
+      "lemma": "basic",
+      "comparative": "more-basic"
+    },
+    {
+      "lemma": "complete",
+      "comparative": "more-complete"
+    },
+    {
+      "lemma": "active",
+      "comparative": "more-active"
+    },
+    {
+      "lemma": "inactive",
+      "comparative": "more-inactive"
+    },
+    {
+      "lemma": "online",
+      "comparative": "more-online"
+    },
+    {
+      "lemma": "offline",
+      "comparative": "more-offline"
+    },
+    {
+      "lemma": "valid",
+      "comparative": "more-valid"
+    },
+    {
+      "lemma": "invalid",
+      "comparative": "more-invalid"
+    },
+    {
+      "lemma": "expired",
+      "comparative": "more-expired"
+    },
+    {
+      "lemma": "current",
+      "comparative": "more-current"
+    },
+    {
+      "lemma": "recent",
+      "comparative": "more-recent"
+    },
+    {
+      "lemma": "present",
+      "comparative": "more-present"
+    },
+    {
+      "lemma": "absent",
+      "comparative": "more-absent"
+    },
+    {
+      "lemma": "available",
+      "comparative": "more-available"
+    },
+    {
+      "lemma": "ready",
+      "comparative": "more-ready"
+    },
+    {
+      "lemma": "broken",
+      "comparative": "more-broken"
+    },
+    {
+      "lemma": "dead",
+      "comparative": "more-dead"
+    },
+    {
+      "lemma": "alive",
+      "comparative": "more-alive"
+    },
+    {
+      "lemma": "null",
+      "comparative": "more-null"
+    },
+    {
+      "lemma": "public",
+      "comparative": "more-public"
+    },
+    {
+      "lemma": "private",
+      "comparative": "more-private"
+    },
+    {
+      "lemma": "secure",
+      "comparative": "more-secure"
+    },
+    {
+      "lemma": "closed",
+      "comparative": "more-closed"
+    },
+    {
+      "lemma": "locked",
+      "comparative": "more-locked"
+    },
+    {
+      "lemma": "unlocked",
+      "comparative": "more-unlocked"
+    },
+    {
+      "lemma": "visible",
+      "comparative": "more-visible"
+    },
+    {
+      "lemma": "hidden",
+      "comparative": "more-hidden"
+    },
+    {
+      "lemma": "known",
+      "comparative": "more-known"
+    },
+    {
+      "lemma": "unknown",
+      "comparative": "more-unknown"
+    },
+    {
+      "lemma": "possible",
+      "comparative": "more-possible"
+    },
+    {
+      "lemma": "impossible",
+      "comparative": "more-impossible"
+    },
+    {
+      "lemma": "necessary",
+      "comparative": "more-necessary"
+    },
+    {
+      "lemma": "optional",
+      "comparative": "more-optional"
+    },
+    {
+      "lemma": "required",
+      "comparative": "more-required"
+    },
+    {
+      "lemma": "allowed",
+      "comparative": "more-allowed"
+    },
+    {
+      "lemma": "banned",
+      "comparative": "more-banned"
+    },
+    {
+      "lemma": "correct",
+      "comparative": "more-correct"
+    },
+    {
+      "lemma": "incorrect",
+      "comparative": "more-incorrect"
+    },
+    {
+      "lemma": "accurate",
+      "comparative": "more-accurate"
+    },
+    {
+      "lemma": "exact",
+      "comparative": "more-exact"
+    },
+    {
+      "lemma": "approximate",
+      "comparative": "more-approximate"
+    },
+    {
+      "lemma": "partial",
+      "comparative": "more-partial"
+    },
+    {
+      "lemma": "total",
+      "comparative": "more-total"
+    },
+    {
+      "lemma": "global",
+      "comparative": "more-global"
+    },
+    {
+      "lemma": "local",
+      "comparative": "more-local"
+    },
+    {
+      "lemma": "remote",
+      "comparative": "more-remote"
+    },
+    {
+      "lemma": "primary",
+      "comparative": "more-primary"
+    },
+    {
+      "lemma": "secondary",
+      "comparative": "more-secondary"
+    },
+    {
+      "lemma": "temporary",
+      "comparative": "more-temporary"
+    },
+    {
+      "lemma": "permanent",
+      "comparative": "more-permanent"
+    },
+    {
+      "lemma": "urgent",
+      "comparative": "more-urgent"
+    },
+    {
+      "lemma": "critical",
+      "comparative": "more-critical"
+    },
+    {
+      "lemma": "successful",
+      "comparative": "more-successful"
+    },
+    {
+      "lemma": "failed",
+      "comparative": "more-failed"
+    },
+    {
+      "lemma": "pending",
+      "comparative": "more-pending"
+    },
+    {
+      "lemma": "non-null",
+      "comparative": "more-non-null"
+    },
+    {
+      "lemma": "fine",
+      "comparative": "finer"
+    },
+    {
+      "lemma": "ok",
+      "comparative": "more-ok"
+    },
+    {
+      "lemma": "weird",
+      "comparative": "weirder"
+    },
+    {
+      "lemma": "strange",
+      "comparative": "stranger"
+    },
+    {
+      "lemma": "funny",
+      "comparative": "funnier"
+    },
+    {
+      "lemma": "serious",
+      "comparative": "more-serious"
+    },
+    {
+      "lemma": "tired",
+      "comparative": "more-tired"
+    },
+    {
+      "lemma": "excited",
+      "comparative": "more-excited"
+    },
+    {
+      "lemma": "confused",
+      "comparative": "more-confused"
+    },
+    {
+      "lemma": "worried",
+      "comparative": "more-worried"
+    },
+    {
+      "lemma": "scared",
+      "comparative": "more-scared"
+    },
+    {
+      "lemma": "bored",
+      "comparative": "more-bored"
+    },
+    {
+      "lemma": "interested",
+      "comparative": "more-interested"
+    },
+    {
+      "lemma": "surprised",
+      "comparative": "more-surprised"
+    },
+    {
+      "lemma": "disappointed",
+      "comparative": "more-disappointed"
+    },
+    {
+      "lemma": "grateful",
+      "comparative": "more-grateful"
+    },
+    {
+      "lemma": "proud",
+      "comparative": "prouder"
+    },
+    {
+      "lemma": "embarrassed",
+      "comparative": "more-embarrassed"
+    },
+    {
+      "lemma": "lonely",
+      "comparative": "lonelier"
+    },
+    {
+      "lemma": "stressed",
+      "comparative": "more-stressed"
+    },
+    {
+      "lemma": "anxious",
+      "comparative": "more-anxious"
+    },
+    {
+      "lemma": "honest",
+      "comparative": "more-honest"
+    },
+    {
+      "lemma": "fair",
+      "comparative": "fairer"
+    },
+    {
+      "lemma": "equal",
+      "comparative": "more-equal"
+    },
+    {
+      "lemma": "unfair",
+      "comparative": "more-unfair"
+    },
+    {
+      "lemma": "kind",
+      "comparative": "kinder"
+    },
+    {
+      "lemma": "mean",
+      "comparative": "meaner"
+    },
+    {
+      "lemma": "gentle",
+      "comparative": "gentler"
+    },
+    {
+      "lemma": "aggressive",
+      "comparative": "more-aggressive"
+    },
+    {
+      "lemma": "patient",
+      "comparative": "more-patient"
+    },
+    {
+      "lemma": "impatient",
+      "comparative": "more-impatient"
+    },
+    {
+      "lemma": "polite",
+      "comparative": "more-polite"
+    },
+    {
+      "lemma": "rude",
+      "comparative": "ruder"
+    },
+    {
+      "lemma": "generous",
+      "comparative": "more-generous"
+    },
+    {
+      "lemma": "selfish",
+      "comparative": "more-selfish"
+    },
+    {
+      "lemma": "loyal",
+      "comparative": "more-loyal"
+    },
+    {
+      "lemma": "reliable",
+      "comparative": "more-reliable"
+    },
+    {
+      "lemma": "responsible",
+      "comparative": "more-responsible"
+    },
+    {
+      "lemma": "independent",
+      "comparative": "more-independent"
+    },
+    {
+      "lemma": "dependent",
+      "comparative": "more-dependent"
+    },
+    {
+      "lemma": "creative",
+      "comparative": "more-creative"
+    },
+    {
+      "lemma": "boring",
+      "comparative": "more-boring"
+    },
+    {
+      "lemma": "exciting",
+      "comparative": "more-exciting"
+    },
+    {
+      "lemma": "interesting",
+      "comparative": "more-interesting"
+    },
+    {
+      "lemma": "useful",
+      "comparative": "more-useful"
+    },
+    {
+      "lemma": "useless",
+      "comparative": "more-useless"
+    },
+    {
+      "lemma": "efficient",
+      "comparative": "more-efficient"
+    },
+    {
+      "lemma": "effective",
+      "comparative": "more-effective"
+    },
+    {
+      "lemma": "logical",
+      "comparative": "more-logical"
+    },
+    {
+      "lemma": "reasonable",
+      "comparative": "more-reasonable"
+    },
+    {
+      "lemma": "practical",
+      "comparative": "more-practical"
+    },
+    {
+      "lemma": "abstract",
+      "comparative": "more-abstract"
+    },
+    {
+      "lemma": "physical",
+      "comparative": "more-physical"
+    },
+    {
+      "lemma": "digital",
+      "comparative": "more-digital"
+    },
+    {
+      "lemma": "virtual",
+      "comparative": "more-virtual"
+    },
+    {
+      "lemma": "automatic",
+      "comparative": "more-automatic"
+    },
+    {
+      "lemma": "manual",
+      "comparative": "more-manual"
+    },
+    {
+      "lemma": "internal",
+      "comparative": "more-internal"
+    },
+    {
+      "lemma": "external",
+      "comparative": "more-external"
+    },
+    {
+      "lemma": "positive",
+      "comparative": "more-positive"
+    },
+    {
+      "lemma": "negative",
+      "comparative": "more-negative"
+    },
+    {
+      "lemma": "flat",
+      "comparative": "flatter"
+    },
+    {
+      "lemma": "round",
+      "comparative": "rounder"
+    },
+    {
+      "lemma": "square",
+      "comparative": "more-square"
+    },
+    {
+      "lemma": "straight",
+      "comparative": "straighter"
+    },
+    {
+      "lemma": "curved",
+      "comparative": "more-curved"
+    },
+    {
+      "lemma": "vertical",
+      "comparative": "more-vertical"
+    },
+    {
+      "lemma": "horizontal",
+      "comparative": "more-horizontal"
+    },
+    {
+      "lemma": "parallel",
+      "comparative": "more-parallel"
+    },
+    {
+      "lemma": "perpendicular",
+      "comparative": "more-perpendicular"
+    },
+    {
+      "lemma": "above",
+      "comparative": "above"
+    },
+    {
+      "lemma": "below",
+      "comparative": "below"
+    },
+    {
+      "lemma": "near",
+      "comparative": "nearer"
+    },
+    {
+      "lemma": "far",
+      "comparative": "farther"
+    },
+    {
+      "lemma": "inside",
+      "comparative": "more-inside"
+    },
+    {
+      "lemma": "outside",
+      "comparative": "more-outside"
+    },
+    {
+      "lemma": "left",
+      "comparative": "more-left"
+    },
+    {
+      "lemma": "front",
+      "comparative": "more-front"
+    },
+    {
+      "lemma": "back",
+      "comparative": "more-back"
+    },
+    {
+      "lemma": "top",
+      "comparative": "more-top"
+    },
+    {
+      "lemma": "bottom",
+      "comparative": "more-bottom"
+    },
+    {
+      "lemma": "rainy",
+      "comparative": "rainier"
+    },
+    {
+      "lemma": "sunny",
+      "comparative": "sunnier"
+    },
+    {
+      "lemma": "windy",
+      "comparative": "windier"
+    },
+    {
+      "lemma": "cloudy",
+      "comparative": "cloudier"
+    },
+    {
+      "lemma": "snowy",
+      "comparative": "snowier"
+    },
+    {
+      "lemma": "stormy",
+      "comparative": "stormier"
+    },
+    {
+      "lemma": "tasty",
+      "comparative": "tastier"
+    },
+    {
+      "lemma": "delicious",
+      "comparative": "more-delicious"
+    },
+    {
+      "lemma": "sweet",
+      "comparative": "sweeter"
+    },
+    {
+      "lemma": "sour",
+      "comparative": "more-sour"
+    },
+    {
+      "lemma": "spicy",
+      "comparative": "spicier"
+    },
+    {
+      "lemma": "salty",
+      "comparative": "saltier"
+    },
+    {
+      "lemma": "bitter",
+      "comparative": "more-bitter"
+    },
+    {
+      "lemma": "tiny",
+      "comparative": "tinier"
+    },
+    {
+      "lemma": "huge",
+      "comparative": "huger"
+    },
+    {
+      "lemma": "giant",
+      "comparative": "more-giant"
+    },
+    {
+      "lemma": "massive",
+      "comparative": "more-massive"
+    },
+    {
+      "lemma": "micro",
+      "comparative": "more-micro"
+    },
+    {
+      "lemma": "macro",
+      "comparative": "more-macro"
+    },
+    {
+      "lemma": "first",
+      "comparative": "first"
+    },
+    {
+      "lemma": "last",
+      "comparative": "last"
+    },
+    {
+      "lemma": "next",
+      "comparative": "next"
+    },
+    {
+      "lemma": "previous",
+      "comparative": "previous"
+    },
+    {
+      "lemma": "single",
+      "comparative": "more-single"
+    },
+    {
+      "lemma": "double",
+      "comparative": "more-double"
+    },
+    {
+      "lemma": "multiple",
+      "comparative": "more-multiple"
+    },
+    {
+      "lemma": "unique",
+      "comparative": "more-unique"
+    },
+    {
+      "lemma": "certain",
+      "comparative": "more-certain"
+    },
+    {
+      "lemma": "uncertain",
+      "comparative": "more-uncertain"
+    },
+    {
+      "lemma": "likely",
+      "comparative": "more-likely"
+    },
+    {
+      "lemma": "unlikely",
+      "comparative": "more-unlikely"
+    },
+    {
+      "lemma": "able",
+      "comparative": "more-able"
+    },
+    {
+      "lemma": "unable",
+      "comparative": "more-unable"
+    },
+    {
+      "lemma": "capable",
+      "comparative": "more-capable"
+    },
+    {
+      "lemma": "incapable",
+      "comparative": "more-incapable"
+    },
+    {
+      "lemma": "dominant",
+      "comparative": "more-dominant"
+    },
+    {
+      "lemma": "major",
+      "comparative": "more-major"
+    },
+    {
+      "lemma": "minor",
+      "comparative": "more-minor"
+    },
+    {
+      "lemma": "warm-blooded",
+      "comparative": "more-warm-blooded"
+    },
+    {
+      "lemma": "cold-blooded",
+      "comparative": "more-cold-blooded"
+    },
+    {
+      "lemma": "dormant",
+      "comparative": "more-dormant"
+    },
+    {
+      "lemma": "admissible",
+      "comparative": "more-admissible"
+    },
+    {
+      "lemma": "illegal",
+      "comparative": "more-illegal"
+    },
+    {
+      "lemma": "legal",
+      "comparative": "more-legal"
+    },
+    {
+      "lemma": "incomplete",
+      "comparative": "more-incomplete"
+    },
+    {
+      "lemma": "expandable",
+      "comparative": "more-expandable"
+    },
+    {
+      "lemma": "like",
+      "comparative": "more-like"
+    },
+    {
+      "lemma": "cut",
+      "comparative": "more-cut"
+    },
+    {
+      "lemma": "home",
+      "comparative": "more-home"
+    },
+    {
+      "lemma": "animal",
+      "comparative": "more-animal"
+    },
+    {
+      "lemma": "world",
+      "comparative": "more-world"
+    },
+    {
+      "lemma": "star",
+      "comparative": "more-star"
+    },
+    {
+      "lemma": "color",
+      "comparative": "more-color"
+    },
+    {
+      "lemma": "every",
+      "comparative": "more-every"
+    },
+    {
+      "lemma": "each",
+      "comparative": "more-each"
+    },
+    {
+      "lemma": "some",
+      "comparative": "more-some"
+    },
+    {
+      "lemma": "any",
+      "comparative": "more-any"
+    },
+    {
+      "lemma": "many",
+      "comparative": "more-many"
+    },
+    {
+      "lemma": "few",
+      "comparative": "more-few"
+    },
+    {
+      "lemma": "beautiful",
+      "comparative": "more-beautiful"
+    },
+    {
+      "lemma": "still",
+      "comparative": "more-still"
+    },
+    {
+      "lemma": "just",
+      "comparative": "more-just"
+    },
+    {
+      "lemma": "very",
+      "comparative": "more-very"
+    },
+    {
+      "lemma": "enough",
+      "comparative": "more-enough"
+    },
+    {
+      "lemma": "together",
+      "comparative": "more-together"
+    },
+    {
+      "lemma": "alone",
+      "comparative": "more-alone"
+    },
+    {
+      "lemma": "away",
+      "comparative": "more-away"
+    },
+    {
+      "lemma": "here",
+      "comparative": "more-here"
+    },
+    {
+      "lemma": "behind",
+      "comparative": "more-behind"
+    },
+    {
+      "lemma": "north",
+      "comparative": "more-north"
+    },
+    {
+      "lemma": "south",
+      "comparative": "more-south"
+    },
+    {
+      "lemma": "east",
+      "comparative": "more-east"
+    },
+    {
+      "lemma": "west",
+      "comparative": "more-west"
+    },
+    {
+      "lemma": "down",
+      "comparative": "more-down"
+    },
+    {
+      "lemma": "sorry",
+      "comparative": "more-sorry"
+    },
+    {
+      "lemma": "welcome",
+      "comparative": "more-welcome"
+    }
+  ],
+  "names": [
+    "John",
+    "Mary",
+    "Bob",
+    "Sarah",
+    "Mike",
+    "Ben",
+    "Alice",
+    "Tom",
+    "Lisa",
+    "David",
+    "Emma",
+    "James",
+    "Jane",
+    "Peter",
+    "Lucy",
+    "Chris",
+    "Anna",
+    "Mark",
+    "Kate",
+    "Sam",
+    "Victor",
+    "Dana",
+    "Omar",
+    "Hugo",
+    "Felix",
+    "Lena",
+    "Ivan",
+    "Pavel",
+    "Rufus",
+    "Maya",
+    "Nils",
+    "Karl",
+    "Yuki",
+    "Dmitri",
+    "Priya",
+    "Ava",
+    "Liam",
+    "Ethan",
+    "Mia",
+    "Noah",
+    "Sophie",
+    "Leo",
+    "Chloe",
+    "Lucas",
+    "Isabella",
+    "Oliver",
+    "Emily",
+    "Aiden",
+    "Ella",
+    "Jack",
+    "Grace",
+    "Ryan",
+    "Lily",
+    "Daniel",
+    "Zoe",
+    "Nathan",
+    "Hannah",
+    "Tyler",
+    "Natalie",
+    "Dylan",
+    "Laura",
+    "Logan",
+    "Amy",
+    "Brandon",
+    "Jessica",
+    "Justin",
+    "Rachel",
+    "Kevin",
+    "Olivia",
+    "Adam",
+    "Rebecca",
+    "Andrew",
+    "Ashley",
+    "Joshua",
+    "Samantha",
+    "Eric",
+    "Stephanie",
+    "Steven",
+    "Nicole",
+    "Timothy",
+    "Jennifer",
+    "Matthew",
+    "Melissa",
+    "Jonathan",
+    "Amanda",
+    "Joseph",
+    "Michelle",
+    "Aaron",
+    "Christina",
+    "Brian",
+    "Lauren",
+    "Sean",
+    "Heather",
+    "Patrick",
+    "Amber",
+    "Kyle",
+    "Crystal"
+  ],
+  "function_words": [
+    "a",
+    "an",
+    "the",
+    "every",
+    "some",
+    "no",
+    "not",
+    "at least",
+    "at most",
+    "exactly",
+    "each",
+    "both",
+    "all",
+    "to",
+    "at",
+    "in",
+    "on",
+    "from",
+    "with",
+    "for",
+    "about",
+    "toward",
+    "into",
+    "of",
+    "by",
+    "as",
+    "before",
+    "after",
+    "than",
+    "and",
+    "or",
+    "if",
+    "then",
+    "that",
+    "but",
+    "can",
+    "cannot",
+    "should",
+    "must",
+    "may",
+    "is",
+    "are",
+    "was",
+    "were",
+    "does",
+    "do",
+    "did",
+    "has",
+    "have",
+    "had",
+    "will",
+    "would",
+    "could",
+    "shall",
+    "who",
+    "what",
+    "which",
+    "where",
+    "when",
+    "how",
+    "why",
+    "there",
+    "here",
+    "also",
+    "only",
+    "just",
+    "very",
+    "quite",
+    "so",
+    "too",
+    "more",
+    "most",
+    "less",
+    "least",
+    "does not",
+    "is not",
+    "should not",
+    "must not",
+    "may not",
+    "it",
+    "this",
+    "these",
+    "those",
+    "any",
+    "anything",
+    "something",
+    "nothing",
+    "everything",
+    "now",
+    "today",
+    "tomorrow",
+    "yesterday",
+    "there is",
+    "there are"
+  ]
+}

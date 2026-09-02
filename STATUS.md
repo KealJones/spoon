@@ -21,14 +21,35 @@ DONE
   (Store API with unimplemented stubs). `cargo check` green.
 
 IN PROGRESS (subagents, Sonnet)
-- kernel: `kernel/eval.rs` + `kernel/prims/*` (Stage 0 primitive inventory)
-- store: SQLite impl of `store/mod.rs`
-- sce: grammar + Earley parser + realizer in `spoon-lang/src/sce/`
+- sce: grammar + Earley parser + realizer in `spoon-lang/src/sce/` (started
+  writing files at 21:54 after a long read; do not respawn)
+- batch 2 (spawned 22:05): ears `spoon-lang/src/ears/` (Gate trait decouples
+  it from sce), grow `spoon-mind/src/grow/` (synth + consolidate), teacher
+  `spoon-mind/src/teacher/`, bin `crates/spoon/src/` (clap, repl, stdio, axum
+  OpenAI API + SSE, inspector). Bin codes against the `Brain` API in
+  `spoon-mind/src/brain.rs`, whose interior is a stub echo until wiring.
+- dispatch `spoon-mind/src/dispatch/` (spawned 22:15): Clause -> Moves |
+  Plan(Intent) | UnknownCapability | NeedsTeacher. Dialog verb mirroring,
+  small-talk policy, self-model QA (`data/seed/self_model.json`), opinions and
+  advice from `stances`, arithmetic compile+eval, command -> Intent.
+- orchestrator: `types/spec.rs` (Spec, Example) added as the grow/teacher
+  contract; `brain.rs` public API frozen: BrainConfig, Brain::open/turn/
+  metrics/snapshot, TurnResult, BrainMetrics, Snapshot.
 - plan: planner (AND/OR search) + executor in `spoon-mind/src/plan/`
-- mouth: templates + LLM renderer + faithfulness check in `spoon-lang/src/mouth/`
-- data: seed lexicon, slang, dialog phrasings, bAbI probes, normalizer prompt, ATTRIBUTIONS.md
-- research: prior-art algorithm memo (lexicon induction, SymSpell, Duckling,
-  AND/OR planning, OE synthesis, Stitch, ISU dialog)
+- discourse: referents, facts QA, corrections in `spoon-mind/src/discourse/`
+
+LANDED FROM BATCH 1
+- kernel: `kernel/eval.rs` + 12 prim modules, ~147 Stage 0 primitives
+  (math/logic, value, text, list, json, time, fs, http, shell, mem, dialog,
+  know.wikidata_*) + 14 kernel concepts. 41 tests green. `dialog.*` prims
+  return `Value::Json` that deserializes straight into `response::Move`, so
+  the brain collects any `dialog.Move`-typed output into the ResponsePlan.
+  `mem.*` goes through `Host::recall/now_ms` (store-backed Host is a brain job).
+- store: SQLite impl, 15 tests green.
+- mouth: `spoon-lang/src/mouth/{templates,faithful,render}.rs`, 10 tests green;
+  live LLM render verified after the transport fix below (0.85s, path=Llm).
+- data: `data/seed/*` 7 files, JSON valid, ATTRIBUTIONS.md, 0 leaks.
+- research: `docs/PRIOR_ART_MEMO.md`.
 
 NEXT (orchestrator, after batch 1 lands)
 1. Wire: `spoon-mind/src/brain.rs` turn loop = ears -> discourse -> dispatch ->
@@ -47,5 +68,13 @@ GOTCHAS
   are not authoritative.
 - `reqwest::blocking` panics inside tokio; kernel primitives run blocking IO
   on a spawned std thread. The Brain runs turns via `spawn_blocking`.
-- Ollama serves an OpenAI-compatible API at `http://localhost:11434/v1`; that is
-  the only LLM transport. Local models: qwen3.5:{0.8b,2b,4b}.
+- LLM transport: `llm.rs` speaks Ollama's native `/api/chat` with `think:false`
+  by default (`LlmConfig::ollama`). Do NOT use the `/v1` OpenAI shim for local
+  models: it ignores `think`, `/no_think` is unreliable on qwen3.5, and the 4b
+  model burns 1500-3000 reasoning tokens then times out (mouth saw 100%
+  template fallback). Native path renders in <1s. `Transport::OpenAi` exists
+  for frontier teachers via `SPOON_TEACHER_URL/KEY/MODEL`.
+  Local models: qwen3.5:{0.8b,2b,4b}.
+- Mouth faithfulness check is structural (numbers, names, forbidden phrases).
+  It does not catch semantic drift (LLM said "I can sort it" for an AskExamples
+  move). Keep template output as the reference; open item for the mouth.

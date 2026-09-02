@@ -1,0 +1,228 @@
+[
+  {
+    "family": 1,
+    "name": "single supporting fact",
+    "story": [
+      "Mary moves to the bathroom.",
+      "John moves to the hallway."
+    ],
+    "question": "Where is Mary?",
+    "answer": "bathroom"
+  },
+  {
+    "family": 1,
+    "name": "single supporting fact",
+    "story": [
+      "Sandra moves to the garden.",
+      "John moves to the kitchen."
+    ],
+    "question": "Where is Sandra?",
+    "answer": "garden"
+  },
+  {
+    "family": 2,
+    "name": "two supporting facts",
+    "story": [
+      "John moves to the garden.",
+      "John picks-up the apple.",
+      "John moves to the kitchen."
+    ],
+    "question": "Where is the apple?",
+    "answer": "kitchen"
+  },
+  {
+    "family": 2,
+    "name": "two supporting facts",
+    "story": [
+      "Mary moves to the garden.",
+      "Mary picks-up the football.",
+      "Mary moves to the hallway."
+    ],
+    "question": "Where is the football?",
+    "answer": "hallway"
+  },
+  {
+    "family": 3,
+    "name": "three supporting facts",
+    "story": [
+      "John moves to the garden.",
+      "Sandra moves to the garden.",
+      "Sandra picks-up the apple.",
+      "Sandra moves to the office."
+    ],
+    "question": "Where is the apple?",
+    "answer": "office"
+  },
+  {
+    "family": 3,
+    "name": "three supporting facts",
+    "story": [
+      "Mary moves to the kitchen.",
+      "John moves to the bathroom.",
+      "Mary picks-up the milk.",
+      "Mary moves to the hallway."
+    ],
+    "question": "Where is the milk?",
+    "answer": "hallway"
+  },
+  {
+    "family": 4,
+    "name": "two argument relations",
+    "story": [
+      "The office is north of the garden.",
+      "The kitchen is south of the office."
+    ],
+    "question": "What is south of the office?",
+    "answer": "kitchen"
+  },
+  {
+    "family": 4,
+    "name": "two argument relations",
+    "story": [
+      "The bathroom is east of the hallway.",
+      "The garden is west of the bathroom."
+    ],
+    "question": "What is east of the hallway?",
+    "answer": "bathroom"
+  },
+  {
+    "family": 5,
+    "name": "three argument relations",
+    "story": [
+      "Mary gives the apple to John.",
+      "John gives the apple to Maya.",
+      "Sandra gives the ball to Mary."
+    ],
+    "question": "Who does John give the apple to?",
+    "answer": "maya"
+  },
+  {
+    "family": 5,
+    "name": "three argument relations",
+    "story": [
+      "John gives the milk to Mary.",
+      "Sandra gives the football to John."
+    ],
+    "question": "Who does John give the milk to?",
+    "answer": "mary"
+  },
+  {
+    "family": 6,
+    "name": "yes no questions",
+    "story": [
+      "Mary moves to the garden.",
+      "John moves to the bathroom."
+    ],
+    "question": "Is Mary in the garden?",
+    "answer": "yes"
+  },
+  {
+    "family": 6,
+    "name": "yes no questions",
+    "story": [
+      "John moves to the kitchen.",
+      "Mary moves to the hallway."
+    ],
+    "question": "Is John in the bathroom?",
+    "answer": "no"
+  },
+  {
+    "family": 7,
+    "name": "counting",
+    "story": [
+      "Mary picks-up the apple.",
+      "Mary picks-up the milk.",
+      "Mary drops the apple."
+    ],
+    "question": "How many objects does Mary carry?",
+    "answer": 1
+  },
+  {
+    "family": 7,
+    "name": "counting",
+    "story": [
+      "John picks-up the apple.",
+      "John picks-up the milk.",
+      "John picks-up the coin."
+    ],
+    "question": "How many objects does John carry?",
+    "answer": 3
+  },
+  {
+    "family": 8,
+    "name": "lists sets",
+    "story": [
+      "Mary picks-up the coin.",
+      "Mary picks-up the key.",
+      "Mary drops the key.",
+      "Mary picks-up the key."
+    ],
+    "question": "What does Mary carry?",
+    "answer": [
+      "coin",
+      "key"
+    ]
+  },
+  {
+    "family": 9,
+    "name": "simple negation",
+    "story": [
+      "John moves to the garden.",
+      "Mary moves to the kitchen."
+    ],
+    "question": "Is John in the bathroom?",
+    "answer": "no"
+  },
+  {
+    "family": 10,
+    "name": "indefinite knowledge",
+    "story": [
+      "John moves to the garden.",
+      "Mary moves to the kitchen or the hallway."
+    ],
+    "question": "Is Mary in the kitchen?",
+    "answer": "maybe"
+  },
+  {
+    "family": 12,
+    "name": "conjunction",
+    "story": [
+      "Mary moves to the kitchen.",
+      "John moves to the garden.",
+      "Mary moves to the kitchen."
+    ],
+    "question": "Where is Mary?",
+    "answer": "kitchen"
+  },
+  {
+    "family": 15,
+    "name": "basic deduction",
+    "story": [
+      "Wolves are afraid of mice.",
+      "Sheep are afraid of wolves.",
+      "Every wolf is white."
+    ],
+    "question": "What color is every wolf?",
+    "answer": "white"
+  },
+  {
+    "family": 17,
+    "name": "positional reasoning",
+    "story": [
+      "The red box is to the left of the blue box.",
+      "The green bag is to the left of the red box."
+    ],
+    "question": "What is to the left of the red box?",
+    "answer": "left"
+  },
+  {
+    "family": 18,
+    "name": "size reasoning",
+    "story": [
+      "The elephant is bigger than the dog.",
+      "The dog is bigger than the cat."
+    ],
+    "question": "Is the elephant bigger than the cat?",
+    "answer": "bigger"
+  }
+]

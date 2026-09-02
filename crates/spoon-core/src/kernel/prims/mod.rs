@@ -1,11 +1,35 @@
-//! Primitive registry. TO BE IMPLEMENTED by the kernel subagent.
+//! Primitive registry. Submodules register actions and concepts into the Kernel.
 //!
-//! Each submodule exposes `pub fn register(k: &mut Kernel)`. Ids are
-//! namespaced: `math.add`, `text.upper`, `list.map`, `json.get`, `time.now`,
-//! `fs.read`, `http.get`, `shell.run`, `mem.recall`, `dialog.greet`, ...
+//! Order: concepts first so that action output types can reference them.
 
 use super::Kernel;
 
+pub mod concepts;
+pub mod math;
+pub mod value;
+pub mod text;
+pub mod list;
+pub mod json;
+pub mod time;
+pub mod fs;
+pub mod http;
+pub mod shell;
+pub mod mem;
+pub mod dialog;
+pub mod know;
+
 pub fn register_all(k: &mut Kernel) {
-    let _ = k;
+    concepts::register(k);
+    math::register(k);
+    value::register(k);
+    text::register(k);
+    list::register(k);
+    json::register(k);
+    time::register(k);
+    fs::register(k);
+    http::register(k);
+    shell::register(k);
+    mem::register(k);
+    dialog::register(k);
+    know::register(k);
 }

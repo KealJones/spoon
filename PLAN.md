@@ -90,31 +90,38 @@ flowchart TD
     CAN --> PLANNER
 ```
 
-### Crate layout (single crate, modules)
+### Crate layout (workspace, four crates; dependency order top to bottom)
 
 ```
-src/
-  main.rs            CLI entry (clap): repl | stdio | serve | teach | bench | export | import
-  lib.rs             module wiring, Spoon struct (the one orchestrator), turn()
+crates/spoon-core/src/
   types/             shared vocabulary. Everything depends on this, it depends on nothing.
     value.rs         Value, Type
-    can.rs           Concept, Action, Property, Effect, Tier, ids
-    ir.rs            Program, Expr
-    clause.rs        Clause, Referent, Pred, Term, Act (ears output)
-    intent.rs        Intent, Signal, Plan, PlanNode
-    response.rs      ResponsePlan, Move
-    episode.rs       Episode, TurnRecord, metrics
-  store/             SQLite persistence + JSON seed export/import
-  kernel/            evaluator, primitives (math, text, list, json, time, fs, http, shell, memory, knowledge)
-  lang/              SCE grammar + Earley parser, lexicon view of the CAN, arithmetic exprs
-  ears/              normalize, native recognizer, phrasing induction, Ollama normalizer, Ears trait
-  discourse/         referent resolution, working memory, correction detection
-  mind/              planner, executor, permissions, facts query, rules
-  grow/              synthesizer (typed enumerative, budgeted), consolidation, teacher specs
-  mouth/             ResponsePlan -> text (templates, Ollama renderer, fact-preservation check)
-  teacher/           curriculum generation, pretrain runner, LLM client (Ollama + OpenAI-compatible)
-  server/            axum: OpenAI API, debug endpoints, inspector static
-  bench/             ACE corpus (158), bAbI probes, weaning report
+    can.rs           Concept, Action, Property, Effect, Tier, Provenance, Fact, ids
+    ir.rs            Program, Expr, Lambda
+    clause.rs        Clause, Referent, Pred, Term, Act, EarsResult (ears output)
+    intent.rs        Intent, Signal, Plan, PlanNode, PlanOutcome
+    response.rs      ResponsePlan, Move, Tone
+    episode.rs       Episode, TurnMetrics, Pair
+    spec.rs          Spec, Example (what the synthesizer is asked to build)
+  can.rs             in-memory CAN index (is-a, producers_of, activation)
+  kernel/            evaluator + Stage 0 primitives (math, text, list, json, time, fs, http, shell, mem, dialog, know)
+  store/             SQLite persistence + Seed export/import
+  llm.rs             the one LLM client (Ollama native / OpenAI-compatible), Seat counters
+crates/spoon-lang/src/
+  sce/               SCE grammar + Earley parser + realizer (Clause <-> SCE text)
+  ears/              normalize, values, phrasings, recognizer, induction, LLM normalizer, ACE bench
+  mouth/             templates, LLM renderer, faithfulness check
+crates/spoon-mind/src/
+  discourse/         grounding, facts QA, corrections, rules
+  plan/              planner (AND/OR over CAN), cost, executor + permissions
+  grow/              synth (typed enumerative, OE-pruned, budgeted), consolidate (Stitch-lite)
+  teacher/           specs, phrasings, concepts, stances, curriculum (LLM seat 3)
+  brain.rs           the one orchestrator: turn(), metrics(), snapshot()
+crates/spoon/src/
+  main.rs, cli.rs    clap: repl | stdio | serve | teach | bench | export | import
+  repl.rs, stdio.rs, seedio.rs
+  server/            axum: OpenAI API (SSE), /debug, inspector.html
+data/                seed/ (lexicon, slang, phrasings, facts), prompts/, bench/ (ACE 158, bAbI probes)
 ```
 
 ## Milestones (each ends wired, demoable in the REPL)
