@@ -225,6 +225,9 @@ static FINAL_TAGS: &[&str] = &[
     "even",
     "at",
     "lol",
+    "obviously",
+    "literally",
+    "basically",
 ];
 
 /// Drop sentence-final filler tags (e.g. "where is bob at" -> "where is bob").

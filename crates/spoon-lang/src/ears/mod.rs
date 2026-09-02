@@ -107,9 +107,18 @@ impl Ears {
             return result;
         }
 
-        // Path 4: LLM normalizer
+        // Path 4: LLM normalizer.
+        // Pass the pre-normalized text (slang expanded, speaker grounded, filler stripped)
+        // so the LLM sees clean input rather than raw typos and internet casuals.
         if let Some((client, cfg)) = &self.llm {
-            if let Some(result) = self.hear_llm(text, gate, client, cfg).await {
+            let normed = normalize(text, &self.lexicon);
+            let normed_text = if normed.sentences.is_empty() {
+                text.to_string()
+            } else {
+                normed.sentences.join(" ")
+            };
+            let llm_input = if normed_text.trim().is_empty() { text } else { &normed_text };
+            if let Some(result) = self.hear_llm(llm_input, gate, client, cfg).await {
                 return result;
             }
         }

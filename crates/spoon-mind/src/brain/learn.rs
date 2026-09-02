@@ -12,7 +12,7 @@ use crate::discourse::{self, ground_all, Entity};
 use crate::dispatch::ask_examples_move;
 use crate::grow::{self, SynthBudget, SynthOutcome};
 
-use spoon_lang::ears::Gate;
+use spoon_lang::ears::{Ears, Gate};
 
 use super::respond::describe_program;
 use super::session::Pending;
@@ -231,19 +231,17 @@ impl Brain {
         verb: &str,
         sce: &str,
         signals: &[Signal],
+        ears: &Ears,
         trace: &mut Vec<String>,
     ) -> Option<ResponsePlan> {
         let clauses = {
             let gate = self.gate.lock();
             match gate.parse(text) {
                 Ok(c) if !c.is_empty() => c,
-                _ => {
-                    let ears = self.ears.lock();
-                    match ears.hear_native(text, &*gate) {
-                        Some(r) if !r.clauses.is_empty() => r.clauses,
-                        _ => return None,
-                    }
-                }
+                _ => match ears.hear_native(text, &*gate) {
+                    Some(r) if !r.clauses.is_empty() => r.clauses,
+                    _ => return None,
+                },
             }
         };
         if !clauses.iter().any(|c| matches!(c.act, Act::Assert)) {
@@ -303,7 +301,7 @@ impl Brain {
     // -----------------------------------------------------------------------
 
     /// `"pup" means "dog".`: remember the synonym (store + ears + turn input).
-    pub(super) fn learn_synonym(&self, word: &str, means: &str) -> anyhow::Result<Move> {
+    pub(super) fn learn_synonym(&self, word: &str, means: &str, ears: &mut Ears) -> anyhow::Result<Move> {
         let word_l = word.to_lowercase();
         let means_l = means.to_lowercase();
         let json = {
@@ -312,7 +310,7 @@ impl Brain {
             serde_json::to_value(&*syn)?
         };
         self.store.lock().kv_set(SYNONYMS_KEY, &json)?;
-        self.ears.lock().learn_word(&word_l, &means_l);
+        ears.learn_word(&word_l, &means_l);
         self.gate.lock().lex.add_noun(&means_l);
         Ok(Move::Learned { what: format!("\"{word_l}\" means \"{means_l}\"") })
     }

@@ -6,7 +6,10 @@ use spoon_core::Can;
 use crate::ears::Gate;
 use crate::sce;
 
-/// Gate that delegates to the real SCE parser.
+/// Gate that delegates to the real SCE parser. Cheap to clone (a few word
+/// sets), so callers can snapshot it for an async parse instead of holding a
+/// lock across an await.
+#[derive(Clone)]
 pub struct SceGate {
     pub lex: sce::Lexicon,
 }

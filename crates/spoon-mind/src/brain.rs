@@ -130,7 +130,11 @@ pub struct Brain {
     pub mouth: Mouth,
     /// Present only when online and the model answered a ping.
     teacher: Option<Teacher>,
-    ears: Mutex<Ears>,
+    /// Async mutex: the ears LLM seat is awaited while this is held, and the
+    /// axum handler needs the turn future to be Send. Held for a whole turn.
+    ears: tokio::sync::Mutex<Ears>,
+    /// Sync mutex, never held across an await; `turn` clones a snapshot for
+    /// the async parse gate.
     gate: Mutex<SceGate>,
     sessions: Mutex<HashMap<String, Session>>,
     /// Word -> canonical word, applied to the raw text before the ears.
@@ -235,7 +239,7 @@ impl Brain {
             llm,
             mouth,
             teacher,
-            ears: Mutex::new(ears),
+            ears: tokio::sync::Mutex::new(ears),
             gate: Mutex::new(gate),
             sessions: Mutex::new(HashMap::new()),
             synonyms: Mutex::new(synonyms),
@@ -255,10 +259,27 @@ impl Brain {
 
     pub async fn turn(&self, session_id: &str, text: &str) -> anyhow::Result<TurnResult> {
         let started = Instant::now();
-        let mut out = self.turn_sync(session_id, text)?;
+        let mut ears = self.ears.lock().await;
+        self.counters.bump(&self.counters.turns);
+        let mut out = SyncTurnResult::new(self.llm.counters.snapshot());
 
-        // The teacher seat: the only LLM call reachable from the turn loop,
-        // and it only ever writes a Spec. Spoon code does the rest.
+        // 1. Pending state: the user may be answering something we asked.
+        // Checked before the ears so a bare "yes" or "cd" never costs an LLM call.
+        if let Some(plan) = self.answer_pending(session_id, text, &mut ears, &mut out.trace) {
+            return self.finalize_turn(session_id, text, out.reply(plan), &started).await;
+        }
+
+        // 2. Ears. The one place the ears LLM seat can run; the gate is a
+        // snapshot so no sync lock is held across the await.
+        let heard = apply_synonyms(text, &self.synonyms.lock());
+        let gate = self.gate.lock().clone();
+        let ears_result = ears.hear(&heard, &gate).await;
+
+        // 3. Everything else is synchronous Spoon code.
+        let mut out = self.turn_sync(session_id, text, ears_result, &mut ears, out)?;
+
+        // The teacher seat: the only other LLM call reachable from the turn
+        // loop, and it only ever writes a Spec. Spoon code does the rest.
         if let Some(req) = out.teacher.take() {
             out.flags.teacher_fallback = true;
             match self.consult_teacher(&req).await {
@@ -291,42 +312,45 @@ impl Brain {
         self.learn_from_spec(&req.verb, spec)
     }
 
-    fn turn_sync(&self, session_id: &str, text: &str) -> anyhow::Result<SyncTurnResult> {
-        self.counters.bump(&self.counters.turns);
-        let mut out = SyncTurnResult::new(self.llm.counters.snapshot());
-        let trace = &mut out.trace;
-
-        let returning_user = self.store.lock().last_episode(session_id).ok().flatten().is_some();
-
-        // 1. Pending state: the user may be answering something we asked.
-        if let Some(pending) = self.with_session(session_id, |s| s.pending.take()) {
-            match pending {
-                Pending::Exec { intent, plan, state, kind } => {
-                    match self.resume_exec(text, &intent, plan, state, &kind, session_id, trace) {
-                        ResumeResult::Done(plan) => return Ok(out.reply(plan)),
-                        ResumeResult::NotAnAnswer => {
-                            if self.cfg.debug {
-                                trace.push("pending dropped, fresh turn".into());
-                            }
+    /// Step 1 of a turn: if we asked the user something last turn, try to read
+    /// this text as the answer. `Some(plan)` means the turn is fully handled.
+    fn answer_pending(
+        &self,
+        session_id: &str,
+        text: &str,
+        ears: &mut Ears,
+        trace: &mut Vec<String>,
+    ) -> Option<ResponsePlan> {
+        let pending = self.with_session(session_id, |s| s.pending.take())?;
+        match pending {
+            Pending::Exec { intent, plan, state, kind } => {
+                match self.resume_exec(text, &intent, plan, state, &kind, session_id, trace) {
+                    ResumeResult::Done(plan) => Some(plan),
+                    ResumeResult::NotAnAnswer => {
+                        if self.cfg.debug {
+                            trace.push("pending dropped, fresh turn".into());
                         }
-                    }
-                }
-                Pending::UnknownVerb { verb, sce, signals } => {
-                    if let Some(plan) = self.handle_unknown_verb_followup(session_id, text, &verb, &sce, &signals, trace) {
-                        return Ok(out.reply(plan));
+                        None
                     }
                 }
             }
+            Pending::UnknownVerb { verb, sce, signals } => {
+                self.handle_unknown_verb_followup(session_id, text, &verb, &sce, &signals, ears, trace)
+            }
         }
+    }
 
-        // 2. Ears (native only here; the LLM ears seat is async and not wired
-        // into this path yet).
-        let heard = apply_synonyms(text, &self.synonyms.lock());
-        let ears_result = {
-            let ears = self.ears.lock();
-            let gate = self.gate.lock();
-            ears.hear_native(&heard, &*gate).unwrap_or_else(|| ears.failed_result(&heard))
-        };
+    fn turn_sync(
+        &self,
+        session_id: &str,
+        text: &str,
+        ears_result: EarsResult,
+        ears: &mut Ears,
+        mut out: SyncTurnResult,
+    ) -> anyhow::Result<SyncTurnResult> {
+        let trace = &mut out.trace;
+        let returning_user = self.store.lock().last_episode(session_id).ok().flatten().is_some();
+
         out.ears_path = ears_result.path.clone();
         out.sce = ears_result.sce.clone();
         match &out.ears_path {
@@ -342,7 +366,7 @@ impl Brain {
                     credit: 0,
                 };
                 let _ = self.store.lock().insert_pair(&pair);
-                self.ears.lock().add_pairs(&[pair]);
+                ears.add_pairs(&[pair]);
             }
             EarsPath::Failed => self.counters.bump(&self.counters.ears_failed),
         }
@@ -370,7 +394,7 @@ impl Brain {
             let mut plan = ResponsePlan::new(vec![]);
             for c in corrections {
                 match c {
-                    Correction::Synonym { word, means } => plan.push(self.learn_synonym(&word, &means)?),
+                    Correction::Synonym { word, means } => plan.push(self.learn_synonym(&word, &means, ears)?),
                     Correction::Meant { text: name } => {
                         for m in self.correct_referent(session_id, &name)?.moves {
                             plan.push(m);
