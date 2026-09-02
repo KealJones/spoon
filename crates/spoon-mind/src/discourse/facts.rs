@@ -297,6 +297,23 @@ pub fn assert_grounded(
     })
 }
 
+/// "The name of Assistant is Spoon" / "The mood of Assistant is calm": the
+/// subject is a possessed noun. Returns (property noun, owner value) so the
+/// fact becomes `rel.<noun>(owner, value)` instead of an is_a on a minted
+/// entity that nobody can query back.
+fn property_subject(
+    term: &Term,
+    bindings: &HashMap<String, Binding>,
+    all_refs: &[&Referent],
+) -> Option<(String, Value)> {
+    let Term::Var { var } = term else { return None };
+    let r = all_refs.iter().find(|r| &r.var == var)?;
+    let owner_var = r.owner.as_deref()?;
+    let noun = r.noun.clone()?;
+    let owner = resolve_term(&Term::Var { var: owner_var.to_string() }, bindings)?;
+    Some((noun, owner))
+}
+
 fn process_be_pred(
     w: &mut FactWriter<'_>,
     pred: &Pred,
@@ -306,6 +323,15 @@ fn process_be_pred(
     episode_id: Option<i64>,
 ) -> Option<(ActionId, Fact)> {
     let sce = "";
+    if let Some((noun, owner)) = pred.args.first().and_then(|t| property_subject(t, bindings, all_refs)) {
+        let value = match &pred.attr {
+            Some(attr) => Value::Text(attr.clone()),
+            None => resolve_term(pred.args.get(1)?, bindings)?,
+        };
+        let action_id = ensure_verb_relation(w, &noun, 2, sce);
+        let fact = make_fact(action_id.clone(), vec![owner, value], pred.negated, &pred.modal, source, episode_id);
+        return Some((action_id, fact));
+    }
     if let Some(attr) = &pred.attr {
         // Attribute form: be(x1) attr="adj" -> rel.is(x1, Text(adj))
         let x1 = resolve_term(pred.args.first()?, bindings)?;
@@ -430,10 +456,10 @@ fn answer_yes_no(
     store: &Store,
     g: &Grounded,
     pred: &Pred,
-    _all_refs: &[&Referent],
+    all_refs: &[&Referent],
 ) -> anyhow::Result<Answer> {
     if pred.pred == "be" {
-        return answer_be_yesno(can, store, g, pred, &[]);
+        return answer_be_yesno(can, store, g, pred, all_refs);
     }
 
     let action_id = action_id_for(can, &pred.pred);
@@ -466,6 +492,28 @@ fn answer_be_yesno(
     pred: &Pred,
     all_refs: &[&Referent],
 ) -> anyhow::Result<Answer> {
+    // Property form: "Is the wellbeing of Assistant good?" -> rel.wellbeing(Assistant, ?)
+    if let Some((noun, owner)) = pred.args.first().and_then(|t| property_subject(t, &g.bindings, all_refs)) {
+        let Some(action_id) = action_id_for(can, &noun) else {
+            return Ok(Answer::Unknown { reason: format!("nothing known about {noun}") });
+        };
+        let want = match &pred.attr {
+            Some(attr) => Some(Value::Text(attr.clone())),
+            None => pred.args.get(1).and_then(|t| resolve_term(t, &g.bindings)),
+        };
+        let facts = store.query_facts(&action_id, &[Some(owner), None]).unwrap_or_default();
+        let Some(want) = want else {
+            return Ok(Answer::Unknown { reason: "unresolved object".into() });
+        };
+        if let Some(f) = facts.iter().find(|f| f.args.get(1) == Some(&want)) {
+            return Ok(Answer::YesNo(f.truth, Some(f.clone())));
+        }
+        if let Some(f) = facts.iter().find(|f| f.truth) {
+            return Ok(Answer::YesNo(false, Some(f.clone())));
+        }
+        return Ok(Answer::Unknown { reason: format!("no {noun} fact") });
+    }
+
     // Attribute form: "Is X brown?" -> query rel.is(x1, Text("brown"))
     if let Some(attr) = &pred.attr {
         let Some(x1) = pred.args.first().and_then(|t| resolve_term(t, &g.bindings)) else {
@@ -530,12 +578,7 @@ fn answer_be_yesno(
                 }
             }
         } else {
-            // Unknown concept: just query rel.is_a(x1, None) and return what's there.
-            let pattern = vec![Some(x1.clone()), None];
-            let facts = store.query_facts(&action_id, &pattern).unwrap_or_default();
-            if !facts.is_empty() {
-                return Ok(Answer::YesNo(true, Some(facts[0].clone())));
-            }
+            return Ok(Answer::Unknown { reason: "unresolved object of 'be'".into() });
         }
     }
 
@@ -547,13 +590,28 @@ fn answer_wh(
     store: &Store,
     g: &Grounded,
     pred: &Pred,
-    _all_refs: &[&Referent],
+    all_refs: &[&Referent],
     focus: &str,
     noun_filter: Option<&str>,
 ) -> anyhow::Result<Answer> {
     if pred.pred == "be" {
-        // be with NP -> we want who/what is x
-        // For now fall through to generic handling.
+        // "What is the name of Assistant?" -> rel.name(Assistant, ?). The
+        // possessed noun may sit on either side of the copula.
+        if let Some((noun, owner)) =
+            pred.args.iter().find_map(|t| property_subject(t, &g.bindings, all_refs))
+        {
+            let Some(action_id) = action_id_for(can, &noun) else {
+                return Ok(Answer::Unknown { reason: format!("nothing known about {noun}") });
+            };
+            let facts = store.query_facts(&action_id, &[Some(owner), None]).unwrap_or_default();
+            let values: Vec<Value> =
+                facts.iter().filter(|f| f.truth).filter_map(|f| f.args.get(1).cloned()).collect();
+            return Ok(if values.is_empty() {
+                Answer::Unknown { reason: format!("no {noun} fact") }
+            } else {
+                Answer::Values(values)
+            });
+        }
     }
 
     let action_id = action_id_for(can, &pred.pred)

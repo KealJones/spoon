@@ -24,17 +24,35 @@ IN PROGRESS (subagents, Sonnet)
 - sce: grammar + Earley parser + realizer in `spoon-lang/src/sce/` (started
   writing files at 21:54 after a long read; do not respawn)
 - batch 2 (spawned 22:05): ears `spoon-lang/src/ears/` (Gate trait decouples
-  it from sce), grow `spoon-mind/src/grow/` (synth + consolidate), teacher
-  `spoon-mind/src/teacher/`. (bin landed, see below.)
-- dispatch `spoon-mind/src/dispatch/` (spawned 22:15): Clause -> Moves |
-  Plan(Intent) | UnknownCapability | NeedsTeacher. Dialog verb mirroring,
-  small-talk policy, self-model QA (`data/seed/self_model.json`), opinions and
-  advice from `stances`, arithmetic compile+eval, command -> Intent.
+  it from sce), grow `spoon-mind/src/grow/` (synth + consolidate). (teacher
+  and bin landed, see below.)
+- grow rework (resumed 22:25): deterministic order, no lossy bank cap,
+  backward type-reachability pruning; targets map_double < 1 s at default budget.
 - orchestrator: `types/spec.rs` (Spec, Example) added as the grow/teacher
   contract; `brain.rs` public API frozen: BrainConfig, Brain::open/turn/
   metrics/snapshot, TurnResult, BrainMetrics, Snapshot.
 - plan: planner (AND/OR search) + executor in `spoon-mind/src/plan/`
 - discourse: referents, facts QA, corrections in `spoon-mind/src/discourse/`
+
+LANDED FROM BATCH 2
+- dispatch: `spoon-mind/src/dispatch/{mod,dialog,selfmodel,opinion,arith,command}.rs`
+  + `data/seed/self_model.json`. 15 tests green. Returns `Dispatched::{Moves,
+  Plan{intent}, UnknownCapability, NeedsTeacher{ask, fallback}}`; opinion
+  keywords are matched in both hyphenated and spaced forms.
+- discourse fixes (orchestrator): property facts. "The X of Y is Z" now stores
+  `rel.X(Y, Z)` (was `rel.is_a(minted_x, Z)`, unqueryable) and "What is the X
+  of Y?" / "Is the X of Y Z?" read it back; yes/no `be` questions now see the
+  clause referents (they got `&[]`, which made unknown objects answer true).
+  Test: `tests/property_facts.rs`.
+- teacher: `spoon-mind/src/teacher/{spec,stance,curriculum,prompts}.rs` +
+  `data/prompts/teacher_*.md`. 10 offline tests green. Live on qwen3.5:4b:
+  `spec_for("double")` gives a valid 8-example Spec in ~3s; `stance_for`
+  gives stance + 4 reasons + 2 counterpoints; `curriculum(5)` gives mixed
+  lessons. Wiring notes: `parse_pairs_json` leaves `Pair.at = 0` and
+  `Store::insert_pair` does NOT fill it (brain sets `now_ms()`); concept
+  provenance comes back with an empty lesson_id (brain fills); `Facts`
+  lessons are loose English, run them through the parser gate and drop
+  failures.
 
 LANDED FROM BATCH 1
 - plan: `spoon-mind/src/plan/{planner,executor,cost}.rs`. AND/OR search over

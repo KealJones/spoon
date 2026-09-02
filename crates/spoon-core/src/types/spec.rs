@@ -52,11 +52,11 @@ impl Spec {
                 ));
             }
             for (j, (v, t)) in ex.inputs.iter().zip(&self.params).enumerate() {
-                if !t.accepts(&v.type_of()) {
+                if !t.accepts_value(v) {
                     return Err(format!("example {i} input {j}: {} is not a {t}", v.type_of()));
                 }
             }
-            if !self.ret.accepts(&ex.output.type_of()) {
+            if !self.ret.accepts_value(&ex.output) {
                 return Err(format!("example {i} output: {} is not a {}", ex.output.type_of(), self.ret));
             }
         }

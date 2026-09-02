@@ -66,6 +66,22 @@ impl Type {
             (a, b) => a == b,
         }
     }
+    /// Runtime check of a concrete value against this type. Unlike `accepts`
+    /// it looks inside lists, so an empty list conforms to any list type and
+    /// a `Name` conforms to any entity concept (is-a is the CAN's business).
+    pub fn accepts_value(&self, v: &Value) -> bool {
+        match (self, v) {
+            (Type::Any, _) => true,
+            (Type::Float, Value::Int(_)) => true,
+            (Type::List(t), Value::List(items)) => items.iter().all(|i| t.accepts_value(i)),
+            (Type::Concept(_), Value::Name(_)) => true,
+            (Type::Concept(c), Value::Struct { concept, .. }) => c == concept,
+            (Type::Func(ps, r), Value::Lambda(l)) => {
+                ps.len() == l.params.len() && r.accepts(&l.ret)
+            }
+            (t, v) => *t == v.type_of(),
+        }
+    }
 }
 
 impl fmt::Display for Type {
