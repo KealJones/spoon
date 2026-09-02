@@ -57,6 +57,23 @@ pub fn unknown_names_in(text: &str, gate: &dyn Gate, lex: &Lexicon) -> Vec<Strin
     names
 }
 
+/// The same names, read off a parse that already succeeded. New vocabulary in
+/// a known frame ("Blorp is a fictional hero.") is heard rather than failed,
+/// so the name has to be learned from the clause and not from the wreckage.
+pub fn unknown_names_in_clauses(clauses: &[Clause], unknown: &[String]) -> Vec<String> {
+    let mut names: Vec<String> = vec![];
+    for clause in clauses {
+        for r in clause.referents.iter().chain(clause.then_referents.iter()) {
+            let Quant::Named(name) = &r.quant else { continue };
+            let is_unknown = unknown.iter().any(|u| u.eq_ignore_ascii_case(name));
+            if is_unknown && looks_like_a_name(name) && !names.contains(name) {
+                names.push(name.clone());
+            }
+        }
+    }
+    names
+}
+
 /// Capitalized, alphabetic, and not SCE syntax (variables like `X1`, minted
 /// names like `Object-X`, the reserved names).
 fn looks_like_a_name(word: &str) -> bool {

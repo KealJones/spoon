@@ -10,11 +10,14 @@
 mod exec;
 mod host;
 mod learn;
+mod lookup;
 mod metrics;
 mod names;
+mod nouns;
 mod respond;
 mod session;
 mod teach;
+mod turn;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -35,7 +38,7 @@ use spoon_lang::ears::gate::SceGate;
 use spoon_lang::ears::{self, Ears, Gate};
 use spoon_lang::mouth::{Mouth, MouthPath, RenderContext};
 
-use crate::discourse::{self, detect_clause_correction, extract_keywords, ground_all, Correction, DiscourseState, Grounded};
+use crate::discourse::{self, detect_clause_correction, extract_keywords, ground_all, Correction, DiscourseState};
 use crate::dispatch::{self, DispatchCtx, Dispatched};
 use crate::teacher::Teacher;
 
@@ -46,6 +49,7 @@ use learn::{apply_synonyms, SYNONYMS_KEY};
 use metrics::Counters;
 pub use metrics::{ActionSummary, BrainMetrics, Snapshot};
 use session::{LastAssert, Pending, Session};
+use turn::{assert_target, dispatch_variant_name, SyncTurnResult, TeacherRequest, TurnFlags};
 
 // ---------------------------------------------------------------------------
 // Config
@@ -141,6 +145,8 @@ pub struct Brain {
     sessions: Mutex<HashMap<String, Session>>,
     /// Word -> canonical word, applied to the raw text before the ears.
     synonyms: Mutex<HashMap<String, String>>,
+    /// WordNet hypernyms from the seed lexicon: the offline lookup source.
+    hypernyms: lookup::Hypernyms,
     counters: Counters,
 }
 
@@ -218,11 +224,18 @@ impl Brain {
         }
 
         let mut gate = SceGate::from_can(&can);
-        // So do proper names met in earlier conversations.
+        // So do proper names and common nouns met in earlier conversations.
         let names = names::load_names(&store);
         let name_refs: Vec<&str> = names.iter().map(String::as_str).collect();
         ears.lexicon_mut().add_names(&name_refs);
         gate.add_names(&name_refs);
+        let learned_nouns = nouns::load_nouns(&store);
+        ears.lexicon_mut().add_nouns(&learned_nouns.iter().map(String::as_str).collect::<Vec<_>>());
+        for noun in &learned_nouns {
+            gate.lex.add_noun(noun);
+        }
+        // The CAN's own vocabulary belongs to the ears too, LLM seat or not.
+        ears.lexicon_mut().extend_from_can(&can);
 
         // Assert self-model seed facts if this is a fresh store.
         if store.counts().unwrap_or_default().facts == 0 {
@@ -250,6 +263,7 @@ impl Brain {
             gate: Mutex::new(gate),
             sessions: Mutex::new(HashMap::new()),
             synonyms: Mutex::new(synonyms),
+            hypernyms: lookup::Hypernyms::load(&data_dir),
             counters: Counters::default(),
         }))
     }
@@ -298,6 +312,26 @@ impl Brain {
 
         // 3. Everything else is synchronous Spoon code.
         let mut out = self.turn_sync(session_id, text, ears_result, &mut ears, out)?;
+
+        // The last link of the lookup chain. The teacher writes a concept
+        // model for a word the offline and network sources could not place;
+        // Spoon code turns it into facts and asks the question again.
+        if let Some(topic) = out.lookup.take() {
+            let context = out.sce.clone();
+            if let Some(found) = self.lookup_with_teacher(&topic, &context).await {
+                if self.cfg.debug {
+                    out.trace.push(format!("lookup {}: {} (teacher)", topic.term, found.sentences.join(" ")));
+                }
+                match self.answer_again(session_id, &out.clauses) {
+                    Some(plan) => out.plan = plan,
+                    None => {
+                        for sentence in found.sentences {
+                            out.plan.push(Move::Learned { what: sentence });
+                        }
+                    }
+                }
+            }
+        }
 
         // The teacher seat: the only other LLM call reachable from the turn
         // loop, and it only ever writes a Spec. Spoon code does the rest.
@@ -417,6 +451,7 @@ impl Brain {
             return Ok(out.reply(plan));
         }
         out.clauses = ears_result.clauses;
+        out.unknown_words = ears_result.unknown_words;
 
         // 3. Corrections stated in SCE act on memory directly.
         let corrections: Vec<Correction> = out.clauses.iter().filter_map(detect_clause_correction).collect();
@@ -446,6 +481,26 @@ impl Brain {
         if self.cfg.debug {
             trace.push(format!("grounded: {} clauses", grounded.len()));
         }
+
+        // 4b. New vocabulary. Nouns the parser guessed from position become
+        // words the gate and the ears know, and anything the turn asks or
+        // asserts the identity of goes through the lookup chain before
+        // dispatch, so the answer can still come out of memory this turn.
+        let new_nouns = nouns::unknown_nouns_in(&out.clauses, &out.unknown_words);
+        if !new_nouns.is_empty() {
+            self.learn_nouns(&new_nouns, ears)?;
+            if self.cfg.debug {
+                trace.push(format!("nouns learned: {}", new_nouns.join(", ")));
+            }
+        }
+        let new_names = names::unknown_names_in_clauses(&out.clauses, &out.unknown_words);
+        if !new_names.is_empty() {
+            self.learn_names(&new_names, ears)?;
+            if self.cfg.debug {
+                trace.push(format!("names learned: {}", new_names.join(", ")));
+            }
+        }
+        out.lookup = self.lookup_topics(&out.clauses, &out.unknown_words, trace).into_iter().next();
 
         // 5. Dispatch. The brain holds the store here, so the host is memoryless.
         let facts_before = self.store.lock().counts().map(|c| c.facts as i64).unwrap_or(0);
@@ -587,83 +642,3 @@ impl Brain {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/// What the synchronous part of a turn produced.
-struct SyncTurnResult {
-    sce: String,
-    clauses: Vec<Clause>,
-    ears_path: EarsPath,
-    plan: ResponsePlan,
-    trace: Vec<String>,
-    flags: TurnFlags,
-    /// Set when an unknown verb should be taken to the teacher.
-    teacher: Option<TeacherRequest>,
-    llm_before: (u32, u32, u32, u32),
-}
-
-/// What happened this turn, for `TurnMetrics`. Filled by the brain submodules.
-#[derive(Default)]
-pub(crate) struct TurnFlags {
-    pub synthesis_attempted: bool,
-    pub synthesis_succeeded: bool,
-    pub teacher_fallback: bool,
-    /// A plan ran an action with a non-Kernel tier.
-    pub used_learned_action: bool,
-    pub plan_steps: usize,
-}
-
-struct TeacherRequest {
-    verb: String,
-    sce: String,
-    signals: Vec<Signal>,
-}
-
-impl SyncTurnResult {
-    fn new(llm_before: (u32, u32, u32, u32)) -> Self {
-        SyncTurnResult {
-            sce: String::new(),
-            clauses: vec![],
-            ears_path: EarsPath::Direct,
-            plan: ResponsePlan::new(vec![]),
-            trace: vec![],
-            flags: TurnFlags::default(),
-            teacher: None,
-            llm_before,
-        }
-    }
-
-    fn reply(mut self, plan: ResponsePlan) -> Self {
-        self.plan = plan;
-        self
-    }
-}
-
-/// The entity an assertion was about, so "User means Mary." can retarget it:
-/// the subject if it is a proper name, else any proper name in the clause.
-fn assert_target(gs: &[Grounded]) -> Option<String> {
-    gs.iter().filter(|g| matches!(g.clause.act, Act::Assert)).find_map(|g| {
-        let named = |var: &str| {
-            g.clause.referents.iter().find(|r| r.var == var).and_then(|r| match &r.quant {
-                Quant::Named(n) if n != "User" && n != "Assistant" && n != "It" => Some(n.clone()),
-                _ => None,
-            })
-        };
-        let subject = match g.clause.conditions.first().and_then(|p| p.args.first()) {
-            Some(Term::Var { var }) => named(var),
-            _ => None,
-        };
-        subject.or_else(|| g.clause.referents.iter().find_map(|r| named(&r.var)))
-    })
-}
-
-fn dispatch_variant_name(d: &Dispatched) -> &'static str {
-    match d {
-        Dispatched::Moves(_) => "Moves",
-        Dispatched::Plan { .. } => "Plan",
-        Dispatched::UnknownCapability { .. } => "UnknownCapability",
-        Dispatched::NeedsTeacher { .. } => "NeedsTeacher",
-    }
-}

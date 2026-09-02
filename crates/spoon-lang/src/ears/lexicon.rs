@@ -233,6 +233,13 @@ impl Lexicon {
         entry.freq += freq;
     }
 
+    /// Register common nouns met in conversation ("movie", "hero").
+    pub fn add_nouns(&mut self, nouns: &[&str]) {
+        for n in nouns {
+            self.insert_word(n, WordKind::Noun, 10);
+        }
+    }
+
     /// Learn a user-taught word (canonical form). Freq = 10 overrides seed defaults.
     pub fn learn_word(&mut self, word: &str, canonical: &str) {
         self.insert_word(canonical, WordKind::Noun, 10);
@@ -272,6 +279,19 @@ impl Lexicon {
     /// True if `word` is registered as a verb (and not shadowed by a noun).
     pub fn is_verb(&self, word: &str) -> bool {
         matches!(self.words.get(&word.to_lowercase()), Some(e) if e.kind == WordKind::Verb)
+    }
+
+    /// True if `word` names a verb the ears know, whatever else it also is.
+    /// The parser hands back lemmas, so `sees` arrives as `see`; a noun of the
+    /// same spelling ("wait", "help") must not hide the verb.
+    pub fn knows_verb(&self, lemma: &str) -> bool {
+        let lower = lemma.to_lowercase();
+        if self.verb_lemmas.contains(&lower) || self.is_verb(&lower) {
+            return true;
+        }
+        // Hyphenated multi-word verbs ("picks-up", "look-for") count when
+        // their head is known.
+        lower.split_once('-').is_some_and(|(head, _)| self.verb_lemmas.contains(head))
     }
 
     /// True if `word` is a seed adjective, even one a noun shadows ("good").
@@ -373,6 +393,13 @@ impl Lexicon {
             if dist == 0 || dist > max_dist {
                 continue;
             }
+            // A repair that drops a letter turns a word the lexicon lacks into
+            // a shorter one it has ("movie" -> "move", "heroes" -> "heres").
+            // Only a doubled letter is worth deleting ("moviee" -> "movie");
+            // everything else is new vocabulary, and shortening it hides that.
+            if candidate.chars().count() < word_len && !is_doubled_letter_deletion(&lower, candidate) {
+                continue;
+            }
             if dist == 2 {
                 // For 2-edit repairs require the same letter multiset (transpositions + no substitutions)
                 let mut cand_sorted: Vec<char> = candidate.chars().collect();
@@ -445,6 +472,18 @@ impl Default for Lexicon {
     fn default() -> Self {
         Lexicon::new()
     }
+}
+
+/// True when `candidate` is `word` with one repeated letter removed.
+fn is_doubled_letter_deletion(word: &str, candidate: &str) -> bool {
+    let chars: Vec<char> = word.chars().collect();
+    (0..chars.len().saturating_sub(1))
+        .filter(|&i| chars[i] == chars[i + 1])
+        .any(|i| {
+            let shortened: String =
+                chars.iter().enumerate().filter(|(j, _)| *j != i).map(|(_, c)| *c).collect();
+            shortened == candidate
+        })
 }
 
 /// Returns true if the word should NOT be modified by typo repair.

@@ -519,12 +519,53 @@ fn ace_category_dump() {
 fn gate_parse_dump() {
     use spoon_lang::ears::Gate;
     let Ok(text) = std::env::var("SPOON_SCE") else { return };
-    let gate = real_gate();
+    let mut gate = real_gate();
+    if let Ok(names) = std::env::var("SPOON_SCE_NAMES") {
+        let names: Vec<&str> = names.split(',').map(str::trim).collect();
+        gate.add_names(&names);
+    }
+    for noun in std::env::var("SPOON_SCE_NOUNS").unwrap_or_default().split(',').filter(|s| !s.is_empty()) {
+        gate.lex.add_noun(noun.trim());
+    }
+    for adj in std::env::var("SPOON_SCE_ADJS").unwrap_or_default().split(',').filter(|s| !s.is_empty()) {
+        gate.lex.add_adjective(adj.trim());
+    }
     for sentence in text.split('|') {
         match gate.parse_reported(sentence.trim()) {
             Ok((clauses, unknown)) => println!("OK  {sentence}\n    {clauses:?} unknown={unknown:?}"),
             Err(e) => println!("ERR {sentence}\n    {e}"),
         }
+    }
+}
+
+/// Hear `SPOON_IN` (utterances separated by `|`) offline with the real gate
+/// and print the normalization plus the verdict. A probe for "what do the
+/// ears make of this".
+#[test]
+#[ignore]
+fn ears_hear_dump() {
+    use spoon_lang::ears::normalize::normalize;
+    let Ok(text) = std::env::var("SPOON_IN") else { return };
+    let mut lex = Lexicon::load_seed_dir(&seed_dir()).expect("load lexicon");
+    lex.add_names(&["John", "Mary", "Bob"]);
+    for name in std::env::var("SPOON_SCE_NAMES").unwrap_or_default().split(',').filter(|s| !s.is_empty()) {
+        lex.add_names(&[name.trim()]);
+    }
+    let mut gate = real_gate();
+    for name in std::env::var("SPOON_SCE_NAMES").unwrap_or_default().split(',').filter(|s| !s.is_empty()) {
+        gate.add_names(&[name.trim()]);
+    }
+    let phrasings = spoon_lang::ears::load_phrasings(&test_data_dir(), &lex).expect("load phrasings");
+    let ears = Ears::new(lex, phrasings, None);
+    let seed_lex = Lexicon::load_seed_dir(&seed_dir()).expect("load lexicon");
+    for input in text.split('|') {
+        let input = input.trim();
+        let normed = normalize(input, &seed_lex);
+        let result = ears.hear_offline(input, &gate);
+        println!(
+            "IN : {input}\n  norm: {:?}\n  path: {:?} conf={} unknown={:?}\n  sce : {}\n",
+            normed.sentences, result.path, result.confidence, result.unknown_words, result.sce
+        );
     }
 }
 
@@ -840,6 +881,50 @@ fn capitalized_junk_is_never_a_clean_direct() {
     // `who owns a dog` is a question, not an assertion about a dog owner.
     let q = ears.hear_offline("who owns a dog", &gate);
     assert_eq!(q.sce, "Who owns a dog?", "{:?}", q);
+}
+
+/// New vocabulary in a known frame is heard, not rejected. The words are
+/// unknown but the shape is not: copula, name, adjective, noun.
+#[test]
+fn new_vocabulary_in_a_known_frame_is_heard() {
+    let ears = make_ears();
+    let gate = real_gate();
+    for line in ["John is a fictional hero.", "Blorp is a happy dog.", "User sees the movie tomorrow."] {
+        let r = ears.hear_offline(line, &gate);
+        assert_eq!(r.path, EarsPath::Direct, "{line}: {r:?}");
+        assert!(r.confidence >= 0.8, "{line}: confidence {} too low", r.confidence);
+        assert!(!r.unknown_words.is_empty(), "{line}: unknowns must be reported");
+    }
+}
+
+/// Words with no shape around them are still junk. Item 1 loosened the
+/// vocabulary rule, not the frame rule.
+#[test]
+fn junk_is_still_rejected_after_the_vocabulary_rule() {
+    let ears = make_ears();
+    let gate = real_gate();
+    for line in ["zxqv flarp wibble", "Hello whats up."] {
+        let r = ears.hear_offline(line, &gate);
+        assert!(
+            !(r.path == EarsPath::Direct && r.confidence >= 0.8),
+            "junk accepted as new vocabulary: {line} -> {r:?}"
+        );
+    }
+}
+
+/// The bug report's own lines. Blocked in the SCE parser, not in the ears:
+/// `Dogs are happy animals.` fails the same way with every word known, and
+/// `The Avengers` is not accepted as a definite proper name. Remove the
+/// ignore when the parser handles plural predicate nominals.
+#[test]
+#[ignore]
+fn avengers_lines_from_the_bug_report() {
+    let ears = make_ears();
+    let gate = real_gate();
+    for line in ["The Avengers are fictional super heroes.", "im going to see the avengers movie tomorrow"] {
+        let r = ears.hear_offline(line, &gate);
+        assert_ne!(r.path, EarsPath::Failed, "{line}: {r:?}");
+    }
 }
 
 /// A command whose only unknown word is its verb is still a clean Direct

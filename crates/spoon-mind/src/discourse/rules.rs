@@ -87,7 +87,7 @@ pub fn add_rule(store: &Store, clause: &Clause) -> anyhow::Result<Rule> {
 
 /// Ensure a concept for `noun` exists in `can` (and is persisted), returning
 /// its ID. Creates a provisional Entity concept extending Thing if absent.
-pub(crate) fn ensure_concept_in_can(can: &mut Can, store: &Store, noun: &str) -> ConceptId {
+pub fn ensure_concept_in_can(can: &mut Can, store: &Store, noun: &str) -> ConceptId {
     let existing = can.concepts_for_noun(noun);
     if let Some(c) = existing.first() {
         return c.id.clone();

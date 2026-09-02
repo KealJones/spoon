@@ -138,9 +138,11 @@ fn noun_phrase(can: &Can, store: &Store, value: &Value, article: Article) -> Str
 }
 
 /// The noun of a minted entity, from its `is_a` fact: `dog_1` -> "dog".
+/// A name that is itself a concept id is a class, not one of its members:
+/// `Animal` has an `is_a` fact too, and "the entity" is not what it means.
 fn entity_noun(can: &Can, store: &Store, value: &Value) -> Option<String> {
     let Value::Name(name) = value else { return None };
-    if matches!(name.as_str(), "User" | "Assistant") {
+    if matches!(name.as_str(), "User" | "Assistant") || can.concept(&ConceptId(name.clone())).is_some() {
         return None;
     }
     let is_a = ActionId("rel.is_a".into());

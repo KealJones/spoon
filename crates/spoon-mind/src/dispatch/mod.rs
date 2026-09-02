@@ -11,7 +11,7 @@ mod selfmodel;
 use spoon_core::can::Can;
 use spoon_core::kernel::Kernel;
 use spoon_core::store::Store;
-use spoon_core::types::{Act, Fact, Intent, Move, QuestionKind, Signal, Value};
+use spoon_core::types::{Act, ConceptId, Fact, Intent, Move, QuestionKind, Signal, Value};
 
 use crate::discourse::{
     answer_grounded, assert_grounded, display_value, realize_fact_with, Answer, Article, DiscourseState, FactWriter,
@@ -289,6 +289,23 @@ fn lowercase_determiner(s: &str) -> String {
 pub(crate) fn render_fact(ctx: &DispatchCtx<'_>, fact: &Fact) -> String {
     if let Some(s) = realize_fact_with(ctx.can, ctx.store, fact, Article::Definite) {
         return s;
+    }
+    // A typing fact says nothing when describing a thing, but it is the whole
+    // reason when it answers "Is Blorp a hero?".
+    if fact.pred.0 == "rel.is_a" {
+        if let [subject, class] = fact.args.as_slice() {
+            let noun = match class {
+                Value::Name(n) => ctx
+                    .can
+                    .concept(&ConceptId(n.clone()))
+                    .and_then(|c| c.nouns.first().cloned())
+                    .unwrap_or_else(|| n.to_lowercase()),
+                other => other.render(),
+            };
+            let article = if noun.starts_with(['a', 'e', 'i', 'o', 'u']) { "an" } else { "a" };
+            let not = if fact.truth { "" } else { "not " };
+            return format!("{} is {not}{article} {noun}", subject.render());
+        }
     }
     let verb = ctx.can.action(&fact.pred)
         .and_then(|a| a.verbs.first().cloned())

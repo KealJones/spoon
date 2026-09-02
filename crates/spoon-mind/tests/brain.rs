@@ -590,3 +590,79 @@ async fn mem_recall_runs_through_the_kernel() {
     let r = say(&brain, "Assistant, recall \"dog\"!").await;
     assert!(r.contains("dog"), "mem.recall should see the store, got: {r}");
 }
+
+// ---------------------------------------------------------------------------
+// New vocabulary: hearing it, keeping it, looking it up
+// ---------------------------------------------------------------------------
+
+/// The nouns and names a session has learned, read straight from the kv rows
+/// that survive a restart.
+fn learned_words(brain: &Brain, key: &str) -> Vec<String> {
+    let store = brain.store.lock();
+    store
+        .kv_get(key)
+        .ok()
+        .flatten()
+        .and_then(|v| serde_json::from_value::<Vec<String>>(v).ok())
+        .unwrap_or_default()
+}
+
+/// An assertion whose content words are all new is still an assertion. The
+/// fact lands, and the words become vocabulary.
+#[tokio::test]
+async fn new_vocabulary_is_heard_and_kept() {
+    let brain = test_brain().await;
+    let r = brain.turn("test", "Blorp is a fictional hero.").await.unwrap();
+    assert_eq!(r.episode.metrics.interior_llm_calls, 0);
+    assert_ne!(r.episode.metrics.ears_path, Some(EarsPath::Failed), "got: {}", r.text);
+    // Acknowledged rather than queried: a hedged "ok" is the mouth's reading
+    // of a parse that leaned on new vocabulary.
+    assert!(r.text.to_lowercase().contains("blorp"), "should note the fact, got: {}", r.text);
+    assert!(!r.text.contains('?'), "nothing to ask about, got: {}", r.text);
+
+    assert!(learned_words(&brain, "seed.names").contains(&"Blorp".to_string()));
+    assert!(learned_words(&brain, "seed.nouns").contains(&"hero".to_string()));
+
+    let back = say(&brain, "Is Blorp a hero?").await;
+    assert!(back.starts_with("yes"), "the fact should answer, got: {back}");
+}
+
+#[tokio::test]
+async fn learned_vocabulary_survives_restart() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    let db_path = tmp.path().to_path_buf();
+    {
+        let brain = file_brain(db_path.clone()).await;
+        say(&brain, "Blorp is a fictional hero.").await;
+    }
+    {
+        let brain = file_brain(db_path).await;
+        assert!(learned_words(&brain, "seed.names").contains(&"Blorp".to_string()));
+        assert!(learned_words(&brain, "seed.nouns").contains(&"hero".to_string()));
+        let r = say(&brain, "Is Blorp a hero?").await;
+        assert!(r.starts_with("yes"), "the fact should outlive the process, got: {r}");
+    }
+}
+
+/// A word Spoon does not know but WordNet does. No network, no teacher: the
+/// hypernym chain in the seed lexicon is enough to answer from memory.
+#[tokio::test]
+async fn wordnet_places_a_word_the_can_never_saw() {
+    let brain = test_brain().await;
+    let what = say(&brain, "What is a dog?").await;
+    assert!(what.contains("animal"), "wordnet should place a dog, got: {what}");
+    assert!(say(&brain, "Is a dog an animal?").await.starts_with("yes"));
+    // The lookup is a claim about classes, not a licence to agree.
+    assert!(say(&brain, "Is a dog a cat?").await.starts_with("I don't know"));
+}
+
+/// Item 1 loosened the vocabulary rule, not the frame rule.
+#[tokio::test]
+async fn junk_is_still_junk() {
+    let brain = test_brain().await;
+    let r = brain.turn("test", "zxqv flarp wibble").await.unwrap();
+    assert_eq!(r.episode.metrics.ears_path, Some(EarsPath::Failed), "got: {}", r.text);
+    assert!(r.text.contains("rephrase"), "should ask, not answer, got: {}", r.text);
+    assert!(learned_words(&brain, "seed.nouns").is_empty(), "junk is not vocabulary");
+    assert!(learned_words(&brain, "seed.names").is_empty(), "junk is not vocabulary");
+}

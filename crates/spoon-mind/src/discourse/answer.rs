@@ -68,6 +68,57 @@ pub fn answer_grounded(
     }
 }
 
+/// Everything a concept is, following stored concept-level `rel.is_a` facts
+/// and the CAN hierarchy: `Dog` -> `Animal` -> `Entity`. Concept-level facts
+/// are what the lookup chain writes, and what makes `Is a dog an animal?`
+/// answerable without ever meeting a particular dog.
+pub fn class_parents(can: &Can, store: &Store, concept: &ConceptId) -> Vec<ConceptId> {
+    let mut seen: Vec<ConceptId> = vec![concept.clone()];
+    let mut frontier = vec![concept.clone()];
+    while let Some(current) = frontier.pop() {
+        for p in class_parents_direct(can, store, &current) {
+            if !seen.contains(&p) {
+                seen.push(p.clone());
+                frontier.push(p);
+            }
+        }
+    }
+    seen.remove(0);
+    seen
+}
+
+/// One hop up: what a concept is, in the shortest true answer.
+pub fn class_parents_direct(can: &Can, store: &Store, concept: &ConceptId) -> Vec<ConceptId> {
+    let mut parents: Vec<ConceptId> = can.concept(concept).map(|c| c.extends.clone()).unwrap_or_default();
+    let stored = store
+        .query_facts(&ActionId("rel.is_a".into()), &[Some(Value::Name(concept.0.clone())), None])
+        .unwrap_or_default();
+    for f in stored.iter().filter(|f| f.truth) {
+        if let Some(Value::Name(parent)) = f.args.get(1) {
+            parents.push(ConceptId(parent.clone()));
+        }
+    }
+    // `Thing` is the root every provisional concept extends; it is true and
+    // useless as an answer unless nothing else is known.
+    if parents.iter().any(|p| p.0 != "Thing") {
+        parents.retain(|p| p.0 != "Thing");
+    }
+    parents.dedup();
+    parents.retain(|p| p != concept);
+    parents
+}
+
+/// The concept a bare noun names ("dog" -> `Dog`), whether or not the CAN
+/// has met it.
+pub fn concept_of_noun(can: &Can, noun: &str) -> ConceptId {
+    let noun = singularize_noun(noun);
+    can.concepts_for_noun(&noun)
+        .into_iter()
+        .next()
+        .map(|c| c.id.clone())
+        .unwrap_or_else(|| ConceptId(capitalize_first(&noun)))
+}
+
 /// `Where is X?`: X's current location, following whoever carries it.
 fn answer_where(store: &Store, g: &Grounded, pred: &Pred) -> Answer {
     let Some(subject) = pred.args.first().and_then(|t| resolve_term(t, &g.bindings)) else {
@@ -169,6 +220,17 @@ fn answer_be_yesno(
 
     // NP form: "Is X a dog?" -> check rel.is_a
     if pred.args.len() >= 2 {
+        // Class membership first: "Is a dog an animal?" is about the concepts,
+        // and no particular dog needs to exist for it to be true.
+        if let (Some(child), Some(parent)) =
+            (subject_noun(&pred.args[0], all_refs), subject_noun(&pred.args[1], all_refs))
+        {
+            let child = concept_of_noun(can, &child);
+            let parent = concept_of_noun(can, &parent);
+            if child == parent || class_parents(can, store, &child).contains(&parent) {
+                return Ok(Answer::YesNo(true, None));
+            }
+        }
         let Some(x1) = resolve_term(&pred.args[0], &g.bindings) else {
             return Ok(Answer::Unknown { reason: "unresolved subject".into() });
         };
@@ -221,6 +283,30 @@ fn answer_be_yesno(
     Ok(Answer::Unknown { reason: "no is_a fact".into() })
 }
 
+/// The head noun of the referent a term points at, for questions about a
+/// class rather than an individual ("a dog", "the avengers").
+fn subject_noun(term: &Term, all_refs: &[&Referent]) -> Option<String> {
+    let Term::Var { var } = term else { return None };
+    all_refs.iter().find(|r| &r.var == var)?.noun.clone()
+}
+
+/// A concept as the phrase that answers "what is it": `Animal` -> "an animal".
+fn class_phrase(can: &Can, concept: &ConceptId) -> String {
+    let noun = can
+        .concept(concept)
+        .and_then(|c| c.nouns.first().cloned())
+        .unwrap_or_else(|| concept.0.to_lowercase());
+    let article = if noun.starts_with(['a', 'e', 'i', 'o', 'u']) { "an" } else { "a" };
+    format!("{article} {noun}")
+}
+
+/// Same, but only for `a dog` and bare plurals: a class, not an individual.
+fn indefinite_noun(term: &Term, all_refs: &[&Referent]) -> Option<String> {
+    let Term::Var { var } = term else { return None };
+    let r = all_refs.iter().find(|r| &r.var == var)?;
+    matches!(r.quant, Quant::Indef | Quant::Every).then(|| r.noun.clone())?
+}
+
 fn answer_wh(
     can: &Can,
     store: &Store,
@@ -247,6 +333,7 @@ fn answer_wh(
                 Answer::Values(values)
             });
         }
+
     }
 
     let action_id = action_id_for(can, &pred.pred)
@@ -269,11 +356,23 @@ fn answer_wh(
     values.sort_by(|a, b| a.render().cmp(&b.render()));
     values.dedup_by(|a, b| a == b);
 
-    if values.is_empty() {
-        Ok(Answer::Unknown { reason: "no matching fact".into() })
-    } else {
-        Ok(Answer::Values(values))
+    if !values.is_empty() {
+        return Ok(Answer::Values(values));
     }
+
+    // Last resort for "What is a dog?": what the concept Dog is a kind of.
+    // The wh slot is the argument with no noun, so the other one names the
+    // class. Indefinite only: "the time" asks about a particular thing, and
+    // answering "an entity" would be true and useless.
+    if pred.pred == "be" {
+        if let Some(noun) = pred.args.iter().find_map(|t| indefinite_noun(t, all_refs)) {
+            let parents = class_parents_direct(can, store, &concept_of_noun(can, &noun));
+            if !parents.is_empty() {
+                return Ok(Answer::Values(parents.iter().map(|c| Value::Text(class_phrase(can, c))).collect()));
+            }
+        }
+    }
+    Ok(Answer::Unknown { reason: "no matching fact".into() })
 }
 
 /// Drop facts whose argument does not fit the noun of an open referent:

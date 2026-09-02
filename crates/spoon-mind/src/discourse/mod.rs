@@ -15,13 +15,13 @@ mod realize;
 mod rules;
 mod state;
 
-pub use answer::{answer_grounded, Answer};
+pub use answer::{answer_grounded, class_parents, concept_of_noun, Answer};
 pub use correction::{detect as detect_correction, detect_clause as detect_clause_correction, Correction};
-pub use facts::{assert_grounded, describe, supersede, AssertOutcome, FactWriter};
+pub use facts::{assert_class_is_a, assert_grounded, describe, supersede, AssertOutcome, FactWriter};
 pub use ground::ground;
 pub use keywords::extract as extract_keywords;
 pub use realize::{concept_name, display_value, realize_fact, realize_fact_with, sub_clause_text, Article};
-pub use rules::{add_rule, forward_chain, universal_to_rule, Rule};
+pub use rules::{add_rule, ensure_concept_in_can, forward_chain, universal_to_rule, Rule};
 
 use std::collections::HashMap;
 

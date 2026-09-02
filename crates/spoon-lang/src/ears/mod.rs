@@ -95,6 +95,10 @@ impl EarsStats {
 /// Confidence of a direct parse that carries unknown words (the last resort).
 const DIRTY_DIRECT_CONFIDENCE: f32 = 0.3;
 
+/// Confidence of a direct parse whose frame is known and whose only unknown
+/// words are new vocabulary (`The Avengers are fictional super heroes.`).
+const NEW_VOCABULARY_CONFIDENCE: f32 = 0.85;
+
 // ---- Ears ----
 
 pub struct Ears {
@@ -256,20 +260,31 @@ impl Ears {
 
         // (2) Pristine SCE typed by the user: capitalized, terminated, and
         // parsed with every word placed. Anything else is normalized first
-        // (the grammar happens to accept `which customer bought the thing?`).
-        if looks_pristine(text) {
-            if let Some(r) = self.clean_direct(text, gate) {
+        // (the grammar happens to accept `which customer bought the thing?`),
+        // and `Wolves are white.` is a universal, not a fact about a Name.
+        let pristine = looks_pristine(text);
+        if pristine {
+            if let Some(r) = self.clean_direct(text, gate).filter(|r| r.confidence >= 1.0) {
                 return Ok(r);
             }
         }
 
-        let outcomes = sentences
+        let outcomes: Vec<Outcome> = sentences
             .iter()
             .map(|sentence| match self.resolve_sentence(sentence, gate) {
                 Some(r) => Outcome::Done(r),
                 None => Outcome::Open(sentence.clone()),
             })
             .collect();
+
+        // (3) The rules had their turn and did not close the utterance. If the
+        // user wrote SCE, take it as written: the words the rules could not
+        // place are new vocabulary, not noise.
+        if pristine && outcomes.iter().any(|o| matches!(o, Outcome::Open(_))) {
+            if let Some(r) = self.clean_direct(text, gate) {
+                return Ok(r);
+            }
+        }
         Err(outcomes)
     }
 
@@ -297,13 +312,16 @@ impl Ears {
         None
     }
 
-    /// Direct parse accepted only when every word is placed (see module docs).
+    /// Direct parse accepted when the parser placed every word, or when it
+    /// placed every *frame* word and the rest is new vocabulary (see module docs).
     fn clean_direct(&self, text: &str, gate: &dyn Gate) -> Option<Resolved> {
         let (clauses, unknown) = self.parse_with_unknowns(text, gate)?;
-        if !is_clean(&clauses, &unknown) {
-            return None;
-        }
-        Some(Resolved { sce: text.trim().to_string(), clauses, path: EarsPath::Direct, confidence: 1.0, unknown })
+        let confidence = match judge_direct(&clauses, &unknown, &self.lexicon) {
+            DirectVerdict::Clean => 1.0,
+            DirectVerdict::NewVocabulary => NEW_VOCABULARY_CONFIDENCE,
+            DirectVerdict::Reject => return None,
+        };
+        Some(Resolved { sce: text.trim().to_string(), clauses, path: EarsPath::Direct, confidence, unknown })
     }
 
     /// Direct parse that tolerates unknown words: the last resort.
@@ -522,17 +540,101 @@ fn looks_pristine(text: &str) -> bool {
     t.starts_with(|c: char| c.is_uppercase() || c == '"') && t.ends_with(['.', '?', '!'])
 }
 
-/// No unknown words, or a single command whose only unknown word is its verb.
-fn is_clean(clauses: &[Clause], unknown: &[String]) -> bool {
+/// How much a direct parse is worth.
+#[derive(Debug, PartialEq, Eq)]
+enum DirectVerdict {
+    /// Every word placed and known.
+    Clean,
+    /// The frame is known and every unknown word sits in a vocabulary slot:
+    /// a proper name, a noun, or a modifier. New words, not junk.
+    NewVocabulary,
+    /// Not good enough for the direct path.
+    Reject,
+}
+
+/// The direct-path policy.
+///
+/// Junk parses because SCE's lexicon is open: `Hello whats up.` reads as a
+/// Name plus a verb nobody knows, and `Sup dude.` the same. A real assertion
+/// about new things (`The Avengers are fictional super heroes.`) has the same
+/// unknown-word count but a frame the interior recognizes: the copula or a
+/// known verb, with the unknowns only in naming positions. That is the line
+/// this draws.
+fn judge_direct(clauses: &[Clause], unknown: &[String], lexicon: &Lexicon) -> DirectVerdict {
     if unknown.is_empty() {
-        return true;
+        return DirectVerdict::Clean;
     }
-    match clauses {
-        [c] if matches!(c.act, Act::Command) => {
-            unknown.iter().all(|u| c.conditions.iter().any(|p| p.pred.eq_ignore_ascii_case(u)))
+    // A command whose only unknown word is its verb: how new verbs reach the learner.
+    if let [c] = clauses {
+        let only_the_verb =
+            unknown.iter().all(|u| c.conditions.iter().any(|p| p.pred.eq_ignore_ascii_case(u)));
+        if matches!(c.act, Act::Command) && only_the_verb {
+            return DirectVerdict::Clean;
         }
-        _ => false,
     }
+    if !clauses.iter().all(|c| frame_is_known(c, lexicon)) {
+        return DirectVerdict::Reject;
+    }
+    let slots = vocabulary_slots(clauses);
+    if unknown.iter().all(|u| slots.iter().any(|s| s.eq_ignore_ascii_case(u))) {
+        DirectVerdict::NewVocabulary
+    } else {
+        DirectVerdict::Reject
+    }
+}
+
+/// Every predicate of the clause is the copula or a verb the ears know.
+/// An unknown verb is the one thing an assertion cannot recover from: it is
+/// what separates `whats up` from `sees the Avengers movie`.
+fn frame_is_known(clause: &Clause, lexicon: &Lexicon) -> bool {
+    for pred in clause.conditions.iter().chain(clause.then.iter()) {
+        if pred.pred != "be" && !lexicon.knows_verb(&pred.pred) {
+            return false;
+        }
+        for term in &pred.args {
+            if let Term::Sub { clause } = term {
+                if !frame_is_known(clause, lexicon) {
+                    return false;
+                }
+            }
+        }
+    }
+    true
+}
+
+/// Words the parse placed as vocabulary rather than structure: proper names,
+/// head nouns, modifiers, and copula attributes. An unknown word here is a
+/// word to learn; anywhere else it is junk.
+fn vocabulary_slots(clauses: &[Clause]) -> Vec<String> {
+    fn walk(clause: &Clause, out: &mut Vec<String>) {
+        for r in clause.referents.iter().chain(clause.then_referents.iter()) {
+            if let Quant::Named(name) = &r.quant {
+                out.push(name.clone());
+            }
+            out.extend(r.noun.clone());
+            out.extend(r.mods.iter().cloned());
+        }
+        for pred in clause.conditions.iter().chain(clause.then.iter()) {
+            out.extend(pred.attr.clone());
+            for term in &pred.args {
+                if let Term::Sub { clause } = term {
+                    walk(clause, out);
+                }
+            }
+        }
+    }
+    let mut out = vec![];
+    for c in clauses {
+        walk(c, &mut out);
+    }
+    // A plural in the text, a singular in the parse (`heroes` / `hero`):
+    // report both spellings so the unknown-word list matches either way.
+    let inflections: Vec<String> = out
+        .iter()
+        .flat_map(|w| [format!("{w}s"), format!("{w}es")])
+        .collect();
+    out.extend(inflections);
+    out
 }
 
 /// Proper names in the clauses that the lexicon does not know. Reserved names,

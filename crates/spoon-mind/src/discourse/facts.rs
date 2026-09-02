@@ -410,6 +410,34 @@ fn process_regular_pred(
     Some((action_id, fact))
 }
 
+// ---------- concept-level is_a ----------
+
+/// Store `rel.is_a(child, parent)` between two *concepts* (not entities), so
+/// "Is a dog an animal?" can be answered without ever meeting a dog. Both
+/// concepts are created provisionally if they are new. Returns `None` when
+/// the fact was already there.
+pub fn assert_class_is_a(
+    w: &mut FactWriter<'_>,
+    child_noun: &str,
+    parent_noun: &str,
+    source: &str,
+) -> anyhow::Result<Option<Fact>> {
+    let child = ensure_concept_in_can(w.can, w.store, child_noun);
+    let parent = ensure_concept_in_can(w.can, w.store, parent_noun);
+    if child == parent {
+        return Ok(None);
+    }
+    let pred = ensure_relation(w, "rel.is_a", &["is_a"], 2, "");
+    let args = vec![Value::Name(child.0.clone()), Value::Name(parent.0.clone())];
+    let pattern: Vec<Option<Value>> = args.iter().map(|a| Some(a.clone())).collect();
+    if !w.store.query_facts(&pred, &pattern).unwrap_or_default().is_empty() {
+        return Ok(None);
+    }
+    let fact = make_fact(pred, args, false, &None, source, None);
+    let id = w.store.insert_fact(&fact)?;
+    Ok(Some(Fact { id, ..fact }))
+}
+
 // ---------- supersede ----------
 
 /// Invalidate an existing fact and insert the incoming replacement.
