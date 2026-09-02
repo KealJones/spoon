@@ -1,8 +1,10 @@
+pub mod bench;
 pub mod cli;
 pub mod repl;
 pub mod seedio;
 pub mod server;
 pub mod stdio;
+pub mod teach;
 
 use clap::Parser;
 use spoon_core::kernel::PermissionMode;
@@ -61,9 +63,16 @@ pub async fn run() -> anyhow::Result<()> {
         Command::Import { file } => {
             seedio::import(cfg.db_path.as_deref(), &file).await
         }
-        Command::Teach { .. } | Command::Bench { .. } => {
-            eprintln!("not wired yet (see STATUS.md)");
-            std::process::exit(2);
+        Command::Teach { lessons, themes, max_minutes, dry_run } => {
+            if cfg.offline {
+                anyhow::bail!("spoon teach needs the teacher seat: drop --offline");
+            }
+            let brain = Brain::open(cfg).await?;
+            teach::run(brain, teach::TeachArgs { lessons, themes, max_minutes, dry_run }).await
+        }
+        Command::Bench { corpus } => {
+            let brain = Brain::open(cfg).await?;
+            bench::run(brain, &corpus).await
         }
     }
 }

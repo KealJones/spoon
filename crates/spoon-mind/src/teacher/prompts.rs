@@ -10,10 +10,12 @@ pub fn spec_prompt(capability: &str, context: &str, known_types: &[String]) -> S
         .replace("{context}", context)
 }
 
-pub fn phrasings_prompt(sce: &str, verb: &str, n: usize) -> String {
+pub fn phrasings_prompt(sce: &str, verb: &str, meaning: &str, n: usize) -> String {
+    let meaning = if meaning.trim().is_empty() { "as the sentence says" } else { meaning.trim() };
     include_str!("../../../../data/prompts/teacher_phrasings.md")
         .replace("{sce}", sce)
         .replace("{verb}", verb)
+        .replace("{meaning}", meaning)
         .replace("{n}", &n.to_string())
 }
 

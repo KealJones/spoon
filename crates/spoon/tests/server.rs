@@ -161,4 +161,18 @@ fn cli_parses() {
 
     let cli2 = Cli::try_parse_from(["spoon", "bench", "ace"]).expect("bench parse");
     assert!(matches!(cli2.command, Command::Bench { ref corpus } if corpus == "ace"));
+
+    let cli3 = Cli::try_parse_from(["spoon", "teach", "--lessons", "6", "--themes", "math,cooking", "--max-minutes", "8", "--dry-run"])
+        .expect("teach parse");
+    match cli3.command {
+        Command::Teach { lessons, themes, max_minutes, dry_run } => {
+            assert_eq!(lessons, 6);
+            assert_eq!(themes, vec!["math".to_string(), "cooking".to_string()]);
+            assert_eq!(max_minutes, 8);
+            assert!(dry_run);
+        }
+        other => panic!("expected teach, got {other:?}"),
+    }
+    let cli4 = Cli::try_parse_from(["spoon", "teach"]).expect("teach defaults");
+    assert!(matches!(cli4.command, Command::Teach { lessons: 10, max_minutes: 30, dry_run: false, .. }));
 }

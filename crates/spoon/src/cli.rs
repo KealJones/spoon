@@ -73,15 +73,25 @@ pub enum Command {
         file: PathBuf,
     },
 
-    /// Run teacher lessons (not wired yet)
+    /// Run a teacher curriculum against the persistent store (online only)
     Teach {
+        /// How many lessons to ask the teacher for
         #[arg(long, default_value = "10")]
         lessons: usize,
+        /// Comma-separated curriculum themes (defaults built in)
+        #[arg(long, value_delimiter = ',')]
+        themes: Vec<String>,
+        /// Wall-clock cap for the whole run
+        #[arg(long, default_value = "30")]
+        max_minutes: u64,
+        /// Print the curriculum and exit without teaching
+        #[arg(long)]
+        dry_run: bool,
     },
 
-    /// Run evaluation benchmark (not wired yet)
+    /// Run a benchmark corpus through the Brain and record the results
     Bench {
-        /// Corpus name: ace | babi
+        /// Corpus name: convo20 | ace | babi | demo
         corpus: String,
     },
 }

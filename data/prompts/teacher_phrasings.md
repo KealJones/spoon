@@ -18,6 +18,9 @@ Each phrasing should be a different way to say the same thing. Vary:
 Do not include any code, pseudo-code, or arrows like "=>".
 Return plain sentences and phrases only.
 
+Every phrasing must keep the same meaning and mention the same object.
+
 Canonical SCE: {sce}
 Canonical verb: {verb}
+What the verb does: {meaning}
 Count: {n}

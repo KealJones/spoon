@@ -54,15 +54,18 @@ impl Teacher {
             .await
     }
 
-    /// Generate messy utterances that should route to `sce`.
+    /// Generate messy utterances that should route to `sce`. `meaning` says
+    /// what the verb does ("the number multiplied by itself") so a short
+    /// command like `square 3` is not misread; empty is allowed.
     pub async fn phrasings_for(
         &self,
         sce: &str,
         verb: &str,
+        meaning: &str,
         n: usize,
     ) -> anyhow::Result<Vec<Pair>> {
         let sce_owned = sce.to_string();
-        let sys = prompts::phrasings_prompt(sce, verb, n);
+        let sys = prompts::phrasings_prompt(sce, verb, meaning, n);
         let msgs = vec![ChatMessage::system(sys)];
         self.chat_with_retry(msgs, move |raw| parse_pairs_json(raw, &sce_owned))
             .await

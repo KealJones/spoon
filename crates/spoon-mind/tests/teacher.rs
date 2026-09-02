@@ -224,6 +224,38 @@ fn parse_lessons_mixed() {
     assert!(has_capability && has_facts && has_phrasings && has_opinion && has_concept);
 }
 
+const LESSONS_SLOPPY: &str = r#"{
+  "lessons": [
+    {"kind": "phrasings",   "sce": "Assistant, reverse \"abc\"!"},
+    {"kind": "phrasings",   "sce": "What is the length of \"abc\"?"},
+    {"kind": "capability",  "signature_hint": "word_count(Text) -> Int"},
+    {"kind": "phrasings",   "sce": "hello there"},
+    {"kind": "opinion",     "topic": "remote work"}
+  ]
+}"#;
+
+/// Small models drop fields: verbs are recovered from the SCE, descriptions
+/// from the signature hint, and what cannot be recovered is dropped rather
+/// than failing the whole curriculum.
+#[test]
+fn parse_lessons_recovers_or_drops_sloppy_entries() {
+    let lessons = parse_lessons_json(LESSONS_SLOPPY).expect("usable lessons remain");
+    assert_eq!(
+        lessons,
+        vec![
+            Lesson::Phrasings { sce: "Assistant, reverse \"abc\"!".into(), verb: "reverse".into() },
+            Lesson::Phrasings { sce: "What is the length of \"abc\"?".into(), verb: "length".into() },
+            Lesson::Capability { description: "word count".into(), signature_hint: "word_count(Text) -> Int".into() },
+            Lesson::Opinion { topic: "remote work".into() },
+        ]
+    );
+    assert_eq!(lessons[3].key(), "opinion:remote work");
+    assert_eq!(lessons[3].kind(), "opinion");
+
+    let err = parse_lessons_json(r#"{"lessons": [{"kind": "phrasings", "sce": "hello there"}]}"#).expect_err("no usable lesson");
+    assert!(err.contains("missing 'verb'"), "got: {err}");
+}
+
 // ---------------------------------------------------------------------------
 // 8. code_fence_stripped
 // ---------------------------------------------------------------------------

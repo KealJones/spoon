@@ -13,6 +13,7 @@ mod learn;
 mod metrics;
 mod respond;
 mod session;
+mod teach;
 
 use std::collections::HashMap;
 use std::path::PathBuf;

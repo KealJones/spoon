@@ -1,0 +1,24 @@
+{
+  "description": "The STATUS demo lines as one offline session. `spoon bench demo --offline` must pass every turn; it is the pick-up regression corpus. expect_contains is matched case-insensitively against the reply.",
+  "turns": [
+    {"text": "Hello!", "expect_contains": "what do you need"},
+    {"text": "John owns a dog.", "expect_contains": "noted"},
+    {"text": "Who owns a dog?", "expect_contains": "John"},
+    {"text": "Assistant, calculate 3 / 500 * 3600!", "expect_contains": "21.6"},
+    {"text": "Assistant, double 21!", "expect_contains": "can't double yet"},
+    {"text": "The double of 3 is 6.", "expect_contains": "one more example"},
+    {"text": "The double of 5 is 10.", "expect_contains": "42"},
+    {"text": "Assistant, triple 4!", "expect_contains": "can't triple yet"},
+    {"text": "The triple of 2 is 6.", "expect_contains": "one more example"},
+    {"text": "The triple of 3 is 9.", "expect_contains": "12"},
+    {"text": "What is the triple of 7?", "expect_contains": "21"},
+    {"text": "What is the reverse of \"abc\"?", "expect_contains": "cba"},
+    {"text": "Is John happy?", "expect_contains": "don't know whether John is happy"},
+    {"text": "\"pup\" means \"dog\".", "expect_contains": "\"pup\" means \"dog\""},
+    {"text": "User means Mary.", "expect_contains": "Mary owns a dog"},
+    {"text": "Assistant, concatenate \"ab\"!", "expect_contains": "what b should i use"},
+    {"text": "cd", "expect_contains": "abcd"},
+    {"text": "whats the double of 100", "expect_contains": "200"},
+    {"text": "can u triple 5 for me", "expect_contains": "15"}
+  ]
+}
