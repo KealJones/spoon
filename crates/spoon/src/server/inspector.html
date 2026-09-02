@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Spoon Inspector</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #1a1a1a; color: #e0e0e0; font-family: monospace; font-size: 14px; padding: 16px; }
+h1 { color: #7ec8e3; margin-bottom: 16px; font-size: 18px; }
+h2 { color: #a0c8a0; margin-bottom: 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.panel { background: #252525; border: 1px solid #333; border-radius: 4px; padding: 12px; }
+.chat-log { height: 300px; overflow-y: auto; margin-bottom: 8px; padding: 8px;
+  background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 2px; }
+.msg { margin-bottom: 6px; line-height: 1.4; }
+.msg.user { color: #7aadff; }
+.msg.bot  { color: #90d090; }
+.msg.err  { color: #ff7070; }
+.row { display: flex; gap: 8px; margin-top: 4px; }
+.row input { flex: 1; background: #111; border: 1px solid #444; color: #e0e0e0;
+  padding: 6px 8px; border-radius: 2px; font-family: monospace; font-size: 14px; }
+.row button { background: #1e3a5a; color: #cce; border: 1px solid #2e5a8a;
+  padding: 6px 14px; cursor: pointer; border-radius: 2px; font-family: monospace; }
+.row button:hover { background: #2a4a7a; }
+.metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 12px; }
+.m { padding: 4px 6px; background: #1a1a1a; border-radius: 2px; }
+.m .lbl { color: #666; font-size: 10px; }
+.m .val { font-size: 15px; font-weight: bold; }
+.m .val.bad { color: #ff5555; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th { color: #666; text-align: left; padding: 4px; border-bottom: 1px solid #2a2a2a; font-size: 10px; text-transform: uppercase; }
+td { padding: 3px 4px; border-bottom: 1px solid #222; color: #bbb; word-break: break-all; }
+.ts { color: #444; font-size: 10px; margin-left: 8px; }
+</style>
+</head>
+<body>
+<h1>Spoon Inspector</h1>
+<div class="grid">
+  <div class="panel">
+    <h2>Chat</h2>
+    <div class="chat-log" id="log"></div>
+    <div class="row">
+      <input id="inp" placeholder="Say something to Spoon..." />
+      <button id="btn">Send</button>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Metrics <span class="ts" id="ts"></span></h2>
+    <div class="metrics-grid" id="mgrid"><div style="color:#555">Loading...</div></div>
+    <h2 style="margin-top:8px">Learned Actions</h2>
+    <table>
+      <thead><tr><th>ID</th><th>Verbs</th><th>Signature</th><th>Uses</th></tr></thead>
+      <tbody id="atbody"></tbody>
+    </table>
+  </div>
+</div>
+<script>
+const log  = document.getElementById('log');
+const inp  = document.getElementById('inp');
+const btn  = document.getElementById('btn');
+const mgrid = document.getElementById('mgrid');
+const atbody = document.getElementById('atbody');
+const ts   = document.getElementById('ts');
+
+function addMsg(cls, text) {
+  const d = document.createElement('div');
+  d.className = 'msg ' + cls;
+  const prefix = cls === 'user' ? 'you: ' : cls === 'bot' ? 'spoon: ' : 'err: ';
+  d.textContent = prefix + text;
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+}
+
+async function send() {
+  const text = inp.value.trim();
+  if (!text) return;
+  inp.value = '';
+  addMsg('user', text);
+  try {
+    const r = await fetch('/v1/chat/completions', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({messages: [{role: 'user', content: text}]})
+    });
+    const d = await r.json();
+    if (d.error) addMsg('err', d.error.message || JSON.stringify(d.error));
+    else addMsg('bot', d.choices[0].message.content);
+  } catch(e) { addMsg('err', e.message); }
+}
+
+btn.onclick = send;
+inp.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+
+const FIELDS = [
+  ['turns','Turns',false],['interior_llm_calls','Interior LLM',true],
+  ['ears_llm_calls','Ears LLM',false],['mouth_llm_calls','Mouth LLM',false],
+  ['teacher_llm_calls','Teacher LLM',false],['ears_native_hits','Ears Native',false],
+  ['ears_llm_hits','Ears LLM Hits',false],['ears_failed','Ears Failed',false],
+  ['synthesis_attempted','Synth Attempted',false],['synthesis_succeeded','Synth OK',false],
+];
+const STORE_FIELDS = ['concepts','actions','facts','episodes','pairs','stances'];
+
+function renderMetrics(m) {
+  let html = FIELDS.map(([k,l,warn]) => {
+    const v = m[k] ?? 0;
+    return `<div class="m"><div class="lbl">${l}</div><div class="val${warn && v ? ' bad' : ''}">${v}</div></div>`;
+  }).join('');
+  if (m.store) {
+    html += STORE_FIELDS.map(k =>
+      `<div class="m"><div class="lbl">store.${k}</div><div class="val">${m.store[k] ?? 0}</div></div>`
+    ).join('');
+  }
+  mgrid.innerHTML = html;
+}
+
+function renderActions(actions) {
+  atbody.innerHTML = actions.length
+    ? actions.map(a => `<tr>
+        <td>${a.id}</td>
+        <td>${(a.verbs||[]).join(', ')}</td>
+        <td>${a.signature||''}</td>
+        <td>${a.uses||0}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="4" style="color:#444">No learned actions yet</td></tr>';
+}
+
+async function poll() {
+  try {
+    const [mr, sr] = await Promise.all([
+      fetch('/debug/metrics').then(r => r.json()),
+      fetch('/debug/snapshot').then(r => r.json()),
+    ]);
+    renderMetrics(mr);
+    renderActions(sr.learned_actions || []);
+    ts.textContent = new Date().toLocaleTimeString();
+  } catch(e) {
+    mgrid.innerHTML = `<div style="color:#f55">poll error: ${e.message}</div>`;
+  }
+}
+
+poll();
+setInterval(poll, 3000);
+</script>
+</body>
+</html>

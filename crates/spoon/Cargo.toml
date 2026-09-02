@@ -4,9 +4,17 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[lib]
+name = "spoon"
+path = "src/lib.rs"
+
 [[bin]]
 name = "spoon"
 path = "src/main.rs"
+
+[dev-dependencies]
+reqwest = { workspace = true }
+tokio = { workspace = true }
 
 [dependencies]
 spoon-core.workspace = true

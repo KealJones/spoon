@@ -1,3 +1,4 @@
-fn main() {
-    println!("spoon");
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    spoon::run().await
 }

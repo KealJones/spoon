@@ -25,9 +25,7 @@ IN PROGRESS (subagents, Sonnet)
   writing files at 21:54 after a long read; do not respawn)
 - batch 2 (spawned 22:05): ears `spoon-lang/src/ears/` (Gate trait decouples
   it from sce), grow `spoon-mind/src/grow/` (synth + consolidate), teacher
-  `spoon-mind/src/teacher/`, bin `crates/spoon/src/` (clap, repl, stdio, axum
-  OpenAI API + SSE, inspector). Bin codes against the `Brain` API in
-  `spoon-mind/src/brain.rs`, whose interior is a stub echo until wiring.
+  `spoon-mind/src/teacher/`. (bin landed, see below.)
 - dispatch `spoon-mind/src/dispatch/` (spawned 22:15): Clause -> Moves |
   Plan(Intent) | UnknownCapability | NeedsTeacher. Dialog verb mirroring,
   small-talk policy, self-model QA (`data/seed/self_model.json`), opinions and
@@ -39,6 +37,20 @@ IN PROGRESS (subagents, Sonnet)
 - discourse: referents, facts QA, corrections in `spoon-mind/src/discourse/`
 
 LANDED FROM BATCH 1
+- plan: `spoon-mind/src/plan/{planner,executor,cost}.rs`. AND/OR search over
+  producers_of with Placeholders (cost 10), Map insertion for One<-Many,
+  projection through struct properties; executor with NeedInput /
+  NeedPermission / NeedChoice round trips via `ExecState`. 12 tests green.
+- discourse: `spoon-mind/src/discourse/{ground,facts,rules,correction,keywords}.rs`.
+  Grounding mints `noun_k` entities; copula "X is smart" -> `rel.is(x, Text)`,
+  "X is a dog" -> `rel.is_a(x, concept)`; provisional Relation actions are
+  created on first use; universals become rules with forward chaining. One
+  integration test with 11 scenarios green.
+- bin: `crates/spoon/src/{lib,cli,repl,stdio,seedio}.rs` + `server/` (axum
+  OpenAI chat completions with SSE, /v1/models, /debug/metrics, /debug/snapshot,
+  /health, inspector.html). 6 tests green. `teach` and `bench` exit 2 "not
+  wired yet". Verified: `--ephemeral --offline stdio` round-trips JSON lines
+  through the stub Brain.
 - kernel: `kernel/eval.rs` + 12 prim modules, ~147 Stage 0 primitives
   (math/logic, value, text, list, json, time, fs, http, shell, mem, dialog,
   know.wikidata_*) + 14 kernel concepts. 41 tests green. `dialog.*` prims
