@@ -6,6 +6,52 @@ not that a type exists. Decisions live in PLAN.md; rules in AGENTS.md.
 
 ---
 
+## 2026-09-02 05:00  M4 part 1: bench + teach wired (commit 0f50eb7)
+
+DONE (252 tests, 0 warnings)
+- `spoon bench convo20|ace|babi|demo` through the real Brain (`crates/spoon/src/
+  bench.rs`). Prints a table + weaning line (turns, ears_native/llm/failed,
+  mouth_llm, teacher_llm) and bails if interior_llm_calls != 0. Results go to
+  `data/bench/results/` (gitignored). `demo` = the 19 pick-up lines
+  (`data/bench/demo.json`), hard regression: 19/19 offline.
+  Offline numbers: convo20 20/20, ace 30/158 structural (native only), babi 1/21.
+- `spoon teach --lessons N [--themes ..] [--max-minutes M] [--dry-run]`
+  (`crates/spoon/src/teach.rs`, `brain/teach.rs`): curriculum -> capability
+  (spec_for -> learn_from_spec -> phrasings_for -> Pairs), facts and concepts
+  (stored with source="teacher" via `Brain::assert_sce` so `export` includes
+  them; turn facts are source="user" and excluded), phrasings -> Pairs,
+  opinion -> stance. Ledger kv `teach.done` makes it resumable. Restart test
+  in `spoon-mind/tests/teach.rs`.
+  Live (qwen3.5:4b, 6 lessons, 24s): 0/1 capability (the teacher's word_count
+  examples were miscounted, so no program fits: correct behaviour), 1/2 facts,
+  1/1 phrasings (6 pairs), 1/1 opinion (remote work, used by a later turn),
+  1/1 concept (recipe, 7 facts). Steered run: `square = mul(x, x)` learned
+  from the teacher's examples + 6 phrasings.
+
+BABI FAILURE CLASSES (the interior gaps, in order of probes affected)
+1. No location state: `Mary moves to the bathroom.` stores an event but
+   `Where is Mary?` has no location semantics (fam 1,2,3,12: 9 probes).
+2. PP predicates do not parse/store: `Is Mary in the garden?`, `What is south
+   of the office?` (fam 4,6,9,10,17: 7 probes).
+3. Three-argument relations: `John gives the apple to Maya.` (fam 5).
+4. No possession aggregation: `How many objects does Mary carry?` (fam 7,8).
+5. Names from story lines are not added to the gate lexicon (`Where is
+   Sandra?` -> unknown: sandra); plural universals `Wolves are white.` fail.
+6. Cosmetic: `elephant_1 is bigger-than` leaks an entity id; `I don't know
+   where is Mary` keeps question word order.
+
+TEACHER NOTES: qwen3.5:4b drops JSON fields (parser now lenient), miscounts
+examples, reads `square` as "area of a square", and repeats the same 6 lessons
+per prompt (deterministic). Failed lessons stay in `teach.done` (no
+--retry-failed yet).
+
+NEXT
+1. Ears round 5: garbage guard, reported speech, for-each variables, plural
+   universals; brain adds Names to the gate lexicon on grounding.
+2. Discourse round: location state (`moves to`/`is in` -> `Where is X?`), PP
+   predicates, 3-arg relations, counting/listing possessions. Target babi >= 12/21.
+3. README.md. 4. Mouth stance check + realizer cosmetics.
+
 ## 2026-09-02 04:20  M1-M3 demoable; messy input native (commits 8bc352e, 2d5f52f)
 
 DONE. Pick-up check passed: all 19 demo lines below run offline through
