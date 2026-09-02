@@ -94,14 +94,29 @@ fn canonical(clause: &spoon_core::types::clause::Clause) -> spoon_core::types::c
     }
 
     fn canon_clause(c: &Clause, map: &mut HashMap<String, String>, cnt: &mut u32) -> Clause {
-        Clause {
-            act: c.act.clone(),
-            referents: c.referents.iter().map(|r| canon_ref(r, map, cnt)).collect(),
-            conditions: c.conditions.iter().map(|p| canon_pred(p, map, cnt)).collect(),
-            then: c.then.iter().map(|p| canon_pred(p, map, cnt)).collect(),
-            then_referents: c.then_referents.iter().map(|r| canon_ref(r, map, cnt)).collect(),
-            sce: c.sce.clone(),
-        }
+        let referents: Vec<Referent> = c.referents.iter().map(|r| canon_ref(r, map, cnt)).collect();
+        let conditions: Vec<Pred> = c.conditions.iter().map(|p| canon_pred(p, map, cnt)).collect();
+        let then: Vec<Pred> = c.then.iter().map(|p| canon_pred(p, map, cnt)).collect();
+        let then_referents: Vec<Referent> =
+            c.then_referents.iter().map(|r| canon_ref(r, map, cnt)).collect();
+        Clause { act: canon_act(&c.act, map), referents, conditions, then, then_referents, sce: c.sce.clone() }
+    }
+
+    /// The focus var of a wh-question is a var like any other.
+    fn canon_act(act: &Act, map: &HashMap<String, String>) -> Act {
+        use spoon_core::types::clause::QuestionKind as Q;
+        let renamed = |v: &String| map.get(v).cloned().unwrap_or_else(|| v.clone());
+        let Act::Question { kind } = act else { return act.clone() };
+        let kind = match kind {
+            Q::Who { focus } => Q::Who { focus: renamed(focus) },
+            Q::What { focus } => Q::What { focus: renamed(focus) },
+            Q::Which { focus } => Q::Which { focus: renamed(focus) },
+            Q::HowMany { focus } => Q::HowMany { focus: renamed(focus) },
+            Q::Where { focus } => Q::Where { focus: renamed(focus) },
+            Q::When { focus } => Q::When { focus: renamed(focus) },
+            other => other.clone(),
+        };
+        Act::Question { kind }
     }
 
     let mut m: HashMap<String, String> = HashMap::new();
@@ -610,6 +625,229 @@ fn literal_owners() {
 }
 
 // ---------------------------------------------------------------------------
+// Test 8b: bAbI forms. Every sentence here is verbatim from
+// data/bench/babi_probes.json.
+// ---------------------------------------------------------------------------
+
+/// The clause and the referent lookup for one sentence.
+fn parsed(s: &str) -> spoon_core::types::clause::Clause {
+    let lex = Lexicon::with_defaults();
+    parse(s, &lex).unwrap_or_else(|e| panic!("{s:?}: {e}")).0
+}
+
+fn referent<'a>(
+    c: &'a spoon_core::types::clause::Clause,
+    var: &str,
+) -> &'a spoon_core::types::clause::Referent {
+    c.referents.iter().find(|r| r.var == var).unwrap_or_else(|| panic!("no referent {var}"))
+}
+
+fn arg_var(p: &spoon_core::types::clause::Pred, i: usize) -> String {
+    match &p.args[i] {
+        Term::Var { var } => var.clone(),
+        other => panic!("arg {i} is not a var: {other:?}"),
+    }
+}
+
+/// `be(the location of X, P)` with the preposition kept as the property's mod.
+fn assert_locative(s: &str, prep: &str, place_noun: &str) {
+    let c = parsed(s);
+    assert_eq!(c.conditions.len(), 1, "{s:?}: one condition");
+    let p = &c.conditions[0];
+    assert_eq!(p.pred, "be", "{s:?}");
+    assert_eq!(p.args.len(), 2, "{s:?}: be(location, place)");
+    let prop = referent(&c, &arg_var(p, 0));
+    assert_eq!(prop.noun.as_deref(), Some("location"), "{s:?}");
+    assert_eq!(prop.quant, Quant::Def, "{s:?}");
+    assert_eq!(prop.mods, vec![prep.to_string()], "{s:?}");
+    let owner = prop.owner.as_deref().unwrap_or_else(|| panic!("{s:?}: no owner"));
+    assert!(matches!(referent(&c, owner).quant, Quant::Named(_)), "{s:?}: owner is the subject");
+    assert_eq!(referent(&c, &arg_var(p, 1)).noun.as_deref(), Some(place_noun), "{s:?}");
+}
+
+#[test]
+fn babi_pp_location() {
+    // fam 6, 9, 10: yes/no location questions and the matching assertion.
+    for s in ["Is Mary in the garden?", "Is John in the bathroom?", "Is Mary in the kitchen?"] {
+        let c = parsed(s);
+        assert!(
+            matches!(c.act, Act::Question { kind: QuestionKind::YesNo }),
+            "{s:?}: expected a yes/no question, got {:?}", c.act
+        );
+    }
+    assert_locative("Is Mary in the garden?", "in", "garden");
+    assert_locative("Is John in the bathroom?", "in", "bathroom");
+    assert_locative("Mary is in the garden.", "in", "garden");
+    assert_locative("John is at home.", "at", "home");
+    roundtrip("Is Mary in the garden?");
+    roundtrip("Mary is in the garden.");
+    roundtrip("John is at home.");
+}
+
+#[test]
+fn babi_or_in_pp() {
+    // fam 10 story line: every alternative is an adjunct of the same prep.
+    let c = parsed("Mary moves to the kitchen or the hallway.");
+    let p = &c.conditions[0];
+    assert_eq!(p.pred, "move");
+    let places: Vec<Option<String>> = p
+        .adjuncts
+        .iter()
+        .map(|(prep, t)| {
+            assert_eq!(prep, "to");
+            let Term::Var { var } = t else { panic!("adjunct is not a var") };
+            referent(&c, var).noun.clone()
+        })
+        .collect();
+    assert_eq!(places, vec![Some("kitchen".into()), Some("hallway".into())]);
+}
+
+/// `X is <phrase> of Y` -> a two-place relation named after the phrase.
+fn assert_relation_of(s: &str, name: &str, left_noun: Option<&str>, right_noun: &str) {
+    let c = parsed(s);
+    assert_eq!(c.conditions.len(), 1, "{s:?}: one condition");
+    let p = &c.conditions[0];
+    assert_eq!(p.pred, name, "{s:?}");
+    assert_eq!(p.args.len(), 2, "{s:?}");
+    assert_eq!(referent(&c, &arg_var(p, 0)).noun.as_deref(), left_noun, "{s:?}: left");
+    assert_eq!(referent(&c, &arg_var(p, 1)).noun.as_deref(), Some(right_noun), "{s:?}: right");
+}
+
+#[test]
+fn babi_relation_of_assertions() {
+    // fam 4, 15, 17 story lines.
+    assert_relation_of("The office is north of the garden.", "north-of", Some("office"), "garden");
+    assert_relation_of("The kitchen is south of the office.", "south-of", Some("kitchen"), "office");
+    assert_relation_of("The bathroom is east of the hallway.", "east-of", Some("bathroom"), "hallway");
+    assert_relation_of("The garden is west of the bathroom.", "west-of", Some("garden"), "bathroom");
+    assert_relation_of(
+        "The red box is to the left of the blue box.", "left-of", Some("box"), "box",
+    );
+    assert_relation_of("The green bag is to the left of the red box.", "left-of", Some("bag"), "box");
+    // Adjectives stay on the referents that carry them.
+    let c = parsed("The red box is to the left of the blue box.");
+    let p = &c.conditions[0];
+    assert_eq!(referent(&c, &arg_var(p, 0)).mods, vec!["red".to_string()]);
+    assert_eq!(referent(&c, &arg_var(p, 1)).mods, vec!["blue".to_string()]);
+    // A plural subject parses as a name; the relation keeps the second term.
+    assert_relation_of("Wolves are afraid of mice.", "afraid-of", None, "mouse");
+    for s in [
+        "The office is north of the garden.",
+        "The red box is to the left of the blue box.",
+        "Wolves are afraid of mice.",
+    ] {
+        roundtrip(s);
+    }
+}
+
+#[test]
+fn babi_relation_of_questions() {
+    // fam 4, 17: the wh-word is the first argument of the relation.
+    for (s, name, right) in [
+        ("What is south of the office?", "south-of", "office"),
+        ("What is east of the hallway?", "east-of", "hallway"),
+        ("What is to the left of the red box?", "left-of", "box"),
+    ] {
+        let c = parsed(s);
+        let focus = match &c.act {
+            Act::Question { kind: QuestionKind::What { focus } } => focus.clone(),
+            other => panic!("{s:?}: expected a What question, got {other:?}"),
+        };
+        let p = &c.conditions[0];
+        assert_eq!(p.pred, name, "{s:?}");
+        assert_eq!(arg_var(p, 0), focus, "{s:?}: the wh-referent is the first argument");
+        assert_eq!(referent(&c, &focus).quant, Quant::Wh, "{s:?}");
+        assert_eq!(referent(&c, &arg_var(p, 1)).noun.as_deref(), Some(right), "{s:?}");
+        roundtrip(s);
+    }
+}
+
+#[test]
+fn babi_give_three_arg() {
+    // fam 5: the assertion, then the same relation asked with a stranded "to".
+    let c = parsed("John gives the apple to Maya.");
+    let p = &c.conditions[0];
+    assert_eq!(p.pred, "give");
+    assert_eq!(p.args.len(), 2);
+    assert_eq!(p.adjuncts.len(), 1);
+    assert_eq!(p.adjuncts[0].0, "to");
+
+    for (s, obj_noun) in [
+        ("Who does John give the apple to?", "apple"),
+        ("Who does John give the milk to?", "milk"),
+    ] {
+        let c = parsed(s);
+        let focus = match &c.act {
+            Act::Question { kind: QuestionKind::Who { focus } } => focus.clone(),
+            other => panic!("{s:?}: expected a Who question, got {other:?}"),
+        };
+        assert_eq!(c.conditions.len(), 1, "{s:?}");
+        let p = &c.conditions[0];
+        assert_eq!(p.pred, "give", "{s:?}");
+        assert!(matches!(referent(&c, &arg_var(p, 0)).quant, Quant::Named(ref n) if n == "John"), "{s:?}");
+        assert_eq!(referent(&c, &arg_var(p, 1)).noun.as_deref(), Some(obj_noun), "{s:?}");
+        assert_eq!(p.adjuncts.len(), 1, "{s:?}: the stranded preposition is attached");
+        assert_eq!(p.adjuncts[0].0, "to", "{s:?}");
+        assert_eq!(p.adjuncts[0].1, Term::Var { var: focus }, "{s:?}: 'to' takes the wh-referent");
+    }
+}
+
+#[test]
+fn babi_property_question() {
+    // fam 15: "What color is every wolf?" == "What is the color of every wolf?"
+    let c = parsed("What color is every wolf?");
+    let focus = match &c.act {
+        Act::Question { kind: QuestionKind::What { focus } } => focus.clone(),
+        other => panic!("expected a What question, got {other:?}"),
+    };
+    let prop = referent(&c, &focus);
+    assert_eq!(prop.noun.as_deref(), Some("color"));
+    assert_eq!(prop.quant, Quant::Def);
+    let owner = referent(&c, prop.owner.as_deref().expect("no owner"));
+    assert_eq!(owner.noun.as_deref(), Some("wolf"));
+    assert_eq!(owner.quant, Quant::Every);
+    let p = &c.conditions[0];
+    assert_eq!(p.pred, "be");
+    assert_eq!(referent(&c, &arg_var(p, 0)).quant, Quant::Wh);
+    assert_eq!(arg_var(p, 1), focus);
+    roundtrip("What color is every wolf?");
+
+    // The universal that answers it still parses as an attribute.
+    let c = parsed("Every wolf is white.");
+    assert_eq!(c.conditions[0].attr.as_deref(), Some("white"));
+    assert_eq!(referent(&c, &arg_var(&c.conditions[0], 0)).quant, Quant::Every);
+}
+
+/// The forms the new copula rules must not steal.
+#[test]
+fn copula_complements_still_disambiguate() {
+    let lex = Lexicon::with_defaults();
+    // Comparatives keep the "-than" attribute, not a relation.
+    let (c, _) = parse("Is the elephant bigger than the cat?", &lex).unwrap();
+    assert_eq!(c.conditions[0].pred, "be");
+    assert_eq!(c.conditions[0].attr.as_deref(), Some("bigger-than"));
+    // A determiner after "is" means a property NP or an is-a, never a relation.
+    let (c, _) = parse("What is the double of 3?", &lex).unwrap();
+    assert_eq!(c.conditions[0].pred, "be");
+    assert!(c.referents.iter().any(|r| r.noun.as_deref() == Some("double") && r.owner.is_some()));
+    let (c, _) = parse("Is John a doctor?", &lex).unwrap();
+    assert_eq!(c.conditions[0].pred, "be");
+    assert_eq!(c.conditions[0].args.len(), 2);
+    assert!(c.referents.iter().any(|r| r.noun.as_deref() == Some("doctor")));
+    // Non-locative copula PPs stay adjuncts of the subject.
+    let (c, _) = parse("John is angry with Mary.", &lex).unwrap();
+    assert_eq!(c.conditions[0].attr.as_deref(), Some("angry"));
+    assert_eq!(c.conditions[0].adjuncts.len(), 1);
+    // Plain adjectives and verb PPs are untouched.
+    parse("Is John happy?", &lex).unwrap();
+    let (c, _) = parse("The train moves at 500 miles-per-hour.", &lex).unwrap();
+    assert_eq!(c.conditions[0].pred, "move");
+    assert_eq!(c.conditions[0].adjuncts.len(), 1);
+    // A stranded preposition without a wh-referent is still a leftover token.
+    assert!(parse("John gives the apple to.", &lex).is_err());
+}
+
+// ---------------------------------------------------------------------------
 // Test 8: Plural nouns
 // ---------------------------------------------------------------------------
 
@@ -637,6 +875,7 @@ fn plural_nouns() {
         ("dogs", "dog"), ("stories", "story"), ("buses", "bus"), ("boxes", "box"), ("churches", "church"),
         ("glass", "glass"), ("bus", "bus"), ("news", "news"), ("analysis", "analysis"),
         ("status", "status"), ("process", "process"), ("series", "series"),
+        ("mice", "mouse"), ("wolves", "wolf"), ("children", "child"), ("people", "person"),
     ] {
         assert_eq!(singularize_noun(w), want, "singularize_noun({w:?})");
     }

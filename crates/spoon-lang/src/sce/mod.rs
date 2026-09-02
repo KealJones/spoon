@@ -11,6 +11,7 @@ mod arith;
 mod lemma;
 mod lexicon;
 mod parser;
+mod pred;
 mod realize;
 mod tokenizer;
 

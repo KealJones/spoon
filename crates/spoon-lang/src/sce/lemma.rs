@@ -102,6 +102,10 @@ fn base_form(word: &str) -> String {
 /// or words in the exception list (invariant plurals).
 pub fn singularize_noun(word: &str) -> String {
     let w = word.to_lowercase();
+    // Irregular plurals: no suffix rule reaches these.
+    if let Some((_, singular)) = IRREGULAR_PLURALS.iter().find(|(plural, _)| *plural == w) {
+        return singular.to_string();
+    }
     // Invariant / already-singular exception patterns
     let no_change = w.ends_with("ss")
         || w.ends_with("us")
@@ -142,6 +146,14 @@ pub fn singularize_noun(word: &str) -> String {
     }
     word.to_string()
 }
+
+/// Plurals whose singular is not a suffix change.
+static IRREGULAR_PLURALS: &[(&str, &str)] = &[
+    ("mice", "mouse"), ("men", "man"), ("women", "woman"), ("children", "child"),
+    ("people", "person"), ("feet", "foot"), ("teeth", "tooth"), ("geese", "goose"),
+    ("oxen", "ox"), ("wolves", "wolf"), ("lives", "life"), ("knives", "knife"),
+    ("leaves", "leaf"), ("halves", "half"), ("shelves", "shelf"), ("thieves", "thief"),
+];
 
 /// Map number words to their integer values.
 pub fn number_word(w: &str) -> Option<u32> {

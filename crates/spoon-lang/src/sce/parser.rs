@@ -13,6 +13,7 @@ use spoon_core::types::value::Value;
 use super::arith::ArithParser;
 use super::lemma::{lemmatize, number_word, singularize_noun};
 use super::lexicon::Lexicon;
+use super::pred;
 use super::tokenizer::{tokenize, Tok};
 
 /// Error returned when a sentence cannot be parsed.
@@ -175,6 +176,14 @@ impl<'lex> Parser<'lex> {
 
     fn is_terminator(&self) -> bool {
         matches!(self.peek(), Some(Tok::Period) | Some(Tok::Bang) | Some(Tok::Question))
+    }
+
+    /// Terminator (or end of input) at an absolute token index.
+    fn is_terminator_at(&self, pos: usize) -> bool {
+        match self.toks.get(pos) {
+            Some(Tok::Period) | Some(Tok::Bang) | Some(Tok::Question) | None => true,
+            _ => false,
+        }
     }
 
     /// True when the current position starts a count/quantifier phrase that
@@ -454,7 +463,12 @@ impl<'lex> Parser<'lex> {
     fn parse_copula(&mut self, subj: &str, parts: &mut Parts) -> Result<(), ParseError> {
         self.pos += 1; // consume 'is'/'are'
         let negated = self.eat_word("not");
+        self.parse_copula_body(subj, parts, negated)
+    }
 
+    /// Everything after `is`/`are` (and an optional `not`). Shared with the
+    /// `Is NP ...?` question so a declarative and its question parse alike.
+    fn parse_copula_body(&mut self, subj: &str, parts: &mut Parts, negated: bool) -> Result<(), ParseError> {
         // passive: "is Verbpp by NP" (heuristic: word after 'is' ends in -ed/special + 'by')
         if !negated {
             let saved = self.save();
@@ -475,6 +489,13 @@ impl<'lex> Parser<'lex> {
             }
         }
 
+        // "is north of NP" / "is to the left of NP" - a two-place relation.
+        // Tried before the is-a reading so a lexicon that happens to know
+        // "north" as a noun cannot turn the relation into a typing.
+        if self.try_relation_of(subj, parts, negated).is_ok() {
+            return Ok(());
+        }
+
         // "is NP" (is-a)
         {
             let saved = self.save();
@@ -484,7 +505,30 @@ impl<'lex> Parser<'lex> {
             self.restore(saved);
         }
 
-        // "is PP" - locative/state copula: "is at home", "is in the garden", "is present"
+        // "is in the garden" - a locative complement states the subject's
+        // location, so it becomes `be(the location of subj, place)`.
+        if let Some(prep) = self.pw().filter(|w| pred::is_locative_prep(w)) {
+            let m = self.mark(parts);
+            self.pos += 1;
+            match self.parse_np(parts) {
+                Ok(place) => {
+                    let prop = self.push_location_property(parts, subj, &prep);
+                    let adjuncts = self.parse_pps(parts)?;
+                    parts.conds.push(Pred {
+                        pred: "be".to_string(),
+                        args: vec![Term::Var { var: prop }, Term::Var { var: place }],
+                        negated,
+                        modal: None,
+                        adjuncts,
+                        attr: None,
+                    });
+                    return Ok(());
+                }
+                Err(_) => self.rollback(parts, m),
+            }
+        }
+
+        // "is PP" - other state copula: "is with Mary", "is about death"
         if Lexicon::is_prep(self.pw().as_deref().unwrap_or("")) {
             let adjuncts = self.parse_pps(parts)?;
             parts.conds.push(Pred {
@@ -500,6 +544,83 @@ impl<'lex> Parser<'lex> {
 
         // "is Adj (PP*)" copula adjective
         self.parse_copula_adj(subj, parts, negated)
+    }
+
+    /// The definite `location` referent owned by `subj`, carrying the
+    /// preposition that was used as its only modifier.
+    fn push_location_property(&mut self, parts: &mut Parts, subj: &str, prep: &str) -> String {
+        let var = self.next_var();
+        parts.refs.push(Referent {
+            var: var.clone(),
+            noun: Some(pred::LOCATION_NOUN.to_string()),
+            quant: Quant::Def,
+            mods: vec![prep.to_string()],
+            owner: Some(subj.to_string()),
+            span: None,
+        });
+        var
+    }
+
+    /// `X is north of Y`, `X is to the left of Y`, `X is afraid of Y` ->
+    /// `Pred { pred: "<phrase>-of", args: [X, Y] }`.
+    ///
+    /// The phrase must not start with a determiner: that is what keeps
+    /// `the double of 3` a property NP and `a member of the team` an is-a.
+    fn try_relation_of(&mut self, subj: &str, parts: &mut Parts, negated: bool) -> Result<(), ParseError> {
+        let no = || self.err("not a relational complement");
+        // Peek the phrase first so a miss costs nothing.
+        let mut words: Vec<String> = vec![];
+        loop {
+            let Some(Tok::Word(w)) = self.toks.get(self.pos + words.len()) else {
+                return Err(no());
+            };
+            let lw = w.to_lowercase();
+            if lw == "of" {
+                break;
+            }
+            if words.is_empty() && (self.starts_determiner() || Self::is_name(w, false)) {
+                return Err(no());
+            }
+            if words.len() == pred::MAX_RELATION_WORDS {
+                return Err(no());
+            }
+            words.push(lw);
+        }
+        let Some(name) = pred::relation_of_name(&words) else {
+            return Err(no());
+        };
+        let m = self.mark(parts);
+        self.pos += words.len() + 1; // phrase + 'of'
+        let obj = self.parse_prep_object(parts);
+        if obj.is_empty() {
+            self.rollback(parts, m);
+            return Err(self.err("Expected a noun phrase after 'of'"));
+        }
+        let adjuncts = self.parse_pps(parts)?;
+        parts.conds.push(Pred {
+            pred: name,
+            args: vec![Term::Var { var: subj.to_string() }, Term::Var { var: obj }],
+            negated,
+            modal: None,
+            adjuncts,
+            attr: None,
+        });
+        Ok(())
+    }
+
+    /// Does the current position start a determiner or count phrase? Peek
+    /// only; `try_parse_det` consumes.
+    fn starts_determiner(&self) -> bool {
+        if matches!(self.peek(), Some(Tok::Number(_))) {
+            return true;
+        }
+        match self.pw() {
+            Some(w) => matches!(
+                w.as_str(),
+                "a" | "an" | "the" | "every" | "some" | "no" | "not" | "exactly" | "at" | "more"
+            ) || number_word(&w).is_some(),
+            None => true,
+        }
     }
 
     fn try_passive(&mut self, subj: &str, parts: &mut Parts) -> Result<(), ParseError> {
@@ -864,43 +985,67 @@ impl<'lex> Parser<'lex> {
         let mut adjuncts = vec![];
         loop {
             let prep = match self.pw() {
-                Some(w) if Lexicon::is_prep(&w) => { let p = w.clone(); self.pos += 1; p }
+                Some(w) if Lexicon::is_prep(&w) => {
+                    // Stranded preposition ("... give the apple to?"): leave it
+                    // for the wh rule, which owns its object.
+                    if self.is_terminator_at(self.pos + 1) { break; }
+                    let p = w.clone(); self.pos += 1; p
+                }
                 _ => break,
             };
-            // Try full NP parse first.
-            let np_var = match self.parse_np(parts) {
-                Ok(v) => v,
-                Err(_) => {
-                    // Fallback: bare noun in PP context (e.g. "at home", "about death").
-                    // Any non-function/prep/var word after a preposition is a bare noun.
-                    // Unknown words are added to unknowns and singularized.
-                    if let Some(raw) = self.praw().map(str::to_string) {
-                        let lw = raw.to_lowercase();
-                        if !Lexicon::is_function_word(&lw) && !Lexicon::is_prep(&lw)
-                            && !Self::is_var(&raw)
-                            && !matches!(self.peek(), Some(Tok::Period) | Some(Tok::Bang) | Some(Tok::Question))
-                        {
-                            let singular = singularize_noun(&lw);
-                            self.pos += 1;
-                            let var = self.next_var();
-                            if !self.lex.is_noun(&lw) {
-                                self.unknowns.push(singular.clone());
-                            }
-                            parts.refs.push(Referent {
-                                var: var.clone(), noun: Some(singular),
-                                quant: Quant::Indef, mods: vec![], owner: None, span: None,
-                            });
-                            var
-                        } else {
-                            String::new()
-                        }
-                    } else { String::new() }
-                }
-            };
+            let np_var = self.parse_prep_object(parts);
             if np_var.is_empty() { break; }
-            adjuncts.push((prep, Term::Var { var: np_var }));
+            adjuncts.push((prep.clone(), Term::Var { var: np_var }));
+            // "moves to the kitchen or the hallway": every alternative is an
+            // adjunct of the same preposition.
+            loop {
+                let saved = self.save();
+                if !self.eat_word("or") { break; }
+                match self.parse_np(parts) {
+                    Ok(alt) => adjuncts.push((prep.clone(), Term::Var { var: alt })),
+                    Err(_) => { self.restore(saved); break; }
+                }
+            }
         }
         Ok(adjuncts)
+    }
+
+    /// The object of a preposition: a full NP, else a bare noun ("at home",
+    /// "about death", "afraid of mice"). Unknown bare nouns are singularized
+    /// and reported. Empty string when nothing can be read.
+    fn parse_prep_object(&mut self, parts: &mut Parts) -> String {
+        if let Ok(v) = self.parse_np(parts) {
+            return v;
+        }
+        let Some(raw) = self.praw().map(str::to_string) else { return String::new() };
+        let lw = raw.to_lowercase();
+        if Lexicon::is_function_word(&lw) || Lexicon::is_prep(&lw) || Self::is_var(&raw)
+            || self.is_terminator()
+        {
+            return String::new();
+        }
+        let singular = singularize_noun(&lw);
+        self.pos += 1;
+        let var = self.next_var();
+        if !self.lex.is_noun(&lw) {
+            self.unknowns.push(singular.clone());
+        }
+        parts.refs.push(Referent {
+            var: var.clone(), noun: Some(singular),
+            quant: Quant::Indef, mods: vec![], owner: None, span: None,
+        });
+        var
+    }
+
+    /// `Who does John give the apple to?`: the trailing preposition takes the
+    /// wh-referent as its object.
+    fn attach_stranded_prep(&mut self, parts: &mut Parts, wh_var: &str) {
+        let Some(prep) = self.pw().filter(|w| Lexicon::is_prep(w)) else { return };
+        if !self.is_terminator_at(self.pos + 1) { return; }
+        self.pos += 1;
+        if let Some(last) = parts.conds.last_mut() {
+            last.adjuncts.push((prep, Term::Var { var: wh_var.to_string() }));
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -1430,6 +1575,12 @@ impl<'lex> Parser<'lex> {
             if let Ok(np_var) = self.parse_np(parts) {
                 parts.conds.push(Pred { pred: "be".to_string(), args: vec![Term::Var { var: wh_var.clone() }, Term::Var { var: np_var }], negated: false, modal: None, adjuncts: vec![], attr: None });
             } else { self.restore(saved); }
+        } else if matches!(self.pw().as_deref(), Some("does") | Some("do")) {
+            // "Who does John give the apple to?" -> give(John, apple) to Wh
+            self.pos += 1;
+            let subj = self.parse_np(parts)?;
+            self.parse_vp(&subj, parts, false, true)?;
+            self.attach_stranded_prep(parts, &wh_var);
         } else {
             self.parse_vp(&wh_var, parts, false, false)?;
         }
@@ -1438,25 +1589,78 @@ impl<'lex> Parser<'lex> {
 
     fn parse_what_question(&mut self, parts: &mut Parts) -> Result<QuestionKind, ParseError> {
         self.expect_word("what")?;
-        let wh_var = self.next_var();
+        // "What color is every wolf?" -> the property of the named NP.
+        if !matches!(self.pw().as_deref(), Some("is") | Some("are") | Some("does") | Some("do")) {
+            let m = self.mark(parts);
+            match self.try_what_property(parts) {
+                Ok(kind) => return Ok(kind),
+                Err(_) => self.rollback(parts, m),
+            }
+        }
         // "What is NP?" -> What{focus = NP var}
-        if self.pw().as_deref() == Some("is") {
+        if self.pw().as_deref() == Some("is") || self.pw().as_deref() == Some("are") {
             self.pos += 1;
+            // "What is south of the office?" -> south-of(Wh, office)
+            let m = self.mark(parts);
+            let rel_wh = self.next_var();
+            parts.refs.push(Referent { var: rel_wh.clone(), noun: None, quant: Quant::Wh, mods: vec![], owner: None, span: None });
+            if self.try_relation_of(&rel_wh, parts, false).is_ok() {
+                return Ok(QuestionKind::What { focus: rel_wh });
+            }
+            self.rollback(parts, m);
+            // The wh-referent is pushed last so this parse and the
+            // "What <noun> is NP?" one order their referents alike.
             let np_var = self.parse_np(parts)?;
+            let wh_var = self.next_var();
             parts.refs.push(Referent { var: wh_var.clone(), noun: None, quant: Quant::Wh, mods: vec![], owner: None, span: None });
-            parts.conds.push(Pred { pred: "be".to_string(), args: vec![Term::Var { var: wh_var.clone() }, Term::Var { var: np_var.clone() }], negated: false, modal: None, adjuncts: vec![], attr: None });
+            parts.conds.push(Pred { pred: "be".to_string(), args: vec![Term::Var { var: wh_var }, Term::Var { var: np_var.clone() }], negated: false, modal: None, adjuncts: vec![], attr: None });
             return Ok(QuestionKind::What { focus: np_var });
         }
         // "What does NP VP?" or "What VP?"
+        let wh_var = self.next_var();
         parts.refs.push(Referent { var: wh_var.clone(), noun: None, quant: Quant::Wh, mods: vec![], owner: None, span: None });
         if self.pw().as_deref() == Some("does") {
             self.pos += 1;
             let subj = self.parse_np(parts)?;
             self.parse_vp(&subj, parts, false, true)?;
+            self.attach_stranded_prep(parts, &wh_var);
         } else {
             self.parse_vp(&wh_var, parts, false, false)?;
         }
         Ok(QuestionKind::What { focus: wh_var })
+    }
+
+    /// `What color is every wolf?` == `What is the color of every wolf?`:
+    /// the asked noun is a definite property of the following NP.
+    fn try_what_property(&mut self, parts: &mut Parts) -> Result<QuestionKind, ParseError> {
+        let (mods, noun) = self.parse_adj_noun();
+        if noun.is_empty() {
+            return Err(self.err("Expected a noun after 'What'"));
+        }
+        if !self.eat_word("is") && !self.eat_word("are") {
+            return Err(self.err("Expected 'is' after 'What <noun>'"));
+        }
+        let owner = self.parse_np(parts)?;
+        let prop_var = self.next_var();
+        parts.refs.push(Referent {
+            var: prop_var.clone(),
+            noun: Some(noun),
+            quant: Quant::Def,
+            mods,
+            owner: Some(owner),
+            span: None,
+        });
+        let wh_var = self.next_var();
+        parts.refs.push(Referent { var: wh_var.clone(), noun: None, quant: Quant::Wh, mods: vec![], owner: None, span: None });
+        parts.conds.push(Pred {
+            pred: "be".to_string(),
+            args: vec![Term::Var { var: wh_var }, Term::Var { var: prop_var.clone() }],
+            negated: false,
+            modal: None,
+            adjuncts: vec![],
+            attr: None,
+        });
+        Ok(QuestionKind::What { focus: prop_var })
     }
 
     fn parse_which_question(&mut self, parts: &mut Parts) -> Result<QuestionKind, ParseError> {
@@ -1554,33 +1758,12 @@ impl<'lex> Parser<'lex> {
         let subj = self.parse_np(parts)?;
         // "Is NP not NP?" handle negated
         let negated = self.eat_word("not");
-        // Could be NP, Adj, or Comparative
+        // The complement grammar is the declarative one: NP, adjective,
+        // comparative, relation-of, or a locative PP.
         if !self.is_terminator() && !self.at_end() {
-            let saved = self.save();
-            if let Ok(obj_var) = self.parse_np(parts) {
-                let adjuncts = self.parse_pps(parts).unwrap_or_default();
-                parts.conds.push(Pred { pred: "be".to_string(), args: vec![Term::Var { var: subj.clone() }, Term::Var { var: obj_var }], negated, modal: None, adjuncts, attr: None });
-                return Ok(QuestionKind::YesNo);
-            }
-            self.restore(saved);
-            // Try comparative: "bigger than NP"
-            if let Some(adj) = self.pw() {
-                if adj.ends_with("er") || adj.ends_with("-than") {
-                    let saved2 = self.save();
-                    if self.try_comparative(&subj, parts, negated).is_ok() {
-                        return Ok(QuestionKind::YesNo);
-                    }
-                    self.restore(saved2);
-                }
-            }
-            // Try plain adjective
-            if let Some(adj) = self.pw() {
-                if !Lexicon::is_function_word(&adj) && !Lexicon::is_prep(&adj) && !Self::is_var(&adj) {
-                    self.pos += 1;
-                    let adjuncts = self.parse_pps(parts).unwrap_or_default();
-                    parts.conds.push(Pred { pred: "be".to_string(), args: vec![Term::Var { var: subj.clone() }], negated, modal: None, adjuncts, attr: Some(adj) });
-                    return Ok(QuestionKind::YesNo);
-                }
+            let m = self.mark(parts);
+            if self.parse_copula_body(&subj, parts, negated).is_err() {
+                self.rollback(parts, m);
             }
         }
         Ok(QuestionKind::YesNo)

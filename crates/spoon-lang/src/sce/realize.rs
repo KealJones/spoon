@@ -11,6 +11,7 @@ use spoon_core::types::value::Value;
 
 use super::arith::render_arith;
 use super::lemma::conjugate_3sg;
+use super::pred;
 
 /// Realize a Clause into a valid SCE sentence.
 pub fn realize(clause: &Clause) -> String {
@@ -70,6 +71,12 @@ fn realize_assert(clause: &Clause) -> String {
     let _is_existential = clause.conditions.is_empty()
         || (clause.referents.len() == 1 && clause.conditions.is_empty());
 
+    // `be(the location of X, P)` came from "X is in P".
+    if let Some((subj, prep, place)) = location_copula(clause, pred, &clause.referents) {
+        let neg = if pred.negated { " not" } else { "" };
+        return format!("{subj} is{neg} {prep} {place}.");
+    }
+
     let subj_str = realize_var_np(clause, &subj_var, &clause.referents);
     let mut parts = vec![];
     for (i, cond) in clause.conditions.iter().enumerate() {
@@ -92,6 +99,27 @@ fn realize_pred(clause: &Clause, pred: &Pred, refs: &[Referent], is_first: bool)
         "be" => realize_be_pred(clause, pred, refs, subj_var, &modal_str, use_base),
         _ => realize_verb_pred(clause, pred, refs, subj_var, &modal_str, use_base, is_first),
     }
+}
+
+/// `be(the location of X, P)` -> `(X, prep, P)`: the locative copula the
+/// parser rewrote into a location property (see `sce::pred`).
+fn location_copula(clause: &Clause, p: &Pred, refs: &[Referent]) -> Option<(String, String, String)> {
+    if p.pred != "be" || p.args.len() < 2 {
+        return None;
+    }
+    let Term::Var { var } = p.args.first()? else { return None };
+    let prop = refs
+        .iter()
+        .chain(clause.then_referents.iter())
+        .find(|r| &r.var == var)
+        .filter(|r| r.noun.as_deref() == Some(pred::LOCATION_NOUN))?;
+    let owner = prop.owner.as_deref()?;
+    let prep = prop.mods.first().cloned().unwrap_or_else(|| "in".to_string());
+    Some((
+        realize_var_np(clause, owner, refs),
+        prep,
+        realize_term(clause, &p.args[1], refs),
+    ))
 }
 
 fn realize_be_pred(clause: &Clause, pred: &Pred, refs: &[Referent], _subj_var: &str, modal_str: &str, _use_base: bool) -> String {
@@ -129,6 +157,11 @@ fn realize_be_pred(clause: &Clause, pred: &Pred, refs: &[Referent], _subj_var: &
 }
 
 fn realize_verb_pred(clause: &Clause, pred: &Pred, refs: &[Referent], _subj_var: &str, modal_str: &str, use_base: bool, _is_first: bool) -> String {
+    // "north-of(X, Y)" is spelled with a copula: "is north of Y".
+    if let Some(words) = relation_of_tail(clause, pred, refs) {
+        let neg = if pred.negated { " not" } else { "" };
+        return format!("is{neg} {words}");
+    }
     let verb = if use_base {
         pred.pred.clone()
     } else {
@@ -163,6 +196,13 @@ fn realize_verb_pred(clause: &Clause, pred: &Pred, refs: &[Referent], _subj_var:
     };
 
     format!("{}{}{}{}", mod_prefix, neg_prefix, verb, obj_full)
+}
+
+/// `north-of(X, Y)` -> `north of <Y>`, the part that follows the copula.
+fn relation_of_tail(clause: &Clause, p: &Pred, refs: &[Referent]) -> Option<String> {
+    let words = pred::relation_of_words(&p.pred)?;
+    let obj = p.args.get(1)?;
+    Some(format!("{} {}", words, realize_term(clause, obj, refs)))
 }
 
 fn realize_modal(modal: &Option<Modal>, negated: bool) -> String {
@@ -216,13 +256,23 @@ fn realize_var_np(clause: &Clause, var: &str, refs: &[Referent]) -> String {
 }
 
 fn realize_ref_np(clause: &Clause, r: &Referent, refs: &[Referent]) -> String {
-    // Possessive: owner set
+    // Possessive: owner set. Only a name takes "'s"; a quantified or literal
+    // owner has to be spelled "the N of X" to re-parse.
     if let Some(ref owner_var) = r.owner {
         let owner_str = realize_var_np(clause, owner_var, refs);
         let noun = r.noun.as_deref().unwrap_or("");
         let mods = r.mods.join(" ");
         let noun_str = if mods.is_empty() { noun.to_string() } else { format!("{} {}", mods, noun) };
-        return format!("{}'s {}", owner_str, noun_str);
+        let owner_is_name = refs
+            .iter()
+            .chain(clause.then_referents.iter())
+            .find(|o| &o.var == owner_var)
+            .map_or(true, |o| matches!(o.quant, Quant::Named(_)));
+        return if owner_is_name {
+            format!("{}'s {}", owner_str, noun_str)
+        } else {
+            format!("the {} of {}", noun_str, owner_str)
+        };
     }
     match &r.quant {
         Quant::Named(name) => name.clone(),
@@ -310,7 +360,15 @@ fn realize_yesno(clause: &Clause) -> String {
         Some(Term::Var { var: v }) => v.as_str(),
         _ => "",
     };
+    if let Some((subj, prep, place)) = location_copula(clause, pred, &clause.referents) {
+        let neg = if pred.negated { " not" } else { "" };
+        return format!("Is {subj}{neg} {prep} {place}?");
+    }
     let subj_str = realize_var_np(clause, subj_var, &clause.referents);
+    if let Some(words) = relation_of_tail(clause, pred, &clause.referents) {
+        let neg = if pred.negated { " not" } else { "" };
+        return format!("Is {subj_str}{neg} {words}?");
+    }
     if pred.pred == "be" {
         let neg = if pred.negated { " not" } else { "" };
         if let Some(ref attr) = pred.attr {
@@ -381,6 +439,9 @@ fn realize_who(clause: &Clause, _focus: &str) -> String {
 fn realize_what(clause: &Clause, _focus: &str) -> String {
     if clause.conditions.is_empty() { return "What?".to_string(); }
     let pred = &clause.conditions[0];
+    if let Some(words) = relation_of_tail(clause, pred, &clause.referents) {
+        return format!("What is {words}?");
+    }
     if pred.pred == "be" {
         let np_var = if let Some(Term::Var { var: v }) = pred.args.get(1) { v.as_str() } else { "" };
         if !np_var.is_empty() {
