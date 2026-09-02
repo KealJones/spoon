@@ -3,143 +3,422 @@
 <head>
 <meta charset="UTF-8">
 <title>Spoon Inspector</title>
+<link rel="icon" href="data:,">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: #1a1a1a; color: #e0e0e0; font-family: monospace; font-size: 14px; padding: 16px; }
-h1 { color: #7ec8e3; margin-bottom: 16px; font-size: 18px; }
-h2 { color: #a0c8a0; margin-bottom: 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
-.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.panel { background: #252525; border: 1px solid #333; border-radius: 4px; padding: 12px; }
-.chat-log { height: 300px; overflow-y: auto; margin-bottom: 8px; padding: 8px;
-  background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 2px; }
-.msg { margin-bottom: 6px; line-height: 1.4; }
+html, body { height: 100%; }
+body { background: #141414; color: #ddd; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px;
+  display: flex; flex-direction: column; }
+header { display: flex; align-items: center; gap: 12px; padding: 6px 12px; background: #1c1c1c;
+  border-bottom: 1px solid #2a2a2a; flex-wrap: wrap; }
+h1 { color: #7ec8e3; font-size: 14px; margin-right: 8px; }
+nav { display: flex; gap: 2px; flex-wrap: wrap; }
+nav button { background: transparent; color: #999; border: 1px solid transparent; padding: 4px 10px;
+  cursor: pointer; font: inherit; border-radius: 3px; }
+nav button:hover { color: #ddd; background: #242424; }
+nav button.active { color: #7ec8e3; background: #242424; border-color: #333; }
+nav button .n { color: #666; margin-left: 4px; font-size: 10px; }
+#hdr-status { margin-left: auto; color: #555; font-size: 10px; }
+main { flex: 1; overflow: hidden; display: flex; }
+.tab { display: none; flex: 1; flex-direction: column; overflow: hidden; padding: 10px 12px; gap: 8px; }
+.tab.active { display: flex; }
+h2 { color: #a0c8a0; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+input, button, select { font: inherit; }
+input { background: #0f0f0f; border: 1px solid #333; color: #ddd; padding: 4px 8px; border-radius: 2px; }
+input:focus { outline: none; border-color: #2e5a8a; }
+button.act { background: #1e3a5a; color: #cce; border: 1px solid #2e5a8a; padding: 4px 12px; cursor: pointer;
+  border-radius: 2px; }
+button.act:hover { background: #2a4a7a; }
+button.act:disabled { opacity: .4; cursor: default; }
+.bar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.bar .grow { flex: 1; min-width: 160px; }
+.bar .info { color: #666; font-size: 10px; }
+.bar .err { color: #ff7070; }
+.scroll { flex: 1; overflow: auto; border: 1px solid #242424; border-radius: 3px; background: #171717; }
+
+/* chat */
+#chat-log { flex: 1; overflow-y: auto; padding: 8px; background: #171717; border: 1px solid #242424; border-radius: 3px; }
+.msg { margin-bottom: 6px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
 .msg.user { color: #7aadff; }
 .msg.bot  { color: #90d090; }
 .msg.err  { color: #ff7070; }
-.row { display: flex; gap: 8px; margin-top: 4px; }
-.row input { flex: 1; background: #111; border: 1px solid #444; color: #e0e0e0;
-  padding: 6px 8px; border-radius: 2px; font-family: monospace; font-size: 14px; }
-.row button { background: #1e3a5a; color: #cce; border: 1px solid #2e5a8a;
-  padding: 6px 14px; cursor: pointer; border-radius: 2px; font-family: monospace; }
-.row button:hover { background: #2a4a7a; }
-.metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 12px; }
-.m { padding: 4px 6px; background: #1a1a1a; border-radius: 2px; }
+.msg .meta { color: #555; font-size: 10px; margin-left: 8px; }
+#session { width: 140px; }
+
+/* overview */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px; }
+.m { padding: 4px 8px; background: #1c1c1c; border-radius: 2px; border: 1px solid #242424; }
 .m .lbl { color: #666; font-size: 10px; }
-.m .val { font-size: 15px; font-weight: bold; }
+.m .val { font-size: 15px; font-weight: bold; color: #ddd; }
 .m .val.bad { color: #ff5555; }
-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-th { color: #666; text-align: left; padding: 4px; border-bottom: 1px solid #2a2a2a; font-size: 10px; text-transform: uppercase; }
-td { padding: 3px 4px; border-bottom: 1px solid #222; color: #bbb; word-break: break-all; }
-.ts { color: #444; font-size: 10px; margin-left: 8px; }
+.m .val.good { color: #90d090; }
+.m .sub { color: #555; font-size: 10px; }
+
+/* tables */
+table { width: 100%; border-collapse: collapse; }
+th { color: #666; text-align: left; padding: 4px 6px; border-bottom: 1px solid #2a2a2a; font-size: 10px;
+  text-transform: uppercase; position: sticky; top: 0; background: #1c1c1c; white-space: nowrap; }
+td { padding: 3px 6px; border-bottom: 1px solid #202020; color: #bbb; vertical-align: top; word-break: break-word; }
+tr.row { cursor: pointer; }
+tr.row:hover td { background: #1e1e1e; }
+tr.row.open td { background: #202428; }
+td.num, td.time { color: #777; white-space: nowrap; font-size: 11px; }
+td.dim { color: #666; }
+td.hi { color: #e8e8e8; }
+td pre, tr.detail pre, tr.trace pre { white-space: pre-wrap; word-break: break-word; font: inherit; }
+td pre { color: #d8b86a; }
+tr.detail td { background: #101214; padding: 6px 10px 8px 24px; }
+tr.detail pre { color: #9ab; font-size: 11px; line-height: 1.35; }
+tr.trace td { background: #131517; padding: 2px 10px 6px 24px; }
+tr.trace pre { color: #8a9a6a; font-size: 11px; line-height: 1.35; }
+.empty { color: #444; padding: 10px; }
+.tag { display: inline-block; padding: 0 5px; border-radius: 2px; font-size: 10px; background: #262626; color: #aaa; }
+.tag.Kernel { color: #888; }
+.tag.Provisional { color: #d8b86a; background: #2a2618; }
+.tag.Consolidated { color: #90d090; background: #1a2a1a; }
+.tag.Deprecated { color: #ff7070; background: #2a1a1a; }
+.tag.dead { color: #ff7070; }
 </style>
 </head>
 <body>
-<h1>Spoon Inspector</h1>
-<div class="grid">
-  <div class="panel">
-    <h2>Chat</h2>
-    <div class="chat-log" id="log"></div>
-    <div class="row">
-      <input id="inp" placeholder="Say something to Spoon..." />
-      <button id="btn">Send</button>
+<header>
+  <h1>Spoon Inspector</h1>
+  <nav id="tabs"></nav>
+  <span id="hdr-status"></span>
+</header>
+<main id="main">
+  <section class="tab" id="tab-chat">
+    <div id="chat-log"></div>
+    <div class="bar">
+      <input id="session" title="X-Spoon-Session header" value="inspector" placeholder="session">
+      <input id="chat-input" class="grow" placeholder="Say something to Spoon..." autofocus>
+      <button class="act" id="chat-send">Send</button>
     </div>
-  </div>
-  <div class="panel">
-    <h2>Metrics <span class="ts" id="ts"></span></h2>
-    <div class="metrics-grid" id="mgrid"><div style="color:#555">Loading...</div></div>
-    <h2 style="margin-top:8px">Learned Actions</h2>
-    <table>
-      <thead><tr><th>ID</th><th>Verbs</th><th>Signature</th><th>Uses</th></tr></thead>
-      <tbody id="atbody"></tbody>
-    </table>
-  </div>
-</div>
+  </section>
+  <section class="tab" id="tab-overview">
+    <div class="bar"><h2>Turns and seats</h2><span class="info" id="ov-ts"></span></div>
+    <div class="cards" id="ov-metrics"><div class="empty">Loading...</div></div>
+    <h2 style="margin-top:6px">Weaning</h2>
+    <div class="cards" id="ov-weaning"></div>
+    <h2 style="margin-top:6px">Store rows</h2>
+    <div class="cards" id="ov-counts"></div>
+    <h2 style="margin-top:6px">CAN (in memory, kernel included)</h2>
+    <div class="cards" id="ov-can"></div>
+  </section>
+</main>
 <script>
-const log  = document.getElementById('log');
-const inp  = document.getElementById('inp');
-const btn  = document.getElementById('btn');
-const mgrid = document.getElementById('mgrid');
-const atbody = document.getElementById('atbody');
-const ts   = document.getElementById('ts');
+'use strict';
 
-function addMsg(cls, text) {
-  const d = document.createElement('div');
-  d.className = 'msg ' + cls;
+// ---- helpers ---------------------------------------------------------------
+
+function el(tag, attrs, children) {
+  const e = document.createElement(tag);
+  if (attrs) for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') e.className = v;
+    else if (k === 'text') e.textContent = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v);
+  }
+  if (children) for (const c of [].concat(children)) {
+    if (c == null) continue;
+    e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+  }
+  return e;
+}
+
+function pad(n) { return String(n).padStart(2, '0'); }
+function fmtTime(ms) {
+  if (ms == null) return '';
+  const d = new Date(ms);
+  if (isNaN(d)) return String(ms);
+  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+function fmtAny(v) {
+  if (v == null) return '';
+  if (Array.isArray(v)) return v.map(fmtAny).join(', ');
+  if (typeof v === 'object') return JSON.stringify(v);
+  return String(v);
+}
+function tag(text, cls) { return el('span', { class: 'tag ' + (cls || text || ''), text: text || '' }); }
+function pre(text) { return el('pre', { text: text || '' }); }
+function debounce(fn, ms) {
+  let t;
+  return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+}
+async function getJson(url) {
+  const r = await fetch(url);
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.error || `${r.status} ${r.statusText}`);
+  return body;
+}
+
+// ---- table definitions -----------------------------------------------------
+// col: { key, label, fmt(value, row) -> string|Node, cls }
+
+const LIMIT = 100;
+const TABLES = {
+  facts: { label: 'Facts', cols: [
+    { key: 'id', label: 'id', cls: 'num' },
+    { key: 'text', label: 'fact', cls: 'hi' },
+    { key: 'sce', label: 'english', cls: 'dim' },
+    { key: 'source', label: 'source' },
+    { key: 'superseded', label: 'state', fmt: v => v ? tag('superseded', 'dead') : tag('live') },
+    { key: 'episode_id', label: 'ep', cls: 'num' },
+    { key: 'at', label: 'at', cls: 'time', fmt: fmtTime },
+  ]},
+  actions: { label: 'Actions', cols: [
+    { key: 'id', label: 'id', cls: 'hi' },
+    { key: 'verbs', label: 'verbs' },
+    { key: 'tier', label: 'tier', fmt: v => tag(v) },
+    { key: 'signature', label: 'signature', cls: 'dim' },
+    { key: 'program', label: 'program', fmt: (v, r) => v == null ? el('span', { class: 'dim', text: r.tier === 'Kernel' ? 'primitive' : '' }) : pre(v) },
+    { key: 'uses', label: 'uses', cls: 'num' },
+    { key: 'updated_at', label: 'updated', cls: 'time', fmt: fmtTime },
+  ]},
+  concepts: { label: 'Concepts', cols: [
+    { key: 'id', label: 'id', cls: 'hi' },
+    { key: 'kind', label: 'kind' },
+    { key: 'parents', label: 'parents' },
+    { key: 'nouns', label: 'nouns' },
+    { key: 'detail', label: 'detail', cls: 'dim' },
+    { key: 'examples', label: 'examples', cls: 'dim' },
+    { key: 'tier', label: 'tier', fmt: v => tag(v) },
+    { key: 'updated_at', label: 'updated', cls: 'time', fmt: fmtTime },
+  ]},
+  pairs: { label: 'Pairs', cols: [
+    { key: 'id', label: 'id', cls: 'num' },
+    { key: 'utterance', label: 'utterance', cls: 'hi' },
+    { key: 'sce', label: 'sce' },
+    { key: 'source', label: 'source' },
+    { key: 'credit', label: 'credit', cls: 'num' },
+    { key: 'at', label: 'at', cls: 'time', fmt: fmtTime },
+  ]},
+  stances: { label: 'Stances', cols: [
+    { key: 'id', label: 'id', cls: 'num' },
+    { key: 'topic', label: 'topic', cls: 'hi' },
+    { key: 'stance', label: 'stance' },
+    { key: 'reasons', label: 'reasons', cls: 'dim' },
+    { key: 'confidence', label: 'conf', cls: 'num', fmt: v => v == null ? '' : Number(v).toFixed(2) },
+    { key: 'source', label: 'source' },
+    { key: 'at', label: 'at', cls: 'time', fmt: fmtTime },
+  ]},
+  episodes: { label: 'Episodes', cols: [
+    { key: 'id', label: 'id', cls: 'num' },
+    { key: 'session_id', label: 'session', cls: 'dim' },
+    { key: 'user_text', label: 'user', cls: 'hi' },
+    { key: 'sce', label: 'sce', cls: 'dim' },
+    { key: 'reply_text', label: 'reply' },
+    { key: 'ears_path', label: 'ears' },
+    { key: 'mouth_path', label: 'mouth' },
+    { key: 'metrics', label: 'metrics', cls: 'dim', fmt: m => m ? `${m.plan_steps} steps, ${m.ms_interior}+${m.ms_mouth}ms, llm e${m.ears_llm_calls} m${m.mouth_llm_calls} t${m.teacher_llm_calls}`
+        + (m.synthesis_succeeded ? ', synth ok' : m.synthesis_attempted ? ', synth tried' : '')
+        + (m.reused_learned_action ? ', reused' : '') + (m.teacher_fallback ? ', teacher' : '') : '' },
+    { key: 'credit', label: 'credit', cls: 'num' },
+    { key: 'at', label: 'at', cls: 'time', fmt: fmtTime },
+  ], sub: r => Array.isArray(r.trace) && r.trace.length ? pre(r.trace.join('\n')) : null },
+  kv: { label: 'KV', cols: [
+    { key: 'key', label: 'key', cls: 'hi' },
+    { key: 'value', label: 'value', fmt: v => pre(JSON.stringify(v, null, 2)) },
+  ]},
+};
+const TAB_ORDER = ['chat', 'overview', ...Object.keys(TABLES)];
+const state = {};   // table name -> { q, rows, more, err, loading }
+
+// ---- tabs ------------------------------------------------------------------
+
+const nav = document.getElementById('tabs');
+const main = document.getElementById('main');
+let current = null;
+
+for (const name of TAB_ORDER) {
+  const label = TABLES[name] ? TABLES[name].label : name[0].toUpperCase() + name.slice(1);
+  nav.appendChild(el('button', { id: 'btn-' + name, onclick: () => { location.hash = name; } },
+    [label, el('span', { class: 'n', id: 'n-' + name })]));
+  if (TABLES[name]) main.appendChild(buildTableTab(name));
+}
+
+function showTab(name) {
+  if (!TAB_ORDER.includes(name)) name = 'chat';
+  current = name;
+  for (const n of TAB_ORDER) {
+    document.getElementById('tab-' + n).classList.toggle('active', n === name);
+    document.getElementById('btn-' + n).classList.toggle('active', n === name);
+  }
+  if (name === 'overview') pollOverview();
+  else if (TABLES[name]) loadTable(name, false);
+  else document.getElementById('chat-input').focus();
+}
+window.addEventListener('hashchange', () => showTab(location.hash.slice(1)));
+
+// ---- generic table tab -----------------------------------------------------
+
+function buildTableTab(name) {
+  const st = state[name] = { q: '', rows: [], more: false, err: null, loading: false };
+  const search = el('input', { class: 'grow', placeholder: `filter ${name} (substring)`,
+    oninput: debounce(() => { st.q = search.value.trim(); loadTable(name, false); }, 250) });
+  const info = el('span', { class: 'info', id: 'info-' + name });
+  const refresh = el('button', { class: 'act', text: 'Refresh', onclick: () => loadTable(name, false) });
+  const more = el('button', { class: 'act', text: 'Load more', id: 'more-' + name, onclick: () => loadTable(name, true) });
+  more.style.display = 'none';
+  const scroll = el('div', { class: 'scroll' }, el('table', {}, [
+    el('thead', {}, el('tr', {}, TABLES[name].cols.map(c => el('th', { text: c.label })))),
+    el('tbody', { id: 'tbody-' + name }),
+  ]));
+  return el('section', { class: 'tab', id: 'tab-' + name }, [
+    el('div', { class: 'bar' }, [search, refresh, more, info]),
+    scroll,
+  ]);
+}
+
+async function loadTable(name, append) {
+  const st = state[name];
+  if (st.loading) return;
+  st.loading = true;
+  const offset = append ? st.rows.length : 0;
+  const url = `/debug/${name}?limit=${LIMIT}&offset=${offset}` + (st.q ? `&q=${encodeURIComponent(st.q)}` : '');
+  try {
+    const rows = await getJson(url);
+    st.rows = append ? st.rows.concat(rows) : rows;
+    st.more = rows.length === LIMIT;
+    st.err = null;
+  } catch (e) {
+    st.err = e.message;
+    if (!append) st.rows = [];
+    st.more = false;
+  }
+  st.loading = false;
+  renderTable(name);
+}
+
+function renderTable(name) {
+  const st = state[name];
+  const def = TABLES[name];
+  const tbody = document.getElementById('tbody-' + name);
+  tbody.replaceChildren();
+  if (st.err) {
+    tbody.appendChild(el('tr', {}, el('td', { class: 'err', colspan: def.cols.length, text: 'error: ' + st.err })));
+  } else if (!st.rows.length) {
+    tbody.appendChild(el('tr', {}, el('td', { class: 'empty', colspan: def.cols.length, text: st.q ? 'no matches' : 'empty' })));
+  }
+  for (const row of st.rows) {
+    const tr = el('tr', { class: 'row' }, def.cols.map(c => {
+      const v = row[c.key];
+      const out = c.fmt ? c.fmt(v, row) : fmtAny(v);
+      return el('td', { class: c.cls || '' }, out);
+    }));
+    let detail = null;
+    tr.onclick = () => {
+      if (detail) { detail.remove(); detail = null; tr.classList.remove('open'); return; }
+      detail = el('tr', { class: 'detail' }, el('td', { colspan: def.cols.length }, pre(JSON.stringify(row, null, 2))));
+      tr.classList.add('open');
+      tr.after(detail);
+    };
+    tbody.appendChild(tr);
+    const sub = def.sub ? def.sub(row) : null;
+    if (sub) tbody.appendChild(el('tr', { class: 'trace' }, el('td', { colspan: def.cols.length }, sub)));
+  }
+  const info = document.getElementById('info-' + name);
+  info.textContent = st.err ? '' : `${st.rows.length} row${st.rows.length === 1 ? '' : 's'}` + (st.q ? ` matching "${st.q}"` : '') + (st.more ? ' (more available)' : '');
+  document.getElementById('more-' + name).style.display = st.more ? '' : 'none';
+}
+
+// ---- chat ------------------------------------------------------------------
+
+const chatLog = document.getElementById('chat-log');
+const chatInput = document.getElementById('chat-input');
+const sessionInput = document.getElementById('session');
+
+function addMsg(cls, text, meta) {
   const prefix = cls === 'user' ? 'you: ' : cls === 'bot' ? 'spoon: ' : 'err: ';
-  d.textContent = prefix + text;
-  log.appendChild(d);
-  log.scrollTop = log.scrollHeight;
+  const d = el('div', { class: 'msg ' + cls }, [prefix + text, meta ? el('span', { class: 'meta', text: meta }) : null]);
+  chatLog.appendChild(d);
+  chatLog.scrollTop = chatLog.scrollHeight;
 }
 
 async function send() {
-  const text = inp.value.trim();
+  const text = chatInput.value.trim();
   if (!text) return;
-  inp.value = '';
+  chatInput.value = '';
   addMsg('user', text);
+  const headers = { 'Content-Type': 'application/json' };
+  const session = sessionInput.value.trim();
+  if (session) headers['X-Spoon-Session'] = session;
   try {
     const r = await fetch('/v1/chat/completions', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({messages: [{role: 'user', content: text}]})
+      method: 'POST', headers,
+      body: JSON.stringify({ messages: [{ role: 'user', content: text }] }),
     });
     const d = await r.json();
-    if (d.error) addMsg('err', d.error.message || JSON.stringify(d.error));
-    else addMsg('bot', d.choices[0].message.content);
-  } catch(e) { addMsg('err', e.message); }
+    if (d.error) { addMsg('err', d.error.message || JSON.stringify(d.error)); return; }
+    const s = d.spoon || {}, m = s.metrics || {};
+    const meta = `ep ${s.episode_id ?? '?'} | ears ${m.ears_path ?? '?'} | mouth ${s.mouth_path ?? '?'} | ${(m.ms_interior ?? 0) + (m.ms_mouth ?? 0)}ms`
+      + (m.interior_llm_calls ? ` | INTERIOR LLM ${m.interior_llm_calls}` : '');
+    addMsg('bot', d.choices[0].message.content, meta);
+  } catch (e) { addMsg('err', e.message); }
 }
+document.getElementById('chat-send').onclick = send;
+chatInput.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
 
-btn.onclick = send;
-inp.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+// ---- overview --------------------------------------------------------------
 
-const FIELDS = [
-  ['turns','Turns',false],['interior_llm_calls','Interior LLM',true],
-  ['ears_llm_calls','Ears LLM',false],['mouth_llm_calls','Mouth LLM',false],
-  ['teacher_llm_calls','Teacher LLM',false],['ears_native_hits','Ears Native',false],
-  ['ears_llm_hits','Ears LLM Hits',false],['ears_failed','Ears Failed',false],
-  ['synthesis_attempted','Synth Attempted',false],['synthesis_succeeded','Synth OK',false],
+const SEAT_FIELDS = [
+  ['turns', 'Turns'], ['interior_llm_calls', 'Interior LLM', 'zero'],
+  ['ears_llm_calls', 'Ears LLM calls'], ['mouth_llm_calls', 'Mouth LLM calls'], ['teacher_llm_calls', 'Teacher LLM calls'],
+  ['synthesis_attempted', 'Synth attempted'], ['synthesis_succeeded', 'Synth ok'],
 ];
-const STORE_FIELDS = ['concepts','actions','facts','episodes','pairs','stances'];
+const COUNT_FIELDS = ['facts', 'fact_args', 'actions', 'concepts', 'pairs', 'stances', 'episodes', 'kv'];
 
-function renderMetrics(m) {
-  let html = FIELDS.map(([k,l,warn]) => {
+function card(lbl, val, cls, sub) {
+  return el('div', { class: 'm' }, [
+    el('div', { class: 'lbl', text: lbl }),
+    el('div', { class: 'val' + (cls ? ' ' + cls : ''), text: String(val) }),
+    sub ? el('div', { class: 'sub', text: sub }) : null,
+  ]);
+}
+function pct(n, d) { return d ? `${Math.round(100 * n / d)}%` : '-'; }
+
+function renderOverview(m, counts, snap) {
+  document.getElementById('ov-metrics').replaceChildren(...SEAT_FIELDS.map(([k, l, rule]) => {
     const v = m[k] ?? 0;
-    return `<div class="m"><div class="lbl">${l}</div><div class="val${warn && v ? ' bad' : ''}">${v}</div></div>`;
-  }).join('');
-  if (m.store) {
-    html += STORE_FIELDS.map(k =>
-      `<div class="m"><div class="lbl">store.${k}</div><div class="val">${m.store[k] ?? 0}</div></div>`
-    ).join('');
+    return card(l, v, rule === 'zero' ? (v ? 'bad' : 'good') : '');
+  }));
+  const native = m.ears_native_hits ?? 0, llm = m.ears_llm_hits ?? 0, failed = m.ears_failed ?? 0;
+  const heard = native + llm + failed, turns = m.turns ?? 0;
+  document.getElementById('ov-weaning').replaceChildren(
+    card('Ears native', pct(native, heard), native === heard && heard ? 'good' : '', `${native} of ${heard} heard turns`),
+    card('Ears LLM', pct(llm, heard), llm ? 'bad' : '', `${llm} turns`),
+    card('Ears failed', pct(failed, heard), failed ? 'bad' : '', `${failed} turns`),
+    card('Mouth LLM', pct(Math.min(m.mouth_llm_calls ?? 0, turns), turns), '', `${m.mouth_llm_calls ?? 0} calls over ${turns} turns`),
+  );
+  document.getElementById('ov-counts').replaceChildren(...COUNT_FIELDS.map(k => card(k, counts[k] ?? 0)));
+  document.getElementById('ov-can').replaceChildren(
+    card('concepts', snap.concepts ?? 0),
+    card('actions', snap.actions ?? 0, '', `${(snap.learned_actions || []).length} learned`),
+  );
+  // Tab badges match what the tab lists: CAN sizes for actions/concepts, store rows for the rest.
+  const badges = { ...counts, actions: snap.actions, concepts: snap.concepts };
+  for (const k of Object.keys(TABLES)) {
+    document.getElementById('n-' + k).textContent = badges[k] ?? '';
   }
-  mgrid.innerHTML = html;
+  document.getElementById('hdr-status').textContent =
+    `${turns} turns | interior llm ${m.interior_llm_calls ?? 0} | ${new Date().toLocaleTimeString()}`;
 }
 
-function renderActions(actions) {
-  atbody.innerHTML = actions.length
-    ? actions.map(a => `<tr>
-        <td>${a.id}</td>
-        <td>${(a.verbs||[]).join(', ')}</td>
-        <td>${a.signature||''}</td>
-        <td>${a.uses||0}</td>
-      </tr>`).join('')
-    : '<tr><td colspan="4" style="color:#444">No learned actions yet</td></tr>';
-}
-
-async function poll() {
+async function pollOverview() {
   try {
-    const [mr, sr] = await Promise.all([
-      fetch('/debug/metrics').then(r => r.json()),
-      fetch('/debug/snapshot').then(r => r.json()),
+    const [m, counts, snap] = await Promise.all([
+      getJson('/debug/metrics'), getJson('/debug/counts'), getJson('/debug/snapshot'),
     ]);
-    renderMetrics(mr);
-    renderActions(sr.learned_actions || []);
-    ts.textContent = new Date().toLocaleTimeString();
-  } catch(e) {
-    mgrid.innerHTML = `<div style="color:#f55">poll error: ${e.message}</div>`;
+    renderOverview(m, counts, snap);
+    document.getElementById('ov-ts').textContent = 'updated ' + new Date().toLocaleTimeString();
+  } catch (e) {
+    document.getElementById('hdr-status').textContent = 'poll error: ' + e.message;
   }
 }
 
-poll();
-setInterval(poll, 3000);
+showTab(location.hash.slice(1) || 'chat');
+pollOverview();
+setInterval(pollOverview, 3000);
 </script>
 </body>
 </html>

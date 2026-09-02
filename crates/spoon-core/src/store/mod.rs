@@ -1,5 +1,6 @@
 //! SQLite persistence. Synchronous rusqlite; the Brain wraps this in a Mutex.
 
+mod inspect;
 mod schema;
 
 use std::path::Path;
@@ -690,9 +691,11 @@ impl Store {
             concepts: count("SELECT COUNT(*) FROM concepts")?,
             actions: count("SELECT COUNT(*) FROM actions")?,
             facts: count("SELECT COUNT(*) FROM facts")?,
+            fact_args: count("SELECT COUNT(*) FROM fact_args")?,
             episodes: count("SELECT COUNT(*) FROM episodes")?,
             pairs: count("SELECT COUNT(*) FROM pairs")?,
             stances: count("SELECT COUNT(*) FROM stances")?,
+            kv: count("SELECT COUNT(*) FROM kv")?,
         })
     }
 }
@@ -702,7 +705,11 @@ pub struct StoreCounts {
     pub concepts: usize,
     pub actions: usize,
     pub facts: usize,
+    #[serde(default)]
+    pub fact_args: usize,
     pub episodes: usize,
     pub pairs: usize,
     pub stances: usize,
+    #[serde(default)]
+    pub kv: usize,
 }
