@@ -6,6 +6,66 @@ not that a type exists. Decisions live in PLAN.md; rules in AGENTS.md.
 
 ---
 
+## 2026-09-02 04:20  M1-M3 demoable; messy input native (commits 8bc352e, 2d5f52f)
+
+DONE. Pick-up check passed: all 19 demo lines below run offline through
+`cargo run -q -p spoon -- --ephemeral --offline --debug stdio`, interior_llm_calls 0,
+241 workspace tests, 0 warnings.
+```
+Hello! / John owns a dog. / Who owns a dog?            -> yo. what do you need? / noted / John.
+Assistant, calculate 3 / 500 * 3600!                   -> 21.6
+Assistant, double 21! + two double facts               -> 42 learned: double = add(x, x)
+Assistant, triple 4! + two triple facts                -> 12 learned: triple = mul(x, 3)   (smaller than the old add(x, double(x)))
+What is the triple of 7?                               -> 21. (source: computed)          (question -> learned action, brain r3)
+What is the reverse of "abc"?                          -> cba. (source: computed)         (question -> kernel action)
+Is John happy? / "pup" means "dog". / User means Mary. -> I don't know ... / learned / got it: Mary owns a dog
+Assistant, concatenate "ab"! -> cd                     -> what b should i use? -> abcd    (placeholder round trip)
+```
+Messy input (ears round 4), same binary, Ollama on but 0 ears LLM calls:
+```
+yo whats up                                        -> User greets Assistant.        phrasing
+ok so john has this dog right and like the dog is brown -> John owns a dog. The dog is brown.
+can u double 21 for me                             -> Assistant, double 21!          (teacher taught double: 42)
+whats the double of 100                            -> What is the double of 100?     -> 200
+im feeling kinda down today                        -> User is sad.                   -> i hear you...
+no i meant mary / what do you think about dogs / thanks!   all correct shapes
+```
+- Ears: phrasing-first, Direct only when clean (no unknown content words, or a
+  Command whose only unknown is the verb), deterministic rules in
+  `ears/rules.rs` + `ears/sentence.rs` (contractions, indirect requests,
+  feelings, corrections, question restoration, clause split, greeting split),
+  LLM last, then direct-with-unknowns at conf 0.3. `Gate::parse_reported`
+  returns unknown words. `data/bench/convo20.json`: 20/20 native.
+  ACE live qwen3.5:4b: 53/158 structural, 104 parsed, repairs counted (60).
+- Brain r3: `dispatch/property.rs` routes `What is the N of X?` / `Is the N of X
+  V?` to a CAN action named N (kernel first, then learned) when memory has no
+  fact; `Present` (Result|Answer|YesNo) tells the brain how to render. Failed
+  ears turns render via template (no echo). `User thinks that dogs are great.`
+  stored and answered; opinion replies cite known facts about the topic.
+- `spoon serve` smoke-tested: `/v1/chat/completions` (+ `spoon` metrics block),
+  `/v1/models`; sessions from X-Spoon-Session > `user` > first-message hash.
+
+KNOWN ISSUES (queued)
+- Ears LLM invents SCE from garbage: `zxqv flarp wibble` -> `Zxqv is a wibble.`
+  Needs a garbage guard (all content words unknown -> Failed) and a prompt
+  escape hatch. ACE misses: reported speech 0/20, context/ellipsis 1/22 (belongs
+  to discourse, not ears), for-each -> `For every N X` variable form 0/20.
+- Mouth adds stance: Reflect `ok so dogs are great.` rendered `i agree, dogs
+  are great.` Faithfulness check should reject first-person stance verbs
+  unless the plan has an Opinion move.
+- Parser: `What is 3 * 4?` (operators only inside calculate), `User says
+  goodbye to Assistant.` (only hyphenated form), `Assistant, now!`.
+- Example ask uses `The triple of 3 is 6.` (generic 3 -> 6 template).
+
+NEXT (M4)
+1. `spoon bench convo20|ace|babi|demo` through the real Brain, JSON results
+   under data/bench/results, ears path counts = weaning numbers.
+2. `spoon teach --lessons N`: curriculum -> capability specs + phrasings +
+   facts + stances + concepts, all stored, resumable, wall-clock capped,
+   then export.
+3. README.md. 4. Ears round 5 (garbage guard, reported speech, for-each).
+5. Mouth stance check.
+
 ## 2026-09-02 02:30  Brain round 2 landed; ears LLM seat wired (commits 3e6f156, a06a597)
 
 DONE (offline stdio, interior_llm_calls == 0 everywhere, 17 brain tests)
