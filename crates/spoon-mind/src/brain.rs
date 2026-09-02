@@ -4,38 +4,46 @@
 //!
 //! Public surface (stable for the `spoon` binary and server):
 //! `BrainConfig`, `Brain::open`, `Brain::turn`, `Brain::metrics`, `Brain::snapshot`.
+//!
+//! Lock order, when more than one is held: sessions -> can -> store -> gate/ears.
 
 mod exec;
 mod host;
 mod learn;
+mod metrics;
 mod respond;
 mod session;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
 
+use anyhow::anyhow;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
 use spoon_core::can::Can;
 use spoon_core::kernel::{Kernel, PermissionMode};
 use spoon_core::llm::{LlmClient, LlmConfig};
-use spoon_core::store::{Store, StoreCounts};
+use spoon_core::store::Store;
 use spoon_core::types::*;
 
-use spoon_lang::ears::{self, Ears, Gate};
 use spoon_lang::ears::gate::SceGate;
+use spoon_lang::ears::{self, Ears, Gate};
 use spoon_lang::mouth::{Mouth, MouthPath, RenderContext};
 
-use crate::discourse::{self, DiscourseState, ground_all, extract_keywords};
+use crate::discourse::{self, detect_clause_correction, extract_keywords, ground_all, Correction, DiscourseState, Grounded};
 use crate::dispatch::{self, DispatchCtx, Dispatched};
+use crate::teacher::Teacher;
 
 use exec::ResumeResult;
-use host::BrainHost;
-use learn::learn_from_examples;
-use session::{Pending, Session};
+pub use host::BrainHost;
+pub use learn::LearnOutcome;
+use learn::{apply_synonyms, SYNONYMS_KEY};
+use metrics::Counters;
+pub use metrics::{ActionSummary, BrainMetrics, Snapshot};
+use session::{LastAssert, Pending, Session};
 
 // ---------------------------------------------------------------------------
 // Config
@@ -109,38 +117,6 @@ pub struct TurnResult {
     pub trace: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct BrainMetrics {
-    pub turns: u64,
-    pub interior_llm_calls: u64,
-    pub ears_llm_calls: u64,
-    pub mouth_llm_calls: u64,
-    pub teacher_llm_calls: u64,
-    pub ears_native_hits: u64,
-    pub ears_llm_hits: u64,
-    pub ears_failed: u64,
-    pub synthesis_attempted: u64,
-    pub synthesis_succeeded: u64,
-    pub store: StoreCounts,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Snapshot {
-    pub concepts: usize,
-    pub actions: usize,
-    pub learned_actions: Vec<ActionSummary>,
-    pub store: StoreCounts,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ActionSummary {
-    pub id: String,
-    pub verbs: Vec<String>,
-    pub signature: String,
-    pub tier: String,
-    pub uses: u64,
-}
-
 // ---------------------------------------------------------------------------
 // Brain
 // ---------------------------------------------------------------------------
@@ -152,21 +128,14 @@ pub struct Brain {
     pub can: Mutex<Can>,
     pub llm: LlmClient,
     pub mouth: Mouth,
+    /// Present only when online and the model answered a ping.
+    teacher: Option<Teacher>,
     ears: Mutex<Ears>,
     gate: Mutex<SceGate>,
     sessions: Mutex<HashMap<String, Session>>,
+    /// Word -> canonical word, applied to the raw text before the ears.
+    synonyms: Mutex<HashMap<String, String>>,
     counters: Counters,
-    data_dir: PathBuf,
-}
-
-#[derive(Default)]
-struct Counters {
-    turns: AtomicU64,
-    ears_native: AtomicU64,
-    ears_llm: AtomicU64,
-    ears_failed: AtomicU64,
-    synth_attempted: AtomicU64,
-    synth_succeeded: AtomicU64,
 }
 
 impl Brain {
@@ -194,73 +163,59 @@ impl Brain {
         }
 
         let llm = LlmClient::new();
-        let mouth_cfg = if cfg.offline {
-            None
+        let ping = |model: &str| {
+            let c = LlmConfig::ollama(model);
+            let llm = llm.clone();
+            async move { llm.ping(&c).await.then_some(c) }
+        };
+        let (mouth_cfg, ears_cfg, teacher_cfg) = if cfg.offline {
+            (None, None, None)
         } else {
-            let c = LlmConfig::ollama(&cfg.mouth_model);
-            llm.ping(&c).await.then_some(c)
+            (ping(&cfg.mouth_model).await, ping(&cfg.ears_model).await, ping(&cfg.teacher_model).await)
         };
         let mouth = Mouth { cfg: mouth_cfg, client: llm.clone() };
+        let teacher = teacher_cfg.map(|c| Teacher::new(llm.clone(), c));
 
         let data_dir = cfg.data_dir.clone().unwrap_or_else(resolve_data_dir);
-
-        // Build ears
-        let ears_llm = if cfg.offline {
-            None
-        } else {
-            let ec = LlmConfig::ollama(&cfg.ears_model);
-            llm.ping(&ec).await.then(|| (llm.clone(), ec))
-        };
-
         let mut ears = match Ears::from_data_dir(&data_dir) {
             Ok(e) => e,
-            Err(_) => {
-                let lex = spoon_lang::ears::lexicon::Lexicon::new();
-                let ps = spoon_lang::ears::phrasings::PhrasingStore::new();
-                Ears::new(lex, ps, None)
-            }
+            Err(_) => Ears::new(
+                spoon_lang::ears::lexicon::Lexicon::new(),
+                spoon_lang::ears::phrasings::PhrasingStore::new(),
+                None,
+            ),
         };
-        if let Some(llm_pair) = ears_llm {
-            ears = Ears::new(
-                {
-                    let mut lex = match spoon_lang::ears::lexicon::Lexicon::load_seed_dir(
-                        &data_dir.join("seed"),
-                    ) {
-                        Ok(l) => l,
-                        Err(_) => spoon_lang::ears::lexicon::Lexicon::new(),
-                    };
-                    lex.extend_from_can(&can);
-                    lex
-                },
-                {
-                    let lex_for_phr = match spoon_lang::ears::lexicon::Lexicon::load_seed_dir(
-                        &data_dir.join("seed"),
-                    ) {
-                        Ok(l) => l,
-                        Err(_) => spoon_lang::ears::lexicon::Lexicon::new(),
-                    };
-                    ears::load_phrasings(&data_dir, &lex_for_phr).unwrap_or_else(|_| {
-                        spoon_lang::ears::phrasings::PhrasingStore::new()
-                    })
-                },
-                Some(llm_pair),
-            );
+        if let Some(ears_cfg) = ears_cfg {
+            let load_lex = || {
+                spoon_lang::ears::lexicon::Lexicon::load_seed_dir(&data_dir.join("seed"))
+                    .unwrap_or_else(|_| spoon_lang::ears::lexicon::Lexicon::new())
+            };
+            let mut lex = load_lex();
+            lex.extend_from_can(&can);
+            let phrasings = ears::load_phrasings(&data_dir, &load_lex())
+                .unwrap_or_else(|_| spoon_lang::ears::phrasings::PhrasingStore::new());
+            ears = Ears::new(lex, phrasings, Some((llm.clone(), ears_cfg)));
         }
 
-        // Load stored pairs into ears
         let pairs = store.pairs(0).unwrap_or_default();
         if !pairs.is_empty() {
             ears.add_pairs(&pairs);
         }
 
-        // Build gate from CAN
+        // Learned synonyms survive restarts via the kv table.
+        let synonyms: HashMap<String, String> = store
+            .kv_get(SYNONYMS_KEY)?
+            .and_then(|v| serde_json::from_value(v).ok())
+            .unwrap_or_default();
+        for (word, canonical) in &synonyms {
+            ears.learn_word(word, canonical);
+        }
+
         let gate = SceGate::from_can(&can);
 
-        // Assert self-model seed facts if this is a fresh store
-        let counts = store.counts().unwrap_or_default();
-        if counts.facts == 0 {
-            let seed_sentences = dispatch::self_model_seed();
-            for sce_text in &seed_sentences {
+        // Assert self-model seed facts if this is a fresh store.
+        if store.counts().unwrap_or_default().facts == 0 {
+            for sce_text in &dispatch::self_model_seed() {
                 if let Ok(clauses) = gate.parse(sce_text) {
                     let mut disc = DiscourseState::default();
                     let gs = ground_all(&mut disc, &clauses, &can);
@@ -279,133 +234,109 @@ impl Brain {
             can: Mutex::new(can),
             llm,
             mouth,
+            teacher,
             ears: Mutex::new(ears),
             gate: Mutex::new(gate),
             sessions: Mutex::new(HashMap::new()),
+            synonyms: Mutex::new(synonyms),
             counters: Counters::default(),
-            data_dir,
         }))
+    }
+
+    /// Run `f` on the session, creating it on first use.
+    fn with_session<R>(&self, session_id: &str, f: impl FnOnce(&mut Session) -> R) -> R {
+        let mut sessions = self.sessions.lock();
+        f(sessions.entry(session_id.to_string()).or_insert_with(Session::new))
     }
 
     // -----------------------------------------------------------------------
     // Turn
     // -----------------------------------------------------------------------
 
-    pub async fn turn(
-        &self,
-        session_id: &str,
-        text: &str,
-    ) -> anyhow::Result<TurnResult> {
-        let started = std::time::Instant::now();
-        let sync_result = self.turn_sync(session_id, text)?;
-        self.finalize_turn(
-            session_id, text, &sync_result.sce, &sync_result.clauses,
-            sync_result.ears_path, sync_result.plan, sync_result.prior_turns,
-            &started, sync_result.trace,
-            sync_result.ears_before, sync_result.mouth_before, sync_result.teacher_before,
-        ).await
-    }
+    pub async fn turn(&self, session_id: &str, text: &str) -> anyhow::Result<TurnResult> {
+        let started = Instant::now();
+        let mut out = self.turn_sync(session_id, text)?;
 
-    fn turn_sync(
-        &self,
-        session_id: &str,
-        text: &str,
-    ) -> anyhow::Result<SyncTurnResult> {
-        self.counters.turns.fetch_add(1, Ordering::Relaxed);
-        let mut trace: Vec<String> = Vec::new();
-        let (ears_before, mouth_before, teacher_before, _) = self.llm.counters.snapshot();
-
-        let returning_user = {
-            let store = self.store.lock();
-            store
-                .last_episode(session_id)
-                .ok()
-                .flatten()
-                .is_some()
-        };
-
-        // 2. Handle pending state
-        {
-            let mut sessions = self.sessions.lock();
-            let session = sessions
-                .entry(session_id.to_string())
-                .or_insert_with(Session::new);
-
-            if let Some(pending) = session.pending.take() {
-                match pending {
-                    Pending::Exec { intent, plan, mut state, kind } => {
-                        let resume_result = self.resume_exec(
-                            text, &intent, &plan, &mut state, &kind, session, &mut trace,
-                        );
-                        match resume_result {
-                            ResumeResult::Done(plan) => {
-                                let prior = session.prior_turns.clone();
-                                return Ok(SyncTurnResult {
-                                    sce: String::new(), clauses: vec![], ears_path: EarsPath::Direct,
-                                    plan, prior_turns: prior, trace, ears_before, mouth_before, teacher_before,
-                                });
-                            }
-                            ResumeResult::StillPending(plan, new_pending) => {
-                                session.pending = Some(new_pending);
-                                let prior = session.prior_turns.clone();
-                                return Ok(SyncTurnResult {
-                                    sce: String::new(), clauses: vec![], ears_path: EarsPath::Direct,
-                                    plan, prior_turns: prior, trace, ears_before, mouth_before, teacher_before,
-                                });
-                            }
-                            ResumeResult::NotAnAnswer => {
-                                if self.cfg.debug {
-                                    trace.push("pending dropped, fresh turn".into());
-                                }
-                            }
+        // The teacher seat: the only LLM call reachable from the turn loop,
+        // and it only ever writes a Spec. Spoon code does the rest.
+        if let Some(req) = out.teacher.take() {
+            out.flags.teacher_fallback = true;
+            match self.consult_teacher(&req).await {
+                Ok(outcome) => {
+                    self.with_session(session_id, |s| {
+                        if matches!(s.pending, Some(Pending::UnknownVerb { .. })) {
+                            s.pending = None;
                         }
-                    }
-                    Pending::UnknownVerb { verb, sce, signals } => {
-                        let unknown_verb_result = self.handle_unknown_verb_followup(
-                            text, &verb, &sce, &signals, session, &mut trace,
-                        );
-                        if let Some(plan) = unknown_verb_result {
-                            let prior = session.prior_turns.clone();
-                            return Ok(SyncTurnResult {
-                                sce: String::new(), clauses: vec![], ears_path: EarsPath::Direct,
-                                plan, prior_turns: prior, trace, ears_before, mouth_before, teacher_before,
-                            });
-                        }
+                    });
+                    out.plan =
+                        self.run_learned(&outcome, &req.verb, &req.signals, &req.sce, session_id, true, &mut out.trace)?;
+                }
+                Err(e) => {
+                    if self.cfg.debug {
+                        out.trace.push(format!("teacher: {e}"));
                     }
                 }
             }
         }
 
-        // 3. Ears
+        self.finalize_turn(session_id, text, out, &started).await
+    }
+
+    async fn consult_teacher(&self, req: &TeacherRequest) -> anyhow::Result<LearnOutcome> {
+        let teacher = self.teacher.as_ref().ok_or_else(|| anyhow!("no teacher available"))?;
+        let known_types: Vec<String> = self.can.lock().concepts().map(|c| c.id.0.clone()).take(30).collect();
+        let arg_types: Vec<String> = req.signals.iter().map(|s| s.ty.to_string()).collect();
+        let context = format!("The user said: {} Argument types: {}", req.sce, arg_types.join(", "));
+        let spec = teacher.spec_for(&req.verb, &context, &known_types).await?;
+        self.learn_from_spec(&req.verb, spec)
+    }
+
+    fn turn_sync(&self, session_id: &str, text: &str) -> anyhow::Result<SyncTurnResult> {
+        self.counters.bump(&self.counters.turns);
+        let mut out = SyncTurnResult::new(self.llm.counters.snapshot());
+        let trace = &mut out.trace;
+
+        let returning_user = self.store.lock().last_episode(session_id).ok().flatten().is_some();
+
+        // 1. Pending state: the user may be answering something we asked.
+        if let Some(pending) = self.with_session(session_id, |s| s.pending.take()) {
+            match pending {
+                Pending::Exec { intent, plan, state, kind } => {
+                    match self.resume_exec(text, &intent, plan, state, &kind, session_id, trace) {
+                        ResumeResult::Done(plan) => return Ok(out.reply(plan)),
+                        ResumeResult::NotAnAnswer => {
+                            if self.cfg.debug {
+                                trace.push("pending dropped, fresh turn".into());
+                            }
+                        }
+                    }
+                }
+                Pending::UnknownVerb { verb, sce, signals } => {
+                    if let Some(plan) = self.handle_unknown_verb_followup(session_id, text, &verb, &sce, &signals, trace) {
+                        return Ok(out.reply(plan));
+                    }
+                }
+            }
+        }
+
+        // 2. Ears (native only here; the LLM ears seat is async and not wired
+        // into this path yet).
+        let heard = apply_synonyms(text, &self.synonyms.lock());
         let ears_result = {
             let ears = self.ears.lock();
             let gate = self.gate.lock();
-            ears.hear_native(text, &*gate)
+            ears.hear_native(&heard, &*gate).unwrap_or_else(|| ears.failed_result(&heard))
         };
-
-        let ears_result = match ears_result {
-            Some(r) => r,
-            None => {
-                let ears = self.ears.lock();
-                let gate = self.gate.lock();
-                ears.hear_native(text, &*gate)
-                    .unwrap_or_else(|| ears.failed_result(text))
-            }
-        };
-
-        let ears_path = ears_result.path.clone();
-        let sce_text = ears_result.sce.clone();
-
-        match &ears_path {
-            EarsPath::Direct | EarsPath::Phrasing | EarsPath::Retrieval => {
-                self.counters.ears_native.fetch_add(1, Ordering::Relaxed);
-            }
+        out.ears_path = ears_result.path.clone();
+        out.sce = ears_result.sce.clone();
+        match &out.ears_path {
+            EarsPath::Direct | EarsPath::Phrasing | EarsPath::Retrieval => self.counters.bump(&self.counters.ears_native),
             EarsPath::Llm => {
-                self.counters.ears_llm.fetch_add(1, Ordering::Relaxed);
+                self.counters.bump(&self.counters.ears_llm);
                 let pair = Pair {
                     id: 0,
                     utterance: text.to_string(),
-                    sce: sce_text.clone(),
+                    sce: out.sce.clone(),
                     source: "llm".into(),
                     at: now_ms(),
                     credit: 0,
@@ -413,19 +344,11 @@ impl Brain {
                 let _ = self.store.lock().insert_pair(&pair);
                 self.ears.lock().add_pairs(&[pair]);
             }
-            EarsPath::Failed => {
-                self.counters.ears_failed.fetch_add(1, Ordering::Relaxed);
-            }
+            EarsPath::Failed => self.counters.bump(&self.counters.ears_failed),
         }
-
         if self.cfg.debug {
-            trace.push(format!(
-                "ears: path={:?} clauses={} sce={}",
-                ears_path, ears_result.clauses.len(), &sce_text
-            ));
+            trace.push(format!("ears: path={:?} clauses={} sce={}", out.ears_path, ears_result.clauses.len(), out.sce));
         }
-
-        // 3b. Failed ears
         if ears_result.clauses.is_empty() {
             let unknown = if ears_result.unknown_words.is_empty() {
                 String::new()
@@ -437,38 +360,48 @@ impl Brain {
                 options: vec![],
                 slot_type: None,
             });
-            let prior = {
-                let sessions = self.sessions.lock();
-                sessions.get(session_id).map(|s| s.prior_turns.clone()).unwrap_or_default()
-            };
-            return Ok(SyncTurnResult {
-                sce: sce_text, clauses: vec![], ears_path: EarsPath::Failed,
-                plan, prior_turns: prior, trace, ears_before, mouth_before, teacher_before,
-            });
+            return Ok(out.reply(plan));
+        }
+        out.clauses = ears_result.clauses;
+
+        // 3. Corrections stated in SCE act on memory directly.
+        let corrections: Vec<Correction> = out.clauses.iter().filter_map(detect_clause_correction).collect();
+        if !corrections.is_empty() {
+            let mut plan = ResponsePlan::new(vec![]);
+            for c in corrections {
+                match c {
+                    Correction::Synonym { word, means } => plan.push(self.learn_synonym(&word, &means)?),
+                    Correction::Meant { text: name } => {
+                        for m in self.correct_referent(session_id, &name)?.moves {
+                            plan.push(m);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            return Ok(out.reply(plan));
         }
 
-        // 4. Discourse grounding
-        let clauses = ears_result.clauses;
+        // 4. Discourse grounding.
         let grounded = {
-            let can = self.can.lock();
             let mut sessions = self.sessions.lock();
             let session = sessions.entry(session_id.to_string()).or_insert_with(Session::new);
-            ground_all(&mut session.discourse, &clauses, &can)
+            let can = self.can.lock();
+            ground_all(&mut session.discourse, &out.clauses, &can)
         };
-
         if self.cfg.debug {
             trace.push(format!("grounded: {} clauses", grounded.len()));
         }
 
-        // 5. Dispatch
-        let dispatch_result = {
+        // 5. Dispatch. The brain holds the store here, so the host is memoryless.
+        let facts_before = self.store.lock().counts().map(|c| c.facts as i64).unwrap_or(0);
+        let at = now_ms();
+        let dispatched = {
+            let sessions = self.sessions.lock();
             let mut can = self.can.lock();
             let store = self.store.lock();
-            let host = BrainHost {
-                permission_mode: self.cfg.permission_mode,
-            };
-            let sessions_guard = self.sessions.lock();
-            let session = sessions_guard.get(session_id).unwrap();
+            let host = BrainHost::memoryless(self.cfg.permission_mode);
+            let session = sessions.get(session_id).expect("session created during grounding");
             let mut dctx = DispatchCtx {
                 can: &mut can,
                 store: &store,
@@ -480,80 +413,39 @@ impl Brain {
             };
             dispatch::dispatch_turn(&mut dctx, &grounded, &session.discourse)?
         };
-
         if self.cfg.debug {
-            trace.push(format!("dispatch: {:?}", dispatch_variant_name(&dispatch_result)));
+            trace.push(format!("dispatch: {}", dispatch_variant_name(&dispatched)));
+        }
+        if let Some(target) = assert_target(&grounded) {
+            let la = LastAssert { target, facts_before, at, sce: out.sce.clone(), ears_path: out.ears_path.clone() };
+            self.with_session(session_id, |s| s.last_assert = Some(la));
         }
 
-        // 6. Handle dispatch result
-        let plan = match dispatch_result {
+        // 6. Act on the dispatch.
+        let plan = match dispatched {
             Dispatched::Moves(moves) => ResponsePlan::new(moves),
-
-            Dispatched::Plan { intent, moves_before } => {
-                self.handle_plan(
-                    &intent, moves_before, session_id, &mut trace,
-                )?
-            }
-
-            Dispatched::UnknownCapability { verb, signals, sce, fallback } => {
-                let learn_result = {
-                    let can = self.can.lock();
-                    let store = self.store.lock();
-                    learn_from_examples(&verb, &can, &store, &self.kernel)
-                };
-
-                match learn_result {
-                    Ok((action, desc)) => {
-                        self.register_learned_action(&action)?;
-                        self.counters.synth_attempted.fetch_add(1, Ordering::Relaxed);
-                        self.counters.synth_succeeded.fetch_add(1, Ordering::Relaxed);
-
-                        let intent = Intent {
-                            goal: Goal::Action { action: action.id.clone() },
-                            signals,
-                            routes: vec![action.id.clone()],
-                            sce: sce.clone(),
-                        };
-                        let mut plan = self.handle_plan(
-                            &intent, vec![], session_id, &mut trace,
-                        )?;
-                        plan.push(Move::Learned {
-                            what: format!("learned '{}': {}", verb, desc),
-                        });
-                        plan
-                    }
-                    Err(_) => {
-                        let mut sessions = self.sessions.lock();
-                        let session = sessions
-                            .entry(session_id.to_string())
-                            .or_insert_with(Session::new);
-                        session.pending = Some(Pending::UnknownVerb {
-                            verb: verb.clone(),
-                            sce,
-                            signals,
-                        });
-                        // Add verb as a noun so "the V of X is Y" parses
-                        self.gate.lock().lex.add_noun(&verb);
-                        ResponsePlan::new(fallback)
-                    }
+            Dispatched::Plan { intent, moves_before } => self.handle_plan(&intent, moves_before, session_id, trace)?,
+            Dispatched::UnknownCapability { verb, signals, sce, fallback } => match self.learn_from_examples(&verb) {
+                Ok(outcome) => {
+                    out.flags.synthesis_attempted = true;
+                    out.flags.synthesis_succeeded = true;
+                    self.run_learned(&outcome, &verb, &signals, &sce, session_id, false, trace)?
                 }
-            }
-
-            Dispatched::NeedsTeacher { fallback, .. } => {
-                ResponsePlan::new(fallback)
-            }
+                Err(short) => {
+                    out.flags.synthesis_attempted = short.have >= 2;
+                    if self.cfg.debug {
+                        trace.push(format!("learn: {}", short.why));
+                    }
+                    if self.teacher.is_some() && short.have == 0 {
+                        out.teacher = Some(TeacherRequest { verb: verb.clone(), sce: sce.clone(), signals: signals.clone() });
+                    }
+                    self.ask_for_examples(session_id, &verb, &sce, &signals, short.have, fallback)
+                }
+            },
+            Dispatched::NeedsTeacher { fallback, .. } => ResponsePlan::new(fallback),
         };
-
-        let prior = {
-            let sessions = self.sessions.lock();
-            sessions.get(session_id).map(|s| s.prior_turns.clone()).unwrap_or_default()
-        };
-        Ok(SyncTurnResult {
-            sce: sce_text, clauses, ears_path, plan, prior_turns: prior,
-            trace, ears_before, mouth_before, teacher_before,
-        })
+        Ok(out.reply(plan))
     }
-
 
     // -----------------------------------------------------------------------
     // Finalize: mouth + episode + return
@@ -563,47 +455,32 @@ impl Brain {
         &self,
         session_id: &str,
         text: &str,
-        sce: &str,
-        clauses: &[Clause],
-        ears_path: EarsPath,
-        mut plan: ResponsePlan,
-        prior_turns: Vec<(String, String)>,
-        started: &std::time::Instant,
-        mut trace: Vec<String>,
-        ears_before: u32,
-        mouth_before: u32,
-        teacher_before: u32,
+        out: SyncTurnResult,
+        started: &Instant,
     ) -> anyhow::Result<TurnResult> {
+        let SyncTurnResult { sce, clauses, ears_path, mut plan, mut trace, flags, llm_before, .. } = out;
         plan.finalize();
-
         if self.cfg.debug {
             trace.push(format!("response: {} moves", plan.moves.len()));
         }
 
-        let ctx = RenderContext {
-            user_text: text.to_string(),
-            prior_turns,
-        };
-        let t_mouth = std::time::Instant::now();
+        let prior_turns = self.with_session(session_id, |s| s.prior_turns.clone());
+        let ctx = RenderContext { user_text: text.to_string(), prior_turns };
+        let t_mouth = Instant::now();
         let (reply, path) = self.mouth.say(&plan, &ctx).await;
         let ms_mouth = t_mouth.elapsed().as_millis() as u64;
 
-        // Update session after the await
-        {
-            let mut sessions = self.sessions.lock();
-            let session = sessions
-                .entry(session_id.to_string())
-                .or_insert_with(Session::new);
-            session.prior_turns.push((text.to_string(), reply.clone()));
-            if session.prior_turns.len() > 10 {
-                session.prior_turns.remove(0);
+        self.with_session(session_id, |s| {
+            s.prior_turns.push((text.to_string(), reply.clone()));
+            if s.prior_turns.len() > 10 {
+                s.prior_turns.remove(0);
             }
-            session.discourse.last_clauses = clauses.to_vec();
-        }
+            s.discourse.last_clauses = clauses.clone();
+        });
 
         let (ears_after, mouth_after, teacher_after, _) = self.llm.counters.snapshot();
-        let keywords = extract_keywords(clauses, text);
-
+        let (ears_before, mouth_before, teacher_before, _) = llm_before;
+        let keywords = extract_keywords(&clauses, text);
         let metrics = TurnMetrics {
             ears_path: Some(ears_path),
             interior_llm_calls: 0,
@@ -611,12 +488,12 @@ impl Brain {
             mouth_llm_calls: mouth_after.saturating_sub(mouth_before),
             teacher_llm_calls: teacher_after.saturating_sub(teacher_before),
             plan_steps: 0,
-            synthesis_attempted: false,
-            synthesis_succeeded: false,
-            teacher_fallback: false,
+            synthesis_attempted: flags.synthesis_attempted,
+            synthesis_succeeded: flags.synthesis_succeeded,
+            teacher_fallback: flags.teacher_fallback,
             reused_learned_action: false,
             ms_ears: 0,
-            ms_interior: started.elapsed().as_millis() as u64 - ms_mouth,
+            ms_interior: (started.elapsed().as_millis() as u64).saturating_sub(ms_mouth),
             ms_mouth,
         };
 
@@ -625,8 +502,8 @@ impl Brain {
             session_id: session_id.to_string(),
             at: now_ms(),
             user_text: text.to_string(),
-            sce: sce.to_string(),
-            clauses: clauses.to_vec(),
+            sce,
+            clauses,
             plans: vec![],
             response: plan,
             reply_text: reply.clone(),
@@ -634,7 +511,6 @@ impl Brain {
             credit: 0,
             keywords,
         };
-
         episode.id = self.store.lock().insert_episode(&episode)?;
 
         Ok(TurnResult {
@@ -649,72 +525,74 @@ impl Brain {
             trace,
         })
     }
-
-    // -----------------------------------------------------------------------
-    // Metrics / Snapshot
-    // -----------------------------------------------------------------------
-
-    pub fn metrics(&self) -> BrainMetrics {
-        let (ears, mouth, teacher, _) = self.llm.counters.snapshot();
-        BrainMetrics {
-            turns: self.counters.turns.load(Ordering::Relaxed),
-            interior_llm_calls: 0,
-            ears_llm_calls: ears as u64,
-            mouth_llm_calls: mouth as u64,
-            teacher_llm_calls: teacher as u64,
-            ears_native_hits: self.counters.ears_native.load(Ordering::Relaxed),
-            ears_llm_hits: self.counters.ears_llm.load(Ordering::Relaxed),
-            ears_failed: self.counters.ears_failed.load(Ordering::Relaxed),
-            synthesis_attempted: self.counters.synth_attempted.load(Ordering::Relaxed),
-            synthesis_succeeded: self.counters.synth_succeeded.load(Ordering::Relaxed),
-            store: self.store.lock().counts().unwrap_or_default(),
-        }
-    }
-
-    pub fn snapshot(&self) -> Snapshot {
-        let can = self.can.lock();
-        let learned_actions = can
-            .actions()
-            .filter(|a| a.tier != Tier::Kernel)
-            .map(|a| ActionSummary {
-                id: a.id.0.clone(),
-                verbs: a.verbs.clone(),
-                signature: format!(
-                    "({}) -> {}",
-                    a.inputs
-                        .iter()
-                        .map(|i| format!("{}: {}", i.name, i.ty))
-                        .collect::<Vec<_>>()
-                        .join(", "),
-                    a.output
-                ),
-                tier: format!("{:?}", a.tier),
-                uses: a.stats.uses,
-            })
-            .collect();
-        Snapshot {
-            concepts: can.concepts().count(),
-            actions: can.actions().count(),
-            learned_actions,
-            store: self.store.lock().counts().unwrap_or_default(),
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
+/// What the synchronous part of a turn produced.
 struct SyncTurnResult {
     sce: String,
     clauses: Vec<Clause>,
     ears_path: EarsPath,
     plan: ResponsePlan,
-    prior_turns: Vec<(String, String)>,
     trace: Vec<String>,
-    ears_before: u32,
-    mouth_before: u32,
-    teacher_before: u32,
+    flags: TurnFlags,
+    /// Set when an unknown verb should be taken to the teacher.
+    teacher: Option<TeacherRequest>,
+    llm_before: (u32, u32, u32, u32),
+}
+
+#[derive(Default)]
+struct TurnFlags {
+    synthesis_attempted: bool,
+    synthesis_succeeded: bool,
+    teacher_fallback: bool,
+}
+
+struct TeacherRequest {
+    verb: String,
+    sce: String,
+    signals: Vec<Signal>,
+}
+
+impl SyncTurnResult {
+    fn new(llm_before: (u32, u32, u32, u32)) -> Self {
+        SyncTurnResult {
+            sce: String::new(),
+            clauses: vec![],
+            ears_path: EarsPath::Direct,
+            plan: ResponsePlan::new(vec![]),
+            trace: vec![],
+            flags: TurnFlags::default(),
+            teacher: None,
+            llm_before,
+        }
+    }
+
+    fn reply(mut self, plan: ResponsePlan) -> Self {
+        self.plan = plan;
+        self
+    }
+}
+
+/// The entity an assertion was about, so "User means Mary." can retarget it:
+/// the subject if it is a proper name, else any proper name in the clause.
+fn assert_target(gs: &[Grounded]) -> Option<String> {
+    gs.iter().filter(|g| matches!(g.clause.act, Act::Assert)).find_map(|g| {
+        let named = |var: &str| {
+            g.clause.referents.iter().find(|r| r.var == var).and_then(|r| match &r.quant {
+                Quant::Named(n) if n != "User" && n != "Assistant" && n != "It" => Some(n.clone()),
+                _ => None,
+            })
+        };
+        let subject = match g.clause.conditions.first().and_then(|p| p.args.first()) {
+            Some(Term::Var { var }) => named(var),
+            _ => None,
+        };
+        subject.or_else(|| g.clause.referents.iter().find_map(|r| named(&r.var)))
+    })
 }
 
 fn dispatch_variant_name(d: &Dispatched) -> &'static str {

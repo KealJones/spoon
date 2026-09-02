@@ -62,7 +62,6 @@ pub enum SynthOutcome {
 struct Entry {
     expr: Expr,
     output_ty: Type,
-    size: usize,
     /// True if the expression contains at least one Param{} node.
     has_param: bool,
 }
@@ -124,7 +123,7 @@ pub fn synthesize(spec: &Spec, can: &Can, kernel: &Kernel, budget: &SynthBudget)
                 if outputs_match(&outputs, &expected) {
                     return mk_found(spec, expr, tried, &start, oe.len());
                 }
-                bank[1].push(Entry { expr, output_ty, size: 1, has_param: true });
+                bank[1].push(Entry { expr, output_ty, has_param: true });
             }
             OeInsert::Dominated => {}
         }
@@ -145,7 +144,7 @@ pub fn synthesize(spec: &Spec, can: &Can, kernel: &Kernel, budget: &SynthBudget)
                 if outputs_match(&outputs, &expected) {
                     return mk_found(spec, expr, tried, &start, oe.len());
                 }
-                bank[1].push(Entry { expr, output_ty, size: 1, has_param: false });
+                bank[1].push(Entry { expr, output_ty, has_param: false });
             }
             OeInsert::Dominated => {}
         }
@@ -214,7 +213,6 @@ pub fn synthesize(spec: &Spec, can: &Can, kernel: &Kernel, budget: &SynthBudget)
                                         bank[n].push(Entry {
                                             expr,
                                             output_ty,
-                                            size: n,
                                             has_param: list_entry.has_param,
                                         });
                                     }
@@ -291,7 +289,6 @@ pub fn synthesize(spec: &Spec, can: &Can, kernel: &Kernel, budget: &SynthBudget)
                                                 bank[n].push(Entry {
                                                     expr,
                                                     output_ty,
-                                                    size: n,
                                                     has_param: has_p,
                                                 });
                                             }
@@ -349,7 +346,7 @@ pub fn synthesize(spec: &Spec, can: &Can, kernel: &Kernel, budget: &SynthBudget)
                             return mk_found(spec, expr, tried, &start, oe.len());
                         }
                         let has_p = combo.iter().any(|e| e.has_param);
-                        bank[n].push(Entry { expr, output_ty, size: n, has_param: has_p });
+                        bank[n].push(Entry { expr, output_ty, has_param: has_p });
                     }
                 }
             }

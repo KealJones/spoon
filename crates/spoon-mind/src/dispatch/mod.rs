@@ -10,11 +10,11 @@ mod selfmodel;
 use spoon_core::can::Can;
 use spoon_core::kernel::Kernel;
 use spoon_core::store::Store;
-use spoon_core::types::{
-    Act, ActionId, Fact, Intent, Move, QuestionKind, Role, Signal, Value,
-};
+use spoon_core::types::{Act, Fact, Intent, Move, QuestionKind, Signal, Value};
 
 use crate::discourse::{answer_grounded, assert_grounded, Answer, DiscourseState, FactWriter, Grounded};
+
+pub use command::ask_examples_move;
 
 // ---- Public types ---------------------------------------------------------
 
@@ -154,7 +154,7 @@ fn dispatch_question(
     let dispatched = match answer {
         Answer::Values(vs) => {
             if vs.is_empty() {
-                Dispatched::Moves(vec![Move::Answer { question: sce, values: vec![], source: None }])
+                Dispatched::Moves(vec![unknown_move(g, kind)])
             } else {
                 Dispatched::Moves(vec![Move::Answer { question: sce, values: vs, source: Some("memory".into()) }])
             }
@@ -193,11 +193,11 @@ fn dispatch_question(
                     }
                 }
                 if moves.is_empty() {
-                    moves.push(Move::Answer { question: sce, values: vec![], source: None });
+                    moves.push(unknown_move(g, kind));
                 }
                 Dispatched::Moves(moves)
             } else {
-                Dispatched::Moves(vec![Move::Answer { question: sce, values: vec![], source: None }])
+                Dispatched::Moves(vec![unknown_move(g, kind)])
             }
         }
     };
@@ -205,6 +205,49 @@ fn dispatch_question(
 }
 
 // ---- Helpers --------------------------------------------------------------
+
+/// An honest unknown, phrased from the question itself:
+/// "Is John happy?" -> "I don't know whether John is happy."
+/// "Who owns a cat?" -> "I don't know who owns a cat."
+/// "What is the color of the dog?" -> "I don't know the color of the dog."
+fn unknown_move(g: &Grounded, kind: &QuestionKind) -> Move {
+    let body = g.clause.sce.trim().trim_end_matches(|c: char| c == '?' || c == '.').trim().to_string();
+    let text = match kind {
+        QuestionKind::YesNo | QuestionKind::Should => {
+            let mut declarative = g.clause.clone();
+            declarative.act = Act::Assert;
+            let s = spoon_lang::sce::realize(&declarative);
+            let s = s.trim().trim_end_matches('.');
+            if s.is_empty() {
+                format!("I don't know: {body}?")
+            } else {
+                format!("I don't know whether {}.", lowercase_determiner(s))
+            }
+        }
+        _ => match body.strip_prefix("What is ").filter(|np| np.starts_with("the ")) {
+            Some(np) => format!("I don't know {np}."),
+            None => format!("I don't know {}.", lowercase_determiner(&body)),
+        },
+    };
+    Move::Explain { text }
+}
+
+/// Lowercase a sentence-initial function word so it can sit mid-sentence;
+/// names keep their capital.
+fn lowercase_determiner(s: &str) -> String {
+    const FUNCTION_WORDS: [&str; 13] =
+        ["the", "a", "an", "it", "there", "every", "no", "some", "who", "what", "which", "where", "when"];
+    let first = s.split_whitespace().next().unwrap_or("");
+    if FUNCTION_WORDS.contains(&first.to_lowercase().as_str()) {
+        let mut cs = s.chars();
+        match cs.next() {
+            Some(c) => c.to_lowercase().collect::<String>() + cs.as_str(),
+            None => String::new(),
+        }
+    } else {
+        s.to_string()
+    }
+}
 
 /// Render a Fact as a compact SCE-ish string.
 pub(crate) fn render_fact(ctx: &DispatchCtx<'_>, fact: &Fact) -> String {

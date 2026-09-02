@@ -24,9 +24,21 @@ pub enum Pending {
 
 #[derive(Debug, Clone)]
 pub enum PendingExecKind {
-    Input { node: usize, input_name: String, ty: Type },
+    Input { node: usize, ty: Type },
     Permission { node: usize },
     Choice { node: usize },
+}
+
+/// The last turn that stored facts, so "User means Mary." can retarget them.
+#[derive(Debug, Clone)]
+pub struct LastAssert {
+    /// The Named entity the user talked about (never User/Assistant).
+    pub target: String,
+    /// Facts stored this turn have ids above this (facts are never deleted).
+    pub facts_before: i64,
+    pub at: i64,
+    pub sce: String,
+    pub ears_path: EarsPath,
 }
 
 /// Per-session state, shared across turns.
@@ -34,6 +46,7 @@ pub struct Session {
     pub discourse: DiscourseState,
     pub pending: Option<Pending>,
     pub prior_turns: Vec<(String, String)>,
+    pub last_assert: Option<LastAssert>,
 }
 
 impl Session {
@@ -42,6 +55,7 @@ impl Session {
             discourse: DiscourseState::default(),
             pending: None,
             prior_turns: Vec::new(),
+            last_assert: None,
         }
     }
 }

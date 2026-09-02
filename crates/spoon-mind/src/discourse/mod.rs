@@ -11,7 +11,7 @@ mod ground;
 mod keywords;
 mod rules;
 
-pub use correction::{detect as detect_correction, Correction};
+pub use correction::{detect as detect_correction, detect_clause as detect_clause_correction, Correction};
 pub use facts::{
     assert_grounded, answer_grounded, describe, supersede, Answer, AssertOutcome, FactWriter,
 };

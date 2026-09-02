@@ -1,7 +1,6 @@
 //! Opinion and advice retrieval from stances.
 //! No LLM involved - queries the store.
 
-use spoon_core::store::Stance;
 use spoon_core::types::{AdviceOption, Move, Quant, QuestionKind, Term};
 
 use crate::discourse::{DiscourseState, Grounded};
@@ -62,7 +61,6 @@ pub fn handle_opinion(
     g: &Grounded,
     _state: &DiscourseState,
 ) -> anyhow::Result<Dispatched> {
-    let sce = g.clause.sce.clone();
     let raw_keywords = extract_topic_keywords(g);
     // Also try space-normalized form (hyphens -> spaces) so "pineapple-pizza" matches "pineapple pizza".
     let mut keywords: Vec<String> = raw_keywords.clone();

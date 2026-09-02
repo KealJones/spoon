@@ -443,7 +443,7 @@ pub fn answer_grounded(
         | QuestionKind::Which { focus }
         | QuestionKind::Where { focus }
         | QuestionKind::When { focus } => {
-            answer_wh(can, store, g, pred, &all_refs, focus, None)
+            answer_wh(can, store, g, pred, &all_refs, focus)
         }
         QuestionKind::HowMany { focus } => {
             answer_how_many(store, g, pred, focus)
@@ -469,6 +469,7 @@ fn answer_yes_no(
 
     let pattern = build_pattern(pred, &g.bindings);
     let facts = store.query_facts(&action_id, &pattern).unwrap_or_default();
+    let facts = filter_by_noun_constraints(can, store, g, pred, all_refs, facts);
 
     if let Some(f) = facts.iter().find(|f| f.truth) {
         return Ok(Answer::YesNo(true, Some(f.clone())));
@@ -592,7 +593,6 @@ fn answer_wh(
     pred: &Pred,
     all_refs: &[&Referent],
     focus: &str,
-    noun_filter: Option<&str>,
 ) -> anyhow::Result<Answer> {
     if pred.pred == "be" {
         // "What is the name of Assistant?" -> rel.name(Assistant, ?). The
@@ -622,6 +622,7 @@ fn answer_wh(
 
     let pattern = build_pattern(pred, &g.bindings);
     let facts = store.query_facts(&action_id, &pattern).unwrap_or_default();
+    let facts = filter_by_noun_constraints(can, store, g, pred, all_refs, facts);
 
     // Find which arg position corresponds to the focus variable.
     let focus_pos = pred.args.iter().position(|t| {
@@ -643,36 +644,6 @@ fn answer_wh(
         .filter_map(|f| f.args.get(pos).cloned())
         .collect();
 
-    // Filter by noun concept for Which questions.
-    if let Some(noun) = noun_filter {
-        let target_concepts: Vec<ConceptId> = can
-            .concepts_for_noun(noun)
-            .iter()
-            .map(|c| c.id.clone())
-            .collect();
-        if !target_concepts.is_empty() {
-            let is_a_id = ActionId("rel.is_a".into());
-            values.retain(|v| {
-                let p = vec![Some(v.clone()), None];
-                store.query_facts(&is_a_id, &p)
-                    .unwrap_or_default()
-                    .iter()
-                    .filter(|f| f.truth)
-                    .any(|f| {
-                        f.args.get(1).and_then(|a| {
-                            if let Value::Name(n) = a {
-                                Some(ConceptId(n.clone()))
-                            } else {
-                                None
-                            }
-                        })
-                        .map(|c| target_concepts.iter().any(|tc| can.is_a(&c, tc) || &c == tc))
-                        .unwrap_or(false)
-                    })
-            });
-        }
-    }
-
     values.sort_by(|a, b| a.render().cmp(&b.render()));
     values.dedup_by(|a, b| a == b);
 
@@ -681,6 +652,49 @@ fn answer_wh(
     } else {
         Ok(Answer::Values(values))
     }
+}
+
+/// Drop facts whose argument does not fit the noun of an open referent:
+/// "Who owns a cat?" must not match own(John, dog_1). A value fits a noun
+/// when it has an is_a fact to that noun's concept (or a subconcept).
+fn filter_by_noun_constraints(
+    can: &Can,
+    store: &Store,
+    g: &Grounded,
+    pred: &Pred,
+    all_refs: &[&Referent],
+    mut facts: Vec<Fact>,
+) -> Vec<Fact> {
+    let is_a_id = ActionId("rel.is_a".into());
+    for (pos, term) in pred.args.iter().enumerate() {
+        let Term::Var { var } = term else { continue };
+        if !matches!(g.bindings.get(var.as_str()), Some(Binding::Unbound)) {
+            continue;
+        }
+        let Some(noun) = all_refs.iter().find(|r| &r.var == var).and_then(|r| r.noun.as_deref()) else {
+            continue;
+        };
+        let mut targets: Vec<ConceptId> = can.concepts_for_noun(noun).iter().map(|c| c.id.clone()).collect();
+        if targets.is_empty() {
+            targets.push(ConceptId(capitalize_first(noun)));
+        }
+        facts.retain(|f| {
+            let Some(v) = f.args.get(pos) else { return false };
+            store
+                .query_facts(&is_a_id, &[Some(v.clone()), None])
+                .unwrap_or_default()
+                .iter()
+                .filter(|f| f.truth)
+                .any(|f| match f.args.get(1) {
+                    Some(Value::Name(n)) => {
+                        let c = ConceptId(n.clone());
+                        targets.iter().any(|tc| &c == tc || can.is_a(&c, tc))
+                    }
+                    _ => false,
+                })
+        });
+    }
+    facts
 }
 
 fn answer_how_many(

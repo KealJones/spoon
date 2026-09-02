@@ -1,11 +1,11 @@
 //! Questions about Assistant: wellbeing, identity, capabilities.
 //! No LLM involved.
 
-use spoon_core::types::{ActionId, Move, Quant, QuestionKind, Role, Term, Type, Value};
+use spoon_core::types::{ActionId, Move, Quant, QuestionKind, Role, Value};
 
 use crate::discourse::{answer_grounded, Answer, DiscourseState, Grounded};
 
-use super::{DispatchCtx, Dispatched, TeacherAsk};
+use super::{DispatchCtx, Dispatched};
 
 /// Returns true if the question involves Assistant as a key referent.
 pub fn is_about_assistant(g: &Grounded) -> bool {
@@ -18,14 +18,14 @@ pub fn handle_assistant_question(
     ctx: &mut DispatchCtx<'_>,
     g: &Grounded,
     kind: &QuestionKind,
-    state: &DiscourseState,
+    _state: &DiscourseState,
 ) -> anyhow::Result<Dispatched> {
     let sce = g.clause.sce.clone();
     let pred = g.clause.conditions.first();
 
     // Capabilities question.
     if is_capability_question(g, pred) {
-        return handle_capabilities(ctx, g, pred, &sce);
+        return handle_capabilities(ctx);
     }
 
     // Opinion/preference question addressed to Assistant.
@@ -49,7 +49,7 @@ pub fn handle_assistant_question(
 
     // Wellbeing / mood / status / feeling questions.
     if is_wellbeing_question(g, pred) {
-        return handle_wellbeing(ctx, g, kind, &sce);
+        return handle_wellbeing(ctx, &sce);
     }
 
     // Identity questions (who/what/is-a).
@@ -75,7 +75,7 @@ pub fn handle_assistant_question(
     }
 
     // Identity fallbacks.
-    let identity_text = identity_fallback(g, pred);
+    let identity_text = identity_fallback(pred);
     Ok(Dispatched::Moves(vec![Move::Explain { text: identity_text }]))
 }
 
@@ -97,12 +97,7 @@ fn is_wellbeing_question(g: &Grounded, pred: Option<&spoon_core::types::Pred>) -
     false
 }
 
-fn handle_wellbeing(
-    ctx: &mut DispatchCtx<'_>,
-    g: &Grounded,
-    kind: &QuestionKind,
-    sce: &str,
-) -> anyhow::Result<Dispatched> {
+fn handle_wellbeing(ctx: &mut DispatchCtx<'_>, sce: &str) -> anyhow::Result<Dispatched> {
     // Try to answer from stored facts.
     let preds_to_try = ["rel.wellbeing", "rel.mood", "rel.status", "rel.feeling"];
     for pred_id in preds_to_try {
@@ -166,12 +161,7 @@ fn capability_verb_from_pred(pred: &spoon_core::types::Pred) -> Option<String> {
     None
 }
 
-fn handle_capabilities(
-    ctx: &mut DispatchCtx<'_>,
-    _g: &Grounded,
-    _pred: Option<&spoon_core::types::Pred>,
-    sce: &str,
-) -> anyhow::Result<Dispatched> {
+fn handle_capabilities(ctx: &mut DispatchCtx<'_>) -> anyhow::Result<Dispatched> {
     // List up to 8 verbs grouped by module.
     let actions: Vec<&spoon_core::types::Action> = ctx.can.actions().collect();
 
@@ -229,7 +219,7 @@ fn take_up_to(verbs: &[String], n: usize, fallback: &str) -> String {
     verbs.iter().take(n).cloned().collect::<Vec<_>>().join(", ")
 }
 
-fn identity_fallback(g: &Grounded, pred: Option<&spoon_core::types::Pred>) -> String {
+fn identity_fallback(pred: Option<&spoon_core::types::Pred>) -> String {
     if let Some(p) = pred {
         if p.pred == "be" {
             return "i am Spoon, a conversational AI built by Keal".to_string();

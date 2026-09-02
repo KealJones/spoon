@@ -1,5 +1,6 @@
 //! Response building helpers for the brain turn loop.
 
+use spoon_core::can::Can;
 use spoon_core::types::*;
 
 /// Build a ResponsePlan from executor outcome, merging accumulated moves.
@@ -55,4 +56,98 @@ pub fn parse_choice(text: &str) -> Option<usize> {
         .ok()
         .filter(|&n| n >= 1)
         .map(|n| n - 1)
+}
+
+/// A user's answer to an `Elicit` for a text input: drop surrounding quotes
+/// and a sentence-final period so `"cd".` becomes `cd`.
+pub fn elicited_text(text: &str) -> String {
+    let t = text.trim().trim_end_matches('.').trim();
+    let t = t.strip_prefix('"').and_then(|s| s.strip_suffix('"')).unwrap_or(t);
+    t.to_string()
+}
+
+// ---------------------------------------------------------------------------
+// Program pretty-printer
+// ---------------------------------------------------------------------------
+
+const PARAM_NAMES: [&str; 6] = ["x", "y", "z", "u", "v", "w"];
+const LAMBDA_NAMES: [&str; 3] = ["a", "b", "c"];
+
+/// Human-readable program description: `(math.add p0 p0)` -> `add(x, x)`.
+/// Learned actions render by their canonical verb, kernel ones lose their
+/// namespace, params become x, y, z.
+pub fn describe_program(program: &Program, can: &Can) -> String {
+    describe_expr(&program.body, can)
+}
+
+fn action_name(id: &ActionId, can: &Can) -> String {
+    if let Some(a) = can.action(id) {
+        if a.tier != Tier::Kernel {
+            return a.canonical_verb().to_string();
+        }
+    }
+    id.0.rsplit('.').next().unwrap_or(&id.0).to_string()
+}
+
+fn describe_expr(expr: &Expr, can: &Can) -> String {
+    match expr {
+        Expr::Const { value: Value::Text(s) } => format!("\"{s}\""),
+        Expr::Const { value } => value.render(),
+        Expr::Param { index } => {
+            PARAM_NAMES.get(*index).map(|s| s.to_string()).unwrap_or_else(|| format!("x{index}"))
+        }
+        Expr::LambdaParam { index } => {
+            LAMBDA_NAMES.get(*index).map(|s| s.to_string()).unwrap_or_else(|| format!("a{index}"))
+        }
+        Expr::Call { action, args } => {
+            let parts: Vec<String> = args.iter().map(|a| describe_expr(a, can)).collect();
+            format!("{}({})", action_name(action, can), parts.join(", "))
+        }
+        Expr::Lambda { lambda } => {
+            let params: Vec<&str> =
+                (0..lambda.params.len()).map(|i| LAMBDA_NAMES.get(i).copied().unwrap_or("_")).collect();
+            format!("({}) -> {}", params.join(", "), describe_expr(&lambda.body, can))
+        }
+        Expr::If { cond, then, otherwise } => format!(
+            "if {} then {} else {}",
+            describe_expr(cond, can),
+            describe_expr(then, can),
+            describe_expr(otherwise, can)
+        ),
+        Expr::ListLit { items } => {
+            let parts: Vec<String> = items.iter().map(|i| describe_expr(i, can)).collect();
+            format!("[{}]", parts.join(", "))
+        }
+        Expr::Struct { concept, fields } => {
+            let parts: Vec<String> =
+                fields.iter().map(|(k, v)| format!("{k}: {}", describe_expr(v, can))).collect();
+            format!("{}{{{}}}", concept.0, parts.join(", "))
+        }
+        Expr::Field { of, name } => format!("{}.{name}", describe_expr(of, can)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pretty_prints_kernel_and_learned_calls() {
+        let mut can = Can::new();
+        let mut learned = Action::primitive("learned.double_abcd", &["double"], vec![], Type::Float, Effect::Pure, "");
+        learned.tier = Tier::Provisional;
+        can.add_action(learned);
+        let body = Expr::call(
+            "math.add",
+            vec![Expr::param(0), Expr::call("learned.double_abcd", vec![Expr::param(0)])],
+        );
+        let program = Program::new(vec![Type::Float], Type::Float, body);
+        assert_eq!(describe_program(&program, &can), "add(x, double(x))");
+    }
+
+    #[test]
+    fn elicited_text_strips_quotes_and_period() {
+        assert_eq!(elicited_text("\"cd\"."), "cd");
+        assert_eq!(elicited_text(" , "), ",");
+    }
 }

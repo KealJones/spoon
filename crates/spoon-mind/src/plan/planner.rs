@@ -308,11 +308,17 @@ impl<'a, 'b> PlanCtx<'a, 'b> {
             return None;
         }
 
-        // Try each producer in cost order; return on first success
+        // Try each producer in cost order; return on first success. Zero-input
+        // producers (now, now-ms) are goals, not fillers: a missing input must
+        // come from what the user said or become a Placeholder, never from
+        // "whatever value the kernel can conjure" (concat "ab" + timestamp).
         let producers = sorted_producers(self.can, ty);
         for action_id in &producers {
             if self.action_stack.contains(action_id) {
                 continue; // cycle guard
+            }
+            if self.can.action(action_id).is_some_and(|a| a.inputs.is_empty()) {
+                continue;
             }
             if self.check_budget() {
                 break;

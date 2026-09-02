@@ -1,9 +1,9 @@
 //! Dialog assert policy: mirrored moves for User dialog acts and small-talk.
 //! No LLM involved.
 
-use spoon_core::types::{Move, Quant, Role, Term, Value};
+use spoon_core::types::{Move, Quant, Role, Term};
 
-use crate::discourse::{assert_grounded, Answer, AssertOutcome, DiscourseState, FactWriter, Grounded};
+use crate::discourse::{assert_grounded, AssertOutcome, DiscourseState, FactWriter, Grounded};
 
 use super::{render_fact, DispatchCtx, Dispatched};
 
@@ -167,7 +167,7 @@ pub fn dispatch_store_assert(
                 slot_type: None,
             }]))
         }
-        AssertOutcome::Universal { rule_id } => {
+        AssertOutcome::Universal { .. } => {
             Ok(Dispatched::Moves(vec![Move::Learned { what: g.clause.sce.clone() }]))
         }
     }
@@ -267,7 +267,7 @@ fn classify_feeling(verb: &str, attr: &str, negated: bool, has_modal: bool) -> O
         }
     }
     // "cannot sleep" - negated modal + sleep verb
-    if (verb == "sleep" && (negated || has_modal)) {
+    if verb == "sleep" && (negated || has_modal) {
         return Some("unable to sleep".to_string());
     }
     // "is in pain"

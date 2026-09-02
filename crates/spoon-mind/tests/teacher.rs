@@ -5,8 +5,8 @@
 
 use spoon_core::{ConceptId, ConceptKind, Type};
 use spoon_mind::teacher::{
-    parse_concept_json, parse_lessons_json, parse_pairs_json, parse_spec_json, parse_stance_json,
-    parse_type, Lesson, Teacher,
+    parse_concept_json, parse_lessons_json, parse_spec_json, parse_stance_json, parse_type, Lesson,
+    Teacher,
 };
 
 // ---------------------------------------------------------------------------

@@ -1,8 +1,6 @@
 //! Integration tests for the dispatch layer.
 //! All clauses are constructed directly (no SCE parser) per instructions.
 
-use std::collections::HashMap;
-
 use spoon_core::can::Can;
 use spoon_core::kernel::{Kernel, NoHost};
 use spoon_core::store::Store;
@@ -69,13 +67,6 @@ fn assert_clause(pred: &str, args: Vec<(&str, Quant)>, sce: &str) -> Clause {
     }
 }
 
-/// Build a negated Assert clause.
-fn negated_clause(pred: &str, args: Vec<(&str, Quant)>, sce: &str) -> Clause {
-    let mut c = assert_clause(pred, args, sce);
-    if let Some(p) = c.conditions.first_mut() { p.negated = true; }
-    c
-}
-
 /// Build an attr assert clause (copula "be" with attribute).
 fn attr_assert_clause(subject_var: &str, subject_quant: Quant, attr: &str, sce: &str) -> Clause {
     Clause {
@@ -120,7 +111,7 @@ fn be_np_clause(subj_var: &str, subj_quant: Quant, obj_var: &str, obj_quant: Qua
 }
 
 /// Build a Who/What question clause.
-fn wh_question_clause(pred: &str, args: Vec<(&str, Quant)>, focus: &str, kind: QuestionKind, sce: &str) -> Clause {
+fn wh_question_clause(pred: &str, args: Vec<(&str, Quant)>, _focus: &str, kind: QuestionKind, sce: &str) -> Clause {
     let referents: Vec<Referent> = args.iter().map(|(var, quant)| {
         let noun = match quant {
             Quant::Wh | Quant::Named(_) => None,
@@ -252,11 +243,12 @@ fn assert_then_who_question() {
     let mut state = DiscourseState::default();
 
     // "John owns a dog."
-    let assert_c = assert_clause(
+    let mut assert_c = assert_clause(
         "own",
         vec![("x1", Quant::Named("John".into())), ("x2", Quant::Indef)],
         "John owns a dog.",
     );
+    assert_c.referents[1].noun = Some("dog".into());
     let gs = ground_all(&mut state, &[assert_c.clone()], &can);
     let r = dispatch(&mut make_ctx(&mut can, &store, &kernel, false), &gs[0], &state).unwrap();
     assert!(matches!(r, Dispatched::Moves(_)), "expected Moves, got {:?}", r);
@@ -297,11 +289,12 @@ fn yesno_from_facts() {
     let mut state = DiscourseState::default();
 
     // Assert "John owns a dog."
-    let assert_c = assert_clause(
+    let mut assert_c = assert_clause(
         "own",
         vec![("x1", Quant::Named("John".into())), ("x2", Quant::Indef)],
         "John owns a dog.",
     );
+    assert_c.referents[1].noun = Some("dog".into());
     let gs = ground_all(&mut state, &[assert_c], &can);
     dispatch(&mut make_ctx(&mut can, &store, &kernel, false), &gs[0], &state).unwrap();
 
@@ -333,14 +326,14 @@ fn yesno_from_facts() {
     q2.referents[1].noun = Some("dog".into());
     let gs2 = ground_all(&mut state, &[q2], &can);
     let r2 = dispatch(&mut make_ctx(&mut can, &store, &kernel, false), &gs2[0], &state).unwrap();
-    // Either YesNo(false) or Answer with empty values - both are valid (no Mary fact).
+    // Either YesNo(false) or an honest unknown - both are valid (no Mary fact).
     match r2 {
         Dispatched::Moves(mvs) => {
             let is_no = mvs.iter().any(|m| {
                 matches!(m, Move::YesNo { answer: false, .. })
-                    || matches!(m, Move::Answer { values, .. } if values.is_empty())
+                    || matches!(m, Move::Explain { text } if text.starts_with("I don't know whether Mary"))
             });
-            assert!(is_no, "expected YesNo(false) or empty Answer for Mary, got {:?}", mvs);
+            assert!(is_no, "expected YesNo(false) or honest unknown for Mary, got {:?}", mvs);
         }
         other => panic!("expected Moves for Mary question, got {:?}", other),
     }
@@ -532,7 +525,7 @@ fn command_to_intent() {
     }
 }
 
-/// Test 9: unknown verb -> UnknownCapability with CannotDo and AskExamples.
+/// Test 9: unknown verb -> UnknownCapability with ONE move asking for SCE examples.
 #[test]
 fn unknown_verb() {
     let kernel = Kernel::new();
@@ -560,10 +553,14 @@ fn unknown_verb() {
     match r {
         Dispatched::UnknownCapability { verb, fallback, .. } => {
             assert_eq!(verb, "frobnicate");
-            let has_cannot = fallback.iter().any(|m| matches!(m, Move::CannotDo { .. }));
-            let has_ask = fallback.iter().any(|m| matches!(m, Move::AskExamples { .. }));
-            assert!(has_cannot, "expected CannotDo in fallback, got {:?}", fallback);
-            assert!(has_ask, "expected AskExamples in fallback, got {:?}", fallback);
+            assert_eq!(fallback.len(), 1, "one move, got {:?}", fallback);
+            match &fallback[0] {
+                Move::Clarify { question, .. } => {
+                    assert!(question.starts_with("I can't frobnicate yet."), "{question}");
+                    assert!(question.contains("'The frobnicate of "), "{question}");
+                }
+                other => panic!("expected Clarify asking for examples, got {:?}", other),
+            }
         }
         other => panic!("expected UnknownCapability, got {:?}", other),
     }

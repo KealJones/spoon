@@ -1,7 +1,11 @@
-//! Correction detection: pure text heuristics over the raw user utterance.
+//! Correction detection.
 //!
-//! Runs BEFORE the ears so the brain can decide how to handle each signal.
-//! No LLM; no parsing; just pattern matching on lowercase text.
+//! `detect` is pure text heuristics over the raw user utterance, run BEFORE
+//! the ears. `detect_clause` recognises the two SCE-shaped corrections the
+//! brain acts on (`"pup" means "dog".`, `User means Mary.`) after parsing.
+//! No LLM anywhere.
+
+use spoon_core::types::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Correction {
@@ -111,6 +115,30 @@ pub fn detect(text: &str) -> Option<Correction> {
     }
 
     None
+}
+
+/// Detect a correction stated in SCE, after parsing:
+/// `"pup" means "dog".` -> Synonym, `User means Mary.` -> Meant.
+pub fn detect_clause(clause: &Clause) -> Option<Correction> {
+    if !matches!(clause.act, Act::Assert) || clause.conditions.len() != 1 {
+        return None;
+    }
+    let p = &clause.conditions[0];
+    if p.pred != "mean" || p.negated || p.args.len() != 2 {
+        return None;
+    }
+    let quant_of = |term: &Term| match term {
+        Term::Var { var } => clause.referents.iter().find(|r| &r.var == var).map(|r| r.quant.clone()),
+        Term::Value { value } => Some(Quant::Literal(value.clone())),
+        _ => None,
+    };
+    match (quant_of(&p.args[0])?, quant_of(&p.args[1])?) {
+        (Quant::Literal(Value::Text(word)), Quant::Literal(Value::Text(means))) => {
+            Some(Correction::Synonym { word, means })
+        }
+        (Quant::Named(who), Quant::Named(name)) if who == "User" => Some(Correction::Meant { text: name }),
+        _ => None,
+    }
 }
 
 fn detect_synonym(stripped: &str) -> Option<Correction> {
