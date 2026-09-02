@@ -6,6 +6,41 @@ not that a type exists. Decisions live in PLAN.md; rules in AGENTS.md.
 
 ---
 
+## 2026-09-02 06:10  Ears r5 + discourse + inspector landed (commits 545250d, 0430450, 1fdded3)
+
+DONE (296 tests, 0 warnings, demo 19/19 offline)
+- Ears r5 (`guard`, `loops`, `reported`, `arith`): garbage guard rejects LLM
+  output with no known content words or numbers not in the input; `??` -> Failed.
+  `for each` -> `For every N X` (loop_like_logic 0/10 -> 5/10 native). Plural
+  universals (`Wolves are white.`). One-level quote unwrap (reported_speech still
+  0/20: corpus wants `a report`/`denies`, interior job). ACE live qwen3.5:4b:
+  53 -> 66/158 structural, 107 parsed, 54 repairs, 0 regressions. convo20 20/20.
+- Discourse: location/carry/drop/give state, `Where is X?` through carry chain,
+  how-many/what-carry, comparatives with definite NPs, names learned in-turn
+  (kv `seed.names`). babi 1/21 -> 11/21 offline (fresh brain per probe).
+- Inspector (`spoon serve` -> http://127.0.0.1:8787/): tabs for Facts, Actions
+  (CAN + learned programs), Concepts, Pairs, Stances, Episodes, KV; `/debug/*`
+  JSON with `?q=` filter. Uses real `~/.spoon/spoon.db` without `--ephemeral`.
+
+BABI REMAINING (10/21, all parser gaps)
+- fam 4,17: `What is south of the office?`, `What is to the left of the red box?`
+- fam 5: `Who does John give the apple to?` (assert parses; wh does not)
+- fam 6,9,10: `Is Mary in the garden?` (PP yes/no; 10 needs `or`)
+- fam 15: `What color is every wolf?` (+ story `Wolves are afraid of mice.`)
+
+ACE REMAINING (top 3): reported_speech compression (interior), messy_runon
+`unless/except` chains (discourse splitter + parser), context_* referents
+(`does he feed it?` -> discourse, not ears).
+
+NEXT (Keal budget-conscious; Sonnet default, Opus for parser/unknown-noun design)
+1. Unknown nouns: accept well-formed sentences with new Names/nouns as
+   provisional concepts; lookup chain (WordNet seed -> teacher.concept_for ->
+   Wiktionary via `http` primitive). Fixes the Avengers wall.
+2. Parser round: PP predicates (`in the garden`, `south of`), 3-arg give wh,
+   `or` in PPs, comparatives on verbs. Target babi >= 18/21.
+3. Mouth stance check (Reflect must not add "i agree").
+4. `--retry-failed` for `spoon teach`.
+
 ## 2026-09-02 05:00  M4 part 1: bench + teach wired (commit 0f50eb7)
 
 DONE (252 tests, 0 warnings)
