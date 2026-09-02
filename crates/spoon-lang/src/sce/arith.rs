@@ -25,6 +25,7 @@ impl<'a> ArithParser<'a> {
         self.toks.get(self.pos)
     }
 
+    #[allow(dead_code)]
     fn advance(&mut self) -> Option<&Tok> {
         let t = self.toks.get(self.pos)?;
         self.pos += 1;

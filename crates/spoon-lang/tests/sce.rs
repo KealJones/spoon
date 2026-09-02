@@ -6,8 +6,38 @@
 //! 4. Unknown-word guessing.
 //! 5. Negative tests.
 
-use spoon_core::types::clause::{Act, ArithExpr, ArithOp, Modal, Quant, QuestionKind, Term};
+use spoon_core::types::clause::{Act, ArithExpr, ArithOp, Quant, QuestionKind, Term};
+use spoon_core::types::value::Value;
 use spoon_lang::sce::{lemmatize, parse, parse_text, realize, Lexicon};
+
+const CORPUS_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/bench/ace_corpus.json");
+
+/// (id, expected_ace) for every corpus item.
+fn corpus_items() -> Vec<(usize, String)> {
+    let raw = std::fs::read_to_string(CORPUS_PATH).expect("corpus not found");
+    let items: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("invalid json");
+    items.iter().filter_map(|item| {
+        let id = item.get("id").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        item.get("expected_ace").and_then(|v| v.as_str()).map(|s| (id, s.to_string()))
+    }).collect()
+}
+
+/// Default lexicon seeded with every content word of the corpus as both noun
+/// and verb (parser position disambiguates).
+fn corpus_lexicon(items: &[(usize, String)]) -> Lexicon {
+    let mut lex = Lexicon::with_defaults();
+    for (_, ace) in items {
+        for word in ace.split_whitespace() {
+            let w = word.trim_matches(|c: char| !c.is_alphanumeric() && c != '-');
+            let lw = w.to_lowercase();
+            if !lw.is_empty() && !Lexicon::is_function_word(&lw) && !Lexicon::is_prep(&lw) {
+                lex.add_noun(&lw);
+                lex.add_verb(&lemmatize(&lw));
+            }
+        }
+    }
+    lex
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -20,7 +50,7 @@ fn canonical(clause: &spoon_core::types::clause::Clause) -> spoon_core::types::c
 
     let mut map: HashMap<String, String> = HashMap::new();
     let mut cnt = 0u32;
-    let mut rename = |v: &str| -> String {
+    let _rename = |v: &str| -> String {
         map.entry(v.to_string()).or_insert_with(|| { cnt += 1; format!("x{}", cnt) }).clone()
     };
 
@@ -182,7 +212,7 @@ fn rule_customer_card() {
     let (clause, _) = parse("If a customer owns a card then the machine accepts the card.", &lex).unwrap();
     assert!(matches!(clause.act, Act::Rule));
     // then_referents contains "the machine" (Def) and reuses card
-    let has_machine = clause.then_referents.iter().any(|r| {
+    let _has_machine = clause.then_referents.iter().any(|r| {
         r.noun.as_deref() == Some("machine") && matches!(r.quant, Quant::Def)
     }) || clause.referents.iter().any(|r| r.noun.as_deref() == Some("machine"));
     // card is in antecedent, machine in consequent
@@ -239,41 +269,15 @@ fn tell_mike_user_refuses() {
 
 #[test]
 fn corpus_parse_rate() {
-    use std::fs;
-    use serde_json::Value;
-
-    let corpus_path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/bench/ace_corpus.json");
-    let raw = fs::read_to_string(corpus_path).expect("corpus not found");
-    let items: Vec<Value> = serde_json::from_str(&raw).expect("invalid json");
-
-    // Build a lexicon seeded from the corpus (extract noun/verb candidates)
-    let mut lex = Lexicon::with_defaults();
-    for item in &items {
-        if let Some(ace) = item.get("expected_ace").and_then(|v| v.as_str()) {
-            // Tokenize and add lowercase words that look like nouns or verbs
-            for word in ace.split_whitespace() {
-                let w = word.trim_matches(|c: char| !c.is_alphanumeric() && c != '-');
-                let lw = w.to_lowercase();
-                if !lw.is_empty() && !Lexicon::is_function_word(&lw) && !Lexicon::is_prep(&lw) {
-                    // Heuristic: add as both noun and verb (parser position will disambiguate)
-                    lex.add_noun(&lw);
-                    let lemma = lemmatize(&lw);
-                    lex.add_verb(&lemma);
-                }
-            }
-        }
-    }
+    let items = corpus_items();
+    let lex = corpus_lexicon(&items);
 
     let total = items.len();
     let mut passed = 0;
     let mut failures: Vec<(usize, String, String)> = vec![]; // (id, ace, error)
 
-    for item in &items {
-        let id = item.get("id").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-        let ace = match item.get("expected_ace").and_then(|v| v.as_str()) {
-            Some(s) => s,
-            None => continue,
-        };
+    for (id, ace) in &items {
+        let id = *id;
         match parse_text(ace, &lex) {
             Ok(_) => passed += 1,
             Err((sent_idx, e)) => {
@@ -295,8 +299,11 @@ fn corpus_parse_rate() {
         let mut sorted: Vec<_> = by_error.iter().collect();
         sorted.sort_by_key(|(_, ids)| -(ids.len() as i64));
         for (err, ids) in sorted.iter().take(15) {
-            eprintln!("  [{}x] {} - items: {:?}", ids.len(), err, &ids[..ids.len().min(5)]);
+            eprintln!("  [{}x] {} - items: {:?}", ids.len(), err, ids);
         }
+        let mut all_ids: Vec<usize> = failures.iter().map(|(id, _, _)| *id).collect();
+        all_ids.sort_unstable();
+        eprintln!("  all failing ids: {:?}", all_ids);
     }
 
     assert!(
@@ -373,7 +380,7 @@ fn debug_specific_fails() {
     ];
     for s in &tests {
         match parse(s, &lex) {
-            Ok((c, _)) => println!("OK: {s}"),
+            Ok((_c, _)) => println!("OK: {s}"),
             Err(e) => println!("FAIL: {s}\n  -> {:?}", e),
         }
     }
@@ -381,24 +388,7 @@ fn debug_specific_fails() {
 
 #[test]
 fn debug_corpus_items() {
-    use spoon_lang::sce::{parse_text, lemmatize, Lexicon};
-    use serde_json::Value;
-    let corpus_path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/bench/ace_corpus.json");
-    let raw = std::fs::read_to_string(corpus_path).unwrap();
-    let items: Vec<Value> = serde_json::from_str(&raw).unwrap();
-    let mut lex = Lexicon::with_defaults();
-    for item in &items {
-        if let Some(ace) = item.get("expected_ace").and_then(|v| v.as_str()) {
-            for word in ace.split_whitespace() {
-                let w = word.trim_matches(|c: char| !c.is_alphanumeric() && c != '-');
-                let lw = w.to_lowercase();
-                if !lw.is_empty() && !Lexicon::is_function_word(&lw) && !Lexicon::is_prep(&lw) {
-                    lex.add_noun(&lw);
-                    lex.add_verb(&lemmatize(&lw));
-                }
-            }
-        }
-    }
+    let lex = corpus_lexicon(&corpus_items());
     let check = [
         "A man sleeps.",
         "If a dog is hungry then the dog eats.",
@@ -416,7 +406,7 @@ fn debug_corpus_items() {
 
 #[test]
 fn debug_man_sleeps() {
-    use spoon_lang::sce::{parse, lemmatize, Lexicon};
+    use spoon_lang::sce::{parse, Lexicon};
     let mut lex = Lexicon::with_defaults();
     // Simulate corpus seeding for "man" and "sleeps"
     lex.add_noun("man");
@@ -475,5 +465,179 @@ fn debug_at_least_cards() {
     match parse("Every customer owns at least 2 cards.", &lex) {
         Ok((c, _)) => println!("OK: {:?}", c.referents.iter().map(|r| (&r.quant, &r.noun)).collect::<Vec<_>>()),
         Err(e) => println!("FAIL: {:?}", e),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Test 6: No silent drops. Every token before the terminator is consumed or
+// the parse fails with the position of the first leftover token.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn no_silent_drops() {
+    let lex = Lexicon::with_defaults();
+    // (sentence, text of the first leftover token or None when the failure
+    //  happens earlier, e.g. the pronoun gate)
+    let must_fail: &[(&str, Option<&str>)] = &[
+        // appositive after a definite NP, then and-coordination and a pronoun
+        (r#"Assistant, open the file "/tmp/x" and save it!"#, Some(r#""/tmp/x""#)),
+        // appositive alone
+        (r#"Assistant, open the file "/tmp/x"!"#, Some(r#""/tmp/x""#)),
+        // appositive in a declarative
+        (r#"The file "/tmp/x" is large."#, None),
+        // trailing junk word
+        ("John owns a dog zorp.", Some("zorp")),
+        // trailing number
+        ("John owns a dog 42.", Some("42")),
+        // second clause without a terminator
+        ("John owns a dog Mary owns a cat.", Some("Mary")),
+        // clause coordination is not VP coordination
+        ("John owns a dog and Mary owns a cat.", None),
+        // pronoun object
+        ("Assistant, save it!", Some("it")),
+        // PP with a pronoun
+        ("John talks about it.", Some("it")),
+        ("John talks about him.", None),
+    ];
+    for (s, leftover) in must_fail {
+        let err = parse(s, &lex).err().unwrap_or_else(|| panic!("expected failure for {s:?}"));
+        if let Some(tok) = leftover {
+            assert!(
+                err.message.contains(&format!("unexpected '{tok}'")),
+                "{s:?}: expected leftover {tok:?} in message, got {:?}", err.message
+            );
+            assert!(err.position.is_some(), "{s:?}: leftover error must carry a position");
+        }
+    }
+
+    let must_parse: &[&str] = &[
+        "Assistant, open the file!",
+        r#"Assistant, open "/tmp/x" and save "/tmp/x"!"#,
+        "The file is large.",
+        "John owns a dog.",
+        "John owns 42 dogs.",
+        "John owns a dog and likes a cat.",
+        "Assistant, save the file!",
+        "John talks about Mary.",
+    ];
+    for s in must_parse {
+        parse(s, &lex).unwrap_or_else(|e| panic!("expected {s:?} to parse: {e}"));
+    }
+    let (clauses, _) = parse_text("John owns a dog. Mary owns a cat.", &lex).expect("two sentences");
+    assert_eq!(clauses.len(), 2);
+}
+
+/// Every corpus sentence that parses consumed every token.
+#[test]
+fn full_consumption() {
+    use spoon_lang::sce::{parse_traced, split_sentences};
+    let items = corpus_items();
+    let lex = corpus_lexicon(&items);
+    let mut checked = 0;
+    for (id, ace) in &items {
+        for sent in split_sentences(ace) {
+            if let Ok((_, _, (consumed, total))) = parse_traced(&sent, &lex) {
+                assert_eq!(consumed, total, "item {id}: {sent:?} left {} token(s) unconsumed", total - consumed);
+                checked += 1;
+            }
+        }
+    }
+    assert!(checked > 200, "expected to check hundreds of sentences, got {checked}");
+}
+
+// ---------------------------------------------------------------------------
+// Test 7: Literal owners in "the Noun of NP"
+// ---------------------------------------------------------------------------
+
+/// Asserts the shape `be(the <noun> of <owner>, <value>)`: three referents,
+/// the property referent is Def and owned by the literal owner.
+fn assert_property_of_literal(s: &str, noun: &str, owner: Value, value: Value, act_ok: impl Fn(&Act) -> bool) {
+    let lex = Lexicon::with_defaults();
+    let (c, _) = parse(s, &lex).unwrap_or_else(|e| panic!("{s:?}: {e}"));
+    assert!(act_ok(&c.act), "{s:?}: unexpected act {:?}", c.act);
+    let owner_ref = c.referents.iter().find(|r| r.quant == Quant::Literal(owner.clone()))
+        .unwrap_or_else(|| panic!("{s:?}: no owner literal {owner:?} in {:?}", c.referents));
+    let prop = c.referents.iter().find(|r| r.noun.as_deref() == Some(noun))
+        .unwrap_or_else(|| panic!("{s:?}: no {noun:?} referent in {:?}", c.referents));
+    assert_eq!(prop.quant, Quant::Def, "{s:?}: property must be Def");
+    assert_eq!(prop.owner.as_deref(), Some(owner_ref.var.as_str()), "{s:?}: property owner must be the literal");
+    let value_ref = c.referents.iter().find(|r| r.quant == Quant::Literal(value.clone()))
+        .unwrap_or_else(|| panic!("{s:?}: no value literal {value:?} in {:?}", c.referents));
+    assert_eq!(c.conditions.len(), 1, "{s:?}: exactly one condition");
+    let be = &c.conditions[0];
+    assert_eq!(be.pred, "be");
+    assert_eq!(be.args, vec![Term::Var { var: prop.var.clone() }, Term::Var { var: value_ref.var.clone() }]);
+}
+
+#[test]
+fn literal_owners() {
+    let is_assert = |a: &Act| matches!(a, Act::Assert);
+    assert_property_of_literal("The double of 3 is 6.", "double", Value::Int(3), Value::Int(6), is_assert);
+    assert_property_of_literal("The half of 2.5 is 1.25.", "half", Value::Float(2.5), Value::Float(1.25), is_assert);
+    assert_property_of_literal("The double of -2 is -4.", "double", Value::Int(-2), Value::Int(-4), is_assert);
+    assert_property_of_literal("The double of -1.5 is -3.", "double", Value::Float(-1.5), Value::Int(-3), is_assert);
+    assert_property_of_literal(
+        r#"The length of "abc" is 3."#, "length", Value::Text("abc".into()), Value::Int(3), is_assert,
+    );
+    assert_property_of_literal(
+        r#"The reverse of "abc" is "cba"."#, "reverse", Value::Text("abc".into()), Value::Text("cba".into()), is_assert,
+    );
+
+    // What-questions: `What is the double of 3?` -> be(wh, the double of 3), focus = property var.
+    let lex = Lexicon::with_defaults();
+    for (s, noun, owner) in [
+        ("What is the double of 3?", "double", Value::Int(3)),
+        ("What is the double of -2.5?", "double", Value::Float(-2.5)),
+        ("What is the double of -2?", "double", Value::Int(-2)),
+        (r#"What is the length of "abc"?"#, "length", Value::Text("abc".into())),
+    ] {
+        let (c, _) = parse(s, &lex).unwrap_or_else(|e| panic!("{s:?}: {e}"));
+        let focus = match &c.act {
+            Act::Question { kind: QuestionKind::What { focus } } => focus.clone(),
+            other => panic!("{s:?}: expected What question, got {other:?}"),
+        };
+        let owner_ref = c.referents.iter().find(|r| r.quant == Quant::Literal(owner.clone()))
+            .unwrap_or_else(|| panic!("{s:?}: no owner literal in {:?}", c.referents));
+        let prop = c.referents.iter().find(|r| r.var == focus)
+            .unwrap_or_else(|| panic!("{s:?}: focus {focus} not a referent"));
+        assert_eq!(prop.noun.as_deref(), Some(noun));
+        assert_eq!(prop.quant, Quant::Def);
+        assert_eq!(prop.owner.as_deref(), Some(owner_ref.var.as_str()));
+        assert_eq!(c.conditions.len(), 1);
+        assert_eq!(c.conditions[0].pred, "be");
+        assert_eq!(c.conditions[0].args[1], Term::Var { var: focus });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Test 8: Plural nouns
+// ---------------------------------------------------------------------------
+
+#[test]
+fn plural_nouns() {
+    use spoon_lang::sce::singularize_noun;
+    let lex = Lexicon::with_defaults();
+    let pp_noun = |s: &str| -> String {
+        let (c, _) = parse(s, &lex).unwrap_or_else(|e| panic!("{s:?}: {e}"));
+        let (_, term) = c.conditions[0].adjuncts.first().unwrap_or_else(|| panic!("{s:?}: no adjunct"));
+        let Term::Var { var } = term else { panic!("{s:?}: adjunct is not a var") };
+        c.referents.iter().find(|r| &r.var == var).and_then(|r| r.noun.clone())
+            .unwrap_or_else(|| panic!("{s:?}: adjunct referent has no noun"))
+    };
+    assert_eq!(pp_noun("John talks about dogs."), "dog");
+    assert_eq!(pp_noun("John talks about stories."), "story");
+    assert_eq!(pp_noun("John talks about buses."), "bus");
+    // Singular-looking words that end in s stay as they are.
+    assert_eq!(pp_noun("John talks about glass."), "glass");
+    assert_eq!(pp_noun("John talks about news."), "news");
+    assert_eq!(pp_noun("John talks about analysis."), "analysis");
+    assert_eq!(pp_noun("John talks about a bus."), "bus");
+
+    for (w, want) in [
+        ("dogs", "dog"), ("stories", "story"), ("buses", "bus"), ("boxes", "box"), ("churches", "church"),
+        ("glass", "glass"), ("bus", "bus"), ("news", "news"), ("analysis", "analysis"),
+        ("status", "status"), ("process", "process"), ("series", "series"),
+    ] {
+        assert_eq!(singularize_noun(w), want, "singularize_noun({w:?})");
     }
 }

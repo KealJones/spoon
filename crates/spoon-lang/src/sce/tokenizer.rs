@@ -315,18 +315,28 @@ pub fn split_sentences(text: &str) -> Vec<String> {
     sentences
 }
 
-/// Return the lowercase string value of a token if it is a Word.
-pub fn word_str(tok: &Tok) -> Option<String> {
-    if let Tok::Word(s) = tok {
-        Some(s.to_lowercase())
-    } else {
-        None
+/// Source-like text of a token, for error messages.
+impl std::fmt::Display for Tok {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Tok::Word(w) | Tok::Path(w) | Tok::Url(w) => f.write_str(w),
+            Tok::Number(n) => write!(f, "{n}"),
+            Tok::Quoted(s) => write!(f, "\"{s}\""),
+            Tok::Comma => f.write_str(","),
+            Tok::Period => f.write_str("."),
+            Tok::Bang => f.write_str("!"),
+            Tok::Question => f.write_str("?"),
+            Tok::AposS => f.write_str("'s"),
+            Tok::Plus => f.write_str("+"),
+            Tok::Minus => f.write_str("-"),
+            Tok::Star => f.write_str("*"),
+            Tok::Slash => f.write_str("/"),
+            Tok::Percent => f.write_str("%"),
+            Tok::Caret => f.write_str("^"),
+            Tok::LParen => f.write_str("("),
+            Tok::RParen => f.write_str(")"),
+        }
     }
-}
-
-/// Return the raw (case-preserved) string of a Word token.
-pub fn word_raw(tok: &Tok) -> Option<&str> {
-    if let Tok::Word(s) = tok { Some(s) } else { None }
 }
 
 #[cfg(test)]

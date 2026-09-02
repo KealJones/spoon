@@ -5,7 +5,7 @@
 //! embedded sub-clauses, arithmetic, rules, and possessives.
 
 use spoon_core::types::clause::{
-    Act, ArithExpr, Clause, Modal, Pred, Quant, QuestionKind, Referent, Term,
+    Act, Clause, Modal, Pred, Quant, QuestionKind, Referent, Term,
 };
 use spoon_core::types::value::Value;
 
@@ -14,11 +14,21 @@ use super::lemma::conjugate_3sg;
 
 /// Realize a Clause into a valid SCE sentence.
 pub fn realize(clause: &Clause) -> String {
-    match &clause.act {
+    let s = match &clause.act {
         Act::Assert => realize_assert(clause),
         Act::Command => realize_command(clause),
         Act::Question { kind } => realize_question(clause, kind),
         Act::Rule => realize_rule(clause),
+    };
+    // Ensure sentence-initial capitalization.
+    capitalize_first(&s)
+}
+
+fn capitalize_first(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
     }
 }
 
@@ -57,7 +67,7 @@ fn realize_assert(clause: &Clause) -> String {
     };
     // Check if subject is "There" existential (referent has no pred from subj)
     // Determine if this looks like a "There is" sentence
-    let is_existential = clause.conditions.is_empty()
+    let _is_existential = clause.conditions.is_empty()
         || (clause.referents.len() == 1 && clause.conditions.is_empty());
 
     let subj_str = realize_var_np(clause, &subj_var, &clause.referents);
@@ -118,7 +128,7 @@ fn realize_be_pred(clause: &Clause, pred: &Pred, refs: &[Referent], _subj_var: &
     }
 }
 
-fn realize_verb_pred(clause: &Clause, pred: &Pred, refs: &[Referent], subj_var: &str, modal_str: &str, use_base: bool, _is_first: bool) -> String {
+fn realize_verb_pred(clause: &Clause, pred: &Pred, refs: &[Referent], _subj_var: &str, modal_str: &str, use_base: bool, _is_first: bool) -> String {
     let verb = if use_base {
         pred.pred.clone()
     } else {
@@ -328,7 +338,7 @@ fn realize_yesno(clause: &Clause) -> String {
         ("Does".to_string(), pred.pred.clone())
     };
     let neg_part = if pred.negated && modal.is_none() { " not" } else { "" };
-    let mut obj_parts: Vec<String> = pred.args.iter().skip(1).map(|a| realize_term(clause, a, &clause.referents)).collect();
+    let obj_parts: Vec<String> = pred.args.iter().skip(1).map(|a| realize_term(clause, a, &clause.referents)).collect();
     let obj_str = obj_parts.join(" ");
     let pp = realize_adjuncts(&pred.adjuncts, clause, &clause.referents);
     let obj_full = if obj_str.is_empty() { pp } else { format!(" {}{}", obj_str, pp) };
@@ -342,7 +352,7 @@ fn realize_modal_q(clause: &Clause, aux: &str) -> String {
     if let Some(pred) = pred {
         let verb = &pred.pred;
         let neg = if pred.negated { " not" } else { "" };
-        let mut obj_parts: Vec<String> = pred.args.iter().skip(1).map(|a| realize_term(clause, a, &clause.referents)).collect();
+        let obj_parts: Vec<String> = pred.args.iter().skip(1).map(|a| realize_term(clause, a, &clause.referents)).collect();
         let obj_str = obj_parts.join(" ");
         let pp = realize_adjuncts(&pred.adjuncts, clause, &clause.referents);
         let obj_full = if obj_str.is_empty() { pp } else { format!(" {}{}", obj_str, pp) };
@@ -352,7 +362,7 @@ fn realize_modal_q(clause: &Clause, aux: &str) -> String {
     }
 }
 
-fn realize_who(clause: &Clause, focus: &str) -> String {
+fn realize_who(clause: &Clause, _focus: &str) -> String {
     if clause.conditions.is_empty() { return "Who?".to_string(); }
     let pred = &clause.conditions[0];
     if pred.pred == "be" {
@@ -361,14 +371,14 @@ fn realize_who(clause: &Clause, focus: &str) -> String {
         return format!("Who is {}?", obj);
     }
     let verb = conjugate_3sg(&pred.pred);
-    let mut obj_parts: Vec<String> = pred.args.iter().skip(1).map(|a| realize_term(clause, a, &clause.referents)).collect();
+    let obj_parts: Vec<String> = pred.args.iter().skip(1).map(|a| realize_term(clause, a, &clause.referents)).collect();
     let obj_str = obj_parts.join(" ");
     let pp = realize_adjuncts(&pred.adjuncts, clause, &clause.referents);
     let obj_full = if obj_str.is_empty() { pp } else { format!(" {}{}", obj_str, pp) };
     format!("Who {}{}?", verb, obj_full)
 }
 
-fn realize_what(clause: &Clause, focus: &str) -> String {
+fn realize_what(clause: &Clause, _focus: &str) -> String {
     if clause.conditions.is_empty() { return "What?".to_string(); }
     let pred = &clause.conditions[0];
     if pred.pred == "be" {
@@ -384,12 +394,12 @@ fn realize_what(clause: &Clause, focus: &str) -> String {
     let is_wh_subj = subj_ref.map_or(false, |r| matches!(r.quant, Quant::Wh));
     if is_wh_subj {
         let verb = conjugate_3sg(&pred.pred);
-        let mut obj_parts: Vec<String> = pred.args.iter().skip(1).map(|a| realize_term(clause, a, &clause.referents)).collect();
+        let obj_parts: Vec<String> = pred.args.iter().skip(1).map(|a| realize_term(clause, a, &clause.referents)).collect();
         format!("What {}{}?", verb, if obj_parts.is_empty() { String::new() } else { format!(" {}", obj_parts.join(" ")) })
     } else {
         let subj_str = realize_var_np(clause, subj_var, &clause.referents);
         let verb = &pred.pred;
-        let mut obj_parts: Vec<String> = pred.args.iter().skip(1).map(|a| realize_term(clause, a, &clause.referents)).collect();
+        let obj_parts: Vec<String> = pred.args.iter().skip(1).map(|a| realize_term(clause, a, &clause.referents)).collect();
         format!("What does {} {}{}?", subj_str, verb, if obj_parts.is_empty() { String::new() } else { format!(" {}", obj_parts.join(" ")) })
     }
 }
@@ -399,14 +409,14 @@ fn realize_which(clause: &Clause, focus: &str) -> String {
     let noun = focus_ref.and_then(|r| r.noun.as_deref()).unwrap_or("thing");
     if clause.conditions.is_empty() { return format!("Which {}?", noun); }
     let pred = &clause.conditions[0];
-    let subj_var = pred.args.first().and_then(|a| if let Term::Var { var: v } = a { Some(v.as_str()) } else { None }).unwrap_or("");
+    let _subj_var = pred.args.first().and_then(|a| if let Term::Var { var: v } = a { Some(v.as_str()) } else { None }).unwrap_or("");
     let verb_str = if let Some(ref m) = pred.modal {
         let ms = match m { Modal::Can => "can", Modal::Should => "should", Modal::Must => "must", Modal::May => "may" };
         format!("{} {}", ms, pred.pred)
     } else {
         conjugate_3sg(&pred.pred)
     };
-    let mut obj_parts: Vec<String> = pred.args.iter().skip(1).map(|a| realize_term(clause, a, &clause.referents)).collect();
+    let obj_parts: Vec<String> = pred.args.iter().skip(1).map(|a| realize_term(clause, a, &clause.referents)).collect();
     let obj_str = if obj_parts.is_empty() { String::new() } else { format!(" {}", obj_parts.join(" ")) };
     format!("Which {} {}{}?", noun, verb_str, obj_str)
 }
@@ -421,17 +431,17 @@ fn realize_howmany(clause: &Clause, focus: &str) -> String {
     let is_wh_subj = focus_ref2.map_or(false, |r| matches!(r.quant, Quant::Wh));
     if is_wh_subj {
         let verb = conjugate_3sg(&pred.pred);
-        let mut obj_parts: Vec<String> = pred.args.iter().skip(1).map(|a| realize_term(clause, a, &clause.referents)).collect();
+        let obj_parts: Vec<String> = pred.args.iter().skip(1).map(|a| realize_term(clause, a, &clause.referents)).collect();
         format!("How many {} {}{}?", noun, verb, if obj_parts.is_empty() { String::new() } else { format!(" {}", obj_parts.join(" ")) })
     } else {
         let subj_str = realize_var_np(clause, subj_var, &clause.referents);
         let verb = &pred.pred;
-        let mut obj_parts: Vec<String> = pred.args.iter().skip(1).map(|a| realize_term(clause, a, &clause.referents)).collect();
+        let obj_parts: Vec<String> = pred.args.iter().skip(1).map(|a| realize_term(clause, a, &clause.referents)).collect();
         format!("How many {} does {} {}{}?", noun, subj_str, verb, if obj_parts.is_empty() { String::new() } else { format!(" {}", obj_parts.join(" ")) })
     }
 }
 
-fn realize_where(clause: &Clause, focus: &str) -> String {
+fn realize_where(clause: &Clause, _focus: &str) -> String {
     if clause.conditions.is_empty() { return "Where?".to_string(); }
     let pred = &clause.conditions[0];
     let subj_var = pred.args.first().and_then(|a| if let Term::Var { var: v } = a { Some(v.as_str()) } else { None }).unwrap_or("");
@@ -439,7 +449,7 @@ fn realize_where(clause: &Clause, focus: &str) -> String {
     format!("Where is {}?", subj_str)
 }
 
-fn realize_when(clause: &Clause, focus: &str) -> String {
+fn realize_when(clause: &Clause, _focus: &str) -> String {
     if clause.conditions.is_empty() { return "When?".to_string(); }
     let pred = &clause.conditions[0];
     let subj_var = pred.args.first().and_then(|a| if let Term::Var { var: v } = a { Some(v.as_str()) } else { None }).unwrap_or("");

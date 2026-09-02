@@ -90,6 +90,59 @@ fn base_form(word: &str) -> String {
     w.to_string()
 }
 
+/// Conservative noun singularizer.
+///
+/// Returns the singular form of a plural noun. Only applies when the
+/// transformation is unambiguous:
+///   - `-ies` -> `-y`  (stories->story)
+///   - `-ses/-xes/-ches/-shes/-zes` -> drop `-es`  (buses->bus, boxes->box)
+///   - plain `-s` -> drop (dogs->dog)
+///
+/// Does NOT transform words ending in `-ss`, `-us`, `-is`, `-ous`, `-news`,
+/// or words in the exception list (invariant plurals).
+pub fn singularize_noun(word: &str) -> String {
+    let w = word.to_lowercase();
+    // Invariant / already-singular exception patterns
+    let no_change = w.ends_with("ss")
+        || w.ends_with("us")
+        || w.ends_with("is")
+        || w.ends_with("ous")
+        || w.ends_with("ics")
+        || w.ends_with("ness")
+        || w.ends_with("ess")
+        || matches!(
+            w.as_str(),
+            "news" | "series" | "species" | "means" | "deer" | "sheep" | "fish"
+                | "aircraft" | "data" | "media" | "criteria" | "phenomena"
+                | "software" | "hardware" | "access" | "process" | "address"
+                | "basis" | "analysis" | "thesis" | "crisis" | "axis"
+        );
+    if no_change {
+        return word.to_string();
+    }
+    // -ies -> -y
+    if w.ends_with("ies") && w.len() > 3 {
+        return format!("{}y", &word[..word.len() - 3]);
+    }
+    // sibilant -es: buses->bus, boxes->box, churches->church, dishes->dish, buzzes->buzz
+    if w.len() > 3 {
+        let stem = &w[..w.len() - 2];
+        let sib = stem.ends_with('s')
+            || stem.ends_with('x')
+            || stem.ends_with('z')
+            || stem.ends_with("ch")
+            || stem.ends_with("sh");
+        if w.ends_with("es") && sib {
+            return word[..word.len() - 2].to_string();
+        }
+    }
+    // plain -s -> drop (not -ss, already handled above)
+    if w.ends_with('s') && w.len() > 2 {
+        return word[..word.len() - 1].to_string();
+    }
+    word.to_string()
+}
+
 /// Map number words to their integer values.
 pub fn number_word(w: &str) -> Option<u32> {
     match w.to_lowercase().as_str() {

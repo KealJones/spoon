@@ -89,7 +89,7 @@ impl Lexicon {
     /// True if this lowercase word is a function word (closed class).
     pub fn is_function_word(w: &str) -> bool {
         matches!(w,
-            "a"|"an"|"the"|"every"|"some"|"no"|"not"|"each"|"an"|
+            "a"|"an"|"the"|"every"|"some"|"no"|"not"|"each"|
             "at"|"least"|"most"|"exactly"|"more"|"unknown"|
             "is"|"are"|"was"|"were"|"am"|"be"|"been"|"being"|
             "has"|"have"|"had"|"having"|

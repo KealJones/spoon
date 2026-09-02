@@ -15,6 +15,10 @@ mod realize;
 mod tokenizer;
 
 pub use lexicon::Lexicon;
-pub use lemma::lemmatize;
+pub use lemma::{lemmatize, singularize_noun};
 pub use parser::{parse, parse_text, ParseError};
+#[doc(hidden)]
+pub use parser::parse_traced;
+#[doc(hidden)]
+pub use tokenizer::split_sentences;
 pub use realize::realize;

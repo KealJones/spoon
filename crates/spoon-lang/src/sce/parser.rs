@@ -5,14 +5,13 @@
 //! by fewest guesses then fewer derivation steps.
 
 use std::collections::HashMap;
-use chrono::Utc;
 use spoon_core::types::clause::{
     Act, ArithExpr, Clause, Modal, Pred, Quant, QuestionKind, Referent, Term,
 };
 use spoon_core::types::value::Value;
 
-use super::arith::{render_arith, ArithParser};
-use super::lemma::{lemmatize, number_word};
+use super::arith::ArithParser;
+use super::lemma::{lemmatize, number_word, singularize_noun};
 use super::lexicon::Lexicon;
 use super::tokenizer::{tokenize, Tok};
 
@@ -40,6 +39,15 @@ struct Parts {
     conds: Vec<Pred>,
 }
 
+struct Mark {
+    pos: usize,
+    refs: usize,
+    conds: usize,
+    cnt: u32,
+    unknowns: usize,
+    name_map: HashMap<String, String>,
+}
+
 // ---------------------------------------------------------------------------
 // Parser
 // ---------------------------------------------------------------------------
@@ -61,6 +69,28 @@ impl<'lex> Parser<'lex> {
     fn save(&self) -> usize { self.pos }
     fn restore(&mut self, p: usize) { self.pos = p; }
 
+    /// Full checkpoint (position plus everything a failed attempt may have
+    /// pushed) for speculative paths that must leave no trace on failure.
+    fn mark(&self, parts: &Parts) -> Mark {
+        Mark {
+            pos: self.pos,
+            refs: parts.refs.len(),
+            conds: parts.conds.len(),
+            cnt: self.cnt,
+            unknowns: self.unknowns.len(),
+            name_map: self.name_map.clone(),
+        }
+    }
+
+    fn rollback(&mut self, parts: &mut Parts, m: Mark) {
+        self.pos = m.pos;
+        self.cnt = m.cnt;
+        self.unknowns.truncate(m.unknowns);
+        self.name_map = m.name_map;
+        parts.refs.truncate(m.refs);
+        parts.conds.truncate(m.conds);
+    }
+
     fn next_var(&mut self) -> String {
         self.cnt += 1;
         format!("x{}", self.cnt)
@@ -81,6 +111,7 @@ impl<'lex> Parser<'lex> {
 
     fn peek(&self) -> Option<&Tok> { self.toks.get(self.pos) }
     fn peek2(&self) -> Option<&Tok> { self.toks.get(self.pos + 1) }
+    #[allow(dead_code)]
     fn peek3(&self) -> Option<&Tok> { self.toks.get(self.pos + 2) }
 
     /// Lowercase word at current position (None if not a Word token).
@@ -103,6 +134,7 @@ impl<'lex> Parser<'lex> {
             _ => None,
         }
     }
+    #[allow(dead_code)]
     fn pw3(&self) -> Option<String> {
         match self.peek3()? {
             Tok::Word(w) => Some(w.to_lowercase()),
@@ -110,6 +142,7 @@ impl<'lex> Parser<'lex> {
         }
     }
 
+    #[allow(dead_code)]
     fn advance(&mut self) -> Option<Tok> {
         if self.pos < self.toks.len() {
             let t = self.toks[self.pos].clone();
@@ -163,10 +196,13 @@ impl<'lex> Parser<'lex> {
         }
     }
 
-    fn is_np_breaker(&self, w: &str) -> bool {
+    /// Lenient breaker check for "the N of NP" noun head: only rejects core verbs,
+    /// so corpus-seeded nouns like "wellbeing" or "double" are accepted.
+    fn is_the_of_np_breaker(&self, w: &str) -> bool {
         if Lexicon::is_function_word(w) { return true; }
         if Lexicon::is_prep(w) { return true; }
-        if self.lex.is_verb(w) { return true; }
+        let lm = lemmatize(w);
+        if self.lex.is_core_verb(w) || self.lex.is_core_verb(&lm) { return true; }
         false
     }
 
@@ -327,9 +363,16 @@ impl<'lex> Parser<'lex> {
         self.parse_decl_into(&mut parts)?;
         let term = self.eat_terminator_type();
         if term.is_none() && !self.at_end() {
-            return Err(self.err("Expected sentence terminator"));
+            return Err(self.leftover_err());
         }
         Ok(Clause { act: Act::Assert, referents: parts.refs, conditions: parts.conds, then: vec![], then_referents: vec![], sce: sce.to_string() })
+    }
+
+    /// Error for content the grammar could not attach: names the first
+    /// unconsumed token and its position.
+    fn leftover_err(&self) -> ParseError {
+        let tok = self.toks.get(self.pos).map(|t| t.to_string()).unwrap_or_default();
+        self.err(&format!("unexpected '{}' at {}", tok, self.pos))
     }
 
     fn parse_decl_into(&mut self, parts: &mut Parts) -> Result<(), ParseError> {
@@ -545,7 +588,7 @@ impl<'lex> Parser<'lex> {
         let mut adj_parts = vec![];
         // Skip adverbs like "very", "quite"
         while let Some(w) = self.pw() {
-            if matches!(w.as_str(), "very"|"quite"|"rather"|"somewhat"|"extremely"|"highly"|"deeply"|"truly"|"quite") {
+            if matches!(w.as_str(), "very"|"quite"|"rather"|"somewhat"|"extremely"|"highly"|"deeply"|"truly") {
                 adj_parts.push(w);
                 self.pos += 1;
             } else {
@@ -616,8 +659,14 @@ impl<'lex> Parser<'lex> {
             None => return Err(self.err("Expected verb")),
         };
         let lw = verb_raw.to_lowercase();
-        if Lexicon::is_function_word(&lw) && !self.lex.is_verb(&lw) && !self.lex.is_verb(&lemmatize(&lw)) {
+        let known_verb = self.lex.is_verb(&lw) || self.lex.is_verb(&lemmatize(&lw));
+        if Lexicon::is_function_word(&lw) && !known_verb {
             return Err(self.err(&format!("'{}' is not a verb", verb_raw)));
+        }
+        // A capitalized name in verb position means a clause boundary was
+        // missed ("John owns a dog and Mary owns a cat."), not an unknown verb.
+        if Self::is_name(&verb_raw, false) && !known_verb {
+            return Err(self.err(&format!("'{}' is a name, not a verb", verb_raw)));
         }
         self.pos += 1;
 
@@ -685,6 +734,27 @@ impl<'lex> Parser<'lex> {
                         }
                     }
                     Err(_) => { self.restore(saved); }
+                }
+            }
+        }
+
+        // Gerund complement: "stops retrying the task" / "stops decreasing Y"
+        // When no object NP was captured AND next word is V-ing, parse it as a
+        // complementary VP with the same subject, then push the main pred as-is.
+        if args.len() == 1 && !self.is_terminator() && !self.at_end()
+            && self.pw().as_deref() != Some("and")
+        {
+            if let Some(raw) = self.praw().map(str::to_string) {
+                let lw = raw.to_lowercase();
+                if lw.ends_with("ing") && lw.len() > 4
+                    && !Lexicon::is_function_word(&lw) && !Lexicon::is_prep(&lw)
+                {
+                    let ger_saved = self.save();
+                    if self.parse_verb_pred(subj, parts, false, false, None).is_ok() {
+                        // Gerund VP consumed; fall through to push the main pred.
+                    } else {
+                        self.restore(ger_saved);
+                    }
                 }
             }
         }
@@ -801,18 +871,23 @@ impl<'lex> Parser<'lex> {
             let np_var = match self.parse_np(parts) {
                 Ok(v) => v,
                 Err(_) => {
-                    // Fallback: bare noun in PP context (e.g. "at home", "in production").
-                    // In PP position a word is a noun regardless of whether it's also a verb.
+                    // Fallback: bare noun in PP context (e.g. "at home", "about death").
+                    // Any non-function/prep/var word after a preposition is a bare noun.
+                    // Unknown words are added to unknowns and singularized.
                     if let Some(raw) = self.praw().map(str::to_string) {
                         let lw = raw.to_lowercase();
                         if !Lexicon::is_function_word(&lw) && !Lexicon::is_prep(&lw)
                             && !Self::is_var(&raw)
-                            && (self.lex.is_noun(&lw) || self.lex.is_noun(&lemmatize(&lw)))
+                            && !matches!(self.peek(), Some(Tok::Period) | Some(Tok::Bang) | Some(Tok::Question))
                         {
+                            let singular = singularize_noun(&lw);
                             self.pos += 1;
                             let var = self.next_var();
+                            if !self.lex.is_noun(&lw) {
+                                self.unknowns.push(singular.clone());
+                            }
                             parts.refs.push(Referent {
-                                var: var.clone(), noun: Some(lw),
+                                var: var.clone(), noun: Some(singular),
                                 quant: Quant::Indef, mods: vec![], owner: None, span: None,
                             });
                             var
@@ -842,9 +917,16 @@ impl<'lex> Parser<'lex> {
             self.restore(saved);
         }
 
-        // Determiner-headed NP
-        if let Some((quant, explicit_var)) = self.try_parse_det() {
-            return self.finish_det_np(parts, quant, explicit_var);
+        // Determiner-headed NP. Save/restore so a spurious number-as-count-det
+        // (e.g. "3" in "the double of 3 is 6") doesn't permanently advance pos.
+        {
+            let det_saved = self.save();
+            if let Some((quant, explicit_var)) = self.try_parse_det() {
+                match self.finish_det_np(parts, quant, explicit_var) {
+                    Ok(v) => return Ok(v),
+                    Err(_) => self.restore(det_saved),
+                }
+            }
         }
 
         // Name or Variable (capitalized word)
@@ -852,19 +934,30 @@ impl<'lex> Parser<'lex> {
             let is_init = self.is_initial();
             if Self::is_var(&raw) {
                 self.pos += 1;
-                // Variable
-                if let Some(existing) = self.name_map.get(&raw).cloned() {
-                    // Already seen: return existing var
-                    return Ok(existing);
+                // Variable (resolve existing or introduce new)
+                let var_name = if let Some(existing) = self.name_map.get(&raw).cloned() {
+                    existing
+                } else {
+                    self.name_map.insert(raw.clone(), raw.clone());
+                    parts.refs.push(Referent {
+                        var: raw.clone(), noun: None,
+                        quant: Quant::Named(raw.clone()),
+                        mods: vec![], owner: None, span: None,
+                    });
+                    raw.clone()
+                };
+                // Possessive: Var 's Noun -> new Indef referent owned by Var
+                if matches!(self.peek(), Some(Tok::AposS)) {
+                    self.pos += 1;
+                    let (mods, noun) = self.parse_adj_noun();
+                    let poss_var = self.next_var();
+                    parts.refs.push(Referent {
+                        var: poss_var.clone(), noun: Some(noun),
+                        quant: Quant::Indef, mods, owner: Some(var_name), span: None,
+                    });
+                    return Ok(poss_var);
                 }
-                // New variable
-                self.name_map.insert(raw.clone(), raw.clone());
-                parts.refs.push(Referent {
-                    var: raw.clone(), noun: None,
-                    quant: Quant::Named(raw.clone()),
-                    mods: vec![], owner: None, span: None,
-                });
-                return Ok(raw);
+                return Ok(var_name);
             }
             if Self::is_name(&raw, is_init) {
                 self.pos += 1;
@@ -922,10 +1015,15 @@ impl<'lex> Parser<'lex> {
             }
             Some(Tok::Number(n)) => {
                 let n = *n; self.pos += 1;
-                let var = self.next_var();
-                let val = if n.fract() == 0.0 { Value::Int(n as i64) } else { Value::Float(n) };
-                parts.refs.push(Referent { var: var.clone(), noun: None, quant: Quant::Literal(val), mods: vec![], owner: None, span: None });
-                return Ok(var);
+                return Ok(self.push_number(parts, n));
+            }
+            // The tokenizer reads "-" after a word as an operator, so a negative
+            // literal in NP position ("of -2") arrives as Minus, Number.
+            Some(Tok::Minus) if matches!(self.peek2(), Some(Tok::Number(_))) => {
+                self.pos += 1;
+                let n = match self.peek() { Some(Tok::Number(n)) => *n, _ => unreachable!() };
+                self.pos += 1;
+                return Ok(self.push_number(parts, -n));
             }
             Some(Tok::Path(s)) => {
                 let s = s.clone(); self.pos += 1;
@@ -942,20 +1040,21 @@ impl<'lex> Parser<'lex> {
             _ => {}
         }
 
-        // Bare noun (no determiner): known noun or unknown word in noun position.
-        // Only allow if: known noun OR we're being lenient (unknown word that looks like noun).
-        // We only do this as a last resort to avoid consuming verbs.
+        // Bare noun (no determiner): known noun that is not also a (full) verb.
+        // Use is_verb (not is_core_verb) to exclude corpus-seeded verb lookalikes.
+        // Last resort - only when unambiguously a noun.
         if let Some(raw) = self.praw().map(str::to_string) {
             let lw = raw.to_lowercase();
             let lemma = lemmatize(&lw);
             let is_noun = self.lex.is_noun(&lw) || self.lex.is_noun(&lemma);
             let is_verb = self.lex.is_verb(&lw) || self.lex.is_verb(&lemma);
             let is_func = Lexicon::is_function_word(&lw) || Lexicon::is_prep(&lw);
-            if !is_func && !Self::is_var(&raw) && (is_noun && !is_verb) {
+            if !is_func && !Self::is_var(&raw) && is_noun && !is_verb {
                 self.pos += 1;
+                let singular = singularize_noun(&lw);
                 let var = self.next_var();
                 parts.refs.push(Referent {
-                    var: var.clone(), noun: Some(lw),
+                    var: var.clone(), noun: Some(singular),
                     quant: Quant::Indef, mods: vec![], owner: None, span: None,
                 });
                 return Ok(var);
@@ -965,12 +1064,30 @@ impl<'lex> Parser<'lex> {
         Err(self.err("Expected noun phrase"))
     }
 
+    fn push_number(&mut self, parts: &mut Parts, n: f64) -> String {
+        let var = self.next_var();
+        let val = if n.fract() == 0.0 { Value::Int(n as i64) } else { Value::Float(n) };
+        parts.refs.push(Referent { var: var.clone(), noun: None, quant: Quant::Literal(val), mods: vec![], owner: None, span: None });
+        var
+    }
+
     fn try_the_of_np(&mut self, parts: &mut Parts) -> Result<String, ParseError> {
         self.pos += 1; // consume 'the'
-        let noun = match self.pw() {
-            Some(n) if !self.is_np_breaker(&n) => { let n = n.clone(); self.pos += 1; n }
-            _ => return Err(self.err("Expected noun after 'the'")),
-        };
+        // Parse optional adjectives + noun using lenient core-verb check.
+        // This allows "the main city of New-York" and "the wellbeing of Assistant".
+        let mut candidates: Vec<String> = vec![];
+        while let Some(w) = self.pw() {
+            if self.is_the_of_np_breaker(&w) { break; }
+            // Stop if next token is "of" (that's the separator, not the noun)
+            if w.as_str() == "of" { break; }
+            candidates.push(w);
+            self.pos += 1;
+        }
+        if candidates.is_empty() {
+            return Err(self.err("Expected noun after 'the'"));
+        }
+        let noun = candidates.last().cloned().unwrap_or_default();
+        let mods: Vec<String> = candidates[..candidates.len() - 1].to_vec();
         if !self.eat_word("of") {
             return Err(self.err("Expected 'of' in 'the N of NP'"));
         }
@@ -978,7 +1095,7 @@ impl<'lex> Parser<'lex> {
         let var = self.next_var();
         parts.refs.push(Referent {
             var: var.clone(), noun: Some(noun), quant: Quant::Def,
-            mods: vec![], owner: Some(of_var), span: None,
+            mods, owner: Some(of_var), span: None,
         });
         Ok(var)
     }
@@ -1098,7 +1215,7 @@ impl<'lex> Parser<'lex> {
             self.next_var()
         };
 
-        let mut r = Referent { var: var.clone(), noun: Some(noun), quant, mods, owner: None, span: None };
+        let r = Referent { var: var.clone(), noun: Some(noun), quant, mods, owner: None, span: None };
 
         // Parse inline PP on NP (attaches as Pred rather than adjunct to keep NP clean)
         // "the file in the folder" -> NP file with PP as condition
@@ -1136,6 +1253,13 @@ impl<'lex> Parser<'lex> {
                     let raw = w.as_str();
                     if Lexicon::is_function_word(&lw) || Lexicon::is_prep(&lw) { break; }
                     if Self::is_var(raw) || Self::is_name(raw, false) { break; }
+                    // A word directly before "than" is a comparative adjective
+                    // ("bigger than"), never an NP head, whatever the lexicon says.
+                    if !candidates.is_empty()
+                        && matches!(self.toks.get(scan + 1), Some(Tok::Word(n)) if n.eq_ignore_ascii_case("than"))
+                    {
+                        break;
+                    }
                     // Pure verb (not also a noun) stops the NP.
                     // For words that are BOTH noun and verb, stop only if the word is
                     // clearly acting as a verb form:
@@ -1170,14 +1294,21 @@ impl<'lex> Parser<'lex> {
             return (vec![], String::new());
         }
         // Head noun selection (rightmost-first priority):
-        // 1. Rightmost known noun that is not a core verb (not in DEFAULT_VERBS lemmas).
-        // 2. Rightmost known noun (even if also a core verb).
-        // 3. Last candidate word.
+        // 1. Rightmost CORE noun (DEFAULT_NOUNS) that is not a core verb.
+        //    Prevents corpus-seeded comparative adjectives ("bigger") from
+        //    stealing the head from an earlier core noun ("dog").
+        // 2. Rightmost known noun that is not a core verb.
+        // 3. Rightmost known noun (even if also a core verb).
+        // 4. Last candidate word.
         let noun_idx = candidates.iter()
             .rposition(|(_, w)| {
                 let lm = lemmatize(w);
-                self.lex.is_noun(w) && !self.lex.is_core_verb(w) && !self.lex.is_core_verb(&lm)
+                self.lex.is_core_noun(w) && !self.lex.is_core_verb(w) && !self.lex.is_core_verb(&lm)
             })
+            .or_else(|| candidates.iter().rposition(|(_, w)| {
+                let lm = lemmatize(w);
+                self.lex.is_noun(w) && !self.lex.is_core_verb(w) && !self.lex.is_core_verb(&lm)
+            }))
             .or_else(|| candidates.iter().rposition(|(_, w)| self.lex.is_noun(w)))
             .unwrap_or(candidates.len() - 1);
         let noun = candidates[noun_idx].1.clone();
@@ -1330,12 +1461,47 @@ impl<'lex> Parser<'lex> {
 
     fn parse_which_question(&mut self, parts: &mut Parts) -> Result<QuestionKind, ParseError> {
         self.expect_word("which")?;
-        // "Which Noun VP?"
         let (mods, noun) = self.parse_adj_noun();
         let wh_var = self.next_var();
         parts.refs.push(Referent { var: wh_var.clone(), noun: if noun.is_empty() { None } else { Some(noun) }, quant: Quant::Wh, mods, owner: None, span: None });
+        // "Which N should/can/must/may Subject Verb?" -- wh-referent is the object.
+        // Speculative: "Which person should own the task?" has no explicit
+        // subject, so on any failure roll back and treat the wh-referent as subject.
+        let m = self.mark(parts);
+        if let Some(modal) = self.parse_modal() {
+            let negated = self.eat_word("not");
+            match self.try_which_object(parts, &wh_var, modal, negated) {
+                Ok(()) => return Ok(QuestionKind::Which { focus: wh_var }),
+                Err(_) => self.rollback(parts, m),
+            }
+        }
+        // "Which Noun VP?" -- wh-referent is the subject
         self.parse_vp(&wh_var, parts, false, false)?;
         Ok(QuestionKind::Which { focus: wh_var })
+    }
+
+    fn try_which_object(&mut self, parts: &mut Parts, wh_var: &str, modal: Modal, negated: bool) -> Result<(), ParseError> {
+        let subj = self.parse_np(parts)?;
+        let verb_raw = match self.praw() {
+            Some(v) if !Lexicon::is_function_word(&v.to_lowercase()) => v.to_string(),
+            _ => return Err(self.err("Expected verb in which-question")),
+        };
+        self.pos += 1;
+        let verb_lemma = lemmatize(&verb_raw);
+        if !self.lex.is_verb(&verb_lemma) { self.unknowns.push(verb_lemma.clone()); }
+        let adjuncts = self.parse_pps(parts)?;
+        if !self.is_terminator() {
+            return Err(self.err("Expected end of which-question"));
+        }
+        parts.conds.push(Pred {
+            pred: verb_lemma,
+            args: vec![Term::Var { var: subj }, Term::Var { var: wh_var.to_string() }],
+            negated,
+            modal: Some(modal),
+            adjuncts,
+            attr: None,
+        });
+        Ok(())
     }
 
     fn parse_where_question(&mut self, parts: &mut Parts) -> Result<QuestionKind, ParseError> {
@@ -1388,7 +1554,7 @@ impl<'lex> Parser<'lex> {
         let subj = self.parse_np(parts)?;
         // "Is NP not NP?" handle negated
         let negated = self.eat_word("not");
-        // Could be Adj or NP
+        // Could be NP, Adj, or Comparative
         if !self.is_terminator() && !self.at_end() {
             let saved = self.save();
             if let Ok(obj_var) = self.parse_np(parts) {
@@ -1397,9 +1563,19 @@ impl<'lex> Parser<'lex> {
                 return Ok(QuestionKind::YesNo);
             }
             self.restore(saved);
-            // Try adjective
+            // Try comparative: "bigger than NP"
             if let Some(adj) = self.pw() {
-                if !self.is_np_breaker(&adj) {
+                if adj.ends_with("er") || adj.ends_with("-than") {
+                    let saved2 = self.save();
+                    if self.try_comparative(&subj, parts, negated).is_ok() {
+                        return Ok(QuestionKind::YesNo);
+                    }
+                    self.restore(saved2);
+                }
+            }
+            // Try plain adjective
+            if let Some(adj) = self.pw() {
+                if !Lexicon::is_function_word(&adj) && !Lexicon::is_prep(&adj) && !Self::is_var(&adj) {
                     self.pos += 1;
                     let adjuncts = self.parse_pps(parts).unwrap_or_default();
                     parts.conds.push(Pred { pred: "be".to_string(), args: vec![Term::Var { var: subj.clone() }], negated, modal: None, adjuncts, attr: Some(adj) });
@@ -1526,6 +1702,13 @@ impl<'lex> Parser<'lex> {
 
 /// Parse one SCE sentence into a Clause.
 pub fn parse(sentence: &str, lex: &Lexicon) -> Result<(Clause, Vec<String>), ParseError> {
+    parse_traced(sentence, lex).map(|(clause, unknowns, _)| (clause, unknowns))
+}
+
+/// `parse` plus `(consumed, total)` token counts. Test hook for the
+/// no-silent-drop invariant; not part of the public contract.
+#[doc(hidden)]
+pub fn parse_traced(sentence: &str, lex: &Lexicon) -> Result<(Clause, Vec<String>, (usize, usize)), ParseError> {
     // Validate: must end in . ! ?
     let trimmed = sentence.trim();
     if !matches!(trimmed.chars().last(), Some('.') | Some('!') | Some('?')) {
@@ -1549,10 +1732,12 @@ pub fn parse(sentence: &str, lex: &Lexicon) -> Result<(Clause, Vec<String>), Par
                         unknown_words: vec![],
                     });
                 }
-                // "its" is also a pronoun (except in very limited contexts)
+                // "its" is also a pronoun. "it" is a function word and is left
+                // to the parser, so the dummy subject of "it is possible that S"
+                // works and any other "it" surfaces as a leftover token.
                 if lw == "its" {
                     return Err(ParseError {
-                        message: format!("Pronoun 'its' is not allowed in SCE. Use a variable or named referent."),
+                        message: "Pronoun 'its' is not allowed in SCE. Use a variable or named referent.".to_string(),
                         position: Some(i),
                         unknown_words: vec![],
                     });
@@ -1564,8 +1749,16 @@ pub fn parse(sentence: &str, lex: &Lexicon) -> Result<(Clause, Vec<String>), Par
     let mut p = Parser::new(toks, lex);
     match p.parse_sentence(trimmed) {
         Ok(clause) => {
+            // Strict: every token before/at the terminator must be consumed.
+            // If tokens remain, the parse silently dropped content - fail instead.
+            if !p.at_end() {
+                let mut e = p.leftover_err();
+                e.unknown_words = p.unknowns;
+                return Err(e);
+            }
+            let consumed = (p.pos, p.toks.len());
             let unknowns = p.unknowns;
-            Ok((clause, unknowns))
+            Ok((clause, unknowns, consumed))
         }
         Err(mut e) => {
             e.unknown_words = p.unknowns;
