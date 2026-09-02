@@ -7,6 +7,7 @@
   {"move":"greet","utterance":"yo","sce":"User greets Assistant."},
   {"move":"greet","utterance":"yo yo yo","sce":"User greets Assistant."},
   {"move":"greet","utterance":"yoooo wasup","sce":"User greets Assistant."},
+  {"move":"greet","utterance":"yoooo wasup girl","sce":"User greets Assistant."},
   {"move":"greet","utterance":"yoooo wasup girl? how you doin?","sce":"User greets Assistant. What is the wellbeing of Assistant?"},
   {"move":"greet","utterance":"heyyy","sce":"User greets Assistant."},
   {"move":"greet","utterance":"heyy what's up","sce":"User greets Assistant."},

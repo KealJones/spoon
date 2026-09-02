@@ -106,3 +106,4 @@ conversational moves.
 | `data/seed/facts_k8.json` | ekg-ai curriculum-k8.json | MIT |
 | `data/bench/babi_probes.json` | bAbI taxonomy (stories: original) | BSD (taxonomy) |
 | `data/prompts/normalizer_base.md` | ACE normalizer spike | Personal (Keal Jones) |
+| `data/seed/common_words.txt` | Hand-compiled common-English word list | Hand-compiled, no external source |

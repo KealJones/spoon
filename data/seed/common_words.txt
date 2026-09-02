@@ -1,0 +1,709 @@
+# Hand-compiled list of ~2500 common English words for typo-repair exclusion.
+# See ATTRIBUTIONS.md for provenance.
+
+# ---- function words, pronouns, determiners ----
+a an the
+i me my mine myself
+you your yours yourself yourselves
+he him his himself
+she her hers herself
+it its itself
+we us our ours ourselves
+they them their theirs themselves
+that this these those
+which who whom whose what when where why how
+whoever whatever whichever wherever whenever however
+some any no every each all both few many more most other such
+either neither
+the a an
+and or but nor yet so for although because since while unless until if though as
+not no never ever always sometimes often rarely usually
+very quite rather too also just even still only already soon ever just
+here there now then again once
+
+# ---- auxiliary and copula verbs ----
+be is am are was were been being
+do does did done doing
+have has had having
+will would shall should can could may might must
+need dare ought used
+get gets got gotten getting
+let lets
+
+# ---- common lexical verbs (all inflections) ----
+go goes went going gone
+come comes came coming
+see sees saw seen seeing
+know knows knew known knowing
+think thinks thought thinking
+take takes took taken taking
+make makes made making
+say says said saying
+look looks looked looking
+want wants wanted wanting
+give gives gave given giving
+use uses used using
+find finds found finding
+tell tells told telling
+ask asks asked asking
+seem seems seemed seeming
+feel feels felt feeling
+try tries tried trying
+leave leaves left leaving
+call calls called calling
+keep keeps kept keeping
+hold holds held holding
+bring brings brought bringing
+show shows showed shown showing
+put puts putting
+move moves moved moving
+live lives lived living
+believe believes believed believing
+happen happens happened happening
+help helps helped helping
+talk talks talked talking
+turn turns turned turning
+start starts started starting
+set sets set setting
+run runs ran running
+stop stops stopped stopping
+open opens opened opening
+close closes closed closing
+wait waits waited waiting
+work works worked working
+write writes wrote written writing
+play plays played playing
+read reads read reading
+pay pays paid paying
+hear hears heard hearing
+need needs needed needing
+pull pulls pulled pulling
+push pushes pushed pushing
+lose loses lost losing
+buy buys bought buying
+pick picks picked picking
+drop drops dropped dropping
+send sends sent sending
+fall falls fell fallen falling
+eat eats ate eaten eating
+sit sits sat sitting
+stand stands stood standing
+meet meets met meeting
+drive drives drove driven driving
+check checks checked checking
+think thought
+learn learns learned learning
+fix fixes fixed fixing
+break breaks broke broken breaking
+change changes changed changing
+add adds added adding
+stay stays stayed staying
+love loves loved loving
+hate hates hated hating
+like likes liked liking
+miss misses missed missing
+follow follows followed following
+care cares cared caring
+die dies died dying
+kill kills killed killing
+pass passes passed passing
+win wins won winning
+fail fails failed failing
+forget forgets forgot forgotten forgetting
+hit hits hitting
+cut cuts cutting
+build builds built building
+create creates created creating
+include includes included including
+become becomes became becoming
+appear appears appeared appearing
+grow grows grew grown growing
+plan plans planned planning
+walk walks walked walking
+carry carries carried carrying
+explain explains explained explaining
+mean means meant meaning
+try tried
+copy copies copied copying
+upload uploads uploaded uploading
+download downloads downloaded downloading
+install installs installed installing
+run ran
+reply replies replied replying
+share shares shared sharing
+delete deletes deleted deleting
+save saves saved saving
+receive receives received receiving
+receive received
+send sent
+receive receives
+contain contains contained containing
+allow allows allowed allowing
+require requires required requiring
+return returns returned returning
+remember remembers remembered remembering
+understand understands understood understanding
+consider considers considered considering
+describe describes described describing
+provide provides provided providing
+show showed shown
+ask asked
+answer answers answered answering
+decide decides decided deciding
+finish finishes finished finishing
+enter enters entered entering
+choose chooses chose chosen choosing
+agree agrees agreed agreeing
+refuse refuses refused refusing
+
+# ---- common nouns ----
+thing things
+time times
+day days
+way ways
+man men
+woman women
+person people
+year years
+place places
+case cases
+week weeks
+month months
+world worlds
+life lives
+hand hands
+part parts
+word words
+house houses
+home homes
+room rooms
+eye eyes
+city cities
+country countries
+town towns
+road roads
+door doors
+car cars
+dog dogs
+cat cats
+bird birds
+fish fishes
+food foods
+water
+air
+money
+phone phones
+number numbers
+name names
+job jobs
+line lines
+book books
+page pages
+fact facts
+idea ideas
+body bodies
+family families
+friend friends
+group groups
+face faces
+head heads
+mind minds
+heart hearts
+back backs
+voice voices
+power powers
+question questions
+side sides
+answer answers
+point points
+reason reasons
+morning mornings
+night nights
+hours hour
+minute minutes
+second seconds
+story stories
+game games
+problem problems
+area areas
+table tables
+room
+computer computers
+message messages
+screen screens
+type types
+lot lots
+bit bits
+sense
+chance chances
+moment moments
+step steps
+list lists
+fire fires
+floor floors
+land lands
+wall walls
+street streets
+school schools
+work
+plan plans
+form forms
+system systems
+process processes
+result results
+letter letters
+action actions
+service services
+order orders
+class classes
+item items
+kind kinds
+level levels
+picture pictures
+site sites
+note notes
+news
+word
+rule rules
+test tests
+run
+turn
+point
+move moves
+error errors
+code codes
+version versions
+date dates
+file files
+data
+field fields
+value values
+key keys
+type
+set
+line
+user users
+input inputs
+output outputs
+window windows
+button buttons
+link links
+text texts
+place
+post posts
+light lights
+sound sounds
+face
+space spaces
+top
+bottom
+side
+end ends
+start
+term terms
+name
+game
+goal goals
+term
+size sizes
+color colors
+shape shapes
+language languages
+model models
+sentence sentences
+words
+subject subjects
+object objects
+matter matters
+example examples
+table
+figure figures
+content contents
+response responses
+request requests
+account accounts
+project projects
+task tasks
+issue issues
+feature features
+update updates
+change changes
+event events
+state states
+status statuses
+condition conditions
+address addresses
+source sources
+target targets
+method methods
+point
+parent parents
+child children
+package packages
+module modules
+function functions
+class
+object
+log logs
+token tokens
+path paths
+route routes
+base bases
+command commands
+config configs
+option options
+default defaults
+list
+array arrays
+string strings
+object
+error
+server servers
+client clients
+host hosts
+service
+port ports
+network networks
+connection connections
+session sessions
+request
+response
+memory
+cache caches
+query queries
+record records
+schema schemas
+table
+index indices
+role roles
+permission permissions
+token
+key
+secret secrets
+password passwords
+header headers
+body
+parameter parameters
+argument arguments
+variable variables
+constant constants
+function
+method
+property properties
+attribute attributes
+class
+interface interfaces
+package
+format formats
+template templates
+context contexts
+handler handlers
+middleware middlewares
+plugin plugins
+component components
+route
+action action
+callback callbacks
+promise promises
+event
+loop loops
+block blocks
+scope scopes
+namespace namespaces
+import imports
+export exports
+library libraries
+framework frameworks
+tool tools
+util utils
+
+# ---- common adjectives ----
+good great nice bad big small large little long short
+old new young old
+high low fast slow hot cold warm cool
+hard soft easy difficult simple complex
+right wrong correct incorrect true false
+real fake valid invalid
+full empty open closed free
+happy sad angry worried scared excited
+tired hungry thirsty
+pretty ugly beautiful
+clean dirty quiet loud
+important interesting boring funny
+serious strange weird normal
+strong weak heavy light
+rich poor sick healthy
+safe dangerous
+busy ready done
+last first next previous
+best worst better worse
+same different similar
+specific general main extra
+single multiple
+several various
+private public
+local remote
+manual automatic
+old new
+current previous
+previous latest
+main major minor
+basic advanced
+final initial
+average total
+standard default
+possible impossible
+available unavailable
+required optional
+expected unexpected
+successful failed
+positive negative
+equal unequal
+
+# ---- adverbs ----
+very much more most less least
+quite really truly actually
+also too either neither
+just only even still already yet
+soon now then later
+here there
+always never sometimes often rarely usually
+maybe perhaps probably definitely
+already yet
+again
+together apart
+apart together
+probably likely maybe
+actually basically essentially
+apparently obviously clearly
+simply directly quickly slowly
+exactly precisely
+slightly really nearly
+finally eventually
+
+# ---- numbers as words ----
+zero one two three four five six seven eight nine ten
+eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty
+thirty forty fifty sixty seventy eighty ninety
+hundred thousand million billion
+
+# ---- days and months ----
+monday tuesday wednesday thursday friday saturday sunday
+january february march april may june july august september october november december
+
+# ---- question words / discourse ----
+who what when where why how
+which whether
+yeah yep yup yes no nope nah
+ok okay alright sure
+thanks thank thx thank you
+please pls plz
+hello hi hey yo
+bye goodbye good
+sorry excuse
+right exactly correct
+yeah
+
+# ---- internet-casual / informal ----
+lol lmao lmfao omg omfg wtf tbh imo imho fyi irl afaik afaict
+gonna wanna gotta hafta tryna kinda sorta
+haha hehe hahaha
+dude bro girl guy mate pal buddy
+bff bestie
+yeah yep nah
+ok okay
+hey yo hi
+thanks thx
+pls plz
+ur u r y k
+cya c ya
+brb ttyl
+asap
+tbh
+ngl
+smh
+oof
+meh
+yikes
+lowkey highkey
+literally actually basically
+the thing is
+vibe vibes
+slay slays slaying
+deadass
+fr fr
+no cap
+facts
+period
+based
+salty
+clout
+lit
+fire
+goat
+fam
+sus
+extra
+savage
+real talk
+tea
+shade
+ghosting ghost ghosts
+dm dms
+rn
+imo
+nbd
+it's
+that's
+what's
+don't
+can't
+won't
+isn't
+aren't
+doesn't
+didn't
+haven't
+hadn't
+wasn't
+weren't
+couldn't
+wouldn't
+shouldn't
+mustn't
+it'll
+he'll
+she'll
+we'll
+they'll
+i'm
+you're
+he's
+she's
+it's
+we're
+they're
+i've
+you've
+we've
+they've
+i'd
+you'd
+he'd
+she'd
+we'd
+they'd
+i'll
+let's
+that's
+there's
+here's
+who's
+what's
+how's
+where's
+when's
+why's
+
+# ---- common short words that get mangled ----
+am an as at be by do go he if in is it me my no of on or so to up us we
+ago ago
+all all
+and and
+any any
+are are
+ask
+but but
+buy
+can can
+did
+end
+few
+for for
+get got
+had
+him him
+his
+how
+its
+let
+may
+new
+nor
+not
+now
+old
+one
+our
+out
+own
+ran ran
+run
+see
+set
+six
+ten
+the
+two
+too
+try
+use
+who
+why
+you
+yet
+ago
+app
+big
+bit
+boy
+bug
+bus
+cry
+cup
+cut
+dad
+day
+ear
+eat
+egg
+far
+fit
+fun
+gas
+hat
+hot
+ice
+jam
+kid
+law
+leg
+map
+mom
+net
+oil
+pay
+pet
+pig
+pit
+pop
+pot
+put
+row
+say
+sit
+six
+sky
+sun
+tab
+tag
+tax
+tip
+try
+van
+war
+win
+zip
+
+# ---- common question-sentence starters ----
+what where when who why how does do did is are was were will would can could should shall have has had
