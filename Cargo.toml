@@ -20,7 +20,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 rusqlite = { version = "0.37", features = ["bundled", "serde_json"] }
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"], default-features = false }
-axum = "0.8"
+axum = { version = "0.8", features = ["macros"] }
 tower-http = { version = "0.6", features = ["cors"] }
 clap = { version = "4", features = ["derive"] }
 chrono = { version = "0.4", features = ["serde"] }
@@ -35,6 +35,7 @@ unicode-segmentation = "1"
 rust-stemmers = "1"
 async-trait = "0.1"
 parking_lot = "0.12"
+tempfile = "3"
 
 [profile.release]
 opt-level = 3

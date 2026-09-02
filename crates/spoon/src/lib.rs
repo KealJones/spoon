@@ -38,6 +38,7 @@ pub async fn run() -> anyhow::Result<()> {
         mouth_model: cli.mouth_model.clone().unwrap_or(defaults.mouth_model),
         teacher_model: cli.teacher_model.clone().unwrap_or(defaults.teacher_model),
         permission_mode,
+        data_dir: None,
     };
 
     match cli.command {
