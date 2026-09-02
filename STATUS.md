@@ -6,9 +6,37 @@ not that a type exists. Decisions live in PLAN.md; rules in AGENTS.md.
 
 ---
 
-## 2026-09-02 07:15  Parser round landed; unknown nouns WIP (commit 077cb92)
+## 2026-09-02 07:30  Unknown nouns + lookup chain landed (commit e8ccd23)
 
-DONE: babi **11/21 -> 18/21** offline (`cargo run -q -p spoon -- --ephemeral --offline bench babi`), demo 19/19, spoon-lang 32/32 sce tests, corpus parse rate 86.1% unchanged.
+DONE (315 tests, 0 warnings, demo 19/19)
+- Ears `judge_direct`: accept parses with known frame (copula, known verb, modal)
+  when unknowns are only Names, head nouns, or modifiers. Junk still fails.
+  Typo repair fix: no more `heroes` -> `heres`.
+- Provisional nouns/names: learned on successful parse, persisted in
+  `seed.nouns` / `seed.names`, gate + ears updated. `brain/turn.rs` extracted;
+  `brain/lookup.rs` (371 lines): WordNet hypernyms (offline, `What is a dog?`
+  -> animal), Wikidata via `know.wikidata_describe` (network + permission),
+  Teacher `concept_for` (async, same turn re-dispatch).
+- Proven on parseable shapes: `John is a fictional hero.`, `Blorp is a happy
+  dog.`, `User sees the movie tomorrow.` all Direct at 0.85.
+
+AVENGERS STILL BLOCKED (parser, not ears/mind)
+- `The Avengers are fictional super heroes.` -> `Expected noun phrase`
+- `Dogs are happy animals.` fails with seed vocabulary only -> plural
+  predicate nominal gap in `sce/parser.rs`
+- `User sees the Avengers movie tomorrow.` -> `unexpected 'the' at 2`
+- Normalizer also downcases `The Avengers` and leaves predicate plural;
+  `#[ignore]` test `avengers_lines_from_the_bug_report` holds the contract.
+
+NEXT
+1. Parser: plural predicate NP (`Dogs are happy animals.`), definite proper
+   name (`The Avengers`), name-as-NP-modifier (`Avengers movie`). Small round.
+2. Discourse: `maybe` for unresolved `or` (babi fam 10); universal color (fam 15).
+3. Mouth stance check.
+
+## 2026-09-02 07:15  Parser round landed (commit 077cb92)
+
+DONE: babi **11/21 -> 18/21** offline, demo 19/19, spoon-lang 32/32 sce tests.
 - Locative copula: `Is Mary in the garden?` -> `location` property on subject.
 - Relational PP: `What is south of the office?`, `to the left of` multiword prep.
 - Stranded preposition: `Who does John give the apple to?`
@@ -19,14 +47,7 @@ DONE: babi **11/21 -> 18/21** offline (`cargo run -q -p spoon -- --ephemeral --o
 BABI REMAINING (3/21, discourse not parser)
 - fam 10: `Is Mary in the kitchen?` expects `maybe` (two candidate locations from `or`; discourse picks first -> `yes`).
 - fam 15: `What color is every wolf?` needs universal property binding + `Every wolf is white.` -> `rel.color` fact.
-- fam 17: probe may have wrong expected answer (`left` vs `the bag`); parser returns correct `the bag`.
-
-IN PROGRESS (uncommitted WIP on disk): unknown nouns agent (`brain/lookup.rs`, `brain/nouns.rs`, ears acceptance policy). Avengers line still Failed until that lands.
-
-NEXT
-1. Finish unknown nouns commit (accept unknown vocabulary, WordNet lookup, Wikidata, teacher concept_for).
-2. Discourse: `maybe` for unresolved disjunction; universal color facts.
-3. Mouth stance check. 4. parser.rs split into submodules (~2000 lines, mechanical).
+- fam 17: probe may have wrong expected answer (`left` vs `the bag`).
 
 ## 2026-09-02 06:10  Ears r5 + discourse + inspector landed (commits 545250d, 0430450, 1fdded3)
 
