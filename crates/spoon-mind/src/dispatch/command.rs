@@ -8,7 +8,7 @@ use crate::discourse::Binding;
 
 use crate::discourse::DiscourseState;
 
-use super::{arith, DispatchCtx, Dispatched};
+use super::{arith, DispatchCtx, Dispatched, Present};
 
 /// Dispatch a Command clause.
 pub fn dispatch_command(
@@ -44,6 +44,7 @@ pub fn dispatch_command(
         Ok(Dispatched::Plan {
             intent: Intent { goal: Goal::Action { action: action_id.clone() }, signals, routes: vec![action_id], sce },
             moves_before: vec![],
+            present: Present::Result,
         })
     } else {
         // Unknown verb: one move that asks for SCE facts the brain can learn from.

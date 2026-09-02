@@ -265,7 +265,7 @@ impl Brain {
 
         // 1. Pending state: the user may be answering something we asked.
         // Checked before the ears so a bare "yes" or "cd" never costs an LLM call.
-        if let Some(plan) = self.answer_pending(session_id, text, &mut ears, &mut out.trace) {
+        if let Some(plan) = self.answer_pending(session_id, text, &mut ears, &mut out.flags, &mut out.trace) {
             return self.finalize_turn(session_id, text, out.reply(plan), &started).await;
         }
 
@@ -289,8 +289,16 @@ impl Brain {
                             s.pending = None;
                         }
                     });
-                    out.plan =
-                        self.run_learned(&outcome, &req.verb, &req.signals, &req.sce, session_id, true, &mut out.trace)?;
+                    out.plan = self.run_learned(
+                        &outcome,
+                        &req.verb,
+                        &req.signals,
+                        &req.sce,
+                        session_id,
+                        true,
+                        &mut out.flags,
+                        &mut out.trace,
+                    )?;
                 }
                 Err(e) => {
                     if self.cfg.debug {
@@ -319,12 +327,13 @@ impl Brain {
         session_id: &str,
         text: &str,
         ears: &mut Ears,
+        flags: &mut TurnFlags,
         trace: &mut Vec<String>,
     ) -> Option<ResponsePlan> {
         let pending = self.with_session(session_id, |s| s.pending.take())?;
         match pending {
-            Pending::Exec { intent, plan, state, kind } => {
-                match self.resume_exec(text, &intent, plan, state, &kind, session_id, trace) {
+            Pending::Exec { intent, plan, state, kind, present } => {
+                match self.resume_exec(text, &intent, plan, state, &kind, &present, session_id, flags, trace) {
                     ResumeResult::Done(plan) => Some(plan),
                     ResumeResult::NotAnAnswer => {
                         if self.cfg.debug {
@@ -335,7 +344,7 @@ impl Brain {
                 }
             }
             Pending::UnknownVerb { verb, sce, signals } => {
-                self.handle_unknown_verb_followup(session_id, text, &verb, &sce, &signals, ears, trace)
+                self.handle_unknown_verb_followup(session_id, text, &verb, &sce, &signals, ears, flags, trace)
             }
         }
     }
@@ -448,13 +457,11 @@ impl Brain {
         // 6. Act on the dispatch.
         let plan = match dispatched {
             Dispatched::Moves(moves) => ResponsePlan::new(moves),
-            Dispatched::Plan { intent, moves_before } => self.handle_plan(&intent, moves_before, session_id, trace)?,
+            Dispatched::Plan { intent, moves_before, present } => {
+                self.handle_plan(&intent, moves_before, &present, session_id, &mut out.flags, trace)?
+            }
             Dispatched::UnknownCapability { verb, signals, sce, fallback } => match self.learn_from_examples(&verb) {
-                Ok(outcome) => {
-                    out.flags.synthesis_attempted = true;
-                    out.flags.synthesis_succeeded = true;
-                    self.run_learned(&outcome, &verb, &signals, &sce, session_id, false, trace)?
-                }
+                Ok(outcome) => self.run_learned(&outcome, &verb, &signals, &sce, session_id, false, &mut out.flags, trace)?,
                 Err(short) => {
                     out.flags.synthesis_attempted = short.have >= 2;
                     if self.cfg.debug {
@@ -488,10 +495,17 @@ impl Brain {
             trace.push(format!("response: {} moves", plan.moves.len()));
         }
 
-        let prior_turns = self.with_session(session_id, |s| s.prior_turns.clone());
-        let ctx = RenderContext { user_text: text.to_string(), prior_turns };
         let t_mouth = Instant::now();
-        let (reply, path) = self.mouth.say(&plan, &ctx).await;
+        let (reply, path) = if ears_path == EarsPath::Failed {
+            // Nothing was understood, so there is nothing to rephrase: the
+            // template says exactly what the plan says and never quotes the
+            // user's text back (the LLM prompt would carry it).
+            (self.mouth.say_offline(&plan), MouthPath::Template)
+        } else {
+            let prior_turns = self.with_session(session_id, |s| s.prior_turns.clone());
+            let ctx = RenderContext { user_text: text.to_string(), prior_turns };
+            self.mouth.say(&plan, &ctx).await
+        };
         let ms_mouth = t_mouth.elapsed().as_millis() as u64;
 
         self.with_session(session_id, |s| {
@@ -511,11 +525,12 @@ impl Brain {
             ears_llm_calls: ears_after.saturating_sub(ears_before),
             mouth_llm_calls: mouth_after.saturating_sub(mouth_before),
             teacher_llm_calls: teacher_after.saturating_sub(teacher_before),
-            plan_steps: 0,
+            plan_steps: flags.plan_steps,
             synthesis_attempted: flags.synthesis_attempted,
             synthesis_succeeded: flags.synthesis_succeeded,
             teacher_fallback: flags.teacher_fallback,
-            reused_learned_action: false,
+            // An action synthesized this turn is new, not reused.
+            reused_learned_action: flags.used_learned_action && !flags.synthesis_succeeded,
             ms_ears: 0,
             ms_interior: (started.elapsed().as_millis() as u64).saturating_sub(ms_mouth),
             ms_mouth,
@@ -568,11 +583,15 @@ struct SyncTurnResult {
     llm_before: (u32, u32, u32, u32),
 }
 
+/// What happened this turn, for `TurnMetrics`. Filled by the brain submodules.
 #[derive(Default)]
-struct TurnFlags {
-    synthesis_attempted: bool,
-    synthesis_succeeded: bool,
-    teacher_fallback: bool,
+pub(crate) struct TurnFlags {
+    pub synthesis_attempted: bool,
+    pub synthesis_succeeded: bool,
+    pub teacher_fallback: bool,
+    /// A plan ran an action with a non-Kernel tier.
+    pub used_learned_action: bool,
+    pub plan_steps: usize,
 }
 
 struct TeacherRequest {

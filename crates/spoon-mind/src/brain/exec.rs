@@ -4,11 +4,12 @@ use spoon_core::can::Can;
 use spoon_core::kernel::{eval, Budget, Ctx, EvalError};
 use spoon_core::types::*;
 
+use crate::dispatch::Present;
 use crate::plan::{ExecOutcome, ExecState, Executor, Planner};
 
-use super::respond::{elicited_text, exec_result_plan, parse_choice, parse_permission};
+use super::respond::{elicited_text, parse_choice, parse_permission, present_result};
 use super::session::{Pending, PendingExecKind};
-use super::{Brain, BrainHost};
+use super::{Brain, BrainHost, TurnFlags};
 
 pub(super) enum ResumeResult {
     Done(ResponsePlan),
@@ -38,7 +39,9 @@ impl Brain {
         &self,
         intent: &Intent,
         moves_before: Vec<Move>,
+        present: &Present,
         session_id: &str,
+        flags: &mut TurnFlags,
         trace: &mut Vec<String>,
     ) -> anyhow::Result<ResponsePlan> {
         let outcome = Planner::new(&self.can.lock()).plan(intent, &Default::default());
@@ -52,7 +55,7 @@ impl Brain {
                         plan.effect
                     ));
                 }
-                Ok(self.run_plan(intent, plan, ExecState::default(), moves_before, session_id, trace))
+                Ok(self.run_plan(intent, plan, ExecState::default(), present, moves_before, session_id, flags, trace))
             }
             PlanOutcome::NoProducer { .. } | PlanOutcome::UnknownAction { .. } => {
                 let mut moves = moves_before;
@@ -70,13 +73,16 @@ impl Brain {
     /// Run (or continue) a plan. The host locks the store itself, so the
     /// brain holds only the CAN lock across the executor call. When the
     /// executor needs the user, the state is parked in the session.
+    #[allow(clippy::too_many_arguments)]
     fn run_plan(
         &self,
         intent: &Intent,
         plan: Plan,
         mut state: ExecState,
+        present: &Present,
         moves_before: Vec<Move>,
         session_id: &str,
+        flags: &mut TurnFlags,
         trace: &mut Vec<String>,
     ) -> ResponsePlan {
         let outcome = {
@@ -88,7 +94,13 @@ impl Brain {
         };
 
         let mut moves = moves_before;
-        let park = |kind: PendingExecKind| Pending::Exec { intent: intent.clone(), plan: plan.clone(), state, kind };
+        let park = |kind: PendingExecKind| Pending::Exec {
+            intent: intent.clone(),
+            plan: plan.clone(),
+            state,
+            kind,
+            present: present.clone(),
+        };
         let pending = match outcome {
             ExecOutcome::Done { value, trace: steps } => {
                 if self.cfg.debug {
@@ -96,10 +108,14 @@ impl Brain {
                 }
                 let mut can = self.can.lock();
                 for aid in plan.actions() {
+                    if can.action(&aid).is_some_and(|a| a.tier != Tier::Kernel) {
+                        flags.used_learned_action = true;
+                    }
                     can.touch(&aid, true);
                 }
+                flags.plan_steps = plan.action_count();
                 let goal = plan.actions().into_iter().last().unwrap_or_else(|| ActionId("unknown".into()));
-                return exec_result_plan(value, &goal, plan.action_count(), moves);
+                return present_result(present, value, &goal, plan.action_count(), moves);
             }
             ExecOutcome::NeedInput { node, ty, input_name, for_action, .. } => {
                 moves.push(Move::Elicit { input_name, ty: ty.clone(), for_action });
@@ -124,6 +140,7 @@ impl Brain {
     }
 
     /// The user replied while a plan was paused. Feed the answer in and run on.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn resume_exec(
         &self,
         text: &str,
@@ -131,7 +148,9 @@ impl Brain {
         plan: Plan,
         mut state: ExecState,
         kind: &PendingExecKind,
+        present: &Present,
         session_id: &str,
+        flags: &mut TurnFlags,
         trace: &mut Vec<String>,
     ) -> ResumeResult {
         match kind {
@@ -169,6 +188,6 @@ impl Brain {
                 None => return ResumeResult::NotAnAnswer,
             },
         }
-        ResumeResult::Done(self.run_plan(intent, plan, state, vec![], session_id, trace))
+        ResumeResult::Done(self.run_plan(intent, plan, state, present, vec![], session_id, flags, trace))
     }
 }

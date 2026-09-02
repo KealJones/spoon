@@ -3,7 +3,7 @@
 
 use spoon_core::types::{Move, Quant, Role, Term};
 
-use crate::discourse::{assert_grounded, AssertOutcome, DiscourseState, FactWriter, Grounded};
+use crate::discourse::{assert_grounded, sub_clause_text, AssertOutcome, DiscourseState, FactWriter, Grounded};
 
 use super::{render_fact, DispatchCtx, Dispatched};
 
@@ -245,7 +245,7 @@ fn small_talk_policy(
         // Check for embedded clause (Sub).
         let summary = pred.args.iter().find_map(|t| {
             if let Term::Sub { clause } = t {
-                Some(compact_sce(&clause.sce))
+                Some(compact_sce(&sub_clause_text(&g.clause.sce, clause)))
             } else {
                 None
             }

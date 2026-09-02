@@ -379,7 +379,11 @@ fn process_regular_pred(
 ) -> Option<(ActionId, Fact)> {
     let mut args: Vec<Value> = Vec::new();
     for term in &pred.args {
-        let v = resolve_term(term, bindings)?;
+        let v = match term {
+            // "User thinks that dogs are great." keeps the user's words.
+            Term::Sub { clause } => Value::Text(super::realize::sub_clause_text(sce, clause)),
+            _ => resolve_term(term, bindings)?,
+        };
         args.push(v);
     }
     // Adjuncts: add as extra args.

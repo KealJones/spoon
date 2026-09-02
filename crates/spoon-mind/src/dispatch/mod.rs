@@ -5,6 +5,7 @@ pub mod arith;
 mod command;
 mod dialog;
 mod opinion;
+mod property;
 mod selfmodel;
 
 use spoon_core::can::Can;
@@ -15,6 +16,7 @@ use spoon_core::types::{Act, Fact, Intent, Move, QuestionKind, Signal, Value};
 use crate::discourse::{answer_grounded, assert_grounded, Answer, DiscourseState, FactWriter, Grounded};
 
 pub use command::ask_examples_move;
+pub use property::Present;
 
 // ---- Public types ---------------------------------------------------------
 
@@ -40,8 +42,10 @@ pub enum TeacherAsk {
 pub enum Dispatched {
     /// Fully handled. Moves in the order they should be said.
     Moves(Vec<Move>),
-    /// A Command resolved to a known action; the brain plans and executes it.
-    Plan { intent: Intent, moves_before: Vec<Move> },
+    /// A Command (or a property question with no stored fact) resolved to a
+    /// known action; the brain plans and executes it, then presents the value
+    /// as `present` says.
+    Plan { intent: Intent, moves_before: Vec<Move>, present: Present },
     /// A Command whose verb matches no action.
     UnknownCapability { verb: String, signals: Vec<Signal>, sce: String, fallback: Vec<Move> },
     /// Something the teacher could supply.
@@ -82,9 +86,9 @@ pub fn dispatch_turn(
             Dispatched::Moves(mut mvs) => {
                 accumulated_moves.append(&mut mvs);
             }
-            Dispatched::Plan { intent, mut moves_before } => {
+            Dispatched::Plan { intent, mut moves_before, present } => {
                 moves_before.splice(0..0, accumulated_moves);
-                return Ok(Dispatched::Plan { intent, moves_before });
+                return Ok(Dispatched::Plan { intent, moves_before, present });
             }
             Dispatched::UnknownCapability { verb, signals, sce, mut fallback } => {
                 fallback.splice(0..0, accumulated_moves);
@@ -139,9 +143,13 @@ fn dispatch_question(
         }
     }
 
-    // 2. Opinion questions.
+    // 2. Opinion questions: Spoon's own views, then views the user reported
+    // ("What does User think about dogs?").
     if opinion::is_opinion_question(g) {
         return opinion::handle_opinion(ctx, g, state);
+    }
+    if let Some(d) = opinion::handle_reported_view(ctx, g, kind) {
+        return Ok(d);
     }
 
     // 3. Advice questions.
@@ -152,12 +160,8 @@ fn dispatch_question(
     // 4. Standard fact lookup.
     let answer = answer_grounded(ctx.can, ctx.store, g, kind)?;
     let dispatched = match answer {
-        Answer::Values(vs) => {
-            if vs.is_empty() {
-                Dispatched::Moves(vec![unknown_move(g, kind)])
-            } else {
-                Dispatched::Moves(vec![Move::Answer { question: sce, values: vs, source: Some("memory".into()) }])
-            }
+        Answer::Values(vs) if !vs.is_empty() => {
+            Dispatched::Moves(vec![Move::Answer { question: sce, values: vs, source: Some("memory".into()) }])
         }
         Answer::YesNo(b, fact) => {
             let because = fact.map(|f| render_fact(ctx, &f));
@@ -170,7 +174,12 @@ fn dispatch_question(
                 source: Some("memory".into()),
             }])
         }
-        Answer::Unknown { .. } => {
+        Answer::Values(_) | Answer::Unknown { .. } => {
+            // 5. No fact: a property question may name a capability
+            // ("What is the double of 100?" runs the learned `double`).
+            if let Some(d) = property::compute(ctx, g, kind) {
+                return Ok(d);
+            }
             // Check for arithmetic term in conditions.
             let has_arith = g.clause.conditions.iter().any(|p| {
                 p.args.iter().any(|t| matches!(t, spoon_core::types::Term::Arith { .. }))

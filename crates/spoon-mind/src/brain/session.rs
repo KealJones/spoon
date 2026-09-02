@@ -3,6 +3,7 @@
 use spoon_core::types::*;
 
 use crate::discourse::DiscourseState;
+use crate::dispatch::Present;
 
 /// What the brain is waiting for from the user on the next turn.
 #[derive(Debug)]
@@ -13,6 +14,8 @@ pub enum Pending {
         plan: Plan,
         state: crate::plan::ExecState,
         kind: PendingExecKind,
+        /// How to present the value once the plan completes.
+        present: Present,
     },
     /// We asked for examples of an unknown verb.
     UnknownVerb {

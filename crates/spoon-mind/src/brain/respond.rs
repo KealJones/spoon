@@ -3,6 +3,47 @@
 use spoon_core::can::Can;
 use spoon_core::types::*;
 
+use crate::dispatch::Present;
+
+/// Present a finished plan's value the way the dispatcher asked: a command
+/// result, a computed answer, or a yes/no comparison.
+pub fn present_result(
+    present: &Present,
+    value: Value,
+    action_id: &ActionId,
+    steps: usize,
+    moves_before: Vec<Move>,
+) -> ResponsePlan {
+    match present {
+        Present::Result => exec_result_plan(value, action_id, steps, moves_before),
+        Present::Answer { question } => {
+            let mut moves = moves_before;
+            moves.push(Move::Answer { question: question.clone(), values: vec![value], source: Some("computed".into()) });
+            ResponsePlan::new(moves)
+        }
+        Present::YesNo { question, subject, want } => {
+            let mut moves = moves_before;
+            moves.push(Move::YesNo {
+                question: question.clone(),
+                answer: values_match(&value, want),
+                because: Some(format!("{subject} is {}", value.render())),
+            });
+            ResponsePlan::new(moves)
+        }
+    }
+}
+
+/// Equality as a user means it: 6 == 6.0, "Wednesday" == Wednesday.
+fn values_match(a: &Value, b: &Value) -> bool {
+    match (a.as_f64(), b.as_f64()) {
+        (Some(x), Some(y)) => (x - y).abs() < 1e-9,
+        _ => match (a.as_str(), b.as_str()) {
+            (Some(x), Some(y)) => x.eq_ignore_ascii_case(y),
+            _ => a == b,
+        },
+    }
+}
+
 /// Build a ResponsePlan from executor outcome, merging accumulated moves.
 pub fn exec_result_plan(
     value: Value,
@@ -149,5 +190,26 @@ mod tests {
     fn elicited_text_strips_quotes_and_period() {
         assert_eq!(elicited_text("\"cd\"."), "cd");
         assert_eq!(elicited_text(" , "), ",");
+    }
+
+    #[test]
+    fn yes_no_presentation_compares_like_a_user() {
+        assert!(values_match(&Value::Float(6.0), &Value::Int(6)));
+        assert!(!values_match(&Value::Float(6.0), &Value::Int(7)));
+        assert!(values_match(&Value::text("Wednesday"), &Value::name("wednesday")));
+        let present = Present::YesNo { question: "Is the double of 3 6?".into(), subject: "the double of 3".into(), want: Value::Int(6) };
+        let plan = present_result(&present, Value::Float(6.0), &ActionId("learned.double".into()), 1, vec![]);
+        assert!(
+            matches!(plan.moves.as_slice(), [Move::YesNo { answer: true, because: Some(b), .. }] if b == "the double of 3 is 6"),
+            "got {:?}",
+            plan.moves
+        );
+        let present = Present::Answer { question: "What is the double of 100?".into() };
+        let plan = present_result(&present, Value::Float(200.0), &ActionId("learned.double".into()), 1, vec![]);
+        assert!(
+            matches!(plan.moves.as_slice(), [Move::Answer { source: Some(s), .. }] if s == "computed"),
+            "got {:?}",
+            plan.moves
+        );
     }
 }

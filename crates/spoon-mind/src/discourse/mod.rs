@@ -9,6 +9,7 @@ mod correction;
 mod facts;
 mod ground;
 mod keywords;
+mod realize;
 mod rules;
 
 pub use correction::{detect as detect_correction, detect_clause as detect_clause_correction, Correction};
@@ -17,6 +18,7 @@ pub use facts::{
 };
 pub use ground::ground;
 pub use keywords::extract as extract_keywords;
+pub use realize::{concept_name, realize_fact, sub_clause_text};
 pub use rules::{add_rule, forward_chain, universal_to_rule, Rule};
 
 use std::collections::HashMap;

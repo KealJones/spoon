@@ -339,6 +339,134 @@ async fn plan_with_placeholder() {
 }
 
 // ---------------------------------------------------------------------------
+// Property questions reach capabilities when memory has no fact
+// ---------------------------------------------------------------------------
+
+fn computed_answer(r: &spoon_mind::brain::TurnResult) -> Option<&Value> {
+    match r.episode.response.moves.as_slice() {
+        [Move::Answer { values, source: Some(src), .. }] if src == "computed" => values.first(),
+        _ => None,
+    }
+}
+
+#[tokio::test]
+async fn property_question_runs_the_learned_action() {
+    let brain = test_brain().await;
+    say(&brain, "Assistant, double 21!").await;
+    say(&brain, "The double of 3 is 6.").await;
+    assert!(say(&brain, "The double of 5 is 10.").await.contains("42"));
+
+    let r = brain.turn("test", "What is the double of 100?").await.unwrap();
+    assert_eq!(r.episode.metrics.interior_llm_calls, 0);
+    assert!(r.text.contains("200"), "got: {}", r.text);
+    assert_eq!(computed_answer(&r), Some(&Value::Int(200)), "moves: {:?}", r.episode.response.moves);
+    assert!(r.episode.metrics.reused_learned_action, "metrics: {:?}", r.episode.metrics);
+    assert_eq!(r.episode.metrics.plan_steps, 1);
+
+    // Yes/no: compute and compare, with the computed value as the reason.
+    let r = brain.turn("test", "Is the double of 3 6?").await.unwrap();
+    assert_eq!(r.episode.metrics.interior_llm_calls, 0);
+    assert!(
+        matches!(r.episode.response.moves.as_slice(), [Move::YesNo { answer: true, because: Some(b), .. }] if b == "the double of 3 is 6"),
+        "got {:?}",
+        r.episode.response.moves
+    );
+    assert!(r.text.starts_with("yes"), "got: {}", r.text);
+    let r = say(&brain, "Is the double of 3 7?").await;
+    assert!(r.starts_with("no"), "got: {r}");
+    // Values never stated as facts compute too.
+    assert!(say(&brain, "Is the double of 4 8?").await.starts_with("yes"));
+    assert!(say(&brain, "Is the double of 4 9?").await.starts_with("no"));
+}
+
+#[tokio::test]
+async fn property_question_runs_a_kernel_action() {
+    let brain = test_brain().await;
+    let r = brain.turn("test", "What is the reverse of \"abc\"?").await.unwrap();
+    assert_eq!(r.episode.metrics.interior_llm_calls, 0);
+    assert_eq!(computed_answer(&r), Some(&Value::text("cba")), "moves: {:?}", r.episode.response.moves);
+    assert!(!r.episode.metrics.reused_learned_action, "kernel actions are not learned");
+    assert!(r.text.contains("cba"), "got: {}", r.text);
+
+    let r = brain.turn("test", "What is the length of \"abc\"?").await.unwrap();
+    assert_eq!(computed_answer(&r), Some(&Value::Int(3)), "moves: {:?}", r.episode.response.moves);
+
+    // No capability named `color`: the unknown stays honest.
+    assert_eq!(say(&brain, "What is the color of the dog?").await, "I don't know the color of the dog.");
+    // A stored fact still wins over computing.
+    say(&brain, "The reverse of \"xy\" is \"zz\".").await;
+    let r = brain.turn("test", "What is the reverse of \"xy\"?").await.unwrap();
+    assert!(r.text.contains("zz") && r.text.contains("memory"), "got: {}", r.text);
+}
+
+#[tokio::test]
+async fn time_questions_reach_the_clock() {
+    let brain = test_brain().await;
+    let r = brain.turn("test", "What is the time?").await.unwrap();
+    assert_eq!(r.episode.metrics.interior_llm_calls, 0);
+    assert!(
+        matches!(computed_answer(&r), Some(Value::DateTime(_))),
+        "moves: {:?}",
+        r.episode.response.moves
+    );
+    let r = brain.turn("test", "What is the hour?").await.unwrap();
+    assert!(
+        matches!(computed_answer(&r), Some(Value::Int(h)) if (0..24).contains(h)),
+        "moves: {:?}",
+        r.episode.response.moves
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Failed ears: ask to rephrase without quoting the user
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn failed_ears_reply_never_echoes_the_utterance() {
+    let brain = test_brain().await;
+    let utterance = "zxqv flarp wibble";
+    let r = brain.turn("test", utterance).await.unwrap();
+    assert_eq!(r.episode.metrics.interior_llm_calls, 0);
+    assert_eq!(r.episode.metrics.ears_path, Some(EarsPath::Failed));
+    assert_eq!(r.mouth_path, "template", "failed-ears clarifications skip the mouth LLM");
+    assert!(!r.text.contains(utterance), "reply echoes the utterance: {}", r.text);
+    assert!(r.text.contains("rephrase"), "got: {}", r.text);
+    assert!(matches!(r.episode.response.moves.as_slice(), [Move::Clarify { .. }]), "got {:?}", r.episode.response.moves);
+}
+
+// ---------------------------------------------------------------------------
+// Opinions: the user's noun, known facts, reported views
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn opinion_fallback_uses_the_users_noun_and_known_facts() {
+    let brain = test_brain().await;
+    let r = say(&brain, "What does Assistant think about dogs?").await;
+    assert!(r.contains("view on dogs yet"), "got: {r}");
+    assert!(!r.contains("on dog "), "lemma leaked: {r}");
+
+    say(&brain, "John owns a dog.").await;
+    let r = say(&brain, "What does Assistant think about dogs?").await;
+    assert_eq!(r, "i don't have a view on dogs yet, but i know John owns a dog. what do you think?");
+}
+
+#[tokio::test]
+async fn reported_view_is_stored_and_read_back() {
+    let brain = test_brain().await;
+    let r = say(&brain, "User thinks that dogs are great.").await;
+    assert!(r.contains("dogs are great"), "got: {r}");
+
+    let r = brain.turn("test", "What does User think about dogs?").await.unwrap();
+    assert_eq!(r.episode.metrics.interior_llm_calls, 0);
+    assert!(
+        matches!(r.episode.response.moves.as_slice(), [Move::Answer { values, source: Some(s), .. }] if s == "memory" && values == &[Value::text("dogs are great")]),
+        "got {:?}",
+        r.episode.response.moves
+    );
+    assert_eq!(say(&brain, "What does User think about cats?").await, "i don't know what you think about cats yet");
+}
+
+// ---------------------------------------------------------------------------
 // BrainHost sees the store
 // ---------------------------------------------------------------------------
 

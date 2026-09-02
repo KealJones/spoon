@@ -9,14 +9,14 @@ use spoon_core::store::Store;
 use spoon_core::types::*;
 
 use crate::discourse::{self, ground_all, Entity};
-use crate::dispatch::ask_examples_move;
+use crate::dispatch::{ask_examples_move, Present};
 use crate::grow::{self, SynthBudget, SynthOutcome};
 
 use spoon_lang::ears::{Ears, Gate};
 
 use super::respond::describe_program;
 use super::session::Pending;
-use super::Brain;
+use super::{Brain, TurnFlags};
 
 /// kv key under which word synonyms persist. The `seed.` prefix makes them
 /// part of `spoon export`.
@@ -176,6 +176,7 @@ impl Brain {
     }
 
     /// Run the command that triggered learning and report what was learned.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn run_learned(
         &self,
         outcome: &LearnOutcome,
@@ -184,15 +185,18 @@ impl Brain {
         sce: &str,
         session_id: &str,
         from_teacher: bool,
+        flags: &mut TurnFlags,
         trace: &mut Vec<String>,
     ) -> anyhow::Result<ResponsePlan> {
+        flags.synthesis_attempted = true;
+        flags.synthesis_succeeded = true;
         let intent = Intent {
             goal: Goal::Action { action: outcome.action.id.clone() },
             signals: signals.to_vec(),
             routes: vec![outcome.action.id.clone()],
             sce: sce.to_string(),
         };
-        let mut plan = self.handle_plan(&intent, vec![], session_id, trace)?;
+        let mut plan = self.handle_plan(&intent, vec![], &Present::Result, session_id, flags, trace)?;
         let source = if from_teacher { " (from the teacher)" } else { "" };
         plan.push(Move::Learned { what: format!("{verb} = {}{source}", outcome.description) });
         Ok(plan)
@@ -224,6 +228,7 @@ impl Brain {
 
     /// The user answered a request for examples. Store any facts they stated,
     /// then try to learn again. `None` means the text was not an answer.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn handle_unknown_verb_followup(
         &self,
         session_id: &str,
@@ -232,6 +237,7 @@ impl Brain {
         sce: &str,
         signals: &[Signal],
         ears: &Ears,
+        flags: &mut TurnFlags,
         trace: &mut Vec<String>,
     ) -> Option<ResponsePlan> {
         let clauses = {
@@ -265,9 +271,10 @@ impl Brain {
                 if self.cfg.debug {
                     trace.push(format!("learned '{verb}': {}", outcome.description));
                 }
-                self.run_learned(&outcome, verb, signals, sce, session_id, false, trace).ok()
+                self.run_learned(&outcome, verb, signals, sce, session_id, false, flags, trace).ok()
             }
             Err(short) => {
+                flags.synthesis_attempted = short.have >= 2;
                 if self.cfg.debug {
                     trace.push(format!("learn failed: {}", short.why));
                 }
