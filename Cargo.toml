@@ -1,0 +1,44 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[workspace.dependencies]
+spoon-core = { path = "crates/spoon-core" }
+spoon-lang = { path = "crates/spoon-lang" }
+spoon-mind = { path = "crates/spoon-mind" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+rusqlite = { version = "0.37", features = ["bundled", "serde_json"] }
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"], default-features = false }
+axum = "0.8"
+tower-http = { version = "0.6", features = ["cors"] }
+clap = { version = "4", features = ["derive"] }
+chrono = { version = "0.4", features = ["serde"] }
+regex = "1"
+rand = "0.9"
+indexmap = { version = "2", features = ["serde"] }
+futures = "0.3"
+strsim = "0.11"
+blake3 = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+unicode-segmentation = "1"
+rust-stemmers = "1"
+async-trait = "0.1"
+parking_lot = "0.12"
+
+[profile.release]
+opt-level = 3
+debug = 1
+
+[profile.dev]
+opt-level = 1
