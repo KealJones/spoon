@@ -57,11 +57,11 @@ fn date_iso_re() -> &'static Regex {
 fn arith_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        // Match expressions like: "3 / 500 * 3600" or "2 * (3 + 4)"
-        // Must contain at least one operator and at least two numeric atoms.
-        Regex::new(
-            r"[\d.]+(?:\s*[\+\-\*/\^%]\s*(?:[\d.]+|\([^\)]+\)))+(?:\s*[\+\-\*/\^%]\s*(?:[\d.]+|\([^\)]+\)))*"
-        ).unwrap()
+        // Match expressions like: "3 / 500 * 3600", "2 * (3 + 4)" or
+        // "((599 + 32) / 0) * 6". Must contain at least one operator and at
+        // least two numeric atoms; a group may open the expression and nest once.
+        let atom = r"(?:[\d.]+|\((?:[^()]|\([^()]*\))+\))";
+        Regex::new(&format!(r"{atom}(?:\s*[\+\-\*/\^%]\s*{atom})+")).unwrap()
     })
 }
 

@@ -10,7 +10,9 @@ use regex::Regex;
 use std::sync::OnceLock;
 
 use crate::ears::lexicon::Lexicon;
-use crate::ears::rules::{is_verbish, strip_discourse};
+use crate::ears::loops::loop_rewrite;
+use crate::ears::reported::unwrap_reported;
+use crate::ears::rules::{is_verbish, strip_discourse, third_person};
 use crate::ears::values::{spot_values, SlotKind};
 
 macro_rules! regex {
@@ -33,6 +35,17 @@ pub fn apply_sentence_rules(body: &str, term: char, lexicon: &Lexicon) -> Vec<St
         let mut out = vec![greeting];
         out.extend(apply_sentence_rules(&rest, term, lexicon));
         return out;
+    }
+    if let Some((report, rest)) = unwrap_reported(body, lexicon) {
+        let mut out = vec![capitalize_opener(&report)];
+        out.extend(apply_sentence_rules(&rest, term, lexicon));
+        return out;
+    }
+    if let Some(sentences) = loop_rewrite(body, lexicon) {
+        return sentences;
+    }
+    if let Some(universal) = plural_universal(body, lexicon) {
+        return vec![universal];
     }
     if let Some(question) = embedded_question(body) {
         return vec![capitalize_opener(&format!("{question}?"))];
@@ -73,6 +86,40 @@ fn copula_less_question(body: &str, lexicon: &Lexicon) -> Option<String> {
         return None;
     }
     Some(format!("Is {subject} {adj}?"))
+}
+
+/// A bare plural subject is a universal: `wolves are white` -> `Every wolf
+/// is white.`, `dogs are animals` -> `Every dog is an animal.`, `cats have
+/// tails` -> `Every cat has a tail.`, `dogs are not cats` -> `No dog is a
+/// cat.` Only a seed plural in subject position with a copula, `have`, or a
+/// base-form verb qualifies; the object's bare plural becomes `a N`.
+fn plural_universal(body: &str, lexicon: &Lexicon) -> Option<String> {
+    let (subject, rest) = body.split_once(' ')?;
+    if !subject.chars().all(|c| c.is_ascii_lowercase()) {
+        return None;
+    }
+    let singular = lexicon.singular(subject)?;
+    let (verb, object) = rest.split_once(' ').unwrap_or((rest, ""));
+    let (quantifier, verb) = match verb {
+        "are" if object.starts_with("not ") => ("No", "is".to_string()),
+        "are" => ("Every", "is".to_string()),
+        "have" | "own" => ("Every", "has".to_string()),
+        v if lexicon.is_base_verb(v) && !lexicon.is_noun(v) => ("Every", third_person(v)),
+        _ => return None,
+    };
+    let object = object.strip_prefix("not ").unwrap_or(object);
+    let object = match object.split_once(' ').unwrap_or((object, "")) {
+        ("", _) => String::new(),
+        (head, tail) => match lexicon.singular(head) {
+            Some(s) => format!(" {} {s}{}", article(&s), if tail.is_empty() { String::new() } else { format!(" {tail}") }),
+            None => format!(" {object}"),
+        },
+    };
+    Some(format!("{quantifier} {singular} {verb}{object}."))
+}
+
+fn article(noun: &str) -> &'static str {
+    if noun.starts_with(['a', 'e', 'i', 'o', 'u']) { "an" } else { "a" }
 }
 
 /// `hello what is up` -> (`hello.`, `what is up`). A greeting addressed by
@@ -251,7 +298,8 @@ pub fn capitalize_opener(sentence: &str) -> String {
         "a" | "an" | "the" | "every" | "no" | "some" | "not" | "at" | "exactly" | "more" | "if" | "for"
             | "there" | "it" | "who" | "what" | "which" | "where" | "when" | "how" | "why" | "does" | "do"
             | "did" | "is" | "are" | "am" | "was" | "were" | "can" | "cannot" | "could" | "should" | "will"
-            | "would" | "must" | "may" | "user" | "assistant"
+            | "would" | "must" | "may" | "user" | "assistant" | "somebody" | "someone" | "nobody" | "everybody"
+            | "everyone" | "anyone"
     );
     if !opener {
         return sentence.to_string();

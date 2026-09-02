@@ -3665,6 +3665,106 @@
       "plural": "welcomes",
       "hypernym": "acceptance",
       "source": "wordnet"
+    },
+    {
+      "lemma": "receipt",
+      "plural": "receipts",
+      "source": "ace"
+    },
+    {
+      "lemma": "failure",
+      "plural": "failures",
+      "source": "ace"
+    },
+    {
+      "lemma": "ping",
+      "plural": "pings",
+      "source": "ace"
+    },
+    {
+      "lemma": "tail",
+      "plural": "tails",
+      "source": "ace"
+    },
+    {
+      "lemma": "claim",
+      "plural": "claims",
+      "source": "ace"
+    },
+    {
+      "lemma": "shift",
+      "plural": "shifts",
+      "source": "ace"
+    },
+    {
+      "lemma": "statement",
+      "plural": "statements",
+      "source": "ace"
+    },
+    {
+      "lemma": "mom",
+      "plural": "moms",
+      "source": "ace"
+    },
+    {
+      "lemma": "dad",
+      "plural": "dads",
+      "source": "ace"
+    },
+    {
+      "lemma": "employer",
+      "plural": "employers",
+      "source": "ace"
+    },
+    {
+      "lemma": "idiot",
+      "plural": "idiots",
+      "source": "ace"
+    },
+    {
+      "lemma": "visit",
+      "plural": "visits",
+      "source": "ace"
+    },
+    {
+      "lemma": "promise",
+      "plural": "promises",
+      "source": "ace"
+    },
+    {
+      "lemma": "retry",
+      "plural": "retries",
+      "source": "ace"
+    },
+    {
+      "lemma": "mile",
+      "plural": "miles",
+      "source": "ace"
+    },
+    {
+      "lemma": "badge",
+      "plural": "badges",
+      "source": "ace"
+    },
+    {
+      "lemma": "employee",
+      "plural": "employees",
+      "source": "ace"
+    },
+    {
+      "lemma": "entry",
+      "plural": "entries",
+      "source": "ace"
+    },
+    {
+      "lemma": "ban",
+      "plural": "bans",
+      "source": "ace"
+    },
+    {
+      "lemma": "draft",
+      "plural": "drafts",
+      "source": "ace"
     }
   ],
   "verbs": [
@@ -6496,6 +6596,259 @@
       "past": "welcomed",
       "arity": 2,
       "source": "wordnet+common"
+    },
+    {
+      "lemma": "retry",
+      "third": "retries",
+      "past": "retried",
+      "source": "ace"
+    },
+    {
+      "lemma": "mark",
+      "third": "marks",
+      "past": "marked",
+      "source": "ace"
+    },
+    {
+      "lemma": "archive",
+      "third": "archives",
+      "past": "archived",
+      "source": "ace"
+    },
+    {
+      "lemma": "subtract",
+      "third": "subtracts",
+      "past": "subtracted",
+      "source": "ace"
+    },
+    {
+      "lemma": "swear",
+      "third": "swears",
+      "past": "swore",
+      "source": "ace"
+    },
+    {
+      "lemma": "promise",
+      "third": "promises",
+      "past": "promised",
+      "source": "ace"
+    },
+    {
+      "lemma": "quit",
+      "third": "quits",
+      "past": "quit",
+      "source": "ace"
+    },
+    {
+      "lemma": "cover",
+      "third": "covers",
+      "past": "covered",
+      "source": "ace"
+    },
+    {
+      "lemma": "apologize",
+      "third": "apologizes",
+      "past": "apologized",
+      "source": "ace"
+    },
+    {
+      "lemma": "deny",
+      "third": "denies",
+      "past": "denied",
+      "source": "ace"
+    },
+    {
+      "lemma": "assume",
+      "third": "assumes",
+      "past": "assumed",
+      "source": "ace"
+    },
+    {
+      "lemma": "decrease",
+      "third": "decreases",
+      "past": "decreased",
+      "source": "ace"
+    },
+    {
+      "lemma": "misunderstand",
+      "third": "misunderstands",
+      "past": "misunderstood",
+      "source": "ace"
+    },
+    {
+      "lemma": "omit",
+      "third": "omits",
+      "past": "omitted",
+      "source": "ace"
+    },
+    {
+      "lemma": "request",
+      "third": "requests",
+      "past": "requested",
+      "source": "ace"
+    },
+    {
+      "lemma": "differ",
+      "third": "differs",
+      "past": "differed",
+      "source": "ace"
+    },
+    {
+      "lemma": "email",
+      "third": "emails",
+      "past": "emailed",
+      "source": "ace"
+    },
+    {
+      "lemma": "warn",
+      "third": "warns",
+      "past": "warned",
+      "source": "ace"
+    },
+    {
+      "lemma": "feed",
+      "third": "feeds",
+      "past": "fed",
+      "source": "ace"
+    },
+    {
+      "lemma": "rerun",
+      "third": "reruns",
+      "past": "reran",
+      "source": "ace"
+    },
+    {
+      "lemma": "override",
+      "third": "overrides",
+      "past": "overrode",
+      "source": "ace"
+    },
+    {
+      "lemma": "touch",
+      "third": "touches",
+      "past": "touched",
+      "source": "ace"
+    },
+    {
+      "lemma": "knock-out",
+      "third": "knocks-out",
+      "past": "knocked-out",
+      "source": "ace"
+    },
+    {
+      "lemma": "offer",
+      "third": "offers",
+      "past": "offered",
+      "source": "ace"
+    },
+    {
+      "lemma": "prefer",
+      "third": "prefers",
+      "past": "preferred",
+      "source": "ace"
+    },
+    {
+      "lemma": "intend",
+      "third": "intends",
+      "past": "intended",
+      "source": "ace"
+    },
+    {
+      "lemma": "reach",
+      "third": "reaches",
+      "past": "reached",
+      "source": "ace"
+    },
+    {
+      "lemma": "stay",
+      "third": "stays",
+      "past": "stayed",
+      "arity": 1,
+      "source": "ace"
+    },
+    {
+      "lemma": "visit",
+      "third": "visits",
+      "past": "visited",
+      "arity": 2,
+      "source": "ace"
+    },
+    {
+      "lemma": "promote",
+      "third": "promotes",
+      "past": "promoted",
+      "arity": 2,
+      "source": "ace"
+    },
+    {
+      "lemma": "guess",
+      "third": "guesses",
+      "past": "guessed",
+      "arity": 2,
+      "source": "ace"
+    },
+    {
+      "lemma": "suppose",
+      "third": "supposes",
+      "past": "supposed",
+      "arity": 2,
+      "source": "ace"
+    },
+    {
+      "lemma": "remain",
+      "third": "remains",
+      "past": "remained",
+      "arity": 1,
+      "source": "ace"
+    },
+    {
+      "lemma": "arrive",
+      "third": "arrives",
+      "past": "arrived",
+      "arity": 1,
+      "source": "ace"
+    },
+    {
+      "lemma": "board",
+      "third": "boards",
+      "past": "boarded",
+      "arity": 2,
+      "source": "ace"
+    },
+    {
+      "lemma": "multiply",
+      "third": "multiplies",
+      "past": "multiplied",
+      "arity": 2,
+      "source": "ace"
+    },
+    {
+      "lemma": "divide",
+      "third": "divides",
+      "past": "divided",
+      "arity": 2,
+      "source": "ace"
+    },
+    {
+      "lemma": "claim",
+      "third": "claims",
+      "past": "claimed",
+      "arity": 2,
+      "source": "ace"
+    },
+    {
+      "lemma": "hope",
+      "third": "hopes",
+      "past": "hoped",
+      "arity": 2,
+      "source": "ace"
+    },
+    {
+      "lemma": "insist",
+      "third": "insists",
+      "past": "insisted",
+      "arity": 2,
+      "source": "ace"
     }
   ],
   "adjectives": [
@@ -7718,6 +8071,54 @@
     {
       "lemma": "welcome",
       "comparative": "more-welcome"
+    },
+    {
+      "lemma": "cancelled",
+      "source": "ace"
+    },
+    {
+      "lemma": "canceled",
+      "source": "ace"
+    },
+    {
+      "lemma": "lazy",
+      "source": "ace"
+    },
+    {
+      "lemma": "mad",
+      "source": "ace"
+    },
+    {
+      "lemma": "ambiguous",
+      "source": "ace"
+    },
+    {
+      "lemma": "brown",
+      "source": "ace"
+    },
+    {
+      "lemma": "hungry",
+      "source": "ace"
+    },
+    {
+      "lemma": "stressful",
+      "source": "ace"
+    },
+    {
+      "lemma": "cheap",
+      "source": "ace"
+    },
+    {
+      "lemma": "annoying",
+      "source": "ace"
+    },
+    {
+      "lemma": "direct",
+      "source": "ace"
+    },
+    {
+      "lemma": "greater",
+      "source": "ace"
     }
   ],
   "names": [
@@ -7913,6 +8314,23 @@
     "tomorrow",
     "yesterday",
     "there is",
-    "there are"
+    "there are",
+    "through",
+    "ones",
+    "backwards",
+    "except",
+    "until",
+    "otherwise",
+    "unless",
+    "whenever",
+    "already",
+    "again",
+    "instead",
+    "anyone",
+    "everyone",
+    "nobody",
+    "somebody",
+    "someone",
+    "whether"
   ]
 }

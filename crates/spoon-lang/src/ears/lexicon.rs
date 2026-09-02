@@ -279,6 +279,39 @@ impl Lexicon {
         self.adjective_lemmas.contains(&word.to_lowercase())
     }
 
+    /// True if `word` is registered as a noun.
+    pub fn is_noun(&self, word: &str) -> bool {
+        matches!(self.words.get(&word.to_lowercase()), Some(e) if e.kind == WordKind::Noun)
+    }
+
+    /// True if `word` is a verb in its base form (`delete`, not `deletes`):
+    /// the shape an imperative opens with.
+    pub fn is_base_verb(&self, word: &str) -> bool {
+        self.verb_lemmas.contains(&word.to_lowercase())
+    }
+
+    /// Singular of a plural noun: the seed's own plurals first (`wolves` ->
+    /// `wolf`), then the regular endings when the result is a known noun
+    /// (`tails` -> `tail`, `boxes` -> `box`, `stories` -> `story`). A word
+    /// that is itself a singular noun (`bus`, `news`) is left alone.
+    pub fn singular(&self, word: &str) -> Option<String> {
+        let lower = word.to_lowercase();
+        if let Some(s) = self.singular_of.get(&lower) {
+            return Some(s.clone());
+        }
+        if self.is_noun(&lower) || !lower.ends_with('s') || lower.len() < 4 {
+            return None;
+        }
+        let mut candidates = vec![lower[..lower.len() - 1].to_string()];
+        if lower.ends_with("ies") {
+            candidates.insert(0, format!("{}y", &lower[..lower.len() - 3]));
+        }
+        if lower.ends_with("es") {
+            candidates.push(lower[..lower.len() - 2].to_string());
+        }
+        candidates.into_iter().find(|c| self.is_noun(c))
+    }
+
     /// True if `word` is a noun, verb or adjective the ears know (seed lexicon
     /// or CAN). Common-list words and function words do not count: they are
     /// known spellings, not vocabulary the interior can place.

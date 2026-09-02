@@ -479,6 +479,55 @@ fn bench_ace_with_real_gate() {
     println!("{}", report);
 }
 
+/// Dump one ACE category end to end, no LLM: input, what the ears made of
+/// it, the gate's verdict, the expected form. `SPOON_ACE_CAT=loop_like_logic
+/// cargo test -p spoon-lang --test ears ace_category_dump -- --ignored --nocapture`.
+#[test]
+#[ignore]
+fn ace_category_dump() {
+    use spoon_lang::ears::Gate;
+    let Ok(category) = std::env::var("SPOON_ACE_CAT") else { return };
+    let corpus = std::fs::read_to_string(workspace_root().join("data/bench/ace_corpus.json")).expect("corpus");
+    let items: Vec<serde_json::Value> = serde_json::from_str(&corpus).expect("corpus json");
+    let ears = make_ears();
+    let gate = real_gate();
+    for item in items.iter().filter(|i| i["category"] == category.as_str()) {
+        let input = item["input"].as_str().unwrap_or_default();
+        let expected = item["expected_ace"].as_str().unwrap_or_default();
+        let result = ears.hear_offline(input, &gate);
+        let verdict = match gate.parse(&result.sce) {
+            Ok(_) => "parses".to_string(),
+            Err(e) => format!("ERR {e}"),
+        };
+        let hit = spoon_lang::ears::bench::structural_eq(expected, &result.sce, &gate);
+        println!(
+            "#{} {} [{:?}] {}\n  IN : {input}\n  GOT: {}\n  EXP: {expected}\n  unknown={:?}\n",
+            item["id"],
+            if hit { "HIT " } else { "miss" },
+            result.path,
+            verdict,
+            result.sce,
+            result.unknown_words
+        );
+    }
+}
+
+/// Parse `SPOON_SCE` (sentences separated by `|`) with the real gate and print
+/// each verdict. A probe for "does this shape parse".
+#[test]
+#[ignore]
+fn gate_parse_dump() {
+    use spoon_lang::ears::Gate;
+    let Ok(text) = std::env::var("SPOON_SCE") else { return };
+    let gate = real_gate();
+    for sentence in text.split('|') {
+        match gate.parse_reported(sentence.trim()) {
+            Ok((clauses, unknown)) => println!("OK  {sentence}\n    {clauses:?} unknown={unknown:?}"),
+            Err(e) => println!("ERR {sentence}\n    {e}"),
+        }
+    }
+}
+
 /// Full ACE benchmark with LLM. Run with SPOON_LLM_TESTS=1.
 #[test]
 #[ignore]
@@ -508,19 +557,21 @@ fn bench_ace_llm_live() {
     println!("=== bench_ace_llm_live (LLM enabled, qwen3.5:4b) ===");
     println!("{}", report);
 
-    let misses: Vec<_> = report.misses.iter().collect();
-    if !misses.is_empty() {
-        println!("\n--- Misses ({}) ---", misses.len());
-        println!("{:<50} | {:<40} | {}", "input", "expected", "got");
-        println!("{}", "-".repeat(130));
-        for m in &misses {
-            println!(
-                "{:<50} | {:<40} | {}",
-                truncate(&m.input, 48),
-                truncate(&m.expected, 38),
-                truncate(&m.got, 38)
-            );
+    if !report.misses.is_empty() {
+        println!("\n--- Misses ({}) ---", report.misses.len());
+        for m in &report.misses {
+            println!("IN : {}\nEXP: {}\nGOT: {}\n", m.input, m.expected, m.got);
         }
+    }
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or_default();
+    let out = workspace_root().join(format!("data/bench/results/ace_llm_live_{stamp}.json"));
+    if let Err(e) = report.save_json(&out) {
+        eprintln!("failed to save report: {e}");
+    } else {
+        println!("saved -> {}", out.display());
     }
 }
 
@@ -591,20 +642,172 @@ fn bench_ace_model_sweep() {
     }
 }
 
-fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
-        s.to_string()
-    } else {
-        format!("{}...", &s[..max.saturating_sub(3)])
-    }
-}
-
 // ---- direct-path policy (real gate) ----
 
 fn real_gate() -> spoon_lang::ears::gate::SceGate {
     let mut gate = spoon_lang::ears::gate::SceGate::with_defaults();
     gate.add_names(&["John", "Mary", "Bob"]);
     gate
+}
+
+/// A one-thread fake Ollama: answers each `/api/chat` POST with the next
+/// canned reply (the last one repeats). Returns the base URL.
+fn fake_ollama(replies: &[&str]) -> String {
+    use std::io::{Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind fake ollama");
+    let base = format!("http://{}", listener.local_addr().expect("local addr"));
+    let replies: Vec<String> = replies.iter().map(|s| s.to_string()).collect();
+    std::thread::spawn(move || {
+        for (i, stream) in listener.incoming().enumerate() {
+            let Ok(mut stream) = stream else { break };
+            let mut buf = Vec::new();
+            let mut chunk = [0u8; 4096];
+            loop {
+                let n = match stream.read(&mut chunk) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => n,
+                };
+                buf.extend_from_slice(&chunk[..n]);
+                let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") else { continue };
+                let headers = String::from_utf8_lossy(&buf[..pos]).to_lowercase();
+                let len = headers
+                    .lines()
+                    .find_map(|l| l.strip_prefix("content-length:"))
+                    .and_then(|v| v.trim().parse::<usize>().ok())
+                    .unwrap_or(0);
+                if buf.len() >= pos + 4 + len {
+                    break;
+                }
+            }
+            let reply = replies.get(i).or(replies.last()).cloned().unwrap_or_default();
+            let body = serde_json::json!({"message": {"role": "assistant", "content": reply}}).to_string();
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            let _ = stream.write_all(response.as_bytes());
+        }
+    });
+    base
+}
+
+fn ears_with_fake_llm(replies: &[&str]) -> Ears {
+    use spoon_core::llm::{LlmClient, LlmConfig, Transport};
+    let cfg = LlmConfig {
+        base_url: fake_ollama(replies),
+        api_key: None,
+        model: "fake".into(),
+        transport: Transport::Ollama,
+        timeout_secs: 5,
+        temperature: 0.0,
+        no_think: true,
+    };
+    let lex = Lexicon::load_seed_dir(&seed_dir()).expect("load lexicon");
+    let phrasings = spoon_lang::ears::load_phrasings(&test_data_dir(), &lex).expect("load phrasings");
+    Ears::new(lex, phrasings, Some((LlmClient::new(), cfg)))
+}
+
+/// The model turns gibberish into grammatical SCE; the guard turns it back
+/// into a failure because no content word is known. A fresh user's name is
+/// not gibberish: `owns` and `dog` carry the sentence.
+#[tokio::test]
+async fn garbage_from_the_llm_is_rejected() {
+    let gate = real_gate();
+
+    let ears = ears_with_fake_llm(&["Zxqv is a wibble."]);
+    let result = ears.hear("zxqv flarp wibble", &gate).await;
+    assert_eq!(result.path, EarsPath::Failed, "got {:?} / {:?}", result.path, result.sce);
+    for word in ["zxqv", "flarp", "wibble"] {
+        assert!(result.unknown_words.iter().any(|w| w.eq_ignore_ascii_case(word)), "{word} missing from {:?}", result.unknown_words);
+    }
+
+    let ears = ears_with_fake_llm(&["Kealan owns a dog."]);
+    let result = ears.hear("kealan owns a dog innit", &gate).await;
+    assert_eq!(result.path, EarsPath::Llm, "got {:?} / {:?}", result.path, result.sce);
+    assert_eq!(result.sce, "Kealan owns a dog.");
+    assert_eq!(result.unknown_words, vec!["Kealan".to_string(), "innit".to_string()]);
+}
+
+/// `??` is the prompt's escape hatch: Failed at once, no repair round.
+#[tokio::test]
+async fn no_meaning_marker_fails_without_repair() {
+    let ears = ears_with_fake_llm(&["??"]);
+    let result = ears.hear("zxqv flarp wibble", &real_gate()).await;
+    assert_eq!(result.path, EarsPath::Failed);
+    let (llm_calls, repairs, _) = ears.stats().snapshot();
+    assert_eq!((llm_calls, repairs), (1, 0));
+}
+
+/// Loop-like English becomes quantified SCE natively (ACE ids 81, 83, 85, 87, 88).
+#[test]
+fn loops_resolve_natively() {
+    let ears = make_ears();
+    let gate = real_gate();
+    let cases = [
+        (
+            "for every user if they are inactive disable their account",
+            "For every user X if X is inactive then Assistant disables X's account.",
+        ),
+        (
+            "for each customer give them a receipt if they bought something",
+            "For every customer X if X buys something then Assistant gives a receipt to X.",
+        ),
+        (
+            "check every file, if its empty delete it, if its not empty archive it",
+            "Assistant deletes every empty file. Assistant archives every file that is not empty.",
+        ),
+        (
+            "keep processing orders as long as there are pending ones and never process a cancelled order",
+            "Assistant processes every pending order. Assistant processes no cancelled order.",
+        ),
+        (
+            "if any task has more than 3 failures stop retrying that task",
+            "If a task owns more than 3 failures then Assistant stops retrying the task.",
+        ),
+        ("go through every card and reject the expired ones", "Assistant rejects every expired card."),
+    ];
+    for (input, expected) in cases {
+        let result = ears.hear_offline(input, &gate);
+        assert_eq!(result.sce, expected, "input {input:?}");
+        assert_eq!(result.path, EarsPath::Direct, "input {input:?}");
+    }
+}
+
+/// Bare plurals are universals.
+#[test]
+fn plural_universals() {
+    let ears = make_ears();
+    let gate = real_gate();
+    let cases = [
+        ("Wolves are white.", "Every wolf is white."),
+        ("dogs are animals", "Every dog is an animal."),
+        ("cats have tails", "Every cat has a tail."),
+        ("dogs are not cats", "No dog is a cat."),
+    ];
+    for (input, expected) in cases {
+        let result = ears.hear_offline(input, &gate);
+        assert_eq!(result.sce, expected, "input {input:?}");
+        assert_eq!(result.path, EarsPath::Direct, "input {input:?}");
+    }
+}
+
+/// One level of reported speech unwraps deterministically; the speaker's
+/// name survives the lowercasing and the typo repair.
+#[test]
+fn reported_speech_unwraps_one_level() {
+    let ears = make_ears();
+    let gate = real_gate();
+    let result = ears.hear_offline("Jake told me \"Sarah said Bob hates me\" but Sarah swears she never said anything about Jake at all", &gate);
+    assert!(
+        result.sce.starts_with("Jake tells User that Sarah says that Bob hates Jake."),
+        "got {:?}",
+        result.sce
+    );
+    assert!(result.sce.contains("about Jake"), "the second mention keeps the name: {:?}", result.sce);
+
+    let result = ears.hear_offline("Greg said \"Ian told me Dheeraj thinks you're ready\"", &gate);
+    assert_eq!(result.sce, "Greg says that Ian tells Greg that Dheeraj thinks that User is ready.");
+    assert_eq!(result.path, EarsPath::Direct, "got {:?}", result.path);
 }
 
 /// Junk that the strict parser would accept as Names must not sneak in as a

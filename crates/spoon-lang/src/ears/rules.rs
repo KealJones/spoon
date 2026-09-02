@@ -88,10 +88,10 @@ pub fn fix_agreement(text: &str) -> String {
     s = regex!(r"\bam User\b").replace_all(&s, "is User").into_owned();
     s = regex!(r"\bare (User|Assistant)\b").replace_all(&s, "is $1").into_owned();
     s = regex!(r"\b(User|Assistant) do not\b").replace_all(&s, "$1 does not").into_owned();
-    s = regex!(r"(?i)(^|[.?!]\s+)(?:do|did) (User|Assistant)\b")
+    s = regex!(r#"(?i)(^|[.?!]"?\s+)(?:do|did) (User|Assistant)\b"#)
         .replace_all(&s, "${1}does $2")
         .into_owned();
-    s = regex!(r"(?i)(^|[.?!]\s+)(what|who|where|when|which|how|why) (?:do|did) (User|Assistant)\b")
+    s = regex!(r#"(?i)(^|[.?!]"?\s+)(what|who|where|when|which|how|why) (?:do|did) (User|Assistant)\b"#)
         .replace_all(&s, "${1}$2 does $3")
         .into_owned();
     s
@@ -110,7 +110,7 @@ pub fn conjugate_fixed_subjects(text: &str, lexicon: &Lexicon) -> String {
             "is" | "are" | "was" | "were" | "has" | "have" | "does" | "do" | "did" | "can" | "cannot" | "could"
                 | "should" | "must" | "may" | "will" | "would" | "am" | "not" | "meant"
         );
-        if auxiliary || verb.ends_with('s') || !lexicon.is_verb(verb) {
+        if auxiliary || verb.ends_with('s') || !lexicon.is_base_verb(verb) {
             return caps[0].to_string();
         }
         format!("{}{} {}", &caps[1], &caps[2], third_person(verb))
@@ -118,7 +118,7 @@ pub fn conjugate_fixed_subjects(text: &str, lexicon: &Lexicon) -> String {
     .into_owned()
 }
 
-fn third_person(verb: &str) -> String {
+pub(crate) fn third_person(verb: &str) -> String {
     if verb.ends_with("sh") || verb.ends_with("ch") || verb.ends_with('x') || verb.ends_with('z') || verb.ends_with('o') || verb.ends_with('s') {
         format!("{verb}es")
     } else if verb.ends_with('y') && !verb.ends_with("ay") && !verb.ends_with("ey") && !verb.ends_with("oy") && !verb.ends_with("uy") {
@@ -134,7 +134,7 @@ fn third_person(verb: &str) -> String {
 /// narrative `this` after such a verb introduces something new, so it is `a`;
 /// a clause-initial `this/that N` refers back, so it is `the N`.
 pub fn possession(text: &str) -> String {
-    let dets = r"a|an|the|this|that|these|those|some|no|\d+|one|two|three|four|five|six|seven|eight|nine|ten";
+    let dets = r"a|an|the|this|that|these|those|some|no|\d+|one|two|three|four|five|six|seven|eight|nine|ten|more than|at least|at most|exactly|fewer than|less than";
     let has = regex!(&format!(r"(?i)\b(has|have)\s+(?:got\s+)?({dets})\b"));
     let mut s = has
         .replace_all(text, |caps: &regex::Captures| {
@@ -215,6 +215,48 @@ pub fn strip_expletives(text: &str) -> String {
     // fucking server` -> `this server`.
     let s = regex!(r"(?i)\b([a-z]+) as (?:shit|hell|fuck|balls|heck)\b").replace_all(&s, "very $1");
     regex!(r"(?i)\b(?:fucking|freaking|frickin|friggin|goddamn|damn|bloody|effing)\s+").replace_all(&s, "").into_owned()
+}
+
+/// Hedges and mid-sentence fillers carry nothing SCE can hold: `bob should
+/// probably wait` -> `bob should wait`, `there is like at least 3 cats` ->
+/// `there are at least 3 cats`. `maybe S` is SCE's `it is possible that S`;
+/// `is home` is the place `at home`.
+pub fn hedges(text: &str) -> String {
+    let s = regex!(
+        r"(?i)(?:\s+(?:probably|definitely|literally|actually|basically|honestly|totally|seriously|genuinely|supposedly|apparently|obviously|clearly|just))+(\s+|[.,!?])"
+    )
+    .replace_all(text, "$1");
+    let s = regex!(r"(?i)\b(is|are|was|were|and|but|so) like (a|an|the|at least|at most|exactly|more than|fewer than|less than|not|very|so|only|\d+)\b")
+        .replace_all(&s, "$1 $2");
+    let s = regex!(r"(?i)\bthere is ((?:at least|at most|exactly|more than|fewer than|less than) )?(\d+|two|three|four|five|six|seven|eight|nine|ten)\b")
+        .replace_all(&s, |caps: &regex::Captures| {
+            let quantifier = caps.get(1).map(|m| m.as_str()).unwrap_or("");
+            let count = &caps[2];
+            let verb = if count == "1" || count == "0" { "is" } else { "are" };
+            format!("there {verb} {quantifier}{count}")
+        });
+    let s = regex!(r"(?i)(^|[.?!]\s+)(?:maybe|perhaps|possibly),?\s+").replace_all(&s, "${1}it is possible that ");
+    // `i think maybe S but i am not sure`: the doubt is already in `maybe`.
+    let s = regex!(r"(?i)\b(think|thinks|believe|believes|guess|guesses|suppose|supposes) (?:that )?(?:maybe|perhaps|possibly) ")
+        .replace_all(&s, "$1 that it is possible that ");
+    // The slang seed has already turned `not sure` into `I am not sure`, so the subject may be doubled.
+    let s = regex!(r"(?i),? but (?:i am|i'm|im|User is) (?:really |honestly |still )?(?:i am |User is )?not (?:so |quite |entirely |totally )?sure$")
+        .replace_all(&s, "");
+    let s = regex!(r"(?i)\bit is (?:absolutely |definitely |certainly |simply )?(?:not true|not the case|false) that\b")
+        .replace_all(&s, "it is false that");
+    // A belief is `believes that`; `thinks about X` keeps its verb.
+    let s = regex!(r"\b([Tt])hink(s?) that\b").replace_all(&s, |caps: &regex::Captures| {
+        let b = if &caps[1] == "T" { "B" } else { "b" };
+        format!("{b}elieve{} that", &caps[2])
+    });
+    let s = regex!(r"(?i)\bat least (?:one|1) ([a-z]+)\b").replace_all(&s, |caps: &regex::Captures| {
+        let noun = &caps[1];
+        let article = if noun.starts_with(['a', 'e', 'i', 'o', 'u']) { "an" } else { "a" };
+        format!("{article} {noun}")
+    });
+    regex!(r"(?i)\b(is|are|was|were|am|stay|stays|stayed|staying|remain|remains|remained) home\b")
+        .replace_all(&s, "$1 at home")
+        .into_owned()
 }
 
 /// Modal periphrases become SCE modals: `has to` -> `must`, `is allowed to`
@@ -417,6 +459,21 @@ pub(crate) fn is_verbish(word: &str, lexicon: &Lexicon) -> bool {
             | "cannot" | "could" | "should" | "must" | "may" | "will" | "would" | "owns" | "likes"
             | "loves" | "hates" | "wants" | "needs" | "knows" | "thinks" | "says"
     ) || lexicon.is_verb(&w)
+        || (!lexicon.is_noun(&w) && third_person_lemma(&w).is_some_and(|lemma| lexicon.is_base_verb(&lemma)))
+}
+
+/// The base verb a third-person form comes from, when the shape allows one:
+/// `feeds` -> `feed`, `watches` -> `watch`, `carries` -> `carry`. The caller
+/// checks the candidate against the lexicon.
+pub(crate) fn third_person_lemma(word: &str) -> Option<String> {
+    let stem = word.strip_suffix('s').filter(|s| s.len() >= 2 && !s.ends_with('s'))?;
+    if let Some(base) = stem.strip_suffix("ie") {
+        return Some(format!("{base}y"));
+    }
+    if let Some(base) = stem.strip_suffix('e').filter(|b| b.ends_with("sh") || b.ends_with("ch") || b.ends_with('x') || b.ends_with('z')) {
+        return Some(base.to_string());
+    }
+    Some(stem.to_string())
 }
 
 /// Spell arithmetic operator words as operators between numbers so the value
@@ -449,7 +506,7 @@ pub fn convert_operator_words(text: &str) -> String {
 }
 
 /// Sentence segments of `text`, each keeping its terminator (if any).
-fn sentence_segments(text: &str) -> Vec<&str> {
+pub(crate) fn sentence_segments(text: &str) -> Vec<&str> {
     let mut segments = vec![];
     let mut start = 0;
     for (i, c) in text.char_indices() {
@@ -464,7 +521,7 @@ fn sentence_segments(text: &str) -> Vec<&str> {
     segments
 }
 
-fn split_terminator(segment: &str) -> (&str, &str) {
+pub(crate) fn split_terminator(segment: &str) -> (&str, &str) {
     match segment.chars().last() {
         Some('.') | Some('?') | Some('!') => (&segment[..segment.len() - 1], &segment[segment.len() - 1..]),
         _ => (segment, ""),
@@ -590,6 +647,24 @@ mod tests {
         assert_eq!(expand_contractions("im tired and i cant sleep"), "i am tired and i cannot sleep");
         assert_eq!(expand_contractions("it was well done"), "it was well done");
         assert_eq!(expand_contractions("they were here"), "they were here");
+    }
+
+    #[test]
+    fn hedges_fillers_and_existentials() {
+        assert_eq!(hedges("bob should probably wait"), "bob should wait");
+        assert_eq!(hedges("i just honestly want a dog."), "i want a dog.");
+        assert_eq!(hedges("there is like at least 3 cats in there"), "there are at least 3 cats in there");
+        assert_eq!(hedges("there is exactly 1 cat"), "there is exactly 1 cat");
+        assert_eq!(hedges("maybe mary is home"), "it is possible that mary is at home");
+        assert_eq!(hedges("he was like \"no way\""), "he was like \"no way\"");
+        assert_eq!(
+            hedges("i think maybe bob owns the car but i am really not sure"),
+            "i believe that it is possible that bob owns the car"
+        );
+        assert_eq!(hedges("what does Assistant think about dogs"), "what does Assistant think about dogs");
+        assert_eq!(hedges("it is absolutely not true that john owns a cat"), "it is false that john owns a cat");
+        assert_eq!(hedges("at least one dog likes every cat"), "a dog likes every cat");
+        assert_eq!(hedges("at least 3 dogs"), "at least 3 dogs");
     }
 
     #[test]

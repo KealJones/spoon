@@ -94,8 +94,9 @@ Key rules:\n\
 - Every noun needs a determiner (a/the/every/some/no/N)\n\
 - Conditionals need `if ... then ...` with no comma before `then`\n\
 - No `tell X that Y says/believes that` - split into two sentences\n\
+- No pronouns: `he/she/it/they/him/her` -> the name or `the NOUN`\n\
 - Phrasal verbs hyphenated: `looks-for`, `knocks-out`\n\
-Fix ONLY what the error names. Output one line.";
+Fix ONLY what the error names. Output one line. If the utterance has no recoverable meaning, output exactly `??`.";
 
     let vocab_block = if vocab.is_empty() {
         String::new()

@@ -23,13 +23,15 @@ Use known words above when the meaning matches.
 7. **Coordinated clauses split**: `john is a doctor and mary is a nurse` -> `John is a doctor. Mary is a nurse.`
 8. **No pronouns**: `me/I/my` -> `User/User's`, `you/your` -> `Assistant/Assistant's`, he/she/it/they -> the name or `the NOUN`: `what do you think about my dog` -> `What does Assistant think about User's dog?`
 9. **Commands**: `Assistant, VERB PHRASE!` - `!` is mandatory. `Assistant,` ONLY before `!`.
-10. **Conditionals**: `If A then B.` - no comma before `then`, `then` is required. No `whether`, `unless`, `why`, `either...or`, `any`.
+10. **Conditionals**: `If A then B.` - no comma before `then`, `then` is required. No `whether`, `unless`, `otherwise`, `until`, `except`, `why`, `either...or`, `any`, `another`, `will`: rewrite as `If A does not ... then B` in the present.
 11. **Every noun needs a determiner**: `a dog`, `the dog`, `every dog`, `no dog`, `User's dog`. Never bare `dog`.
 12. **Relative clauses use `that`**: `the man that owns a dog`.
-13. **Phrasal verbs and multiword names hyphenated**: `looks-for`, `says-goodbye-to`, `New-York`.
-14. **Reported speech**: no `tell X that Y says that`; split into two sentences. No `tell X to VERB`; use `tell X that X should VERB`.
+13. **Phrasal verbs and multiword names hyphenated**: `looks-for`, `says-goodbye-to`, `New-York`, `Job-A`, `Option-B`.
+14. **Reported speech**: no `tell X that Y says that`; split into two sentences. No `tell X to VERB`; use `tell X that X should VERB`. `says`, `believes`, `thinks`, `means` always take `that`.
 15. **Simple present** everywhere. Past only inside reported speech. `If it rains` -> `If the weather is rainy`.
 16. **Unsure questions**: `User does not know the answer.` NOT `User does not know if X.`
+17. **Never open a sentence with** `Then`, `But`, `And`, `So`. `Assistant,` opens commands only, never statements or conditionals.
+18. **No recoverable meaning** (gibberish, random letters): output exactly `??`.
 
 ## Preferred verbs
 
@@ -90,5 +92,14 @@ Output: `Hugo tells User a report. Lena believes that Omar steals Lena's camera.
 
 Input: `check every record and delete the empty ones`
 Output: `Assistant checks every record. Assistant deletes every empty record.`
+
+Input: `nobody boards unless they have a ticket`
+Output: `If a person does not own a ticket then the person does not board.`
+
+Input: `job a pays more but job b is closer`
+Output: `Job-A pays-more-than Job-B. Job-B is closer than Job-A.`
+
+Input: `zxqv flarp wibble`
+Output: `??`
 
 {{CONTEXT}}

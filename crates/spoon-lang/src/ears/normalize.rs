@@ -5,9 +5,10 @@
 use std::collections::HashSet;
 
 use crate::ears::lexicon::{Lexicon, should_protect};
+use crate::ears::arith::chain_arithmetic;
 use crate::ears::rules::{
     arithmetic_verbs, conjugate_fixed_subjects, convert_operator_words, digits, expand_contractions, fix_agreement,
-    modals_and_quantities, possession, present_tense, progressive, quote_mentions, self_correction,
+    hedges, modals_and_quantities, possession, present_tense, progressive, quote_mentions, self_correction,
     singular_quantifiers, split_coordinated, strip_expletives, weather,
 };
 use crate::ears::sentence::apply_sentence_rules;
@@ -38,8 +39,8 @@ pub fn normalize(text: &str, lexicon: &Lexicon) -> Normalized {
     //     a self-correction (`wait no`, `i mean`) keeps only what follows it
     let uncontracted = self_correction(&expand_contractions(&expanded));
 
-    // 3. Elongation squash (3+ same consecutive chars -> 1), expletives, weather-it
-    let squashed = weather(&strip_expletives(&squash_elongation(&uncontracted)));
+    // 3. Elongation squash (3+ same consecutive chars -> 1), expletives, hedges, weather-it
+    let squashed = weather(&hedges(&strip_expletives(&squash_elongation(&uncontracted))));
 
     // 3b. Speaker grounding: first-person -> User, second-person -> Assistant,
     //     then tense, modality, agreement, possession, counting and mention
@@ -48,7 +49,7 @@ pub fn normalize(text: &str, lexicon: &Lexicon) -> Normalized {
     let present = progressive(&present_tense(&modals_and_quantities(&grounded), lexicon), lexicon);
     let owned = conjugate_fixed_subjects(&possession(&present), lexicon);
     let quantified = singular_quantifiers(&owned, lexicon);
-    let counted = arithmetic_verbs(&quote_mentions(&digits(&quantified, lexicon)));
+    let counted = chain_arithmetic(&arithmetic_verbs(&quote_mentions(&digits(&quantified, lexicon))));
 
     // 3c. `S1 and S2` -> two sentences when S2 is a new clause
     let coordinated = split_coordinated(&counted, lexicon);
@@ -369,24 +370,39 @@ fn drop_clause_initial_like(text: &str) -> String {
 // ---- lowercase except names ----
 
 fn lowercase_except_names(text: &str, lexicon: &Lexicon, protected: &[Spotted]) -> String {
+    let words: Vec<(usize, &str)> = word_positions(text).collect();
+    let core_of = |word: &str| -> String {
+        let core = word.trim_end_matches(['.', '?', '!', ',', ';', ':']);
+        core.strip_suffix("'s").unwrap_or(core).to_string()
+    };
+    // Unknown people the utterance itself introduces (`Greg said ...`): every
+    // later mention keeps its capital too, or `Greg` ends up as `grew`.
+    let speakers: Vec<String> = words
+        .iter()
+        .enumerate()
+        .filter(|(i, (_, w))| {
+            let before = i.checked_sub(1).map(|j| words[j].1);
+            let after = words.get(i + 1).map(|w| w.1);
+            is_speaker_position(&core_of(w), before, after, lexicon)
+        })
+        .map(|(_, (_, w))| core_of(w))
+        .collect();
     let mut out = String::with_capacity(text.len());
-    for (byte_pos, word) in word_positions(text) {
-        // Check if this span is inside a protected region
-        let word_end = byte_pos + word.len();
+    for &(byte_pos, word) in &words {
         let in_protected = protected.iter().any(|s| byte_pos >= s.start && byte_pos < s.end);
 
         if in_protected {
             out.push_str(word);
         } else if word.chars().next().is_some_and(|c| c.is_uppercase()) {
             // Look the word up without its punctuation / possessive suffix.
-            let core = word.trim_end_matches(|c: char| matches!(c, '.' | '?' | '!' | ',' | ';' | ':'));
-            let core = core.strip_suffix("'s").unwrap_or(core);
+            let core = core_of(word);
             let suffix = &word[core.len()..];
-            if let Some(canonical) = lexicon.canonical_name(core) {
+            if let Some(canonical) = lexicon.canonical_name(&core) {
                 out.push_str(canonical);
                 out.push_str(suffix);
-            } else if is_sce_symbol(core) {
-                // Variables (X, Y1) and minted names (Object-X) are SCE syntax, not English.
+            } else if is_sce_symbol(&core) || speakers.contains(&core) {
+                // Variables (X, Y1), minted names (Object-X), and the unknown
+                // person who `told`/`said` something are names, not English.
                 out.push_str(word);
             } else {
                 // Not a known name - lowercase it
@@ -396,9 +412,27 @@ fn lowercase_except_names(text: &str, lexicon: &Lexicon, protected: &[Spotted]) 
             out.push_str(word);
         }
         out.push(' ');
-        let _ = word_end;
     }
     out.trim_end().to_string()
+}
+
+/// `Greg said "..."`, `told Denise "..."`: a capitalized word the lexicon does
+/// not know, next to a speech verb, is a person. Without this it would be
+/// lowercased and then typo-repaired into a different word (`greg` -> `grew`).
+fn is_speaker_position(word: &str, before: Option<&str>, after: Option<&str>, lexicon: &Lexicon) -> bool {
+    const SPEECH: &[&str] = &[
+        "said", "says", "told", "tells", "goes", "went", "asked", "asks", "swears", "swore", "thinks", "thought",
+        "believes", "believed", "claims", "claimed", "texted", "texts", "wrote", "writes", "replied", "replies",
+        "insists", "insisted", "mentioned", "mentions", "promised", "promises",
+    ];
+    let capitalized = word.chars().skip(1).all(|c| c.is_lowercase());
+    let acronym = word.chars().all(|c| c.is_uppercase());
+    if word.len() < 2 || lexicon.is_known(word) || !(capitalized || acronym) {
+        return false;
+    }
+    let follows_speech = after.is_some_and(|w| SPEECH.contains(&w.to_lowercase().as_str()));
+    let addressed = before.is_some_and(|w| matches!(w.to_lowercase().as_str(), "told" | "tells" | "tell" | "asked" | "asks"));
+    follows_speech || addressed
 }
 
 /// `X`, `Y1`, `Object-X`, `New-York`: capitalized tokens that are SCE syntax.

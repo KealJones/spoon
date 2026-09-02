@@ -12,13 +12,17 @@
 //! Owned by the ears subagent. The SCE parser is reached only through the
 //! `Gate` trait so this module compiles independently of `sce/`.
 
+pub mod arith;
 pub mod bench;
 pub mod gate;
+pub mod guard;
 pub mod induce;
 pub mod lexicon;
 pub mod llm;
+pub mod loops;
 pub mod normalize;
 pub mod phrasings;
+pub mod reported;
 pub mod rules;
 pub mod sentence;
 pub mod values;
@@ -30,6 +34,7 @@ use spoon_core::llm::{LlmClient, LlmConfig};
 use spoon_core::types::clause::{Act, Clause, EarsPath, EarsResult, Quant, Term};
 use spoon_core::types::episode::Pair;
 
+use crate::ears::guard::{invents_numbers, is_garbage, NO_MEANING};
 use crate::ears::induce::induce_phrasings;
 use crate::ears::lexicon::Lexicon;
 use crate::ears::llm::{build_prompt, build_repair_prompt, call_llm_normalizer, strip_non_sce};
@@ -119,6 +124,16 @@ enum Outcome {
     Open(String),
 }
 
+/// What the LLM seat came back with.
+enum LlmOutcome {
+    Hit(Resolved),
+    /// The model declined (`??`) or invented SCE from nothing: the utterance
+    /// is Failed and the words nobody knows are reported.
+    Garbage(Vec<String>),
+    /// Nothing parseable; the last resort gets its turn.
+    Miss,
+}
+
 impl Ears {
     /// Construct from already-built components. Loads the normalizer prompt
     /// from `data/prompts/normalizer_base.md` relative to the executable's
@@ -173,8 +188,16 @@ impl Ears {
             if outcomes.iter().any(|o| matches!(o, Outcome::Open(_))) {
                 let joined = normed.sentences.join(" ");
                 let llm_input = if joined.trim().is_empty() { text } else { joined.as_str() };
-                if let Some(resolved) = self.hear_llm(llm_input, gate, client, cfg).await {
-                    return self.finish(vec![Outcome::Done(resolved)], &normed, text);
+                match self.hear_llm(llm_input, gate, client, cfg).await {
+                    LlmOutcome::Hit(resolved) => return self.finish(vec![Outcome::Done(resolved)], &normed, text),
+                    LlmOutcome::Garbage(unknown) => {
+                        let mut failed = self.failed_from(&normed, text);
+                        for u in unknown {
+                            push_unknown(&mut failed.unknown_words, u);
+                        }
+                        return failed;
+                    }
+                    LlmOutcome::Miss => {}
                 }
             }
         }
@@ -347,17 +370,13 @@ impl Ears {
             path = worse_path(path, r.path);
             confidence = confidence.min(r.confidence);
             for u in r.unknown {
-                if !unknown.contains(&u) {
-                    unknown.push(u);
-                }
+                push_unknown(&mut unknown, u);
             }
             clauses.extend(r.clauses);
             parts.push(sce);
         }
         for u in &normed.unknown_words {
-            if !unknown.contains(u) {
-                unknown.push(u.clone());
-            }
+            push_unknown(&mut unknown, u.clone());
         }
         EarsResult { clauses, path, sce: parts.join(" "), confidence, unknown_words: unknown }
     }
@@ -375,8 +394,10 @@ impl Ears {
 
     // ---- LLM path ----
 
-    /// LLM normalizer over the normalized utterance. One repair retry on parse failure.
-    async fn hear_llm(&self, text: &str, gate: &dyn Gate, client: &LlmClient, cfg: &LlmConfig) -> Option<Resolved> {
+    /// LLM normalizer over the normalized utterance. One repair retry on parse
+    /// failure. `??` (the prompt's escape hatch) and results with no known
+    /// content word are garbage, not misses.
+    async fn hear_llm(&self, text: &str, gate: &dyn Gate, client: &LlmClient, cfg: &LlmConfig) -> LlmOutcome {
         // Vocabulary: known words that overlap with input stems
         let input_tokens = tokenize_for_bm25(text);
         let mut vocab: Vec<String> = self
@@ -389,18 +410,22 @@ impl Ears {
             .collect();
         vocab.sort();
         vocab.dedup();
+        let debug = std::env::var("SPOON_EARS_DEBUG").is_ok();
 
         let msgs = build_prompt(&self.normalizer_prompt, &vocab, &[], text);
         self.stats.llm_calls.fetch_add(1, Ordering::Relaxed);
-        let raw = call_llm_normalizer(client, cfg, msgs).await.ok()?;
+        let Ok(raw) = call_llm_normalizer(client, cfg, msgs).await else {
+            return LlmOutcome::Miss;
+        };
         let sce = strip_non_sce(&raw);
+        if sce == NO_MEANING {
+            return LlmOutcome::Garbage(vec![]);
+        }
         let parser_err = match self.parse_with_unknowns(&sce, gate) {
-            Some((clauses, unknown)) => {
-                return Some(Resolved { sce, clauses, path: EarsPath::Llm, confidence: 0.8, unknown });
-            }
+            Some((clauses, unknown)) => return self.accept_llm(text, sce, clauses, unknown, 0.8),
             None => gate.parse(&sce).err().unwrap_or_else(|| "no clauses".to_string()),
         };
-        if std::env::var("SPOON_EARS_DEBUG").is_ok() {
+        if debug {
             eprintln!("DBG llm input={text:?} raw={raw:?} err={parser_err:?}");
         }
 
@@ -408,14 +433,33 @@ impl Ears {
         self.stats.repairs.fetch_add(1, Ordering::Relaxed);
         self.stats.llm_calls.fetch_add(1, Ordering::Relaxed);
         let msgs2 = build_repair_prompt(text, &sce, &parser_err, &vocab);
-        let raw2 = call_llm_normalizer(client, cfg, msgs2).await.ok()?;
+        let Ok(raw2) = call_llm_normalizer(client, cfg, msgs2).await else {
+            return LlmOutcome::Miss;
+        };
         let sce2 = strip_non_sce(&raw2);
-        if std::env::var("SPOON_EARS_DEBUG").is_ok() {
+        if debug {
             eprintln!("DBG repair raw={raw2:?} err={:?}", gate.parse(&sce2).err());
         }
-        let (clauses, unknown) = self.parse_with_unknowns(&sce2, gate)?;
+        if sce2 == NO_MEANING {
+            return LlmOutcome::Garbage(vec![]);
+        }
+        let Some((clauses, unknown)) = self.parse_with_unknowns(&sce2, gate) else {
+            return LlmOutcome::Miss;
+        };
         self.stats.repairs_ok.fetch_add(1, Ordering::Relaxed);
-        Some(Resolved { sce: sce2, clauses, path: EarsPath::Llm, confidence: 0.7, unknown })
+        self.accept_llm(text, sce2, clauses, unknown, 0.7)
+    }
+
+    /// A parsed LLM result is a hit unless the guard finds no known content
+    /// word, or a number the input never mentioned (a copied prompt example).
+    fn accept_llm(&self, input: &str, sce: String, clauses: Vec<Clause>, unknown: Vec<String>, confidence: f32) -> LlmOutcome {
+        if is_garbage(&sce, &unknown) || invents_numbers(&sce, input) {
+            if std::env::var("SPOON_EARS_DEBUG").is_ok() {
+                eprintln!("DBG garbage sce={sce:?} unknown={unknown:?}");
+            }
+            return LlmOutcome::Garbage(unknown);
+        }
+        LlmOutcome::Hit(Resolved { sce, clauses, path: EarsPath::Llm, confidence, unknown })
     }
 
     // ---- mutation API ----
@@ -532,6 +576,13 @@ fn is_unknown_name(name: &str, lexicon: &Lexicon) -> bool {
 }
 
 // ---- path ordering ----
+
+/// Unknown words are reported once, whatever their casing (`Kealan` / `kealan`).
+fn push_unknown(list: &mut Vec<String>, word: String) {
+    if !list.iter().any(|w| w.eq_ignore_ascii_case(&word)) {
+        list.push(word);
+    }
+}
 
 fn worse_path(a: EarsPath, b: EarsPath) -> EarsPath {
     if path_rank(&b) > path_rank(&a) { b } else { a }
