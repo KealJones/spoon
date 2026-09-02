@@ -1,17 +1,16 @@
-//! Facts layer: assert grounded clauses as facts, answer questions over them.
+//! Facts layer, assertion side: store grounded clauses as facts. Questions
+//! over them are answered in `answer.rs`.
 //!
 //! Assertion rules:
 //!   - For each Pred, find or create a Relation action (id = "rel.{verb}").
-//!   - "be" copula is handled specially: attr -> rel.is, NP -> rel.is_a.
+//!   - "be" copula is handled specially: attr -> rel.is, NP -> rel.is_a,
+//!     `is ADJ than` -> rel.ADJ-than(x, y) (see `compare.rs`).
 //!   - New entities with nouns get an is_a fact linking them to their concept.
 //!   - Count entities get a rel.count fact.
 //!   - Universal bindings delegate to rules.rs; the clause returns Universal.
 //!   - Contradictions (same pred+args, opposite truth) are surfaced to caller.
-//!
-//! Answer rules:
-//!   - YesNo: query by pred+bound args; check truth; fallback to CAN hierarchy.
-//!   - Who/What/Which/Where/When: collect values at the Query position.
-//!   - HowMany: sum rel.count facts for entities matching the query.
+//!   - Event verbs (moves to, picks-up, drops, gives) also update the world
+//!     state (see `state.rs`).
 
 use std::collections::HashMap;
 
@@ -24,7 +23,7 @@ use spoon_core::types::*;
 use super::rules::{
     capitalize_first, ensure_concept_in_can, forward_chain, universal_to_rule,
 };
-use super::{Binding, Grounded};
+use super::{compare, state, Binding, Grounded};
 
 // ---------- public types ----------
 
@@ -49,19 +48,11 @@ pub enum AssertOutcome {
     },
 }
 
-#[derive(Debug)]
-pub enum Answer {
-    Values(Vec<Value>),
-    YesNo(bool, Option<Fact>),
-    Count(i64),
-    Unknown { reason: String },
-}
-
 // ---------- helpers for assertion ----------
 
 /// Ensure a Relation action exists for `rel_id` (e.g. "rel.own"). Creates a
 /// provisional one with `Impl::Primitive` if absent.
-fn ensure_relation(
+pub(super) fn ensure_relation(
     w: &mut FactWriter<'_>,
     rel_id: &str,
     verbs: &[&str],
@@ -107,7 +98,7 @@ fn ensure_verb_relation(w: &mut FactWriter<'_>, verb: &str, arity: usize, sce: &
 }
 
 /// Resolve a Term to a Value using the binding map.
-fn resolve_term(term: &Term, bindings: &HashMap<String, Binding>) -> Option<Value> {
+pub(super) fn resolve_term(term: &Term, bindings: &HashMap<String, Binding>) -> Option<Value> {
     match term {
         Term::Var { var } => match bindings.get(var.as_str()) {
             Some(Binding::Entity(v)) => Some(v.clone()),
@@ -148,7 +139,7 @@ fn resolve_be_np_arg(
 }
 
 /// Build a Fact (id=0 placeholder) from a Pred and resolved args.
-fn make_fact(
+pub(super) fn make_fact(
     pred_id: ActionId,
     args: Vec<Value>,
     negated: bool,
@@ -288,6 +279,11 @@ pub fn assert_grounded(
             new_relations.push(action_id);
             stored_facts.push(Fact { id, ..fact });
         }
+
+        // An event also moves the world: location and possession state.
+        if pred.pred != "be" {
+            stored_facts.extend(state::derive(w, pred, &g.bindings, source, episode_id)?);
+        }
     }
 
     Ok(AssertOutcome::Stored {
@@ -301,7 +297,7 @@ pub fn assert_grounded(
 /// subject is a possessed noun. Returns (property noun, owner value) so the
 /// fact becomes `rel.<noun>(owner, value)` instead of an is_a on a minted
 /// entity that nobody can query back.
-fn property_subject(
+pub(super) fn property_subject(
     term: &Term,
     bindings: &HashMap<String, Binding>,
     all_refs: &[&Referent],
@@ -331,6 +327,11 @@ fn process_be_pred(
         let action_id = ensure_verb_relation(w, &noun, 2, sce);
         let fact = make_fact(action_id.clone(), vec![owner, value], pred.negated, &pred.modal, source, episode_id);
         return Some((action_id, fact));
+    }
+    if let Some(attr) = pred.attr.as_deref().filter(|a| compare::is_comparative(a)) {
+        if pred.args.len() >= 2 {
+            return compare::fact_for(w, pred, attr, bindings, source, episode_id);
+        }
     }
     if let Some(attr) = &pred.attr {
         // Attribute form: be(x1) attr="adj" -> rel.is(x1, Text(adj))
@@ -417,340 +418,6 @@ pub fn supersede(store: &Store, existing_id: i64, incoming: &Fact) -> anyhow::Re
     store.insert_fact(incoming)
 }
 
-// ---------- answer_grounded ----------
-
-pub fn answer_grounded(
-    can: &Can,
-    store: &Store,
-    g: &Grounded,
-    kind: &QuestionKind,
-) -> anyhow::Result<Answer> {
-    let all_refs: Vec<&Referent> = g
-        .clause
-        .referents
-        .iter()
-        .chain(g.clause.then_referents.iter())
-        .collect();
-
-    // Find the first meaningful predicate.
-    let pred = match g.clause.conditions.first() {
-        Some(p) => p,
-        None => return Ok(Answer::Unknown { reason: "no predicate".into() }),
-    };
-
-    match kind {
-        QuestionKind::YesNo | QuestionKind::Should => {
-            answer_yes_no(can, store, g, pred, &all_refs)
-        }
-        QuestionKind::Who { focus }
-        | QuestionKind::What { focus }
-        | QuestionKind::Which { focus }
-        | QuestionKind::Where { focus }
-        | QuestionKind::When { focus } => {
-            answer_wh(can, store, g, pred, &all_refs, focus)
-        }
-        QuestionKind::HowMany { focus } => {
-            answer_how_many(store, g, pred, focus)
-        }
-    }
-}
-
-fn answer_yes_no(
-    can: &Can,
-    store: &Store,
-    g: &Grounded,
-    pred: &Pred,
-    all_refs: &[&Referent],
-) -> anyhow::Result<Answer> {
-    if pred.pred == "be" {
-        return answer_be_yesno(can, store, g, pred, all_refs);
-    }
-
-    let action_id = action_id_for(can, &pred.pred);
-    let Some(action_id) = action_id else {
-        return Ok(Answer::Unknown { reason: format!("unknown predicate '{}'", pred.pred) });
-    };
-
-    let pattern = build_pattern(pred, &g.bindings);
-    let facts = store.query_facts(&action_id, &pattern).unwrap_or_default();
-    let facts = filter_by_noun_constraints(can, store, g, pred, all_refs, facts);
-
-    if let Some(f) = facts.iter().find(|f| f.truth) {
-        return Ok(Answer::YesNo(true, Some(f.clone())));
-    }
-    if let Some(f) = facts.iter().find(|f| !f.truth) {
-        return Ok(Answer::YesNo(false, Some(f.clone())));
-    }
-
-    // No direct fact: check for Should-type questions.
-    if matches!(g.clause.act, Act::Question { kind: QuestionKind::Should }) {
-        return Ok(Answer::Unknown { reason: "suggestion".into() });
-    }
-
-    Ok(Answer::Unknown { reason: "no fact".into() })
-}
-
-fn answer_be_yesno(
-    can: &Can,
-    store: &Store,
-    g: &Grounded,
-    pred: &Pred,
-    all_refs: &[&Referent],
-) -> anyhow::Result<Answer> {
-    // Property form: "Is the wellbeing of Assistant good?" -> rel.wellbeing(Assistant, ?)
-    if let Some((noun, owner)) = pred.args.first().and_then(|t| property_subject(t, &g.bindings, all_refs)) {
-        let Some(action_id) = action_id_for(can, &noun) else {
-            return Ok(Answer::Unknown { reason: format!("nothing known about {noun}") });
-        };
-        let want = match &pred.attr {
-            Some(attr) => Some(Value::Text(attr.clone())),
-            None => pred.args.get(1).and_then(|t| resolve_term(t, &g.bindings)),
-        };
-        let facts = store.query_facts(&action_id, &[Some(owner), None]).unwrap_or_default();
-        let Some(want) = want else {
-            return Ok(Answer::Unknown { reason: "unresolved object".into() });
-        };
-        if let Some(f) = facts.iter().find(|f| f.args.get(1) == Some(&want)) {
-            return Ok(Answer::YesNo(f.truth, Some(f.clone())));
-        }
-        if let Some(f) = facts.iter().find(|f| f.truth) {
-            return Ok(Answer::YesNo(false, Some(f.clone())));
-        }
-        return Ok(Answer::Unknown { reason: format!("no {noun} fact") });
-    }
-
-    // Attribute form: "Is X brown?" -> query rel.is(x1, Text("brown"))
-    if let Some(attr) = &pred.attr {
-        let Some(x1) = pred.args.first().and_then(|t| resolve_term(t, &g.bindings)) else {
-            return Ok(Answer::Unknown { reason: "unresolved subject".into() });
-        };
-        let action_id = ActionId("rel.is".into());
-        let pattern = vec![Some(x1), Some(Value::Text(attr.clone()))];
-        let facts = store.query_facts(&action_id, &pattern).unwrap_or_default();
-        if let Some(f) = facts.iter().find(|f| f.truth) {
-            return Ok(Answer::YesNo(true, Some(f.clone())));
-        }
-        if let Some(f) = facts.iter().find(|f| !f.truth) {
-            return Ok(Answer::YesNo(false, Some(f.clone())));
-        }
-        return Ok(Answer::Unknown { reason: "no attribute fact".into() });
-    }
-
-    // NP form: "Is X a dog?" -> check rel.is_a
-    if pred.args.len() >= 2 {
-        let Some(x1) = resolve_term(&pred.args[0], &g.bindings) else {
-            return Ok(Answer::Unknown { reason: "unresolved subject".into() });
-        };
-
-        // Determine the target concept.
-        let target_concept = if let Term::Var { var: x2_var } = &pred.args[1] {
-            let ref2 = all_refs.iter().find(|r| &r.var == x2_var);
-            ref2.and_then(|r| r.noun.as_deref()).and_then(|noun| {
-                can.concepts_for_noun(noun)
-                    .into_iter()
-                    .next()
-                    .map(|c| c.id.clone())
-                    .or_else(|| Some(ConceptId(capitalize_first(noun))))
-            })
-        } else if let Term::Value { value: Value::Name(n) } = &pred.args[1] {
-            Some(ConceptId(n.clone()))
-        } else {
-            None
-        };
-
-        let action_id = ActionId("rel.is_a".into());
-
-        if let Some(tc) = &target_concept {
-            // Direct fact lookup.
-            let pattern = vec![Some(x1.clone()), Some(Value::Name(tc.0.clone()))];
-            let facts = store.query_facts(&action_id, &pattern).unwrap_or_default();
-            if let Some(f) = facts.iter().find(|f| f.truth) {
-                return Ok(Answer::YesNo(true, Some(f.clone())));
-            }
-            if let Some(f) = facts.iter().find(|f| !f.truth) {
-                return Ok(Answer::YesNo(false, Some(f.clone())));
-            }
-
-            // CAN hierarchy fallback: query all is_a facts for x1, then check closure.
-            let direct_pattern = vec![Some(x1.clone()), None];
-            let direct_facts = store.query_facts(&action_id, &direct_pattern).unwrap_or_default();
-            for f in direct_facts.iter().filter(|f| f.truth) {
-                if let Some(Value::Name(concept_name)) = f.args.get(1) {
-                    let c = ConceptId(concept_name.clone());
-                    if can.is_a(&c, tc) {
-                        return Ok(Answer::YesNo(true, Some(f.clone())));
-                    }
-                }
-            }
-        } else {
-            return Ok(Answer::Unknown { reason: "unresolved object of 'be'".into() });
-        }
-    }
-
-    Ok(Answer::Unknown { reason: "no is_a fact".into() })
-}
-
-fn answer_wh(
-    can: &Can,
-    store: &Store,
-    g: &Grounded,
-    pred: &Pred,
-    all_refs: &[&Referent],
-    focus: &str,
-) -> anyhow::Result<Answer> {
-    if pred.pred == "be" {
-        // "What is the name of Assistant?" -> rel.name(Assistant, ?). The
-        // possessed noun may sit on either side of the copula.
-        if let Some((noun, owner)) =
-            pred.args.iter().find_map(|t| property_subject(t, &g.bindings, all_refs))
-        {
-            let Some(action_id) = action_id_for(can, &noun) else {
-                return Ok(Answer::Unknown { reason: format!("nothing known about {noun}") });
-            };
-            let facts = store.query_facts(&action_id, &[Some(owner), None]).unwrap_or_default();
-            let values: Vec<Value> =
-                facts.iter().filter(|f| f.truth).filter_map(|f| f.args.get(1).cloned()).collect();
-            return Ok(if values.is_empty() {
-                Answer::Unknown { reason: format!("no {noun} fact") }
-            } else {
-                Answer::Values(values)
-            });
-        }
-    }
-
-    let action_id = action_id_for(can, &pred.pred)
-        .or_else(|| Some(ActionId(format!("rel.{}", pred.pred))));
-    let Some(action_id) = action_id else {
-        return Ok(Answer::Unknown { reason: format!("unknown predicate '{}'", pred.pred) });
-    };
-
-    let pattern = build_pattern(pred, &g.bindings);
-    let facts = store.query_facts(&action_id, &pattern).unwrap_or_default();
-    let facts = filter_by_noun_constraints(can, store, g, pred, all_refs, facts);
-
-    // Find which arg position corresponds to the focus variable.
-    let focus_pos = pred.args.iter().position(|t| {
-        if let Term::Var { var } = t {
-            var == focus
-                && matches!(
-                    g.bindings.get(var.as_str()),
-                    Some(Binding::Query) | Some(Binding::Unbound)
-                )
-        } else {
-            false
-        }
-    });
-
-    let pos = focus_pos.unwrap_or(0);
-    let mut values: Vec<Value> = facts
-        .iter()
-        .filter(|f| f.truth)
-        .filter_map(|f| f.args.get(pos).cloned())
-        .collect();
-
-    values.sort_by(|a, b| a.render().cmp(&b.render()));
-    values.dedup_by(|a, b| a == b);
-
-    if values.is_empty() {
-        Ok(Answer::Unknown { reason: "no matching fact".into() })
-    } else {
-        Ok(Answer::Values(values))
-    }
-}
-
-/// Drop facts whose argument does not fit the noun of an open referent:
-/// "Who owns a cat?" must not match own(John, dog_1). A value fits a noun
-/// when it has an is_a fact to that noun's concept (or a subconcept).
-fn filter_by_noun_constraints(
-    can: &Can,
-    store: &Store,
-    g: &Grounded,
-    pred: &Pred,
-    all_refs: &[&Referent],
-    mut facts: Vec<Fact>,
-) -> Vec<Fact> {
-    let is_a_id = ActionId("rel.is_a".into());
-    for (pos, term) in pred.args.iter().enumerate() {
-        let Term::Var { var } = term else { continue };
-        if !matches!(g.bindings.get(var.as_str()), Some(Binding::Unbound)) {
-            continue;
-        }
-        let Some(noun) = all_refs.iter().find(|r| &r.var == var).and_then(|r| r.noun.as_deref()) else {
-            continue;
-        };
-        let mut targets: Vec<ConceptId> = can.concepts_for_noun(noun).iter().map(|c| c.id.clone()).collect();
-        if targets.is_empty() {
-            targets.push(ConceptId(capitalize_first(noun)));
-        }
-        facts.retain(|f| {
-            let Some(v) = f.args.get(pos) else { return false };
-            store
-                .query_facts(&is_a_id, &[Some(v.clone()), None])
-                .unwrap_or_default()
-                .iter()
-                .filter(|f| f.truth)
-                .any(|f| match f.args.get(1) {
-                    Some(Value::Name(n)) => {
-                        let c = ConceptId(n.clone());
-                        targets.iter().any(|tc| &c == tc || can.is_a(&c, tc))
-                    }
-                    _ => false,
-                })
-        });
-    }
-    facts
-}
-
-fn answer_how_many(
-    store: &Store,
-    g: &Grounded,
-    pred: &Pred,
-    focus: &str,
-) -> anyhow::Result<Answer> {
-    // Find the focus var position in the pred.
-    let focus_pos = pred.args.iter().position(|t| {
-        if let Term::Var { var } = t {
-            var == focus
-        } else {
-            false
-        }
-    });
-
-    // Build query pattern: focus position = None, rest = bound.
-    let pattern = build_pattern(pred, &g.bindings);
-
-    let action_id = ActionId(format!("rel.{}", pred.pred));
-
-    let facts = store.query_facts(&action_id, &pattern).unwrap_or_default();
-
-    let pos = focus_pos.unwrap_or(pred.args.len().saturating_sub(1));
-    let count_id = ActionId("rel.count".into());
-    let mut total: i64 = 0;
-    let mut found_count = false;
-
-    for fact in facts.iter().filter(|f| f.truth) {
-        if let Some(entity_val) = fact.args.get(pos) {
-            let cp = vec![Some(entity_val.clone()), None];
-            let count_facts = store.query_facts(&count_id, &cp).unwrap_or_default();
-            for cf in count_facts.iter().filter(|f| f.truth) {
-                if let Some(Value::Int(n)) = cf.args.get(1) {
-                    total += n;
-                    found_count = true;
-                }
-            }
-            if !found_count {
-                total += 1; // Count the entity itself if no count fact.
-            }
-        }
-    }
-
-    if facts.iter().any(|f| f.truth) {
-        Ok(Answer::Count(total))
-    } else {
-        Ok(Answer::Unknown { reason: "no matching facts".into() })
-    }
-}
-
 // ---------- describe ----------
 
 /// Describe an entity as a list of SCE-style strings, e.g. "John owns dog_1".
@@ -773,7 +440,7 @@ pub fn describe(can: &Can, store: &Store, entity: &Value) -> Vec<String> {
 // ---------- utility ----------
 
 /// Find the ActionId for a verb by checking Relation actions in CAN.
-fn action_id_for(can: &Can, verb: &str) -> Option<ActionId> {
+pub(super) fn action_id_for(can: &Can, verb: &str) -> Option<ActionId> {
     let direct = ActionId(format!("rel.{}", verb));
     if can.action(&direct).is_some() {
         return Some(direct);
@@ -782,27 +449,4 @@ fn action_id_for(can: &Can, verb: &str) -> Option<ActionId> {
         .iter()
         .find(|a| a.role == Role::Relation)
         .map(|a| a.id.clone())
-}
-
-/// Build a query pattern from a Pred and bindings: Entity/Literal -> Some(v),
-/// Query/Unbound/Universal -> None.
-fn build_pattern(pred: &Pred, bindings: &HashMap<String, Binding>) -> Vec<Option<Value>> {
-    let mut pattern: Vec<Option<Value>> = pred
-        .args
-        .iter()
-        .map(|t| match t {
-            Term::Var { var } => match bindings.get(var.as_str()) {
-                Some(Binding::Entity(v)) => Some(v.clone()),
-                Some(Binding::Literal(v)) => Some(v.clone()),
-                _ => None,
-            },
-            Term::Value { value } => Some(value.clone()),
-            _ => None,
-        })
-        .collect();
-
-    if let Some(attr) = &pred.attr {
-        pattern.push(Some(Value::Text(attr.clone())));
-    }
-    pattern
 }

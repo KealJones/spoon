@@ -5,20 +5,22 @@
 //! (or well-defined bindings) before the facts and rules layers act on them.
 //! Everything here is pure deterministic logic - no LLM calls anywhere.
 
+mod answer;
+mod compare;
 mod correction;
 mod facts;
 mod ground;
 mod keywords;
 mod realize;
 mod rules;
+mod state;
 
+pub use answer::{answer_grounded, Answer};
 pub use correction::{detect as detect_correction, detect_clause as detect_clause_correction, Correction};
-pub use facts::{
-    assert_grounded, answer_grounded, describe, supersede, Answer, AssertOutcome, FactWriter,
-};
+pub use facts::{assert_grounded, describe, supersede, AssertOutcome, FactWriter};
 pub use ground::ground;
 pub use keywords::extract as extract_keywords;
-pub use realize::{concept_name, realize_fact, sub_clause_text};
+pub use realize::{concept_name, display_value, realize_fact, realize_fact_with, sub_clause_text, Article};
 pub use rules::{add_rule, forward_chain, universal_to_rule, Rule};
 
 use std::collections::HashMap;

@@ -230,6 +230,9 @@ async fn babi(brain: &Brain, data_dir: &Path) -> anyhow::Result<Outcome> {
     let mut weaning = Weaning::default();
     let mut rows: Vec<ProbeRow> = Vec::with_capacity(probes.len());
     for (i, probe) in probes.iter().enumerate() {
+        // Each bAbI story is an independent world: a fresh in-memory brain per
+        // probe, otherwise Mary still carries the football from an earlier story.
+        let brain = Brain::open(spoon_mind::brain::BrainConfig { db_path: None, ..brain.cfg.clone() }).await?;
         let session = format!("babi-{i}");
         let mut paths = Vec::with_capacity(probe.story.len() + 1);
         for line in &probe.story {

@@ -11,6 +11,7 @@ mod exec;
 mod host;
 mod learn;
 mod metrics;
+mod names;
 mod respond;
 mod session;
 mod teach;
@@ -216,7 +217,12 @@ impl Brain {
             ears.learn_word(word, canonical);
         }
 
-        let gate = SceGate::from_can(&can);
+        let mut gate = SceGate::from_can(&can);
+        // So do proper names met in earlier conversations.
+        let names = names::load_names(&store);
+        let name_refs: Vec<&str> = names.iter().map(String::as_str).collect();
+        ears.lexicon_mut().add_names(&name_refs);
+        gate.add_names(&name_refs);
 
         // Assert self-model seed facts if this is a fresh store.
         if store.counts().unwrap_or_default().facts == 0 {
@@ -274,7 +280,21 @@ impl Brain {
         // snapshot so no sync lock is held across the await.
         let heard = apply_synonyms(text, &self.synonyms.lock());
         let gate = self.gate.lock().clone();
-        let ears_result = ears.hear(&heard, &gate).await;
+        let mut ears_result = ears.hear(&heard, &gate).await;
+
+        // 2b. A sentence that failed only on proper names the ears have never
+        // met ("Sandra moves to the garden."): learn the names, hear again.
+        if ears_result.clauses.is_empty() {
+            let names = names::unknown_names_in(&heard, &gate, ears.lexicon_mut());
+            if !names.is_empty() {
+                self.learn_names(&names, &mut ears)?;
+                if self.cfg.debug {
+                    out.trace.push(format!("names learned: {}", names.join(", ")));
+                }
+                let gate = self.gate.lock().clone();
+                ears_result = ears.hear(&heard, &gate).await;
+            }
+        }
 
         // 3. Everything else is synchronous Spoon code.
         let mut out = self.turn_sync(session_id, text, ears_result, &mut ears, out)?;

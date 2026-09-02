@@ -13,7 +13,10 @@ use spoon_core::kernel::Kernel;
 use spoon_core::store::Store;
 use spoon_core::types::{Act, Fact, Intent, Move, QuestionKind, Signal, Value};
 
-use crate::discourse::{answer_grounded, assert_grounded, Answer, DiscourseState, FactWriter, Grounded};
+use crate::discourse::{
+    answer_grounded, assert_grounded, display_value, realize_fact_with, Answer, Article, DiscourseState, FactWriter,
+    Grounded,
+};
 
 pub use command::ask_examples_move;
 pub use property::Present;
@@ -161,7 +164,8 @@ fn dispatch_question(
     let answer = answer_grounded(ctx.can, ctx.store, g, kind)?;
     let dispatched = match answer {
         Answer::Values(vs) if !vs.is_empty() => {
-            Dispatched::Moves(vec![Move::Answer { question: sce, values: vs, source: Some("memory".into()) }])
+            let values = vs.iter().map(|v| display_value(ctx.can, ctx.store, v)).collect();
+            Dispatched::Moves(vec![Move::Answer { question: sce, values, source: Some("memory".into()) }])
         }
         Answer::YesNo(b, fact) => {
             let because = fact.map(|f| render_fact(ctx, &f));
@@ -219,6 +223,7 @@ fn dispatch_question(
 /// "Is John happy?" -> "I don't know whether John is happy."
 /// "Who owns a cat?" -> "I don't know who owns a cat."
 /// "What is the color of the dog?" -> "I don't know the color of the dog."
+/// "Where is Mary?" -> "I don't know where Mary is."
 fn unknown_move(g: &Grounded, kind: &QuestionKind) -> Move {
     let body = g.clause.sce.trim().trim_end_matches(|c: char| c == '?' || c == '.').trim().to_string();
     let text = match kind {
@@ -233,12 +238,33 @@ fn unknown_move(g: &Grounded, kind: &QuestionKind) -> Move {
                 format!("I don't know whether {}.", lowercase_determiner(s))
             }
         }
+        QuestionKind::Where { .. } | QuestionKind::When { .. } => match embedded_copula_question(&body) {
+            Some(embedded) => format!("I don't know {embedded}."),
+            None => format!("I don't know {}.", lowercase_determiner(&body)),
+        },
         _ => match body.strip_prefix("What is ").filter(|np| np.starts_with("the ")) {
             Some(np) => format!("I don't know {np}."),
             None => format!("I don't know {}.", lowercase_determiner(&body)),
         },
     };
     Move::Explain { text }
+}
+
+/// "Where is Mary" -> "where Mary is": an embedded question puts the copula
+/// after its subject. Anything that is not `wh + copula + subject` is left
+/// to the caller.
+fn embedded_copula_question(body: &str) -> Option<String> {
+    let mut words = body.split_whitespace();
+    let wh = words.next()?.to_lowercase();
+    let copula = words.next()?;
+    if !matches!(copula, "is" | "are" | "was" | "were") {
+        return None;
+    }
+    let subject = words.collect::<Vec<_>>().join(" ");
+    if subject.is_empty() {
+        return None;
+    }
+    Some(format!("{wh} {} {copula}", lowercase_determiner(&subject)))
 }
 
 /// Lowercase a sentence-initial function word so it can sit mid-sentence;
@@ -258,8 +284,12 @@ fn lowercase_determiner(s: &str) -> String {
     }
 }
 
-/// Render a Fact as a compact SCE-ish string.
+/// Render a Fact as English with definite noun phrases ("the elephant is
+/// bigger than the cat"), falling back to a compact SCE-ish string.
 pub(crate) fn render_fact(ctx: &DispatchCtx<'_>, fact: &Fact) -> String {
+    if let Some(s) = realize_fact_with(ctx.can, ctx.store, fact, Article::Definite) {
+        return s;
+    }
     let verb = ctx.can.action(&fact.pred)
         .and_then(|a| a.verbs.first().cloned())
         .unwrap_or_else(|| fact.pred.0.clone());

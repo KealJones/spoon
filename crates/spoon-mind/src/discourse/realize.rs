@@ -29,25 +29,52 @@ fn trim_sentence(s: &str) -> String {
     s.trim().trim_end_matches(['.', '!', '?']).trim().to_string()
 }
 
+/// How a minted entity reads: "a dog" when memory is quoted cold, "the dog"
+/// when the entity was just mentioned (answers and yes/no evidence).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Article {
+    Indefinite,
+    Definite,
+}
+
 /// A stored fact as a short English clause without the final period:
 /// `rel.own(John, dog_1)` -> "John owns a dog", `rel.is(dog_1, brown)` ->
 /// "a dog is brown", `rel.color(dog_1, brown)` -> "the color of a dog is
 /// brown". Typing and count facts (`is_a`, `count`) have nothing to say and
 /// give `None`.
 pub fn realize_fact(can: &Can, store: &Store, fact: &Fact) -> Option<String> {
+    realize_fact_with(can, store, fact, Article::Indefinite)
+}
+
+/// `realize_fact` with a choice of article for minted entities:
+/// `rel.bigger-than(elephant_1, cat_2)` -> "the elephant is bigger than the cat".
+pub fn realize_fact_with(can: &Can, store: &Store, fact: &Fact, article: Article) -> Option<String> {
     let rel = fact.pred.0.strip_prefix("rel.")?;
     if matches!(rel, "is_a" | "count") || fact.args.is_empty() {
         return None;
     }
     let not = if fact.truth { "" } else { "not " };
+    let np = |v: &Value| noun_phrase(can, store, v, article);
     if rel == "is" {
         let [subject, attr] = fact.args.as_slice() else { return None };
-        return Some(format!("{} is {not}{}", noun_phrase(can, store, subject), attr.render()));
+        return Some(format!("{} is {not}{}", np(subject), attr.render()));
+    }
+    if let Some(adj) = rel.strip_suffix("-than") {
+        let [left, right] = fact.args.as_slice() else { return None };
+        return Some(format!("{} is {not}{adj} than {}", np(left), np(right)));
+    }
+    if rel == "location" {
+        let [entity, place] = fact.args.as_slice() else { return None };
+        return Some(format!("{} is {not}in {}", np(entity), np(place)));
     }
     if fact.args.iter().all(|a| matches!(a, Value::Name(_))) {
         // A verb relation between entities: let the SCE realizer conjugate.
-        let referents: Vec<Referent> =
-            fact.args.iter().enumerate().map(|(i, a)| referent(can, store, a, &format!("x{i}"))).collect();
+        let referents: Vec<Referent> = fact
+            .args
+            .iter()
+            .enumerate()
+            .map(|(i, a)| referent(can, store, a, &format!("x{i}"), article))
+            .collect();
         let clause = Clause {
             act: Act::Assert,
             conditions: vec![Pred {
@@ -69,15 +96,25 @@ pub fn realize_fact(can: &Can, store: &Store, fact: &Fact) -> Option<String> {
     }
     // A property with a literal value: "the color of a dog is brown".
     let [owner, value] = fact.args.as_slice() else { return None };
-    Some(format!("the {rel} of {} is {not}{}", noun_phrase(can, store, owner), value.render()))
+    Some(format!("the {rel} of {} is {not}{}", np(owner), value.render()))
+}
+
+/// A value as it should be spoken in an answer: minted entities become
+/// definite noun phrases (`bathroom_1` -> "the bathroom"), everything else is
+/// returned untouched so names and numbers keep their type.
+pub fn display_value(can: &Can, store: &Store, value: &Value) -> Value {
+    match entity_noun(can, store, value) {
+        Some(noun) => Value::Text(format!("the {noun}")),
+        None => value.clone(),
+    }
 }
 
 /// The referent for a fact argument. Minted entities (`dog_1`, which carry an
-/// `is_a` fact) become indefinite noun phrases; names stay names.
-fn referent(can: &Can, store: &Store, value: &Value, var: &str) -> Referent {
+/// `is_a` fact) become noun phrases; names stay names.
+fn referent(can: &Can, store: &Store, value: &Value, var: &str, article: Article) -> Referent {
     let (noun, quant) = match value {
         Value::Name(_) => match entity_noun(can, store, value) {
-            Some(noun) => (Some(noun), Quant::Indef),
+            Some(noun) => (Some(noun), if article == Article::Definite { Quant::Def } else { Quant::Indef }),
             None => (None, Quant::Named(value.render())),
         },
         v => (None, Quant::Literal(v.clone())),
@@ -85,10 +122,14 @@ fn referent(can: &Can, store: &Store, value: &Value, var: &str) -> Referent {
     Referent { var: var.into(), noun, quant, mods: vec![], owner: None, span: None }
 }
 
-fn noun_phrase(can: &Can, store: &Store, value: &Value) -> String {
+fn noun_phrase(can: &Can, store: &Store, value: &Value, article: Article) -> String {
     match (value, entity_noun(can, store, value)) {
         (Value::Name(_), Some(noun)) => {
-            let article = if noun.starts_with(['a', 'e', 'i', 'o', 'u']) { "an" } else { "a" };
+            let article = match article {
+                Article::Definite => "the",
+                Article::Indefinite if noun.starts_with(['a', 'e', 'i', 'o', 'u']) => "an",
+                Article::Indefinite => "a",
+            };
             format!("{article} {noun}")
         }
         (Value::Text(s), _) => format!("\"{s}\""),
@@ -192,5 +233,37 @@ mod tests {
         assert_eq!(realize_fact(&can, &store, &color), Some("the color of a dog is brown".into()));
         let typing = fact("rel.is_a", vec![Value::name("dog_1"), Value::name("Dog")]);
         assert_eq!(realize_fact(&can, &store, &typing), None);
+    }
+
+    #[test]
+    fn definite_facts_and_display_values() {
+        let mut can = Can::new();
+        can.add_concept(Concept::entity("Elephant", &["elephant"]));
+        can.add_concept(Concept::entity("Cat", &["cat"]));
+        let store = Store::open_memory().unwrap();
+        let fact = |pred: &str, args: Vec<Value>| Fact {
+            id: 0,
+            pred: ActionId(pred.into()),
+            args,
+            truth: true,
+            modal: None,
+            asserted_at: 0,
+            invalidated_at: None,
+            source: "test".into(),
+            episode_id: None,
+        };
+        store.insert_fact(&fact("rel.is_a", vec![Value::name("elephant_1"), Value::name("Elephant")])).unwrap();
+        store.insert_fact(&fact("rel.is_a", vec![Value::name("cat_2"), Value::name("Cat")])).unwrap();
+
+        let bigger = fact("rel.bigger-than", vec![Value::name("elephant_1"), Value::name("cat_2")]);
+        assert_eq!(
+            realize_fact_with(&can, &store, &bigger, Article::Definite),
+            Some("the elephant is bigger than the cat".into())
+        );
+        let at = fact("rel.location", vec![Value::name("Mary"), Value::name("cat_2")]);
+        assert_eq!(realize_fact_with(&can, &store, &at, Article::Definite), Some("Mary is in the cat".into()));
+        assert_eq!(display_value(&can, &store, &Value::name("cat_2")), Value::text("the cat"));
+        assert_eq!(display_value(&can, &store, &Value::name("Mary")), Value::name("Mary"));
+        assert_eq!(display_value(&can, &store, &Value::Int(3)), Value::Int(3));
     }
 }

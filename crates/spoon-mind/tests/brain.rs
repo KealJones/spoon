@@ -188,6 +188,102 @@ async fn unknown_questions_are_honest() {
 }
 
 // ---------------------------------------------------------------------------
+// World state: locations, carrying, and questions over them (babi families)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn location_follows_the_last_move() {
+    let brain = test_brain().await;
+    say(&brain, "Mary moves to the bathroom.").await;
+    say(&brain, "John moves to the hallway.").await;
+    say(&brain, "Mary moves to the kitchen.").await;
+    let r = say(&brain, "Where is Mary?").await;
+    assert!(r.starts_with("the kitchen"), "current location, got: {r}");
+    assert!(r.contains("source: memory"), "memory answers say so, got: {r}");
+    assert!(say(&brain, "Where is John?").await.starts_with("the hallway"));
+}
+
+#[tokio::test]
+async fn carried_objects_travel_with_their_carrier() {
+    let brain = test_brain().await;
+    say(&brain, "John moves to the garden.").await;
+    say(&brain, "John picks-up the apple.").await;
+    say(&brain, "John moves to the kitchen.").await;
+    let r = say(&brain, "Where is the apple?").await;
+    assert!(r.starts_with("the kitchen"), "carried object is where its carrier is, got: {r}");
+}
+
+#[tokio::test]
+async fn dropped_objects_stay_where_they_were_dropped() {
+    let brain = test_brain().await;
+    say(&brain, "Mary picks-up the milk.").await;
+    say(&brain, "Mary moves to the hallway.").await;
+    say(&brain, "Mary drops the milk.").await;
+    say(&brain, "Mary moves to the office.").await;
+    assert!(say(&brain, "Where is the milk?").await.starts_with("the hallway"));
+    assert!(say(&brain, "Where is Mary?").await.starts_with("the office"));
+}
+
+#[tokio::test]
+async fn counts_and_lists_what_is_carried() {
+    let brain = test_brain().await;
+    say(&brain, "Mary picks-up the apple.").await;
+    say(&brain, "Mary picks-up the milk.").await;
+    say(&brain, "Mary drops the apple.").await;
+    let r = say(&brain, "How many objects does Mary carry?").await;
+    assert!(r.starts_with("1."), "one object after the drop, got: {r}");
+
+    say(&brain, "John picks-up the coin.").await;
+    say(&brain, "John picks-up the key.").await;
+    say(&brain, "John drops the key.").await;
+    say(&brain, "John picks-up the key.").await;
+    assert!(say(&brain, "How many objects does John carry?").await.starts_with("2."));
+    let r = say(&brain, "What does John carry?").await;
+    assert!(r.starts_with("the coin and the key"), "list from memory, got: {r}");
+    assert!(r.contains("source: memory"), "got: {r}");
+}
+
+#[tokio::test]
+async fn unknown_location_is_honest_and_well_worded() {
+    let brain = test_brain().await;
+    say(&brain, "John moves to the hallway.").await;
+    assert_eq!(say(&brain, "Where is Mary?").await, "I don't know where Mary is.");
+    assert_eq!(say(&brain, "Where is the apple?").await, "I don't know where the apple is.");
+}
+
+#[tokio::test]
+async fn comparatives_chain_and_read_as_english() {
+    let brain = test_brain().await;
+    say(&brain, "The elephant is bigger than the dog.").await;
+    say(&brain, "The dog is bigger than the cat.").await;
+    let r = say(&brain, "Is the elephant bigger than the cat?").await;
+    assert!(r.starts_with("yes"), "got: {r}");
+    assert!(r.contains("the elephant is bigger than the cat"), "no entity ids, got: {r}");
+    let r = say(&brain, "Is the cat bigger than the elephant?").await;
+    assert!(r.starts_with("no"), "got: {r}");
+}
+
+#[tokio::test]
+async fn names_learned_from_context_survive_restart() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    let db_path = tmp.path().to_path_buf();
+    {
+        let brain = file_brain(db_path.clone()).await;
+        let r = brain.turn("test", "Sandra moves to the garden.").await.unwrap();
+        assert_eq!(r.episode.metrics.interior_llm_calls, 0);
+        assert!(!r.text.contains("unknown"), "the name is learned in-turn, got: {}", r.text);
+        assert!(say(&brain, "Where is Sandra?").await.starts_with("the garden"));
+    }
+    {
+        let brain = file_brain(db_path).await;
+        let r = say(&brain, "Where is Sandra?").await;
+        assert!(r.starts_with("the garden"), "name and location must survive restart, got: {r}");
+        say(&brain, "Sandra moves to the office.").await;
+        assert!(say(&brain, "Where is Sandra?").await.starts_with("the office"));
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Unknown capability: one move, SCE example, readable learned reply
 // ---------------------------------------------------------------------------
 
