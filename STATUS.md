@@ -6,6 +6,28 @@ not that a type exists. Decisions live in PLAN.md; rules in AGENTS.md.
 
 ---
 
+## 2026-09-02 07:15  Parser round landed; unknown nouns WIP (commit 077cb92)
+
+DONE: babi **11/21 -> 18/21** offline (`cargo run -q -p spoon -- --ephemeral --offline bench babi`), demo 19/19, spoon-lang 32/32 sce tests, corpus parse rate 86.1% unchanged.
+- Locative copula: `Is Mary in the garden?` -> `location` property on subject.
+- Relational PP: `What is south of the office?`, `to the left of` multiword prep.
+- Stranded preposition: `Who does John give the apple to?`
+- Property question: `What color is every wolf?` rewrites to `What is the color of every wolf?`
+- `or` in PP lists: `Mary moves to the kitchen or the hallway.`
+- `sce/pred.rs` for shared preposition sets; irregular plurals (`mice`, `wolves`).
+
+BABI REMAINING (3/21, discourse not parser)
+- fam 10: `Is Mary in the kitchen?` expects `maybe` (two candidate locations from `or`; discourse picks first -> `yes`).
+- fam 15: `What color is every wolf?` needs universal property binding + `Every wolf is white.` -> `rel.color` fact.
+- fam 17: probe may have wrong expected answer (`left` vs `the bag`); parser returns correct `the bag`.
+
+IN PROGRESS (uncommitted WIP on disk): unknown nouns agent (`brain/lookup.rs`, `brain/nouns.rs`, ears acceptance policy). Avengers line still Failed until that lands.
+
+NEXT
+1. Finish unknown nouns commit (accept unknown vocabulary, WordNet lookup, Wikidata, teacher concept_for).
+2. Discourse: `maybe` for unresolved disjunction; universal color facts.
+3. Mouth stance check. 4. parser.rs split into submodules (~2000 lines, mechanical).
+
 ## 2026-09-02 06:10  Ears r5 + discourse + inspector landed (commits 545250d, 0430450, 1fdded3)
 
 DONE (296 tests, 0 warnings, demo 19/19 offline)
