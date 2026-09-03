@@ -215,9 +215,7 @@ impl<W: Write> Writer<'_, W> {
             return self.out.write_str("nan");
         }
         if value.is_infinite() {
-            return self
-                .out
-                .write_str(if value > 0.0 { "inf" } else { "-inf" });
+            return self.out.write_str(if value > 0.0 { "inf" } else { "-inf" });
         }
         // `{:?}` on f64 is the shortest representation that round-trips
         // exactly, which is precisely the guarantee this notation needs.

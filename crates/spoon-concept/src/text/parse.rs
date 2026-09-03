@@ -65,10 +65,7 @@ pub enum ParseError {
     },
 
     #[error("invalid hole at offset {offset}: {reason}")]
-    BadHole {
-        offset: usize,
-        reason: &'static str,
-    },
+    BadHole { offset: usize, reason: &'static str },
 
     #[error("invalid symbol literal \"{text}\" at offset {offset}: expected '#' and 16 hex digits")]
     BadSymbol { offset: usize, text: String },
@@ -254,7 +251,12 @@ fn lex(src: &str) -> Result<Vec<Tok>, ParseError> {
             '{' | '[' => lex_json_structure(&mut lexer)?,
             c if c.is_ascii_digit() || c == '-' || c == '+' => lex_numeric(&mut lexer)?,
             c if c.is_alphabetic() => lex_word(&mut lexer)?,
-            c => return Err(ParseError::BadChar { offset: start, ch: c }),
+            c => {
+                return Err(ParseError::BadChar {
+                    offset: start,
+                    ch: c,
+                });
+            }
         };
         out.push(Tok {
             kind,
@@ -488,8 +490,7 @@ fn lex_numeric(lexer: &mut Lexer<'_>) -> Result<TokKind, ParseError> {
 /// symbol identity is case-insensitive: allowing `True` as a name would give
 /// one concept two spellings, one of which reads back as a boolean.
 fn lex_word(lexer: &mut Lexer<'_>) -> Result<TokKind, ParseError> {
-    let word =
-        lexer.take_while(|c| c.is_alphanumeric() || matches!(c, '-' | '_' | '.' | ':'));
+    let word = lexer.take_while(|c| c.is_alphanumeric() || matches!(c, '-' | '_' | '.' | ':'));
     let lowered = word.to_lowercase();
     match lowered.as_str() {
         "true" => Ok(TokKind::Value(Ground::Bool(true))),

@@ -30,7 +30,13 @@ fn symbol_id_ignores_case_and_surrounding_space() {
 #[test]
 fn distinct_names_get_distinct_ids() {
     let names = [
-        "greg", "keal", "add", "sort", "friend-with", "employment", "height",
+        "greg",
+        "keal",
+        "add",
+        "sort",
+        "friend-with",
+        "employment",
+        "height",
     ];
     let mut seen = std::collections::HashSet::new();
     for n in names {
@@ -78,7 +84,10 @@ fn int_float_and_text_are_three_different_concepts() {
 
 #[test]
 fn bool_false_does_not_collide_with_int_zero() {
-    assert_ne!(Concept::bool(false).content_id(), Concept::int(0).content_id());
+    assert_ne!(
+        Concept::bool(false).content_id(),
+        Concept::int(0).content_id()
+    );
 }
 
 #[test]
@@ -88,7 +97,10 @@ fn nan_equals_itself() {
     let a = Ground::Float(f64::NAN);
     let b = Ground::Float(f64::NAN);
     assert_eq!(a, b);
-    assert_eq!(Concept::ground(a).content_id(), Concept::ground(b).content_id());
+    assert_eq!(
+        Concept::ground(a).content_id(),
+        Concept::ground(b).content_id()
+    );
 }
 
 #[test]
@@ -154,7 +166,10 @@ fn json_object_key_order_does_not_change_identity() {
 
 #[test]
 fn content_id_is_stable_across_construction_paths() {
-    let a = Concept::call("friend-with", [Concept::named("Greg"), Concept::named("Keal")]);
+    let a = Concept::call(
+        "friend-with",
+        [Concept::named("Greg"), Concept::named("Keal")],
+    );
     let b = Concept::apply(
         Concept::named("Friend-With"),
         vec![Concept::named("greg"), Concept::named("keal")],
@@ -175,8 +190,14 @@ fn hyphenation_is_significant() {
 
 #[test]
 fn argument_order_matters() {
-    let a = Concept::call("friend-with", [Concept::named("Greg"), Concept::named("Keal")]);
-    let b = Concept::call("friend-with", [Concept::named("Keal"), Concept::named("Greg")]);
+    let a = Concept::call(
+        "friend-with",
+        [Concept::named("Greg"), Concept::named("Keal")],
+    );
+    let b = Concept::call(
+        "friend-with",
+        [Concept::named("Keal"), Concept::named("Greg")],
+    );
     // These are different concepts. That they mean the same thing is something
     // Symmetric<FriendWith> has to establish by inference, not something the
     // representation may assume.
@@ -189,11 +210,18 @@ fn nesting_is_not_flattening() {
     // into the digest before the children precisely to prevent this.
     let nested = Concept::call(
         "f",
-        [Concept::named("a"), Concept::call("g", [Concept::named("b")])],
+        [
+            Concept::named("a"),
+            Concept::call("g", [Concept::named("b")]),
+        ],
     );
     let flat = Concept::call(
         "f",
-        [Concept::named("a"), Concept::named("g"), Concept::named("b")],
+        [
+            Concept::named("a"),
+            Concept::named("g"),
+            Concept::named("b"),
+        ],
     );
     assert_ne!(nested.content_id(), flat.content_id());
 }
@@ -222,7 +250,13 @@ fn hole_does_not_collide_with_named_or_ground() {
 
 #[test]
 fn content_id_hex_round_trips() {
-    let c = Concept::call("stated", [Concept::named("keal"), Concept::call("is-sad", [Concept::named("greg")])]);
+    let c = Concept::call(
+        "stated",
+        [
+            Concept::named("keal"),
+            Concept::call("is-sad", [Concept::named("greg")]),
+        ],
+    );
     let id = c.content_id();
     let hex = id.to_hex();
     assert_eq!(hex.len(), 64);
@@ -252,7 +286,10 @@ fn ground_identity_versus_named_identity() {
 
 #[test]
 fn compound_exposes_head_and_args() {
-    let c = Concept::call("employment", [Concept::named("Greg"), Concept::named("Workiva")]);
+    let c = Concept::call(
+        "employment",
+        [Concept::named("Greg"), Concept::named("Workiva")],
+    );
     assert_eq!(c.arity(), 2);
     assert_eq!(c.head_symbol(), Some(SymbolId::of("employment")));
     assert_eq!(c.arg(0), Some(&Concept::named("greg")));
@@ -280,11 +317,20 @@ fn size_and_depth_count_the_head() {
     assert_eq!(atom.depth(), 1);
 
     // Compound node + head + 2 args
-    let flat = Concept::call("friend-with", [Concept::named("greg"), Concept::named("keal")]);
+    let flat = Concept::call(
+        "friend-with",
+        [Concept::named("greg"), Concept::named("keal")],
+    );
     assert_eq!(flat.size(), 4);
     assert_eq!(flat.depth(), 2);
 
-    let nested = Concept::call("sum", [Concept::call("map", [Concept::named("friends"), Concept::named("height")])]);
+    let nested = Concept::call(
+        "sum",
+        [Concept::call(
+            "map",
+            [Concept::named("friends"), Concept::named("height")],
+        )],
+    );
     assert_eq!(nested.depth(), 3);
     assert_eq!(nested.size(), 6);
 }
@@ -315,7 +361,10 @@ fn concepts_round_trip_through_json() {
         Concept::call("raining", []),
         Concept::call(
             "stated",
-            [Concept::named("keal"), Concept::call("is-sad", [Concept::named("greg")])],
+            [
+                Concept::named("keal"),
+                Concept::call("is-sad", [Concept::named("greg")]),
+            ],
         ),
         Concept::apply(
             Concept::call("sort", [Concept::named("descending")]),

@@ -164,7 +164,10 @@ fn the_generalization_covers_both_inputs() {
         for right in terms.iter().skip(20) {
             let (general, _, _) = anti_unify(left, right);
             assert!(generalizes(&general, left).is_some(), "does not cover left");
-            assert!(generalizes(&general, right).is_some(), "does not cover right");
+            assert!(
+                generalizes(&general, right).is_some(),
+                "does not cover right"
+            );
         }
     }
 }

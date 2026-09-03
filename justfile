@@ -1,44 +1,32 @@
 default:
     @just --list
 
-repl:
-    cargo run -p spoon -- repl
+# ---- build and test ----
 
-repl-offline:
-    cargo run -p spoon -- --ephemeral --offline repl
-
-serve port="8787" host="127.0.0.1":
-    cargo run -p spoon -- serve --port {{port}} --host {{host}}
-
-stdio:
-    cargo run -q -p spoon -- --offline stdio
-
-bench-demo:
-    cargo run -p spoon -- --offline bench demo
-
-bench suite="convo20":
-    cargo run -p spoon -- bench {{suite}}
-
-teach lessons="6":
-    cargo run -p spoon -- teach --lessons {{lessons}}
-
-export out="seed.json":
-    cargo run -p spoon -- export --out {{out}}
-
-import file="seed.json":
-    cargo run -p spoon -- import {{file}}
+check:
+    cargo check --workspace --all-targets
 
 test:
     cargo test --workspace
 
-build:
-    cargo build --workspace
+test-crate crate:
+    cargo test -p {{crate}}
 
-check:
-    cargo check --workspace
+lint:
+    cargo clippy --workspace --all-targets -- -D warnings
 
 fmt:
     cargo fmt --all
 
-clippy:
-    cargo clippy --workspace --all-targets
+fmt-check:
+    cargo fmt --all -- --check
+
+# Everything CI would run.
+ci: fmt-check lint test
+
+# ---- v1 reference ----
+
+# The v1 tree lives in reference/ and is deliberately outside the workspace so
+# it stays readable without being built. Point cargo at it explicitly to run it.
+v1-repl:
+    cargo run --manifest-path reference/spoon/Cargo.toml -- --ephemeral --offline repl
