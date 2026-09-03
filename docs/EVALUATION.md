@@ -263,25 +263,64 @@ choice, the design is broken.
 
 ---
 
-## 10. Open questions for the implementer
+## 10. Decisions settled during implementation
 
-These are genuinely undecided. Pick one, implement it fully, and record the
-choice in STATUS.md rather than leaving a switch.
+The three questions this section previously left open are answered. Each was
+settled by writing the case that forces the answer, not by preference.
 
-1. **Normalization order.** Innermost-first (reduce arguments fully, then the
-   head) or outermost-first (rewrite the head, then descend)? Outermost is
-   required for lazy conditionals to work at all. Innermost is more predictable
-   for arithmetic. The likely answer is outermost with `ArgStrategy` restoring
-   eagerness where it is wanted, but confirm it against the `If` and recursion
-   cases before committing.
+### Normalization order: outermost-first
 
-2. **Context representation.** `context_fit` needs an active context to match
-   `WorksWellWith` against. What is that context concretely: the current goal
-   concept, the last N episodes, an explicit context concept passed down the
-   evaluation stack? Start with the smallest thing that makes the scoring
-   testable.
+The head is rewritten first; `ArgStrategy` then restores eagerness wherever it
+is wanted, which is almost everywhere.
 
-3. **Exploration accounting.** When exploration picks a worse realization and
-   it fails, that failure is partly the explorer's fault, not the
-   realization's. Decide whether exploratory failures are weighted less in
-   `success_rate` and say why.
+Innermost-first cannot express a conditional. `If<true, 7, Boom<>>` under
+innermost evaluation reduces `Boom<>` before `If` ever runs, and the whole
+expression fails on a branch that was never taken. Outermost-first with an
+eager default gives innermost behaviour for arithmetic while leaving `If`,
+`And`, `Or`, and `Quote` able to opt out. Pinned by
+`a_lazy_native_does_not_evaluate_the_branch_it_did_not_take`.
+
+### Context: an explicit list of situation concepts
+
+`Evaluator::with_situation(Vec<Concept>)` carries concepts describing the
+current situation. Selection matches them against stored
+`WorksWellWith<realization, X>` and `WorksPoorlyWith<realization, X>` claims.
+
+Those claims are ordinary stored concepts, so which contexts a realization
+suits is something Spoon learns rather than something baked into the ranker.
+Starting with an explicit list keeps the scoring testable; richer sources (the
+active goal, recent episodes, argument type tags) can populate the same list
+later without changing the ranker.
+
+### Exploratory failures count at full weight
+
+No discount. An exploratory run that fails is real evidence that the
+realization does not work in that situation, and inventing a correction factor
+without data to justify it would be guessing. The trace records which
+applications were exploratory (`Step::explored`), so if the weighting ever
+turns out to matter, the data to settle it is already there.
+
+### Further decisions worth recording
+
+**No realization is not an error.** A compound whose head nothing realizes
+reduces to itself with its arguments reduced, and the step is recorded as
+`Irreducible`. `FriendWith<Greg, Keal>` is a fact, not a computation; treating
+it as a failure would make every stored relationship un-evaluable.
+`Height<Add<1, 2>>` becomes `Height<3>`, which is strictly more useful than the
+unreduced form. `Outcome::Stuck` is reserved for the genuine case: realizations
+existed, and every one of them was excluded or failed.
+
+**Missing machinery excludes a realization rather than failing it.** A brain
+with no LLM seat has no selectable neural realizations, and one with no
+external runner has no selectable external ones. That is a coherent
+configuration, not a broken brain, and excluding them during selection lets the
+alternatives still get their turn.
+
+**Effect is the maximum of what the realization claims and what its native
+declares.** A stored realization claiming `Pure` cannot smuggle in a native
+that opens a socket.
+
+**Evidence is committed explicitly.** `Evaluator::commit_evidence()` writes
+outcomes back; evaluation alone writes nothing. A speculative evaluation that
+gets thrown away should not teach Spoon anything, and a write on the hot path
+would be wrong twice over.

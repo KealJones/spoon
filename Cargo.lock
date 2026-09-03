@@ -474,6 +474,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "spoon-eval"
+version = "0.2.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "spoon-concept",
+ "spoon-store",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "spoon-store"
 version = "0.2.0"
 dependencies = [
