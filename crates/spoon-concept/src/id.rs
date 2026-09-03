@@ -148,6 +148,7 @@ impl From<JsonBlob> for serde_json::Value {
 pub enum Ground {
     Bool(bool),
     Int(i64),
+    #[serde(with = "float_repr")]
     Float(f64),
     Text(Arc<str>),
     Bytes(Arc<[u8]>),
@@ -244,6 +245,69 @@ impl Ground {
             Ground::Json(j) => {
                 hasher.update(&[0x07]);
                 hasher.update(j.digest());
+            }
+        }
+    }
+}
+
+/// Serde for `Ground::Float` that survives JSON.
+///
+/// JSON has no spelling for NaN or infinity, and `serde_json` silently writes
+/// them as `null`, which then fails to read back as an `f64`. A concept holding
+/// one would be writable and permanently unreadable: exactly the kind of
+/// corruption that shows up months later in a brain nobody can load.
+///
+/// Finite values serialize as ordinary JSON numbers so seed files stay
+/// readable. Non-finite values serialize as the strings `"NaN"`, `"inf"`, and
+/// `"-inf"`. Deserialization accepts either form, and also accepts integers,
+/// since a JSON writer is free to emit `1` for `1.0`.
+mod float_repr {
+    use serde::de::{Error, Unexpected, Visitor};
+    use serde::{Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(value: &f64, serializer: S) -> Result<S::Ok, S::Error> {
+        if value.is_finite() {
+            serializer.serialize_f64(*value)
+        } else if value.is_nan() {
+            serializer.serialize_str("NaN")
+        } else if *value > 0.0 {
+            serializer.serialize_str("inf")
+        } else {
+            serializer.serialize_str("-inf")
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<f64, D::Error> {
+        deserializer.deserialize_any(FloatVisitor)
+    }
+
+    struct FloatVisitor;
+
+    impl Visitor<'_> for FloatVisitor {
+        type Value = f64;
+
+        fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("a float, or one of the strings \"NaN\", \"inf\", \"-inf\"")
+        }
+
+        fn visit_f64<E: Error>(self, v: f64) -> Result<f64, E> {
+            Ok(v)
+        }
+
+        fn visit_i64<E: Error>(self, v: i64) -> Result<f64, E> {
+            Ok(v as f64)
+        }
+
+        fn visit_u64<E: Error>(self, v: u64) -> Result<f64, E> {
+            Ok(v as f64)
+        }
+
+        fn visit_str<E: Error>(self, v: &str) -> Result<f64, E> {
+            match v {
+                "NaN" | "nan" => Ok(f64::NAN),
+                "inf" | "Infinity" | "+inf" => Ok(f64::INFINITY),
+                "-inf" | "-Infinity" => Ok(f64::NEG_INFINITY),
+                other => Err(E::invalid_value(Unexpected::Str(other), &self)),
             }
         }
     }

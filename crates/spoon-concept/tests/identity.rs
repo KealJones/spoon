@@ -385,6 +385,33 @@ fn concepts_round_trip_through_json() {
 }
 
 #[test]
+fn non_finite_floats_survive_json() {
+    // JSON has no spelling for NaN or infinity and serde_json writes them as
+    // null, which then refuses to read back as f64. A concept carrying one
+    // would be writable and permanently unreadable, so Ground::Float encodes
+    // the non-finite cases as strings.
+    for f in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        let c = Concept::call("f", [Concept::float(f)]);
+        let encoded = serde_json::to_string(&c).unwrap();
+        let decoded: Concept = serde_json::from_str(&encoded)
+            .unwrap_or_else(|e| panic!("{f} encoded as {encoded} and failed to read back: {e}"));
+        assert_eq!(c.content_id(), decoded.content_id(), "{encoded}");
+    }
+}
+
+#[test]
+fn finite_floats_stay_readable_in_seed_files() {
+    // Only the non-finite cases become strings. Ordinary values stay JSON
+    // numbers so an exported seed is still something a human can read.
+    let encoded = serde_json::to_string(&Concept::float(2.5)).unwrap();
+    assert!(encoded.contains(r#""Float":2.5"#), "got {encoded}");
+    assert!(
+        !encoded.contains(r#""Float":""#),
+        "finite float was quoted: {encoded}"
+    );
+}
+
+#[test]
 fn concept_id_variants_round_trip() {
     for id in [
         ConceptId::named("greg"),

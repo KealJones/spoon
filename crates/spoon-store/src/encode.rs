@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
-use spoon_concept::{Concept, ConceptId, ContentId, Ground, SymbolId};
+use spoon_concept::{Concept, ConceptId, ContentId, SymbolId};
 
 use crate::error::{Result, StoreError};
 
@@ -69,13 +69,6 @@ pub(crate) fn ts_from_sql_opt(
     }
 }
 
-pub(crate) fn content_id_from_sql(table: &'static str, raw: &[u8]) -> Result<ContentId> {
-    let bytes: [u8; 32] = raw
-        .try_into()
-        .map_err(|_| StoreError::corrupt(table, format!("content id is {} bytes", raw.len())))?;
-    Ok(ContentId(bytes))
-}
-
 /// Whether this concept earns a row of its own when it is merely mentioned.
 ///
 /// Named atomics and compounds do: a name means nothing without the store, and
@@ -107,7 +100,6 @@ pub(crate) struct ConceptRow {
 
 impl ConceptRow {
     pub(crate) fn build(c: &Concept) -> Result<ConceptRow> {
-        reject_non_finite(c)?;
         let encoded = serde_json::to_string(c)?;
         let content_id = c.content_id();
         match c {
@@ -189,16 +181,11 @@ pub(crate) fn participants(c: &Concept) -> Vec<Participant> {
         .collect();
     // Deterministic insert order keeps write behaviour reproducible, which
     // matters when a test diffs two databases built the same way.
-    out.sort_by(|a, b| (a.position, a.id, a.depth).cmp(&(b.position, b.id, b.depth)));
+    out.sort_by_key(|p| (p.position, p.id, p.depth));
     out
 }
 
-fn walk(
-    c: &Concept,
-    position: i64,
-    depth: i64,
-    shallowest: &mut HashMap<(ContentId, i64), i64>,
-) {
+fn walk(c: &Concept, position: i64, depth: i64, shallowest: &mut HashMap<(ContentId, i64), i64>) {
     if c.is_hole() {
         return;
     }
@@ -218,27 +205,6 @@ fn walk(
         }
     }
 }
-
-/// JSON cannot represent NaN or infinity. `serde_json` writes them as `null`,
-/// which then fails to parse back into an `f64`, so a store that accepted one
-/// would hand out a row that can never be read again. Refusing at write time
-/// keeps the failure where the caller can still see what caused it.
-pub(crate) fn reject_non_finite(c: &Concept) -> Result<()> {
-    match c {
-        Concept::Atomic(ConceptId::Ground(Ground::Float(f))) if !f.is_finite() => {
-            Err(StoreError::NonFiniteFloat { value: *f })
-        }
-        Concept::Compound { head, args } => {
-            reject_non_finite(head)?;
-            for arg in args.iter() {
-                reject_non_finite(arg)?;
-            }
-            Ok(())
-        }
-        _ => Ok(()),
-    }
-}
-
 pub(crate) fn decode_concept(table: &'static str, encoded: &str) -> Result<Concept> {
     serde_json::from_str(encoded)
         .map_err(|e| StoreError::corrupt(table, format!("undecodable concept: {e}")))

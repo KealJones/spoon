@@ -38,12 +38,6 @@ pub enum StoreError {
     /// no-op we should swallow.
     #[error("a bare hole is not a storable concept")]
     HoleNotStorable,
-
-    /// JSON has no encoding for NaN or infinity. Writing one would produce a
-    /// row that reads back as an error forever, so reject it at write time
-    /// where the caller can still do something about it.
-    #[error("cannot store a non-finite float ({value})")]
-    NonFiniteFloat { value: f64 },
 }
 
 pub type Result<T> = std::result::Result<T, StoreError>;
