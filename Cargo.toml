@@ -3,15 +3,15 @@ resolver = "2"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license = "MIT"
 
 [workspace.dependencies]
-spoon-core = { path = "crates/spoon-core" }
-spoon-lang = { path = "crates/spoon-lang" }
-spoon-mind = { path = "crates/spoon-mind" }
-serde = { version = "1", features = ["derive"] }
+spoon-concept = { path = "crates/spoon-concept" }
+spoon-store = { path = "crates/spoon-store" }
+
+serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
 anyhow = "1"
 thiserror = "2"
