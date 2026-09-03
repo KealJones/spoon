@@ -11,6 +11,7 @@ license = "MIT"
 spoon-concept = { path = "crates/spoon-concept" }
 spoon-store = { path = "crates/spoon-store" }
 spoon-eval = { path = "crates/spoon-eval" }
+spoon-natives = { path = "crates/spoon-natives" }
 
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
