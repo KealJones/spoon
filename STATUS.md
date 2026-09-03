@@ -6,6 +6,84 @@ Decisions in PIVOT_PLAN.md; rules in AGENTS.md; design in docs/CONCEPT-IR-DESIGN
 
 ---
 
+## 2026-09-03  Stage 2 complete: evaluator and 98 bootstrap natives (380 tests, 0 warnings)
+
+DONE
+- `spoon-eval`: the evaluation loop, budgets, realization selection with
+  exploration, effect authority, per-turn purity-gated caching, and the trace.
+  Written by the orchestrator; it is the architectural heart.
+- `spoon-natives`: 98 bootstrap concepts across arithmetic, logic, collections,
+  text, store access, JSON, and time. None privileged: each is an ordinary
+  concept that ships with a Native realization.
+- `seed_bootstrap` stores a realization plus metadata for every registered
+  native, so a fresh brain can actually reach them. Registering code is not the
+  same as the concept existing.
+
+HIGHER-ORDER FUNCTIONS NEED NO MACHINERY, which is the payoff of one
+representation
+- `Map`, `Filter`, `Reduce`, `SortBy`, `Find`, `All`, `Any`, `GroupBy` apply
+  their function argument by building `Concept::apply(f, args)` and handing it
+  back to the evaluator.
+- `Map<List<1,2,3>, double>` where `double` is a stored `Composed` body of
+  `Add<Hole(0), Hole(0)>` gives `List<2,4,6>`. `triple` built on `double` maps
+  too. Nothing in `Map` knows the difference between a native and something
+  Spoon learned yesterday.
+
+THE THREE OPEN QUESTIONS ARE SETTLED (recorded in docs/EVALUATION.md section 10)
+- Outermost-first rewriting. Innermost cannot express a conditional at all:
+  `If<true, 7, Boom<>>` would reduce the branch it never takes.
+- Context is an explicit list of situation concepts matched against stored
+  `WorksWellWith` / `WorksPoorlyWith` claims, so contextual fit is learned.
+- Exploratory failures count at full weight. The trace marks which applications
+  were exploratory, so the data to revisit it exists.
+
+FURTHER DECISIONS WORTH REMEMBERING
+- No realization is not an error. `FriendWith<Greg, Keal>` is a fact and
+  reduces to itself; `Height<Add<1,2>>` becomes `Height<3>`. `Outcome::Stuck`
+  is reserved for realizations existing and all of them failing.
+- Missing machinery excludes a realization from selection rather than failing
+  it at apply time, so a brain with no LLM seat is coherent and the
+  alternatives still get their turn.
+- Effect is the maximum of the realization's claim and its native's
+  declaration. There is a test for the attack: a `Pure` claim over a
+  network-touching native is still gated.
+- Evidence is committed explicitly via `commit_evidence()`. A speculative
+  evaluation that gets thrown away teaches Spoon nothing.
+- Int and Float are distinct identities, so arithmetic widens rather than
+  conflating. Int/Int comparison stays in i64: past 2^53 an f64 cannot separate
+  adjacent integers and `Lt` would quietly answer false for two different
+  numbers.
+
+OPEN, worth revisiting when a call site pushes back
+- `index-of` and `find` error when nothing matches rather than returning a
+  sentinel. Defensible (a sentinel is a value the caller can forget to check)
+  but it may force awkward double traversal. There is no `Maybe` concept yet;
+  introducing one is a design decision, not a patch.
+- `to-text` refuses named concepts, since a name's meaning lives in the store
+  rather than in its spelling. The mouth may want a different answer.
+
+TESTS: 380 passing. 153 in `spoon-concept`, 41 in `spoon-store`, 24 in
+`spoon-eval`, 162 in `spoon-natives`. 63 of those are orchestrator property
+suites written against the laws rather than the implementations, including the
+one that matters most here: a write buried inside `Map` is still gated, so the
+permission layer cannot be laundered through a higher-order call.
+
+NEXT (Stage 3: inference)
+The evaluator already applies `Rule` realizations forward when the pattern
+matches the concept in hand. Stage 3 is the backward direction and the
+machinery it needs.
+1. `spoon-infer`: full two-way unification with an occurs check, and a
+   discrimination-tree index so rule lookup does not scan.
+2. Backward chaining: when a query has no direct assertion, collect rules whose
+   `produce` could yield the shape and try them, sharing the evaluator budget.
+3. Bootstrap meta-concepts: `Symmetric`, `InverseOf`, `TransitiveClosure`,
+   `DefaultExpectation` (defeasible: direct evidence about Greg beats an
+   inherited expectation about people), `Synonym`.
+4. Cycle handling is already in place via the in-progress goal set; confirm it
+   holds for backward chains too.
+
+---
+
 ## 2026-09-03  Stage 1 complete: concept substrate and store (194 tests, 0 warnings)
 
 DONE, all wired and exercised through tests

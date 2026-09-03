@@ -2,9 +2,7 @@
 //! system will lean on. Written against the laws, not the implementation.
 
 use chrono::{TimeZone, Utc};
-use spoon_concept::{
-    Activation, Concept, Ground, Provenance, Realization, RealizationSpec, Tier,
-};
+use spoon_concept::{Activation, Concept, Ground, Provenance, Realization, RealizationSpec, Tier};
 use spoon_eval::{Budget, Evaluator, NativeRegistry, Outcome, PermissionMode};
 use spoon_store::Store;
 
@@ -69,14 +67,27 @@ fn a_learned_capability_works_as_a_mapper() {
     // Map knows the difference between a native and something Spoon learned
     // yesterday.
     let (store, reg) = env();
-    learn(&store, "double", Concept::call("add", [Concept::hole(0), Concept::hole(0)]));
+    learn(
+        &store,
+        "double",
+        Concept::call("add", [Concept::hole(0), Concept::hole(0)]),
+    );
 
     let out = value(
         &store,
         &reg,
-        &Concept::call("map", [list([Concept::int(1), Concept::int(2), Concept::int(3)]), Concept::named("double")]),
+        &Concept::call(
+            "map",
+            [
+                list([Concept::int(1), Concept::int(2), Concept::int(3)]),
+                Concept::named("double"),
+            ],
+        ),
     );
-    assert_eq!(out, list([Concept::int(2), Concept::int(4), Concept::int(6)]));
+    assert_eq!(
+        out,
+        list([Concept::int(2), Concept::int(4), Concept::int(6)])
+    );
 }
 
 #[test]
@@ -84,16 +95,32 @@ fn a_capability_learned_on_top_of_another_also_maps() {
     // triple is built on double, which is built on add. Three layers, and Map
     // still needs to know nothing.
     let (store, reg) = env();
-    learn(&store, "double", Concept::call("add", [Concept::hole(0), Concept::hole(0)]));
+    learn(
+        &store,
+        "double",
+        Concept::call("add", [Concept::hole(0), Concept::hole(0)]),
+    );
     learn(
         &store,
         "triple",
-        Concept::call("add", [Concept::hole(0), Concept::call("double", [Concept::hole(0)])]),
+        Concept::call(
+            "add",
+            [
+                Concept::hole(0),
+                Concept::call("double", [Concept::hole(0)]),
+            ],
+        ),
     );
     let out = value(
         &store,
         &reg,
-        &Concept::call("map", [list([Concept::int(1), Concept::int(5)]), Concept::named("triple")]),
+        &Concept::call(
+            "map",
+            [
+                list([Concept::int(1), Concept::int(5)]),
+                Concept::named("triple"),
+            ],
+        ),
     );
     assert_eq!(out, list([Concept::int(3), Concept::int(15)]));
 }
@@ -104,7 +131,10 @@ fn natives_and_learned_capabilities_are_interchangeable_as_arguments() {
     let native_mapped = value(
         &store,
         &reg,
-        &Concept::call("map", [list([Concept::text("ab")]), Concept::named("upper")]),
+        &Concept::call(
+            "map",
+            [list([Concept::text("ab")]), Concept::named("upper")],
+        ),
     );
     assert_eq!(native_mapped, list([Concept::text("AB")]));
 }
@@ -112,13 +142,23 @@ fn natives_and_learned_capabilities_are_interchangeable_as_arguments() {
 #[test]
 fn higher_order_results_compose_with_ordinary_ones() {
     let (store, reg) = env();
-    learn(&store, "double", Concept::call("add", [Concept::hole(0), Concept::hole(0)]));
+    learn(
+        &store,
+        "double",
+        Concept::call("add", [Concept::hole(0), Concept::hole(0)]),
+    );
     let out = value(
         &store,
         &reg,
         &Concept::call(
             "sum",
-            [Concept::call("map", [list([Concept::int(1), Concept::int(2), Concept::int(3)]), Concept::named("double")])],
+            [Concept::call(
+                "map",
+                [
+                    list([Concept::int(1), Concept::int(2), Concept::int(3)]),
+                    Concept::named("double"),
+                ],
+            )],
         ),
     );
     assert_eq!(out, Concept::int(12));
@@ -127,13 +167,25 @@ fn higher_order_results_compose_with_ordinary_ones() {
 #[test]
 fn filter_runs_a_learned_predicate() {
     let (store, reg) = env();
-    learn(&store, "big", Concept::call("gt", [Concept::hole(0), Concept::int(2)]));
+    learn(
+        &store,
+        "big",
+        Concept::call("gt", [Concept::hole(0), Concept::int(2)]),
+    );
     let out = value(
         &store,
         &reg,
         &Concept::call(
             "filter",
-            [list([Concept::int(1), Concept::int(3), Concept::int(2), Concept::int(5)]), Concept::named("big")],
+            [
+                list([
+                    Concept::int(1),
+                    Concept::int(3),
+                    Concept::int(2),
+                    Concept::int(5),
+                ]),
+                Concept::named("big"),
+            ],
         ),
     );
     assert_eq!(out, list([Concept::int(3), Concept::int(5)]));
@@ -146,20 +198,37 @@ fn filter_runs_a_learned_predicate() {
 #[test]
 fn empty_list_answers_are_the_identity_of_the_operation() {
     let (store, reg) = env();
-    assert_eq!(value(&store, &reg, &Concept::call("sum", [list([])])), Concept::int(0));
-    assert_eq!(value(&store, &reg, &Concept::call("product", [list([])])), Concept::int(1));
-    assert_eq!(value(&store, &reg, &Concept::call("count", [list([])])), Concept::int(0));
+    assert_eq!(
+        value(&store, &reg, &Concept::call("sum", [list([])])),
+        Concept::int(0)
+    );
+    assert_eq!(
+        value(&store, &reg, &Concept::call("product", [list([])])),
+        Concept::int(1)
+    );
+    assert_eq!(
+        value(&store, &reg, &Concept::call("count", [list([])])),
+        Concept::int(0)
+    );
     assert_eq!(
         value(&store, &reg, &Concept::call("is-empty", [list([])])),
         Concept::bool(true)
     );
     // Vacuous truth for all, vacuous falsehood for any.
     assert_eq!(
-        value(&store, &reg, &Concept::call("all", [list([]), Concept::named("is-even")])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("all", [list([]), Concept::named("is-even")])
+        ),
         Concept::bool(true)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("any", [list([]), Concept::named("is-even")])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("any", [list([]), Concept::named("is-even")])
+        ),
         Concept::bool(false)
     );
 }
@@ -180,7 +249,11 @@ fn out_of_range_access_is_refused_rather_than_guessed() {
     let (store, reg) = env();
     let three = list([Concept::int(1), Concept::int(2), Concept::int(3)]);
     for index in [3, 99, -1] {
-        let out = eval(&store, &reg, &Concept::call("nth", [three.clone(), Concept::int(index)]));
+        let out = eval(
+            &store,
+            &reg,
+            &Concept::call("nth", [three.clone(), Concept::int(index)]),
+        );
         assert!(is_error(&out), "nth {index} gave {out:?}");
     }
 }
@@ -195,7 +268,11 @@ fn sorting_is_stable_and_reproducible() {
     // downstream test flaky and every diff unreadable.
     let (store, reg) = env();
     learn(&store, "self", Concept::hole(0));
-    let input = list((0..40).map(|i| Concept::int((i * 7) % 11)).collect::<Vec<_>>());
+    let input = list(
+        (0..40)
+            .map(|i| Concept::int((i * 7) % 11))
+            .collect::<Vec<_>>(),
+    );
     let expr = Concept::call("sort-by", [input, Concept::named("self")]);
     let first = value(&store, &reg, &expr);
     for _ in 0..10 {
@@ -214,11 +291,22 @@ fn sorting_is_stable_and_reproducible() {
 #[test]
 fn mapping_preserves_order() {
     let (store, reg) = env();
-    learn(&store, "double", Concept::call("add", [Concept::hole(0), Concept::hole(0)]));
+    learn(
+        &store,
+        "double",
+        Concept::call("add", [Concept::hole(0), Concept::hole(0)]),
+    );
     let input = list((1..=20).map(Concept::int).collect::<Vec<_>>());
-    let out = value(&store, &reg, &Concept::call("map", [input, Concept::named("double")]));
-    let got: Vec<i64> =
-        out.args().iter().map(|c| c.as_ground().and_then(Ground::as_i64).unwrap()).collect();
+    let out = value(
+        &store,
+        &reg,
+        &Concept::call("map", [input, Concept::named("double")]),
+    );
+    let got: Vec<i64> = out
+        .args()
+        .iter()
+        .map(|c| c.as_ground().and_then(Ground::as_i64).unwrap())
+        .collect();
     assert_eq!(got, (1..=20).map(|i| i * 2).collect::<Vec<i64>>());
 }
 
@@ -229,9 +317,18 @@ fn mapping_preserves_order() {
 #[test]
 fn text_length_counts_characters_not_bytes() {
     let (store, reg) = env();
-    let cases = [("abc", 3), ("\u{4E2D}\u{6587}", 2), ("caf\u{e9}", 4), ("", 0)];
+    let cases = [
+        ("abc", 3),
+        ("\u{4E2D}\u{6587}", 2),
+        ("caf\u{e9}", 4),
+        ("", 0),
+    ];
     for (text, expected) in cases {
-        let out = value(&store, &reg, &Concept::call("text-length", [Concept::text(text)]));
+        let out = value(
+            &store,
+            &reg,
+            &Concept::call("text-length", [Concept::text(text)]),
+        );
         assert_eq!(out, Concept::int(expected), "text-length of {text:?}");
     }
 }
@@ -253,10 +350,16 @@ fn substring_never_splits_a_character_and_never_panics() {
                 ),
             );
             if let Outcome::Value(v) = out {
-                let s = v.as_ground().and_then(Ground::as_str).expect("substring gives text");
+                let s = v
+                    .as_ground()
+                    .and_then(Ground::as_str)
+                    .expect("substring gives text");
                 // Whatever came back has to be a well-formed run of characters
                 // from the original, not a byte fragment.
-                assert!(text.contains(s), "substring produced {s:?}, not a slice of {text:?}");
+                assert!(
+                    text.contains(s),
+                    "substring produced {s:?}, not a slice of {text:?}"
+                );
             }
         }
     }
@@ -266,7 +369,11 @@ fn substring_never_splits_a_character_and_never_panics() {
 fn char_at_addresses_characters() {
     let (store, reg) = env();
     let text = "a\u{4E2D}b";
-    let out = value(&store, &reg, &Concept::call("char-at", [Concept::text(text), Concept::int(1)]));
+    let out = value(
+        &store,
+        &reg,
+        &Concept::call("char-at", [Concept::text(text), Concept::int(1)]),
+    );
     assert_eq!(out, Concept::text("\u{4E2D}"));
     assert!(is_error(&eval(
         &store,
@@ -279,11 +386,19 @@ fn char_at_addresses_characters() {
 fn case_conversion_handles_non_ascii() {
     let (store, reg) = env();
     assert_eq!(
-        value(&store, &reg, &Concept::call("upper", [Concept::text("caf\u{e9}")])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("upper", [Concept::text("caf\u{e9}")])
+        ),
         Concept::text("CAF\u{c9}")
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("lower", [Concept::text("STRA\u{df}E")])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("lower", [Concept::text("STRA\u{df}E")])
+        ),
         Concept::text("stra\u{df}e")
     );
 }
@@ -297,8 +412,11 @@ fn split_and_join_round_trip() {
         &Concept::call("split", [Concept::text("a,b,c"), Concept::text(",")]),
     );
     assert_eq!(parts.arity(), 3);
-    let rejoined =
-        value(&store, &reg, &Concept::call("join", [parts, Concept::text(",")]));
+    let rejoined = value(
+        &store,
+        &reg,
+        &Concept::call("join", [parts, Concept::text(",")]),
+    );
     assert_eq!(rejoined, Concept::text("a,b,c"));
 }
 
@@ -319,11 +437,19 @@ fn a_huge_repeat_is_refused_instead_of_allocated() {
 fn parsing_refuses_garbage_rather_than_defaulting() {
     let (store, reg) = env();
     assert_eq!(
-        value(&store, &reg, &Concept::call("parse-int", [Concept::text("42")])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("parse-int", [Concept::text("42")])
+        ),
         Concept::int(42)
     );
     for bad in ["", "abc", "4.2", " 42 x"] {
-        let out = eval(&store, &reg, &Concept::call("parse-int", [Concept::text(bad)]));
+        let out = eval(
+            &store,
+            &reg,
+            &Concept::call("parse-int", [Concept::text(bad)]),
+        );
         assert!(is_error(&out), "parse-int({bad:?}) gave {out:?}");
     }
 }
