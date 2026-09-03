@@ -52,7 +52,11 @@ impl Effect {
     }
 
     pub fn join(self, other: Effect) -> Effect {
-        if self.rank() >= other.rank() { self } else { other }
+        if self.rank() >= other.rank() {
+            self
+        } else {
+            other
+        }
     }
 
     pub fn as_str(self) -> &'static str {

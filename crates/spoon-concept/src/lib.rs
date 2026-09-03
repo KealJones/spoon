@@ -27,6 +27,7 @@ mod concept;
 mod id;
 mod meta;
 mod ops;
+mod text;
 
 pub use concept::{Concept, ContentId};
 pub use id::{ConceptId, Ground, GroundKind, HoleId, JsonBlob, SymbolId, SymbolTable};
@@ -37,6 +38,7 @@ pub use meta::{
 pub use ops::{
     Bindings, Path, PathStep, PostOrder, PreOrder, alpha_equivalent, anti_unify, at_path,
     find_first, flatten_spine, generalizes, hole_count, holes, is_ground_term, map_args, max_hole,
-    positions, post_order, pre_order, rename_holes, replace_at, subterms, substitute,
-    substitute_positional, try_map_args, walk,
+    positions, post_order, pre_order, rename_holes, replace_at, substitute, substitute_positional,
+    subterms, try_map_args, walk,
 };
+pub use text::{ConceptDisplay, ParseError, display, parse, render, render_compact};

@@ -56,16 +56,7 @@ fn alpha_rec(
                 _ => false,
             }
         }
-        (
-            Concept::Compound {
-                head: lh,
-                args: la,
-            },
-            Concept::Compound {
-                head: rh,
-                args: ra,
-            },
-        ) => {
+        (Concept::Compound { head: lh, args: la }, Concept::Compound { head: rh, args: ra }) => {
             la.len() == ra.len()
                 && alpha_rec(lh, rh, forward, backward)
                 && la
@@ -173,16 +164,8 @@ impl AntiUnifier {
             // Identical subtrees need no hole, and cloning is O(1).
             return left.clone();
         }
-        if let (
-            Concept::Compound {
-                head: lh,
-                args: la,
-            },
-            Concept::Compound {
-                head: rh,
-                args: ra,
-            },
-        ) = (left, right)
+        if let (Concept::Compound { head: lh, args: la }, Concept::Compound { head: rh, args: ra }) =
+            (left, right)
             && la.len() == ra.len()
         {
             let head = self.generalize(lh, rh);
