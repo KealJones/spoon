@@ -383,6 +383,17 @@ struct Template {
     content: Vec<String>,
     skeleton: String,
     standing: f64,
+    /// The source prior, kept so standing can be recomputed as evidence
+    /// arrives without going back to the store.
+    prior: f64,
+    successes: u32,
+    failures: u32,
+    /// The stored pair this came from, when there is one.
+    ///
+    /// Carried so a reading can be credited or blamed after the turn. Without
+    /// it the standing computed in `from_store` can only ever go up, since
+    /// nothing downstream knows which pair to charge for a bad reading.
+    pair: Option<i64>,
     /// Identity for deduplication: the same shape read the same way twice is
     /// one template, not two votes.
     key: String,
@@ -390,6 +401,15 @@ struct Template {
 
 impl Template {
     fn build(utterance: &str, steps: &[Concept], standing: f64) -> Option<Template> {
+        Template::from_pair(utterance, steps, standing, None)
+    }
+
+    fn from_pair(
+        utterance: &str,
+        steps: &[Concept],
+        standing: f64,
+        pair: Option<i64>,
+    ) -> Option<Template> {
         if steps.is_empty() {
             return None;
         }
@@ -459,6 +479,10 @@ impl Template {
             content,
             skeleton,
             standing,
+            prior: standing,
+            successes: 0,
+            failures: 0,
+            pair,
             key,
         })
     }
@@ -695,7 +719,12 @@ impl PhrasingIndex {
         let mut index = PhrasingIndex::new();
         for pair in store.all_pairs(MAX_PAIRS)? {
             let standing = pair.standing();
-            if let Some(template) = Template::build(&pair.utterance, &pair.steps, standing) {
+            if let Some(mut template) =
+                Template::from_pair(&pair.utterance, &pair.steps, standing, Some(pair.id))
+            {
+                template.prior = pair.source.prior();
+                template.successes = pair.successes;
+                template.failures = pair.failures;
                 index.push(template);
             }
         }
@@ -718,11 +747,42 @@ impl PhrasingIndex {
         }
     }
 
+    /// Note how a reading built from a stored pair turned out.
+    ///
+    /// The store keeps the durable count; this keeps the index in step within
+    /// the run. Without it a phrasing demoted on turn three keeps winning
+    /// until the next restart, which for a long run means it never stops.
+    pub fn record(&mut self, pair: i64, worked: bool) {
+        for template in &mut self.templates {
+            if template.pair != Some(pair) {
+                continue;
+            }
+            if worked {
+                template.successes = template.successes.saturating_add(1);
+            } else {
+                template.failures = template.failures.saturating_add(1);
+            }
+            template.standing = spoon_store::pairs::standing(
+                template.prior,
+                template.successes,
+                template.failures,
+            );
+        }
+    }
+
     /// The best reading for this utterance, or `None` when nothing is confident
     /// enough to be worth the risk of being wrong.
     pub fn recognize(&self, text: &str) -> Option<(Vec<Concept>, f64)> {
+        self.recognize_from(text)
+            .map(|(steps, confidence, _)| (steps, confidence))
+    }
+
+    /// The best reading, with the stored pair it came from.
+    ///
+    /// The caller needs the id to say afterwards whether the reading worked.
+    pub fn recognize_from(&self, text: &str) -> Option<(Vec<Concept>, f64, Option<i64>)> {
         let input = Prepared::new(text)?;
-        let mut best: Option<(Vec<Concept>, f64)> = None;
+        let mut best: Option<(Vec<Concept>, f64, Option<i64>)> = None;
         for index in self.candidates(&input) {
             let Some(template) = self.templates.get(index) else {
                 continue;
@@ -733,8 +793,8 @@ impl PhrasingIndex {
             if confidence < MIN_CONFIDENCE {
                 continue;
             }
-            if best.as_ref().is_none_or(|(_, top)| confidence > *top) {
-                best = Some((steps, confidence));
+            if best.as_ref().is_none_or(|(_, top, _)| confidence > *top) {
+                best = Some((steps, confidence, template.pair));
             }
         }
         best

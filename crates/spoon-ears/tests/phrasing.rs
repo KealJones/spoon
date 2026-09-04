@@ -495,3 +495,59 @@ fn corpus_streaming_recognition_rate() {
     assert_eq!(correct, 1);
     assert_eq!(wrong, 0, "a wrong reading costs more than a miss");
 }
+
+#[test]
+fn a_phrasing_that_keeps_being_wrong_stops_winning() {
+    // The store has kept success and failure counts for pairs from the
+    // beginning and nothing outside the tests ever wrote to them, so a
+    // phrasing that generalized badly kept firing forever and training could
+    // only make the ears more confident, never better.
+    let store = Store::open_in_memory().expect("store");
+    let id = store
+        .put_pair(
+            "make it lowercase",
+            &[parse("lower<?0>", &SymbolTable::new()).expect("parse")],
+            PairSource::Model,
+        )
+        .expect("pair");
+    let mut index = PhrasingIndex::from_store(&store).expect("index");
+
+    let before = index
+        .recognize("make it lowercase")
+        .expect("recognized")
+        .1;
+
+    for _ in 0..6 {
+        index.record(id, false);
+    }
+    let after = index.recognize("make it lowercase").map(|(_, c)| c);
+
+    // Either it now scores below what the ears will act on, or it is at least
+    // clearly worse than it was. Both mean the evidence is being felt.
+    if let Some(confidence) = after {
+        assert!(
+            confidence < before,
+            "standing did not fall: {before} then {confidence}"
+        );
+    }
+}
+
+#[test]
+fn success_and_failure_move_a_phrasing_in_opposite_directions() {
+    let store = Store::open_in_memory().expect("store");
+    let id = store
+        .put_pair(
+            "make it lowercase",
+            &[parse("lower<?0>", &SymbolTable::new()).expect("parse")],
+            PairSource::Model,
+        )
+        .expect("pair");
+    let mut index = PhrasingIndex::from_store(&store).expect("index");
+    let start = index.recognize("make it lowercase").expect("seen").1;
+
+    for _ in 0..5 {
+        index.record(id, true);
+    }
+    let up = index.recognize("make it lowercase").expect("seen").1;
+    assert!(up > start, "success did not help: {start} then {up}");
+}

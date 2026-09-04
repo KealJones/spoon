@@ -86,6 +86,14 @@ pub struct Brain {
     counters: Arc<SeatCounters>,
     config: BrainConfig,
     next_episode: u64,
+    /// The stored phrasing that produced this turn's reading, if one did.
+    ///
+    /// Held between hearing and the end of the turn so the pair can be
+    /// credited or blamed. The store has kept success and failure counts for
+    /// pairs from the beginning and nothing outside the tests ever wrote to
+    /// them, so a phrasing that generalized badly kept firing forever and
+    /// training could only ever make the ears more confident, never better.
+    last_pair: Option<i64>,
     /// Readings learned from turns the model got right.
     ///
     /// Held here rather than inside the ears because it is fed by what the
@@ -120,6 +128,7 @@ impl Brain {
             config,
             next_episode,
             phrasing,
+            last_pair: None,
         })
     }
 
@@ -282,6 +291,26 @@ impl Brain {
             }
         }
 
+        // ---- credit the phrasing that produced the reading ----
+        // The one thing that lets training make the ears better rather than
+        // only more confident. A pair that reads an utterance into something
+        // that does not answer it is wrong, and saying so pulls its standing
+        // down until it stops being chosen. Without this the standing computed
+        // when the index is built can only go up.
+        //
+        // Judged on whether the turn produced an answer, not on whether the
+        // answer was right, because Spoon has no way to know the latter. That
+        // still catches the failure that matters: `make REALIZATION lowercase`
+        // matched a phrasing learned from a different sentence and came back
+        // unknown, where the model would have got it.
+        if let Some(pair) = self.last_pair.take() {
+            let worked = result
+                .as_ref()
+                .is_some_and(|r| is_answer(&self.store, r) && !is_unknown(r));
+            let _ = self.store.record_pair_outcome(pair, worked);
+            self.phrasing.record(pair, worked);
+        }
+
         // ---- mouth ----
         let mouth_started = Instant::now();
         let response = self.build_response(&moves, result.as_ref(), &gaps, &heard);
@@ -354,6 +383,7 @@ impl Brain {
     ) -> (Heard, EarsPath) {
         // Native first, always. Every turn the model does not handle is the
         // weaning curve moving.
+        self.last_pair = None;
         if let Some(heard) = self.ears.hear_native(text) {
             metrics.ears_native += 1;
             return (heard, EarsPath::Native);
@@ -361,12 +391,13 @@ impl Brain {
         // Then whatever this user has said before. A phrasing learned from an
         // earlier turn costs nothing and is the only part of the ears that gets
         // better with use.
-        if let Some((steps, confidence)) = self.phrasing.recognize(text) {
+        if let Some((steps, confidence, pair)) = self.phrasing.recognize_from(text) {
             metrics.ears_native += 1;
             let mut heard = Heard::native(steps, confidence);
             // A recognized reading can mint names the store has never seen, and
             // an id whose spelling was never recorded prints as hex.
             heard.names = name_shaped_words(text);
+            self.last_pair = pair;
             return (heard, EarsPath::Native);
         }
         let vocabulary: Vec<String> = self

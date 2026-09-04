@@ -106,17 +106,27 @@ impl Pair {
     /// The blend weight `n / (n + 3)` is what makes early evidence count
     /// without letting a single unlucky turn erase a source's standing.
     pub fn standing(&self) -> f64 {
-        let successes = f64::from(self.successes);
-        let failures = f64::from(self.failures);
-        let observations = successes + failures;
-        if observations == 0.0 {
-            return self.source.prior();
-        }
-        // Laplace smoothing keeps a single failure from meaning "never right".
-        let observed = (successes + 1.0) / (observations + 2.0);
-        let weight = observations / (observations + 3.0);
-        (self.source.prior() * (1.0 - weight) + observed * weight).clamp(0.0, 1.0)
+        standing(self.source.prior(), self.successes, self.failures)
     }
+}
+
+/// A pair's standing from its prior and its record.
+///
+/// Free rather than a method because the ears keep their own copy of a
+/// template's standing in memory and have to age it the same way. Two
+/// formulas that were meant to agree and drifted would show up as a phrasing
+/// the store had demoted and the index still trusted.
+pub fn standing(prior: f64, successes: u32, failures: u32) -> f64 {
+    let successes = f64::from(successes);
+    let failures = f64::from(failures);
+    let observations = successes + failures;
+    if observations == 0.0 {
+        return prior;
+    }
+    // Laplace smoothing keeps a single failure from meaning "never right".
+    let observed = (successes + 1.0) / (observations + 2.0);
+    let weight = observations / (observations + 3.0);
+    (prior * (1.0 - weight) + observed * weight).clamp(0.0, 1.0)
 }
 
 /// Structural key for a reading.
