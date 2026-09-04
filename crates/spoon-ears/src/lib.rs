@@ -8,7 +8,8 @@
 mod model;
 mod native;
 mod phrasing;
+pub mod pycall;
 
-pub use model::ModelEars;
+pub use model::{EarsFormat, ModelEars};
 pub use native::NativeEars;
 pub use phrasing::{MIN_CONFIDENCE, PhrasingIndex};

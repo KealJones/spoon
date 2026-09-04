@@ -72,6 +72,7 @@
   <button data-tab="concepts">concepts</button>
   <button data-tab="realizations">realizations</button>
   <button data-tab="episodes">episodes</button>
+  <button data-tab="prompts">prompts</button>
 </nav>
 <div id="view"></div>
 <script>
@@ -225,9 +226,13 @@ function renderEpisodeTimeline(ep) {
   const stage = (name, cls, content) =>
     content ? `<div class="stage"><div class="stage-head ${cls}">${name}</div><div class="stage-body">${content}</div></div>` : '';
 
-  const ears = ep.ears_exchange
-    ? `<pre>${esc(ep.ears_exchange.raw_response)}</pre>`
+  const earsRaw = ep.ears_exchange
+    ? `<details><summary>raw model output</summary><pre>${esc(ep.ears_exchange.raw_response)}</pre></details>
+       <details><summary>full prompt</summary><pre style="max-height:20rem;overflow:auto">${esc(
+         (ep.ears_exchange.messages || []).map(m => `[${m.role}]\n${m.content}`).join('\n\n---\n\n')
+       )}</pre></details>`
     : '';
+  const ears = earsRaw;
   const stepsSource = ep.steps_rendered || ep.steps || [];
   const steps = stepsSource.length
     ? `<div>${stepsSource.map(s => `<span class="chip">${esc(typeof s === 'string' ? s : JSON.stringify(s))}</span>`).join('')}</div>`
@@ -243,7 +248,10 @@ function renderEpisodeTimeline(ep) {
       ).join('')
     : '';
   const mouth = ep.mouth_exchange
-    ? `<pre>${esc(ep.mouth_exchange.raw_response)}</pre>`
+    ? `<details><summary>raw model output</summary><pre>${esc(ep.mouth_exchange.raw_response)}</pre></details>
+       <details><summary>full prompt</summary><pre style="max-height:20rem;overflow:auto">${esc(
+         (ep.mouth_exchange.messages || []).map(m => `[${m.role}]\n${m.content}`).join('\n\n---\n\n')
+       )}</pre></details>`
     : '';
   const learning = (ep.learning || []).length
     ? ep.learning.map(l => `<div class="learned">+ ${esc(l)}</div>`).join('')
@@ -273,6 +281,40 @@ async function render() {
     document.getElementById('go').onclick = go;
     msg.onkeydown = e => { if (e.key === 'Enter') go(); };
     msg.focus();
+    return;
+  }
+  if (tab === 'prompts') {
+    const d = await get('/debug/episodes?limit=20');
+    const episodes = d.episodes || [];
+    let html = '<h2 style="font-size:.9rem;opacity:.6">Recent LLM exchanges per episode</h2>';
+    for (const ep of episodes) {
+      const full = await get('/debug/episode?id=' + ep.id);
+      const exchanges = [];
+      if (full.ears_exchange) {
+        exchanges.push({seat: 'Ears', ex: full.ears_exchange});
+      }
+      for (const [i, tex] of (full.teacher_exchanges || []).entries()) {
+        exchanges.push({seat: `Teacher #${i+1}`, ex: tex});
+      }
+      if (full.mouth_exchange) {
+        exchanges.push({seat: 'Mouth', ex: full.mouth_exchange});
+      }
+      if (exchanges.length === 0) continue;
+      html += `<div class="turn" style="margin-bottom:1rem">
+        <div class="you">#${ep.id}: ${esc(ep.user_text)} -> ${esc(ep.reply)}</div>`;
+      for (const {seat, ex} of exchanges) {
+        const msgs = (ex.messages || []).map(m =>
+          `<div style="margin:.3rem 0"><span class="chip strong">${esc(m.role)}</span><pre style="max-height:15rem;overflow:auto;margin:.2rem 0">${esc(m.content)}</pre></div>`
+        ).join('');
+        html += `<details class="step" style="margin:.3rem 0">
+          <summary><b>${esc(seat)}</b> - ${(ex.messages||[]).length} messages</summary>
+          ${msgs}
+          <div style="margin-top:.4rem"><span class="chip">Response:</span><pre style="max-height:10rem;overflow:auto">${esc(ex.raw_response)}</pre></div>
+        </details>`;
+      }
+      html += '</div>';
+    }
+    view.innerHTML = html;
     return;
   }
   if (tab === 'status') {

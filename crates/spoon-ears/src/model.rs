@@ -12,10 +12,18 @@ use spoon_concept::{Concept, SymbolTable, parse};
 use spoon_seat::{Ears, Heard, LlmClient, LlmError, Message, Seat, Turn};
 
 use crate::native::NativeEars;
+use crate::pycall;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EarsFormat {
+    AngleBracket,
+    PythonCall,
+}
 
 pub struct ModelEars {
     client: LlmClient,
     native: NativeEars,
+    pub format: EarsFormat,
 }
 
 impl ModelEars {
@@ -23,7 +31,13 @@ impl ModelEars {
         ModelEars {
             client,
             native: NativeEars::new(),
+            format: EarsFormat::AngleBracket,
         }
+    }
+
+    pub fn with_format(mut self, format: EarsFormat) -> Self {
+        self.format = format;
+        self
     }
 
     /// Built fresh each turn from the activation-ranked vocabulary, so the
@@ -113,6 +127,85 @@ Reply with the steps and nothing else. No prose, no explanation, no code fences.
         )
     }
 
+    fn prompt_python(vocabulary: &[String], rules: &[String]) -> String {
+        let learned = if rules.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "\n\nLearned from earlier mistakes:\n{}",
+                rules
+                    .iter()
+                    .map(|r| format!("# {r}"))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            )
+        };
+        let known = vocabulary.join("\n  ");
+        format!(
+            r#"You translate messy human speech into Python function calls. You never compute, resolve, or answer anything. You only translate.
+
+First write a comment explaining your interpretation, then write the function call.
+
+Each step is one of these wrapper functions:
+  assert_that(CONCEPT)   - the speaker is stating something true
+  ask(CONCEPT)           - the speaker is asking whether something holds, or asking for a value
+  do(CONCEPT)            - the speaker wants something done or computed
+  chat(CONCEPT)          - social talk with no request in it
+  correction(STEP)       - the speaker is repairing what they just said; STEP is the replacement
+
+Arguments are: strings "text", numbers, True/False, function calls, or ?0 for an unknown/placeholder.
+Lists are written as Python lists: [1, 2, 3]
+Lambda for predicates: lambda x: math_gt(x, 4)
+
+Examples:
+  "john has a dog"
+  # Statement: john owns a dog
+  assert_that(owns(john, dog))
+
+  "who owns a dog"
+  # Question: who is the owner of a dog (unknown subject)
+  ask(owns(?0, dog))
+
+  "is keal friends with greg"
+  # Question: are keal and greg friends
+  ask(friends(keal, greg))
+
+  "add 2 and 3"
+  # Computation: add two numbers
+  do(math_add(2, 3))
+
+  "how many r's in strawberry"
+  # Computation: count characters matching "r" in "strawberry"
+  ask(list_count(list_filter(text_chars("strawberry"), lambda x: logic_eq(x, "r"))))
+
+  "biggest of 4, 9, 2 and 7"
+  # Computation: find the maximum of a list
+  do(list_max_of([4, 9, 2, 7]))
+
+  "reverse banana"
+  # Computation: reverse the text "banana"
+  do(text_reverse("banana"))
+
+  "the ones over 4"
+  # Computation: filter elements greater than 4
+  do(list_filter(?0, lambda x: logic_gt(x, 4)))
+
+  "hey"
+  # Social: greeting
+  chat(greet())
+
+  "friendship is symmetric"
+  # Statement about a relation
+  assert_that(symmetric(friends))
+
+Functions available (use underscores, they map to the concept names):
+  {known}
+
+Prefer a known function. Invent a new snake_case name only when nothing fits.
+Reply with ONLY the comment and function call per step. No other prose.{learned}"#
+        )
+    }
+
     /// Read the model's reply back into concepts.
     ///
     /// A line that does not parse is dropped rather than guessed at, and any
@@ -144,6 +237,39 @@ Reply with the steps and nothing else. No prose, no explanation, no code fences.
         }
         (steps, unknown)
     }
+
+    fn parse_python_steps(reply: &str, table: &SymbolTable) -> (Vec<Concept>, Vec<Arc<str>>) {
+        let mut steps = Vec::new();
+        let mut unknown = Vec::new();
+        let (metadata, exprs) = pycall::split_metadata(reply);
+        // Metadata (# comments) capture intent - stored but not parsed as concepts
+        let _ = metadata; // TODO: attach to Heard once we add an intent field
+        for line in &exprs {
+            let line = line.trim().trim_start_matches("- ").trim();
+            if line.is_empty() || line.starts_with("```") {
+                continue;
+            }
+            let Ok(concept) = pycall::parse_pycall(line, table) else {
+                // Fall back to angle-bracket parse in case the model mixed formats
+                if let Ok(concept) = parse(line, table) {
+                    steps.push(concept);
+                }
+                continue;
+            };
+            for node in spoon_concept::pre_order(&concept) {
+                if node.head_symbol() == Some(spoon_concept::SymbolId::of("unknown"))
+                    && let Some(word) = node
+                        .arg(0)
+                        .and_then(|a| a.as_ground())
+                        .and_then(|g| g.as_str())
+                {
+                    unknown.push(Arc::from(word));
+                }
+            }
+            steps.push(concept);
+        }
+        (steps, unknown)
+    }
 }
 
 #[async_trait::async_trait]
@@ -155,10 +281,11 @@ impl Ears for ModelEars {
         recent: &[Turn],
         rules: &[String],
     ) -> Result<Heard, LlmError> {
-        // Recent turns go in as prior exchanges rather than as a block of
-        // prose, because that is the shape a chat model is trained to resolve
-        // references against.
-        let mut messages = vec![Message::system(Self::prompt(vocabulary, rules))];
+        let system_prompt = match self.format {
+            EarsFormat::AngleBracket => Self::prompt(vocabulary, rules),
+            EarsFormat::PythonCall => Self::prompt_python(vocabulary, rules),
+        };
+        let mut messages = vec![Message::system(system_prompt)];
         for turn in recent {
             messages.push(Message::user(turn.said.to_string()));
             messages.push(Message::assistant(turn.understood.to_string()));
@@ -170,7 +297,10 @@ impl Ears for ModelEars {
             .await?;
 
         let table = SymbolTable::new();
-        let (steps, unknown) = Self::parse_steps(&reply, &table);
+        let (steps, unknown) = match self.format {
+            EarsFormat::AngleBracket => Self::parse_steps(&reply, &table),
+            EarsFormat::PythonCall => Self::parse_python_steps(&reply, &table),
+        };
         if steps.is_empty() {
             return Err(LlmError::Unusable {
                 seat: "ears",

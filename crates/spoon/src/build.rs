@@ -106,10 +106,20 @@ pub async fn assemble(cli: &Cli) -> Result<Brain> {
     let teaching = online && !cli.no_teaching;
     let (ears, mouth, teacher): SeatTrio = if online {
         (
-            Box::new(ModelEars::new(LlmClient::new(
-                LlmConfig::ollama(&ears_model),
-                counters.clone(),
-            ))),
+            {
+                let ears_format = if std::env::var("SPOON_EARS_PYTHON").is_ok() {
+                    spoon_ears::EarsFormat::PythonCall
+                } else {
+                    spoon_ears::EarsFormat::AngleBracket
+                };
+                Box::new(
+                    ModelEars::new(LlmClient::new(
+                        LlmConfig::ollama(&ears_model),
+                        counters.clone(),
+                    ))
+                    .with_format(ears_format),
+                )
+            },
             Box::new(ModelMouth::new(
                 LlmClient::new(LlmConfig::ollama(&mouth_model), counters.clone()),
                 table.clone(),
