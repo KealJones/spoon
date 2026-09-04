@@ -65,6 +65,20 @@ const THANKS: &[&str] = &[
 
 const FAREWELL: &[&str] = &["bye", "goodbye", "later", "see ya", "cya", "night"];
 
+/// Words that can sit around a greeting without turning it into a request.
+///
+/// A greeting is a whole turn or it is not a greeting. "hey" is hello; "hey
+/// quick one, 356 minus 43" is arithmetic with a polite opener, and reading
+/// the first word and stopping threw the question away and answered hello.
+/// So the test is whether anything substantive is left, not whether it starts
+/// with a greeting.
+const SMALL_TALK: &[&str] = &[
+    "there", "you", "u", "how", "hows", "how's", "are", "is", "it", "going", "goin", "on",
+    "doing", "doin", "up", "whats", "what's", "wassup", "wasup", "good", "well", "all",
+    "right", "alright", "man", "dude", "girl", "bro", "buddy", "friend", "again", "morning",
+    "afternoon", "evening", "everyone", "everybody", "yall", "y'all", "spoon", "lol", "haha",
+];
+
 /// Markers that a speaker is repairing what they just said.
 ///
 /// A finite, learnable set. Detecting a correction does not need to understand
@@ -125,11 +139,28 @@ impl NativeEars {
 
     fn social(text: &str) -> Option<Concept> {
         let n = Self::normalize(text);
-        let first = n.split_whitespace().next().unwrap_or("");
-        let matches = |set: &[&str]| {
-            set.iter()
-                .any(|w| n == *w || n.starts_with(&format!("{w} ")) || first == *w)
+        fn word(w: &str) -> &str {
+            w.trim_matches(|c: char| !c.is_alphanumeric() && c != '\'')
+        }
+        // Nothing substantive left over. A multi-word set entry like "see ya"
+        // is checked against the whole utterance; single words are checked per
+        // word so ordering and repetition do not matter ("yo yo yo").
+        let only = |set: &[&str]| {
+            let words: Vec<&str> = n
+                .split_whitespace()
+                .map(word)
+                .filter(|w| !w.is_empty())
+                .collect();
+            if words.is_empty() {
+                return false;
+            }
+            let opens = set.iter().any(|w| n == *w || n.starts_with(&format!("{w} ")));
+            let all_social = words
+                .iter()
+                .all(|w| set.contains(w) || SMALL_TALK.contains(w));
+            opens && all_social
         };
+        let matches = |set: &[&str]| only(set);
         if matches(GREETING) {
             return Some(Concept::call("chat", [Concept::call("greet", [])]));
         }

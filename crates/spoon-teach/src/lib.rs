@@ -252,6 +252,13 @@ Acting on that went wrong: {trouble}\n\nWas the reading right, and if not what s
                 .skip(1)
                 .take_while(|l| !l.trim().starts_with("RULE "))
                 .filter_map(|l| parse(l.trim(), &self.table).ok())
+                // A step is a move, so it is always a compound. A bare atom
+                // parses cleanly and means nothing, which is how a stray
+                // protocol word ends up as the answer: a reply of "READING"
+                // followed by "CORRECT" parsed the second line into a concept
+                // named CORRECT, and Spoon reported that as the result of
+                // "31 to the power of 2".
+                .filter(|c: &Concept| c.is_compound())
                 .collect();
             if steps.is_empty() {
                 return unknown("a reading with no usable steps");

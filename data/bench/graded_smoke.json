@@ -1,0 +1,106 @@
+{
+ "name": "graded_smoke",
+ "note": "A stratified sample of graded, small enough to run between edits.",
+ "cases": [
+  {
+   "say": "what is 188 minus 159",
+   "expect": "29",
+   "category": "arith-minus"
+  },
+  {
+   "say": "what is 339 minus 61",
+   "expect": "278",
+   "category": "arith-minus"
+  },
+  {
+   "say": "hey quick one, 356 minus 43",
+   "expect": "313",
+   "category": "arith-minus"
+  },
+  {
+   "say": "whats 238 minus 92?",
+   "expect": "146",
+   "category": "arith-minus"
+  },
+  {
+   "say": "hey quick one, 76 minus 109",
+   "expect": "-33",
+   "category": "arith-minus"
+  },
+  {
+   "say": "can you work out 202 minus 103 for me",
+   "expect": "99",
+   "category": "arith-minus"
+  },
+  {
+   "say": "hey quick one, 107 plus 129",
+   "expect": "236",
+   "category": "arith-plus"
+  },
+  {
+   "say": "37 + 25",
+   "expect": "62",
+   "category": "arith-plus"
+  },
+  {
+   "say": "what is 335 plus 14",
+   "expect": "349",
+   "category": "arith-plus"
+  },
+  {
+   "say": "whats 264 plus 109?",
+   "expect": "373",
+   "category": "arith-plus"
+  },
+  {
+   "say": "295 + 82",
+   "expect": "377",
+   "category": "arith-plus"
+  },
+  {
+   "say": "hey quick one, 357 plus 91",
+   "expect": "448",
+   "category": "arith-plus"
+  },
+  {
+   "say": "what is 10 to the power of 2",
+   "expect": "100",
+   "category": "arith-pow"
+  },
+  {
+   "say": "what is 30 to the power of 4",
+   "expect": "810000",
+   "category": "arith-pow"
+  },
+  {
+   "say": "what is 37 to the power of 2",
+   "expect": "1369",
+   "category": "arith-pow"
+  },
+  {
+   "say": "34 to the power of 2",
+   "expect": "1156",
+   "category": "arith-pow"
+  },
+  {
+   "say": "31 to the power of 2",
+   "expect": "961",
+   "category": "arith-pow"
+  },
+  {
+   "say": "37 to the power of 2",
+   "expect": "1369",
+   "category": "arith-pow"
+  },
+  {
+   "say": "what is 12 times 5",
+   "expect": "60",
+   "category": "arith-times"
+  },
+  {
+   "say": "can you work out 246 times 47 for me",
+   "expect": "11562",
+   "category": "arith-times"
+  }
+ ]
+}

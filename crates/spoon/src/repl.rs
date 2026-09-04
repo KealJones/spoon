@@ -103,15 +103,78 @@ pub async fn stdio(cli: &Cli) -> Result<()> {
 ///
 /// The headline number is how often the model was needed. It should fall as
 /// Spoon learns; if it does not, the native path is not learning anything.
+/// One case in a graded suite.
+///
+/// `expect` is the rendered result concept, not the reply. The mouth is a
+/// language model, so grading its prose measures the mouth's mood; the result
+/// concept is what the interior actually worked out, and it is the thing that
+/// is either right or wrong.
+#[derive(serde::Deserialize)]
+struct Case {
+    say: String,
+    #[serde(default)]
+    expect: Option<String>,
+    /// Any one of these counts. For questions with more than one true answer.
+    #[serde(default)]
+    expect_any: Vec<String>,
+    #[serde(default)]
+    category: String,
+}
+
+impl Case {
+    fn accepts(&self, got: &str) -> bool {
+        let norm = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
+        let got = norm(got);
+        if let Some(want) = &self.expect
+            && norm(want) == got
+        {
+            return true;
+        }
+        self.expect_any.iter().any(|w| norm(w) == got)
+    }
+
+    fn wanted(&self) -> String {
+        match &self.expect {
+            Some(e) => e.clone(),
+            None => self.expect_any.join(" | "),
+        }
+    }
+}
+
 pub async fn bench(cli: &Cli, suite: &str) -> Result<()> {
     let path = format!("data/bench/{suite}.json");
     let raw =
         std::fs::read_to_string(&path).map_err(|e| anyhow::anyhow!("cannot read {path}: {e}"))?;
     let corpus: serde_json::Value = serde_json::from_str(&raw)?;
+
+    // Two shapes. `lines` is ungraded and only reports how a turn went, which
+    // is all the older corpora can support. `cases` carries the answer, so the
+    // suite can say whether Spoon was right. Ungraded suites were the reason
+    // "it cannot answer anything" stayed invisible for so long: every number
+    // the bench printed was about paths taken, not answers given.
     let lines: Vec<&str> = corpus["lines"]
         .as_array()
         .map(|a| a.iter().filter_map(|v| v.as_str()).collect())
         .unwrap_or_default();
+    let cases: Vec<Case> = corpus["cases"]
+        .as_array()
+        .map(|a| serde_json::from_value(serde_json::Value::Array(a.clone())))
+        .transpose()?
+        .unwrap_or_default();
+    let graded = !cases.is_empty();
+    let cases: Vec<Case> = if graded {
+        cases
+    } else {
+        lines
+            .iter()
+            .map(|l| Case {
+                say: (*l).to_string(),
+                expect: None,
+                expect_any: Vec::new(),
+                category: String::new(),
+            })
+            .collect()
+    };
 
     let mut brain = assemble(cli).await?;
     let mut native = 0usize;
@@ -119,12 +182,15 @@ pub async fn bench(cli: &Cli, suite: &str) -> Result<()> {
     let mut failed = 0usize;
     let mut gaps = 0usize;
     let mut interior_calls = 0u64;
+    let mut right = 0usize;
+    let mut by_category: std::collections::BTreeMap<String, (usize, usize)> = Default::default();
+    let mut wrong: Vec<(String, String, String)> = Vec::new();
     let started = std::time::Instant::now();
 
-    println!("{:<3} {:<58} reply", "#", "utterance");
+    println!("{:<4} {:<52} {:<22} want", "#", "utterance", "got");
     println!("{}", "-".repeat(110));
-    for (i, line) in lines.iter().enumerate() {
-        let result = brain.turn("bench", line).await?;
+    for (i, case) in cases.iter().enumerate() {
+        let result = brain.turn("bench", &case.say).await?;
         let e = &result.episode;
         match e.ears_path {
             spoon_brain::EarsPath::Native => native += 1,
@@ -133,6 +199,12 @@ pub async fn bench(cli: &Cli, suite: &str) -> Result<()> {
         }
         gaps += e.gaps.len();
         interior_calls += e.metrics.interior_model_calls;
+
+        let got = e
+            .result
+            .as_ref()
+            .map(|c| brain.render(c))
+            .unwrap_or_else(|| "-".to_string());
         let short = |s: &str, n: usize| {
             let t: String = s.chars().take(n).collect();
             if s.chars().count() > n {
@@ -141,18 +213,66 @@ pub async fn bench(cli: &Cli, suite: &str) -> Result<()> {
                 t
             }
         };
-        println!(
-            "{:<3} {:<58} {}",
-            i + 1,
-            short(line, 55),
-            short(&result.reply, 45)
-        );
+
+        if graded {
+            let ok = case.accepts(&got);
+            if ok {
+                right += 1;
+            } else {
+                wrong.push((case.say.clone(), got.clone(), case.wanted()));
+            }
+            let slot = by_category.entry(case.category.clone()).or_default();
+            slot.1 += 1;
+            if ok {
+                slot.0 += 1;
+            }
+            println!(
+                "{:<4} {:<52} {:<22} {}",
+                if ok {
+                    (i + 1).to_string()
+                } else {
+                    format!("{}x", i + 1)
+                },
+                short(&case.say, 50),
+                short(&got, 20),
+                short(&case.wanted(), 24)
+            );
+        } else {
+            println!(
+                "{:<4} {:<52} {}",
+                i + 1,
+                short(&case.say, 50),
+                short(&result.reply, 45)
+            );
+        }
     }
 
-    let total = lines.len().max(1);
+    let total = cases.len().max(1);
     println!("\n{} utterances in {:?}", total, started.elapsed());
+    if graded {
+        println!(
+            "correct: {right}/{total} ({:.0}%)",
+            100.0 * right as f64 / total as f64
+        );
+        println!("\nby category:");
+        for (name, (ok, n)) in &by_category {
+            println!(
+                "  {:<22} {:>3}/{:<3} {:>3.0}%",
+                if name.is_empty() { "-" } else { name },
+                ok,
+                n,
+                100.0 * *ok as f64 / *n.max(&1) as f64
+            );
+        }
+        if !wrong.is_empty() {
+            println!("\nwrong ({}):", wrong.len());
+            for (say, got, want) in wrong.iter().take(40) {
+                println!("  {say}\n      got  {got}\n      want {want}");
+            }
+        }
+    }
     println!(
-        "ears: native {native} ({:.0}%)  model {model}  failed {failed}",
+        "\nears: native {native} ({:.0}%)  model {model}  failed {failed}",
         100.0 * native as f64 / total as f64
     );
     println!("capability gaps encountered: {gaps}");
