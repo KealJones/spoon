@@ -28,6 +28,7 @@ pub async fn run(cli: &Cli, host: &str, port: u16) -> Result<()> {
         .route("/v1/chat/completions", post(chat))
         .route("/debug/status", get(status))
         .route("/debug/concepts", get(concepts))
+        .route("/debug/concept", get(concept_detail))
         .route("/debug/realizations", get(realizations))
         .route("/debug/episodes", get(episodes))
         .with_state(brain);
@@ -187,7 +188,148 @@ async fn concepts(State(brain): State<Shared>, Query(f): Query<Filter>) -> impl 
         })
         .take(f.limit)
         .collect();
-    Json(json!({ "count": rendered.len(), "concepts": rendered }))
+    // Names as well as instances. Browsing wants "what does Spoon know about
+    // owns", and a flat list of every fact mentioning it answers a different
+    // question.
+    let mut names: Vec<String> = guard
+        .store()
+        .all_symbols()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(_, name)| name)
+        .filter(|n| f.q.as_ref().is_none_or(|q| n.to_lowercase().contains(&q.to_lowercase())))
+        .collect();
+    names.sort();
+    names.dedup();
+    names.truncate(f.limit);
+
+    Json(json!({ "count": rendered.len(), "concepts": rendered, "names": names }))
+}
+
+#[derive(serde::Deserialize)]
+struct Named {
+    name: String,
+}
+
+/// Everything Spoon holds about one concept.
+///
+/// Gathered in one place because the interesting questions about a concept are
+/// all relational: what realizes it, which of those is winning, what has been
+/// said about it, and what it takes part in. Answering those from a flat list
+/// means opening four tabs and holding the join in your head.
+async fn concept_detail(
+    State(brain): State<Shared>,
+    Query(q): Query<Named>,
+) -> impl IntoResponse {
+    let guard = brain.lock().await;
+    let store = guard.store();
+    let now = chrono::Utc::now();
+    let concept = spoon_concept::Concept::named(&q.name);
+    let id = concept.content_id();
+
+    let meta = store.get_meta(&concept).ok().flatten();
+
+    // How it can be carried out, best first, with the numbers selection runs on.
+    let mut realizations: Vec<serde_json::Value> = store
+        .realizations_for(&concept)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|r| {
+            let scored =
+                spoon_eval::score(std::sync::Arc::new(r.clone()), 0.5, now, None);
+            json!({
+                "name": r.name,
+                "kind": r.spec.kind().as_str(),
+                "source": provenance_label(&r.provenance),
+                "effect": r.effect.as_str(),
+                "tier": format!("{:?}", r.tier),
+                "score": scored.score,
+                "success_rate": r.activation.success_rate(),
+                "uses": r.activation.uses,
+                "successes": r.activation.successes,
+                "failures": r.activation.failures,
+                // The body, so a learned capability can be read rather than
+                // just counted.
+                "body": match &r.spec {
+                    spoon_concept::RealizationSpec::Composed { body } => {
+                        Some(guard.render(body))
+                    }
+                    spoon_concept::RealizationSpec::Rule { pattern, produce, direction, .. } => {
+                        Some(format!(
+                            "{} => {} ({})",
+                            guard.render(pattern),
+                            guard.render(produce),
+                            direction.as_str()
+                        ))
+                    }
+                    spoon_concept::RealizationSpec::Native { native } => {
+                        Some(format!("native {}", native.as_str()))
+                    }
+                    _ => None,
+                },
+            })
+        })
+        .collect();
+    realizations.sort_by(|a, b| {
+        b["score"].as_f64().partial_cmp(&a["score"].as_f64()).unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    // Everything mentioning it, split by whether it is the subject or a
+    // participant. A concept's meaning is mostly what it takes part in.
+    let mentions = store.concepts_containing(id, 200).unwrap_or_default();
+    let (heads, participates): (Vec<_>, Vec<_>) =
+        mentions.iter().partition(|c| c.head_symbol() == concept.as_symbol());
+
+    let live = |c: &spoon_concept::Concept| store.holds(c).unwrap_or(false);
+    let render_all = |v: Vec<&spoon_concept::Concept>| -> Vec<String> {
+        v.into_iter().map(|c| guard.render(c)).collect()
+    };
+
+    // Declared properties: symmetric, transitive and the rest are ordinary
+    // facts, so they show up here rather than needing a special lookup.
+    let properties: Vec<String> = participates
+        .iter()
+        .filter(|c| live(c))
+        .filter(|c| {
+            c.head_symbol().is_some_and(|h| {
+                ["symmetric", "transitive", "inverse-of", "subtype-of", "default-expectation"]
+                    .iter()
+                    .any(|n| h == spoon_concept::SymbolId::of(n))
+            })
+        })
+        .map(|c| guard.render(c))
+        .collect();
+
+    Json(json!({
+        "name": q.name,
+        "id": id.to_hex(),
+        "known": meta.is_some() || !realizations.is_empty() || !mentions.is_empty(),
+        "kind": if realizations.iter().any(|r| r["kind"] == "native") {
+            "native capability"
+        } else if realizations.iter().any(|r| r["kind"] == "composed") {
+            "learned capability"
+        } else if realizations.iter().any(|r| r["kind"] == "rule") {
+            "inference rule"
+        } else if !realizations.is_empty() {
+            "capability"
+        } else {
+            "data"
+        },
+        "surface_forms": meta.as_ref().map(|m| m.surface_forms.clone()).unwrap_or_default(),
+        "note": meta.as_ref().and_then(|m| m.note.clone()),
+        "tier": meta.as_ref().map(|m| format!("{:?}", m.tier)),
+        "source": meta.as_ref().map(|m| provenance_label(&m.provenance)),
+        "uses": meta.as_ref().map(|m| m.activation.uses).unwrap_or(0),
+        "success_rate": meta.as_ref().map(|m| m.activation.success_rate()),
+        "last_used": meta.as_ref().and_then(|m| m.activation.last_used_at),
+        "realization_count": realizations.len(),
+        "realizations": realizations,
+        "properties": properties,
+        "facts": render_all(heads.iter().filter(|c| live(c)).copied().collect()),
+        "appears_in": render_all(
+            participates.iter().filter(|c| live(c)).copied().collect()
+        ),
+    }))
 }
 
 async fn realizations(State(brain): State<Shared>, Query(f): Query<Filter>) -> impl IntoResponse {

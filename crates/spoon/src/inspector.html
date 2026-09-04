@@ -29,6 +29,21 @@
   .turn .meta { opacity: .5; font-size: .8rem; margin-top: .2rem; }
   .turn .learned { font-size: .8rem; margin-top: .2rem; opacity: .85; }
   pre { margin: .2rem 0; white-space: pre-wrap; word-break: break-word; }
+  .split { display: grid; grid-template-columns: 15rem 1fr; gap: 1.5rem; align-items: start; }
+  .names { display: flex; flex-direction: column; max-height: 78vh; overflow: auto; }
+  button.name { font: inherit; text-align: left; background: none; border: 0; color: inherit;
+                padding: .25rem .4rem; cursor: pointer; border-radius: 3px; }
+  button.name:hover { background: #8882; }
+  .detail h1 { font-size: 1.15rem; margin: 0 0 .5rem; }
+  .detail h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em;
+               opacity: .55; margin: 1.2rem 0 .3rem; font-weight: 600; }
+  .chip { display: inline-block; border: 1px solid var(--line); border-radius: 3px;
+          padding: .1rem .45rem; margin: 0 .3rem .3rem 0; font-size: .8rem; }
+  .chip.strong { border-color: currentColor; font-weight: 600; }
+  .note { opacity: .75; margin: .3rem 0; }
+  .hint { opacity: .45; font-size: .8rem; }
+  tr.body td { border-bottom: 0; padding-top: 0; opacity: .7; }
+  tr.body code { font-size: .85rem; }
 </style>
 </head>
 <body>
@@ -80,6 +95,46 @@ async function send(text) {
   render();
 }
 
+const num = (v) => v == null ? '-' : (Math.round(v * 100) / 100).toFixed(2);
+
+let picked = null;
+
+async function showConcept(name) {
+  picked = name;
+  const d = await get('/debug/concept?name=' + encodeURIComponent(name));
+  const detail = document.getElementById('detail');
+  const section = (title, body) => body ? `<h2>${title}</h2>${body}` : '';
+  const chips = (xs) => xs && xs.length
+    ? `<div>${xs.map(x => `<span class="chip">${esc(x)}</span>`).join('')}</div>` : '';
+  const lines = (xs) => xs && xs.length
+    ? `<pre>${xs.map(esc).join('\n')}</pre>` : '';
+
+  detail.innerHTML = `
+    <h1>${esc(d.name)}</h1>
+    <div class="tags">
+      <span class="chip strong">${esc(d.kind)}</span>
+      ${d.tier ? `<span class="chip">${esc(d.tier)}</span>` : ''}
+      ${d.source ? `<span class="chip">${esc(d.source)}</span>` : ''}
+      <span class="chip">${d.realization_count} realization${d.realization_count === 1 ? '' : 's'}</span>
+      <span class="chip">${d.uses} use${d.uses === 1 ? '' : 's'}</span>
+      ${d.success_rate != null ? `<span class="chip">${num(d.success_rate)} success</span>` : ''}
+    </div>
+    ${d.note ? `<p class="note">${esc(d.note)}</p>` : ''}
+    ${section('surface forms', chips(d.surface_forms))}
+    ${section('declared properties', lines(d.properties))}
+    ${section('how it can be carried out', d.realizations.length ? `<table>
+      <thead><tr><th>name</th><th>kind</th><th>source</th><th>effect</th><th>score</th><th>uses</th><th>ok</th><th>fail</th></tr></thead>
+      <tbody>${d.realizations.map(r => `<tr>
+        <td>${esc(r.name)}</td><td>${esc(r.kind)}</td><td>${esc(r.source)}</td>
+        <td>${esc(r.effect)}</td><td class="n">${num(r.score)}</td>
+        <td class="n">${r.uses}</td><td class="n">${r.successes}</td><td class="n">${r.failures}</td>
+      </tr>${r.body ? `<tr class="body"><td colspan="8"><code>${esc(r.body)}</code></td></tr>` : ''}`).join('')}
+      </tbody></table>` : '<p class="hint">nothing realizes it, so it is data</p>')}
+    ${section('facts it heads', lines(d.facts))}
+    ${section('where it appears', lines(d.appears_in))}
+    <p class="hint">${esc(d.id)}</p>`;
+}
+
 async function render() {
   if (tab === 'chat') {
     view.innerHTML = `<div class="chat"><input id="msg" placeholder="say something" autofocus><button id="go">send</button></div>` +
@@ -102,12 +157,20 @@ async function render() {
   }
   const q = new URLSearchParams(location.hash.slice(1)).get('q') || '';
   const filter = `<input id="q" placeholder="filter" value="${esc(q)}">`;
+  const was = document.getElementById('q');
+  const focused = was === document.activeElement;
+  const caret = was ? was.selectionStart : 0;
   if (tab === 'concepts') {
-    const d = await get('/debug/concepts?limit=500&q=' + encodeURIComponent(q));
-    view.innerHTML = filter + table(['concept'], d.concepts.map(c => [c]));
+    const d = await get('/debug/concepts?limit=800&q=' + encodeURIComponent(q));
+    view.innerHTML = filter +
+      `<div class="split"><div class="names">${
+        d.names.map(n => `<button class="name" data-name="${esc(n)}">${esc(n)}</button>`).join('')
+      }</div><div id="detail" class="detail"><p class="hint">pick a concept</p></div></div>`;
+    document.querySelectorAll('button.name').forEach(b =>
+      b.onclick = () => showConcept(b.dataset.name));
+    if (picked) showConcept(picked);
   } else if (tab === 'realizations') {
     const d = await get('/debug/realizations?limit=500&q=' + encodeURIComponent(q));
-    const num = (v) => v == null ? '-' : (Math.round(v * 100) / 100).toFixed(2);
     const summary = `<div class="stats">${
       (d.by_source || []).map(s => `<div class="stat"><b>${s.count}</b><span>${esc(s.source)} &middot; ${
         num(s.mean_success_rate)} rate &middot; ${s.uses} uses</span></div>`).join('')
@@ -125,7 +188,10 @@ async function render() {
       d.episodes.map(e => [e.id, e.user_text, e.reply, e.ears_path, (e.gaps || []).length, e.metrics?.millis_total ?? 0]));
   }
   const input = document.getElementById('q');
-  if (input) input.oninput = () => { location.hash = 'q=' + encodeURIComponent(input.value); render(); };
+  if (input) {
+    input.oninput = () => { location.hash = 'q=' + encodeURIComponent(input.value); render(); };
+    if (focused) { input.focus(); input.setSelectionRange(caret, caret); }
+  }
 }
 render();
 </script>

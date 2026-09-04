@@ -530,10 +530,10 @@ impl Brain {
                         .with_budget(self.config.eval_budget)
                         .with_permission(self.config.permission);
                     if let Outcome::Value(value) = evaluator.evaluate(goal) {
-                        // Only when something actually reduced. A concept that
-                        // evaluates to itself is data, and answering a question
-                        // by repeating it is not an answer.
-                        if value != *goal {
+                        // Only when something actually reduced, and only when
+                        // what came back is an answer rather than a term that
+                        // stalled partway.
+                        if value != *goal && is_answer(&self.store, &value) {
                             metrics.eval_nodes += evaluator.trace().nodes_used;
                             let _ = evaluator.commit_evidence();
                             return Ok(Some(value));
@@ -1234,4 +1234,31 @@ fn name_shaped_words(text: &str) -> Vec<Arc<str>> {
 
 fn episode_json(episode: &Episode) -> spoon_store::Result<String> {
     serde_json::to_string(episode).map_err(spoon_store::StoreError::from)
+}
+
+/// Whether an evaluated value is an answer or a term that stalled.
+///
+/// "Did anything change" is too weak a test on its own. Asked how many r's
+/// are in a string, the ears composed `count-matching<chars<"...">, "r">`
+/// against a head nothing realizes. `chars` reduced, so the term changed,
+/// so the old test passed it through and reported
+/// `count-matching<list<"f", "o", ...>, "r">` as the answer. Half a
+/// reduction is not a result, and reporting one means the gap is never
+/// seen and the capability is never learned.
+///
+/// An unrealized compound is data when the store asserts it and a stall
+/// when it does not. `friend-with<greg, keal>` is a fact and stays an
+/// answer; a head applied to arguments that nothing can carry out and
+/// nobody ever claimed is a gap.
+pub fn is_answer(store: &Store, value: &Concept) -> bool {
+    spoon_concept::pre_order(value).all(|node| {
+        let Concept::Compound { head, .. } = node else {
+            return true;
+        };
+        if head.as_symbol().is_none() {
+            return true;
+        }
+        let realized = store.realizations_for(head).is_ok_and(|r| !r.is_empty());
+        realized || store.holds(node).unwrap_or(false)
+    })
 }
