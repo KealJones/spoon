@@ -113,6 +113,25 @@ impl Mouth for TemplateMouth {
     }
 }
 
+/// Is this response just a value, with nothing around it to explain?
+fn is_bare_value(response: &Concept) -> bool {
+    response
+        .head_symbol()
+        .is_some_and(|h| h == spoon_concept::SymbolId::of("answer"))
+        && response.arity() == 1
+        && response.arg(0).is_some_and(|a| {
+            // A ground scalar. A list or a JSON blob does read better with a
+            // sentence around it, so those still go to the model.
+            matches!(
+                a.as_ground(),
+                Some(Ground::Int(_) | Ground::Float(_) | Ground::Bool(_))
+            ) || a
+                .as_ground()
+                .and_then(Ground::as_str)
+                .is_some_and(|t| t.len() < 40)
+        })
+}
+
 /// The model path, with the template underneath it.
 pub struct ModelMouth {
     client: LlmClient,
@@ -150,6 +169,19 @@ impl ModelMouth {
 impl Mouth for ModelMouth {
     async fn say(&self, response: &Concept, must_mention: &[Concept]) -> Result<String, LlmError> {
         let baseline = self.template.say_native(response, must_mention);
+
+        // A bare value is left alone. The mouth exists to make a structured
+        // result readable, and "3" is already readable: there is nothing to
+        // improve and a great deal to get wrong. Asked to phrase the answer to
+        // "how many r's in Strawberry", the model returned "i'll be there at
+        // 3." It kept the number, so the faithfulness check passed, and the
+        // answer was still ruined.
+        //
+        // The length guard cannot catch this, because three characters of
+        // slack around a one-character answer is no slack at all.
+        if is_bare_value(response) {
+            return Ok(baseline);
+        }
         let prompt = r#"Rewrite the given line as one short, casual sentence a person would actually say.
 
 Rules:

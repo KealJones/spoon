@@ -19,8 +19,10 @@
 
 use std::cmp::Ordering;
 
-use spoon_concept::{Concept, Ground, SymbolId};
-use spoon_eval::{Arity, Ctx, EvalError, EvalResult, NativeRegistry, native_error, type_error};
+use spoon_concept::{Concept, Effect, Ground, SymbolId};
+use spoon_eval::{
+    ArgStrategy, Arity, Ctx, EvalError, EvalResult, NativeRegistry, native_error, type_error,
+};
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -81,7 +83,23 @@ fn out_of_range(native: &str, index: usize, len: usize) -> EvalError {
 /// realization selection, budget charging, and effect accounting on the way
 /// through, so a mapper that writes to the store is gated exactly where the
 /// write happens rather than being pre-approved here.
+///
+/// A function argument carrying holes is a lambda over them, and its arguments
+/// are substituted rather than applied. Without that, the only functions that
+/// can be passed are ones with names, so "keep the ones equal to r" is
+/// inexpressible: `filter<chars<"strawberry">, eq<?0, "r">>` is the obvious way
+/// to write it and applying `eq<?0, "r">` to an element would produce a
+/// compound with a compound head, which means nothing.
+///
+/// This is not a new idea in the system. A `Composed` realization is already a
+/// body whose holes bind positionally to the call's arguments, so a concept
+/// with holes already means a function everywhere else. Treating it as one here
+/// removes a special case rather than adding one.
 fn call(ctx: &mut dyn Ctx, f: &Concept, args: Vec<Concept>) -> EvalResult {
+    if !spoon_concept::holes(f).is_empty() {
+        let bound = spoon_concept::substitute_positional(f, &args);
+        return ctx.eval(&bound);
+    }
     ctx.eval(&Concept::apply(f.clone(), args))
 }
 
@@ -643,46 +661,60 @@ pub fn register(registry: &mut NativeRegistry) {
         "a list with any inner lists spliced in, one level deep",
     );
 
-    registry.pure(
+    registry.register(
         "map",
         map,
         Arity::Exact(2),
+        ArgStrategy::Selective(0b001),
+        Effect::Pure,
         "apply a function to every element of a list",
     );
-    registry.pure(
+    registry.register(
         "filter",
         filter,
         Arity::Exact(2),
+        ArgStrategy::Selective(0b001),
+        Effect::Pure,
         "the elements of a list for which a predicate holds",
     );
-    registry.pure(
+    registry.register(
         "reduce",
         reduce,
         Arity::Exact(3),
+        ArgStrategy::Selective(0b101),
+        Effect::Pure,
         "fold a list into one value with a function and an initial value",
     );
-    registry.pure(
+    registry.register(
         "sort-by",
         sort_by,
         Arity::Exact(2),
+        ArgStrategy::Selective(0b001),
+        Effect::Pure,
         "a list ordered by a key function, stably and deterministically",
     );
-    registry.pure(
+    registry.register(
         "find",
         find,
         Arity::Exact(2),
+        ArgStrategy::Selective(0b001),
+        Effect::Pure,
         "the first element of a list satisfying a predicate",
     );
-    registry.pure(
+    registry.register(
         "all",
         all,
         Arity::Exact(2),
+        ArgStrategy::Selective(0b001),
+        Effect::Pure,
         "whether every element satisfies a predicate",
     );
-    registry.pure(
+    registry.register(
         "any",
         any,
         Arity::Exact(2),
+        ArgStrategy::Selective(0b001),
+        Effect::Pure,
         "whether some element satisfies a predicate",
     );
     registry.pure(
@@ -709,10 +741,12 @@ pub fn register(registry: &mut NativeRegistry) {
         Arity::Exact(1),
         "the largest of a list of numbers",
     );
-    registry.pure(
+    registry.register(
         "group-by",
         group_by,
         Arity::Exact(2),
+        ArgStrategy::Selective(0b001),
+        Effect::Pure,
         "a list of Group<key, List<..>> collecting elements by a key function",
     );
 }

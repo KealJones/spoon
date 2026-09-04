@@ -82,8 +82,8 @@ fn recall(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// back equal to the cap means "at least this many" rather than "exactly this
 /// many". Reporting a number the scan cannot stand behind would be worse than
 /// reporting a bounded one.
-fn count_matching(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let found = search(ctx, "count-matching", &args[0], SCAN_LIMIT)?;
+fn count_recalled(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let found = search(ctx, "count-recalled", &args[0], SCAN_LIMIT)?;
     Ok(Concept::int(found.len() as i64))
 }
 
@@ -298,11 +298,11 @@ pub fn register(registry: &mut NativeRegistry) {
         "the concepts that go by a surface form",
     );
     registry.register(
-        "count-matching",
-        count_matching,
+        "count-recalled",
+        count_recalled,
         Arity::Exact(1),
         ArgStrategy::Eager,
         Effect::Read,
-        "how many stored concepts match a pattern",
+        "how many concepts in memory match a pattern (not a count of list elements)",
     );
 }

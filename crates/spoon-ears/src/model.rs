@@ -63,6 +63,13 @@ A list is written list<a, b, c> with the items as separate arguments. Never
 write list<[a, b, c]>: that is a list of one thing, the bracketed value itself,
 which is almost never what someone means.
 
+Where a function is wanted, write an expression with ?0 standing for each
+element. This is how you say "compare against this value", which has no name:
+
+  "how many r's in strawberry"  -> ask<count<filter<chars<"strawberry">, eq<?0, "r">>>>
+  "double each of them"         -> do<map<?0, mul<?0, 2>>>
+  "the ones over 4"             -> do<filter<?0, gt<?0, 4>>>
+
 A CONCEPT is written Head<Arg, Arg>. Arguments are concepts, quoted "text", numbers, true/false, or ?0 for something unspecified. Names are kebab-case.
 
 Examples:

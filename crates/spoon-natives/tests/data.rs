@@ -403,14 +403,14 @@ fn count_matching_counts_what_recall_returns() {
     let pattern = Concept::call("owns", [Concept::hole(0), Concept::named("dog")]);
 
     assert_eq!(
-        value(&store, &reg, &Concept::call("count-matching", [pattern])),
+        value(&store, &reg, &Concept::call("count-recalled", [pattern])),
         Concept::int(2)
     );
     assert_eq!(
         value(
             &store,
             &reg,
-            &Concept::call("count-matching", [owns("nobody", "dragon")])
+            &Concept::call("count-recalled", [owns("nobody", "dragon")])
         ),
         Concept::int(0)
     );
@@ -1039,7 +1039,7 @@ fn every_native_refuses_a_wrong_typed_argument_instead_of_panicking() {
         Concept::call("recall-about", [Concept::named("greg"), text("lots")]),
         Concept::call("recall-by-head", [Concept::int(7)]),
         Concept::call("surface-of", [Concept::int(7)]),
-        Concept::call("count-matching", [Concept::hole(0)]),
+        Concept::call("count-recalled", [Concept::hole(0)]),
         // describe takes any concept and answers for all of them, so the only
         // way to misuse it is arity, which the evaluator checks.
         Concept::call("describe", [Concept::named("greg"), Concept::named("greg")]),

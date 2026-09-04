@@ -194,7 +194,23 @@ impl Brain {
         metrics.millis_interior = interior_started.elapsed().as_millis() as u64;
 
         // ---- teacher, only for what the interior could not do ----
-        if self.config.teaching && (!gaps.is_empty() || !heard.unknown.is_empty()) {
+        // Checked on every turn the model read, not only on ones that visibly
+        // went wrong.
+        //
+        // A wrong reading that happens to evaluate is the worst case, because
+        // it produces a confident wrong answer and no signal at all: asked how
+        // many r's are in Strawberry, the ears composed
+        // `count-matching<text-contains<"Strawberry", "r">>`, which asks the
+        // store how many concepts match `true`, answers 0, and reports no gap.
+        // Waiting for trouble means never catching it.
+        //
+        // The cost amortizes to nothing. Checking a reading is the cheapest
+        // thing the Teacher does and the only answer that compounds, since a
+        // correction is kept as a phrasing and the native path takes that shape
+        // for free from then on.
+        let worth_checking = ears_path == EarsPath::Model;
+        if self.config.teaching && (worth_checking || !gaps.is_empty() || !heard.unknown.is_empty())
+        {
             self.consult_teacher(text, &heard, &gaps, &mut metrics)
                 .await;
         }
@@ -494,7 +510,19 @@ impl Brain {
                 // smallest of these" is worked out. Routing every question to
                 // the fact store means anything computable comes back unknown
                 // while the answer was one evaluation away.
-                if derived.is_empty() && holes(goal).is_empty() {
+                // Holes are not a reason to skip this. A hole in a goal can be
+                // a question variable, as in `owns<?0, dog>` meaning who, or a
+                // lambda parameter, as in
+                // `count<filter<chars<"strawberry">, eq<?0, "r">>>` where it
+                // stands for each element and is bound before anything is
+                // asked. Refusing to evaluate anything containing a hole
+                // treated the second as the first and answered "unknown" to a
+                // question whose answer was three.
+                //
+                // Trying and looking at the result tells them apart exactly: a
+                // question variable leaves the goal irreducible, and a lambda
+                // parameter reduces to an answer.
+                if derived.is_empty() {
                     let mut evaluator = Evaluator::new(&self.store, &self.registry)
                         .with_budget(self.config.eval_budget)
                         .with_permission(self.config.permission);
