@@ -9,10 +9,12 @@
 
 mod derive;
 mod error;
+mod index;
 mod rule;
 mod unify;
 
 pub use derive::{Derivation, DeriveBudget, Engine, Support};
 pub use error::{InferError, Result};
+pub use index::{DiscriminationTree, RetrievalStats};
 pub use rule::{RuleIndex, ScanIndex, StoredRule, load_rules};
 pub use unify::{Substitution, unify, unify_terms};
