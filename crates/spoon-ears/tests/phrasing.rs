@@ -551,3 +551,54 @@ fn success_and_failure_move_a_phrasing_in_opposite_directions() {
     let up = index.recognize("make it lowercase").expect("seen").1;
     assert!(up > start, "success did not help: {start} then {up}");
 }
+#[test]
+fn a_word_argument_becomes_a_slot() {
+    let table = SymbolTable::new();
+    let mut index = PhrasingIndex::new();
+    index.learn(
+        "make COMMITTEE lowercase",
+        &[parse("do<lower<\"COMMITTEE\">>", &table).expect("parse")],
+    );
+    let got = index.recognize("make REALIZATION lowercase");
+    assert!(
+        got.is_some(),
+        "a template learned from one word did not generalize to another"
+    );
+    let (steps, _) = got.unwrap();
+    assert_eq!(
+        render(&steps[0], &table),
+        "do<lower<\"REALIZATION\">>",
+        "the slot was not refilled from the new sentence"
+    );
+}
+
+#[test]
+fn a_word_the_reading_does_not_quote_stays_literal() {
+    // "reverse" must not become a slot, or the template matches every
+    // three-word sentence. The reading holds it as a head, not as text, so
+    // the steps-linkage check throws it out.
+    let table = SymbolTable::new();
+    let mut index = PhrasingIndex::new();
+    index.learn(
+        "reverse banana",
+        &[parse("do<reverse<\"banana\">>", &table).expect("parse")],
+    );
+    assert!(
+        index.recognize("upper banana").is_none(),
+        "the verb was treated as a slot"
+    );
+    let (steps, _) = index.recognize("reverse science").expect("same shape");
+    assert_eq!(render(&steps[0], &table), "do<reverse<\"science\">>");
+}
+
+#[test]
+fn numbers_still_generalize_the_way_they_did() {
+    let table = SymbolTable::new();
+    let mut index = PhrasingIndex::new();
+    index.learn(
+        "what is 3 plus 4",
+        &[parse("ask<add<3, 4>>", &table).expect("parse")],
+    );
+    let (steps, _) = index.recognize("what is 21 plus 8").expect("same shape");
+    assert_eq!(render(&steps[0], &table), "ask<add<21, 8>>");
+}

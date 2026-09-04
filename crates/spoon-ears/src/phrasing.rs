@@ -218,6 +218,16 @@ enum SlotKind {
     Float,
     Text,
     Name,
+    /// A bare word standing where the reading has a piece of text.
+    ///
+    /// Without this a phrasing never generalized over words, only over numbers
+    /// and quoted strings, so "make COMMITTEE lowercase" taught Spoon nothing
+    /// about "make REALIZATION lowercase" and most of what a person says
+    /// stayed unlearnable. Every word is a candidate and the steps-linkage
+    /// check throws out the ones the reading does not actually mention, which
+    /// is why "reverse" in "reverse banana" stays a literal: the reading holds
+    /// it as a head, not as text.
+    Word,
 }
 
 /// The value a token stands for, if it looks like one at all.
@@ -246,6 +256,11 @@ fn value_of(raw: &str) -> Option<(SlotKind, Concept)> {
     }
     if looks_like_name(&trimmed) {
         return Some((SlotKind::Name, Concept::named(&trimmed)));
+    }
+    // Case as written, because the reading quotes the word as it was typed and
+    // linkage compares the two.
+    if trimmed.chars().count() >= 2 && trimmed.chars().all(char::is_alphanumeric) {
+        return Some((SlotKind::Word, Concept::text(&trimmed)));
     }
     None
 }
@@ -296,7 +311,13 @@ impl Prepared {
         let content = dedup_sorted(
             toks.iter()
                 .zip(values.iter())
-                .filter(|(tok, value)| value.is_none() && !is_stopword(&tok.key))
+                .filter(|(tok, value)| {
+                    let variable = matches!(
+                        value,
+                        Some((SlotKind::Int | SlotKind::Float | SlotKind::Text | SlotKind::Name, _))
+                    );
+                    !variable && !is_stopword(&tok.key)
+                })
                 .map(|(tok, _)| tok.key.clone()),
         );
         let skeleton = skeleton_of(toks.iter().zip(values.iter()).map(
@@ -453,9 +474,7 @@ impl Template {
         }
 
         let content = dedup_sorted(pieces.iter().filter_map(|piece| match piece {
-            Piece::Word(word) if !is_stopword(word) && value_of(word).is_none() => {
-                Some(word.clone())
-            }
+            Piece::Word(word) if !is_stopword(word) => Some(word.clone()),
             _ => None,
         }));
         let skeleton = skeleton_of(pieces.iter().map(|piece| match piece {
@@ -552,15 +571,25 @@ impl Template {
         // offers, in order. Counts must agree: a leftover value is something
         // the template cannot explain, and an unfilled slot is a hole in the
         // answer.
+        // Word slots are deliberately left out of this count on both sides.
+        // Matching by bag of values works because values are rare; now that
+        // every word is a candidate, counting them here would make the tallies
+        // disagree on almost every sentence and shut fuzzy matching off
+        // entirely. A word slot is filled by position or not at all.
         let wanted: Vec<usize> = self
             .pieces
             .iter()
             .filter_map(|piece| match piece {
-                Piece::Slot(slot) => Some(*slot),
-                Piece::Word(_) => None,
+                Piece::Slot(slot) if self.slots.get(*slot) != Some(&SlotKind::Word) => Some(*slot),
+                _ => None,
             })
             .collect();
-        let supplied: Vec<&(SlotKind, Concept)> = input.values.iter().flatten().collect();
+        let supplied: Vec<&(SlotKind, Concept)> = input
+            .values
+            .iter()
+            .flatten()
+            .filter(|(kind, _)| *kind != SlotKind::Word)
+            .collect();
         if wanted.len() != supplied.len() {
             return None;
         }
