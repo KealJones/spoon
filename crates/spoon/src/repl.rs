@@ -294,3 +294,126 @@ pub async fn bench(cli: &Cli, suite: &str) -> Result<()> {
     );
     Ok(())
 }
+
+pub async fn bench_compare_ears(cli: &Cli, suite: &str) -> Result<()> {
+    let path = format!("data/bench/{suite}.json");
+    let raw =
+        std::fs::read_to_string(&path).map_err(|e| anyhow::anyhow!("cannot read {path}: {e}"))?;
+    let corpus: serde_json::Value = serde_json::from_str(&raw)?;
+    let cases: Vec<Case> = corpus["cases"]
+        .as_array()
+        .map(|a| serde_json::from_value(serde_json::Value::Array(a.clone())))
+        .transpose()?
+        .unwrap_or_default();
+
+    if cases.is_empty() {
+        anyhow::bail!("no graded cases in {path}");
+    }
+
+    let (mut brain_ab, ears_flag_ab) = assemble(cli).await?;
+    ears_flag_ab.set(spoon_ears::EarsFormat::AngleBracket);
+
+    let (mut brain_py, ears_flag_py) = assemble(cli).await?;
+    ears_flag_py.set(spoon_ears::EarsFormat::PythonCall);
+
+    let mut ab_right = 0usize;
+    let mut py_right = 0usize;
+    let mut both_right = 0usize;
+    let mut both_wrong = 0usize;
+    let mut ab_only = 0usize;
+    let mut py_only = 0usize;
+    let total = cases.iter().filter(|c| !c.setup).count();
+    let started = std::time::Instant::now();
+
+    println!(
+        "{:<4} {:<40} {:<18} {:<18} {}",
+        "#", "utterance", "angle-bracket", "python", "want"
+    );
+    println!("{}", "-".repeat(110));
+
+    for (i, case) in cases.iter().enumerate() {
+        let ab_result = brain_ab.turn("bench-ab", &case.say).await?;
+        let py_result = brain_py.turn("bench-py", &case.say).await?;
+
+        let ab_got = ab_result
+            .episode
+            .result
+            .as_ref()
+            .map(|c| brain_ab.render(c))
+            .unwrap_or_else(|| "-".to_string());
+        let py_got = py_result
+            .episode
+            .result
+            .as_ref()
+            .map(|c| brain_py.render(c))
+            .unwrap_or_else(|| "-".to_string());
+
+        if case.setup {
+            println!("{:<4} {:<40} (setup)", i + 1, truncate(&case.say, 38));
+            continue;
+        }
+
+        let ab_ok = case.accepts(&ab_got);
+        let py_ok = case.accepts(&py_got);
+
+        if ab_ok {
+            ab_right += 1;
+        }
+        if py_ok {
+            py_right += 1;
+        }
+        match (ab_ok, py_ok) {
+            (true, true) => both_right += 1,
+            (false, false) => both_wrong += 1,
+            (true, false) => ab_only += 1,
+            (false, true) => py_only += 1,
+        }
+
+        let marker = match (ab_ok, py_ok) {
+            (true, true) => format!("{}", i + 1),
+            (false, false) => format!("{}x", i + 1),
+            (true, false) => format!("{}~", i + 1),  // AB won
+            (false, true) => format!("{}+", i + 1),  // PY won
+        };
+        println!(
+            "{:<4} {:<40} {:<18} {:<18} {}",
+            marker,
+            truncate(&case.say, 38),
+            truncate(&ab_got, 16),
+            truncate(&py_got, 16),
+            truncate(&case.wanted(), 20),
+        );
+    }
+
+    let elapsed = started.elapsed();
+    println!("\n{total} cases in {elapsed:?}");
+    println!(
+        "angle-bracket: {ab_right}/{total} ({:.0}%)",
+        100.0 * ab_right as f64 / total as f64
+    );
+    println!(
+        "python:        {py_right}/{total} ({:.0}%)",
+        100.0 * py_right as f64 / total as f64
+    );
+    println!("\nboth right: {both_right}  both wrong: {both_wrong}");
+    println!("angle-bracket only: {ab_only}  python only: {py_only}");
+
+    if py_only > 0 {
+        println!("\n--- python wins ({py_only}) ---");
+        // Re-run to show details would be too slow, the numbers above tell the story
+    }
+    if ab_only > 0 {
+        println!("\n--- angle-bracket wins ({ab_only}) ---");
+    }
+
+    Ok(())
+}
+
+fn truncate(s: &str, n: usize) -> String {
+    let t: String = s.chars().take(n).collect();
+    if s.chars().count() > n {
+        format!("{t}...")
+    } else {
+        t
+    }
+}

@@ -61,6 +61,9 @@ enum Command {
     Bench {
         #[arg(default_value = "session")]
         suite: String,
+        /// Run each case with both angle-bracket and Python ears, compare results.
+        #[arg(long)]
+        compare_ears: bool,
     },
     /// What is this brain failing at?
     Doctor {
@@ -113,7 +116,16 @@ async fn main() -> anyhow::Result<()> {
         Command::Repl => repl::run(&cli).await,
         Command::Stdio => repl::stdio(&cli).await,
         Command::Serve { port, ref host } => serve::run(&cli, host, port).await,
-        Command::Bench { ref suite } => build::bench(&cli, suite).await,
+        Command::Bench {
+            ref suite,
+            compare_ears,
+        } => {
+            if compare_ears {
+                crate::repl::bench_compare_ears(&cli, suite).await
+            } else {
+                build::bench(&cli, suite).await
+            }
+        }
         Command::Doctor { limit } => build::doctor(&cli, limit),
         Command::Export { ref out } => build::export(&cli, out.as_deref()),
         Command::Import { ref file } => build::import(&cli, file),
