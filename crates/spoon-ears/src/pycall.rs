@@ -7,9 +7,7 @@
 //! string/number/bool literals and `lambda x:` for holes. No variables, no
 //! imports, no control flow.
 
-use std::sync::Arc;
-
-use spoon_concept::{Concept, Ground, SymbolTable};
+use spoon_concept::{Concept, SymbolTable};
 
 #[derive(Debug)]
 pub enum PyParseError {

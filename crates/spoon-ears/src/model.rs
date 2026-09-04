@@ -63,7 +63,7 @@ impl ModelEars {
         }
     }
 
-    pub fn with_format(mut self, format: EarsFormat) -> Self {
+    pub fn with_format(self, format: EarsFormat) -> Self {
         self.format_flag.set(format);
         self
     }
