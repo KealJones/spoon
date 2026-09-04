@@ -16,14 +16,19 @@ out="${OUT:-target/overnight/$(date +%Y%m%d-%H%M%S)}"
 mkdir -p "$out"
 brain="$out/brain.db"
 base="$out/baseline.db"
-spoon=./target/debug/spoon
+# A copy, taken once. Each step execs the binary fresh, so editing the source
+# mid-run would silently score the trained half with different code than the
+# baseline half and every comparison in the summary would be meaningless.
+spoon="$out/spoon"
 train_suite="${TRAIN:-graded_train}"
 test_suite="${TEST:-graded_test}"
 facts_train="${FACTS_TRAIN:-graded_facts_train}"
 facts_test="${FACTS_TEST:-graded_facts_test}"
 
 cargo build -q --workspace || exit 1
-echo "results: $out"
+cp ./target/debug/spoon "$spoon"
+git rev-parse HEAD > "$out/commit" 2>/dev/null || true
+echo "results: $out  (binary pinned at $(cut -c1-8 "$out/commit" 2>/dev/null))"
 
 step() {
   local name="$1"; shift
