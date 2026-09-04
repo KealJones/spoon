@@ -167,7 +167,23 @@ fn concat_lists(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     Ok(make_list(items))
 }
 
+/// Reversing text gives back text.
+///
+/// `reverse` was list-only, so "reverse the word banana" got as far as
+/// `reverse<"banana">` and stopped, and going through `chars` gave back
+/// `list<"a", "n", ...>` unless something remembered to join it. Both are the
+/// same failure: the answer to a question about a word is a word.
+///
+/// This is not a special case for strings. It is one native that knows the
+/// shape of its argument, the same way `want_list` already accepts a JSON
+/// array because refusing it would mean a conversion step nobody asked for.
+///
+/// Reversed by character, not by byte, so a word with an accent in it comes
+/// back as a word rather than as broken bytes.
 fn reverse(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    if let Some(text) = args[0].as_ground().and_then(|g| g.as_str()) {
+        return Ok(Concept::text(text.chars().rev().collect::<String>()));
+    }
     let mut items = want_list("reverse", &args[0])?.to_vec();
     items.reverse();
     Ok(make_list(items))
@@ -656,7 +672,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "reverse",
         reverse,
         Arity::Exact(1),
-        "a list in the opposite order",
+        "a list, or a piece of text, in the opposite order",
     );
     registry.pure(
         "sort",

@@ -806,3 +806,27 @@ fn sort_refuses_values_with_no_shared_order() {
     let message = why_failed(&store, &reg, &Concept::call("sort", [mixed]));
     assert!(message.contains("sort"), "got {message}");
 }
+
+#[test]
+fn reverse_gives_back_the_shape_it_was_given() {
+    // The answer to a question about a word is a word. Going through `chars`
+    // gave back list<"a", "n", ...> unless something remembered to join it.
+    let (store, reg) = brain();
+    assert_eq!(
+        value(&store, &reg, &Concept::call("reverse", [Concept::text("banana")])),
+        Concept::text("ananab")
+    );
+    assert_eq!(
+        value(&store, &reg, &Concept::call("reverse", [ints([1, 2, 3])])),
+        ints([3, 2, 1])
+    );
+    // By character, not by byte, or an accented word comes back broken.
+    assert_eq!(
+        value(&store, &reg, &Concept::call("reverse", [Concept::text("café")])),
+        Concept::text("éfac")
+    );
+    assert_eq!(
+        value(&store, &reg, &Concept::call("reverse", [Concept::text("")])),
+        Concept::text("")
+    );
+}

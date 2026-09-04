@@ -59,16 +59,17 @@ fn the_answer_exists_and_is_correct() {
 }
 
 #[test]
-fn enumeration_cannot_reach_it_and_says_so_honestly() {
-    // Roughly a hundred operators and eight nodes is past what bottom-up
-    // enumeration can cover: a real run explored four hundred thousand
-    // candidates in twenty-eight seconds without arriving. The number is
-    // asserted so that an improvement to the search shows up here as a failing
-    // test rather than going unnoticed.
+fn enumeration_reaches_it_now_that_reverse_knows_about_text() {
+    // This test used to assert the opposite, and the reason it flipped is the
+    // point. The target was join<reverse<chars<?0>>, "">: eight nodes, past
+    // what bottom-up enumeration covers with roughly a hundred operators, and
+    // a real run explored four hundred thousand candidates in twenty-eight
+    // seconds without arriving.
     //
-    // What matters is that it reports running out rather than claiming the
-    // space was searched. Exhausted would mean no such program exists, which
-    // is false and would stop anyone looking further.
+    // Nothing about the search improved. `reverse` learned to reverse text, so
+    // the same program is three nodes instead of eight, and the search walks
+    // straight to it. Widening what a primitive accepts moved a problem from
+    // out of reach to trivial, which is worth more than a faster search.
     let (store, registry) = env();
     let budget = SynthBudget {
         max_size: 9,
@@ -78,11 +79,10 @@ fn enumeration_cannot_reach_it_and_says_so_honestly() {
     let outcome = synthesize(&reversal_spec("reverse-text"), &store, &registry, budget);
 
     match outcome {
-        SynthOutcome::OutOfBudget { .. } => {}
-        SynthOutcome::Found { body, size, .. } => {
-            panic!("search reached it after all, at size {size}: {body:?}. Update this test.")
+        SynthOutcome::Found { size, .. } => {
+            assert!(size <= 4, "expected a small body, got size {size}");
         }
-        other => panic!("expected to run out of budget, got {other:?}"),
+        other => panic!("expected to find a body, got {other:?}"),
     }
 }
 
