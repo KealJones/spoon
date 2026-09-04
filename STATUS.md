@@ -6,6 +6,59 @@ Decisions in PIVOT_PLAN.md; rules in AGENTS.md; design in docs/CONCEPT-IR-DESIGN
 
 ---
 
+## 2026-09-03  The config was never read, and the bench never checked answers
+
+Two findings that invalidate most of what this log said about the Teacher.
+
+**The Teacher was never the model it was set to.** `~/.spoon/config.json` has
+said `qwen3.8:27b` for a while, and Spoon had never opened the file. All three
+seats ran the `qwen3.5:4b` default. The entry above, "the model in the seat is
+not good enough for this class of problem", was measuring a model nobody chose.
+Flags now override the file, the file overrides the default, and `database.path`
+is refused rather than honored: it points at a v1 brain whose schema this build
+cannot read.
+
+**The bench never checked whether an answer was right.** It reported which ears
+path ran and how many gaps appeared, which is why "it cannot answer anything"
+stayed invisible while every number on the report looked healthy. Suites now
+carry expected results and the runner scores them by category, grading the
+result concept rather than the reply, since the mouth is a language model and
+grading its prose measures the mouth's mood.
+
+BASELINE  280/336 (83%) on held-out cases, native ears 42%.
+
+DONE
+- Graded bench with per-category scoring, `--no-teaching`, and setup turns.
+- 3787 generated cases over 38 categories, split 70/30 train and test, with the
+  split taken per category and deduplicated by utterance first.
+- Reverse works on text, which also collapsed `reverse-text` from an
+  eight-node synthesis target to three nodes. The test asserting enumeration
+  could not reach it now asserts that it can. Nothing about the search improved.
+- `sort` exists under the name people use.
+- A stall is no longer reported as an answer, in three separate places: a
+  half-reduced ask, a stuck `Move::Do`, and a value containing holes.
+- The turn re-runs the interior once after learning something, so a turn that
+  synthesizes exactly what it needs stops answering "unknown".
+- Retiring a native retires everything that still names it: its realization,
+  the phrasings that produce it, and the Teacher's durable advice about it.
+  A brain with history failed where a fresh brain succeeded, because only the
+  old one had the bad memories.
+- A greeting is a whole turn or it is not one. "hey quick one, 356 minus 43"
+  used to answer hello.
+- The inspector shows a concept in full: kind, description, realizations with
+  their bodies and scores, declared properties, and where it appears.
+
+NEXT
+- Run `scripts/overnight.sh`: baseline, curriculum, train with teaching on,
+  score the held-out half with teaching off. The number that matters is whether
+  training moves the test score off 83%.
+- The ears leave words as bare concept names, so `ends-with<parallel, "el">`
+  fails where `ends-with<"parallel", "el">` works. Teaching should fix this by
+  storing phrasings; if it does not, that is the next real bug.
+- Turns that produce no result at all: the ears returned zero steps.
+
+---
+
 ## 2026-09-03  Correction: the Teacher result was the prompt talking to itself
 
 An earlier entry claimed the Teacher, once fixed, produced
