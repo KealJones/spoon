@@ -119,6 +119,13 @@ struct Case {
     expect_any: Vec<String>,
     #[serde(default)]
     category: String,
+    /// Run it, do not grade it.
+    ///
+    /// Some questions only mean something after something else was said.
+    /// "who has a dog" needs "john has a dog" to have happened, and the
+    /// setup turn is not itself the thing under test.
+    #[serde(default)]
+    setup: bool,
 }
 
 impl Case {
@@ -172,6 +179,7 @@ pub async fn bench(cli: &Cli, suite: &str) -> Result<()> {
                 expect: None,
                 expect_any: Vec::new(),
                 category: String::new(),
+                setup: false,
             })
             .collect()
     };
@@ -214,7 +222,9 @@ pub async fn bench(cli: &Cli, suite: &str) -> Result<()> {
             }
         };
 
-        if graded {
+        if graded && case.setup {
+            println!("{:<4} {:<52} {:<22} (setup)", i + 1, short(&case.say, 50), short(&got, 20));
+        } else if graded {
             let ok = case.accepts(&got);
             if ok {
                 right += 1;
@@ -247,7 +257,7 @@ pub async fn bench(cli: &Cli, suite: &str) -> Result<()> {
         }
     }
 
-    let total = cases.len().max(1);
+    let total = cases.iter().filter(|c| !c.setup).count().max(1);
     println!("\n{} utterances in {:?}", total, started.elapsed());
     if graded {
         println!(

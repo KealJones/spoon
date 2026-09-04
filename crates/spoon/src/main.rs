@@ -21,6 +21,13 @@ struct Cli {
     /// Never consult a model. Everything still works, with less fluency.
     #[arg(long, global = true)]
     offline: bool,
+    /// Keep the ears and mouth, silence the Teacher.
+    ///
+    /// Teaching is what makes a run slow and what makes it change the brain.
+    /// Turning it off measures the interior as it stands, which is the number
+    /// you want when checking whether an edit helped.
+    #[arg(long, global = true)]
+    no_teaching: bool,
     /// Overrides ears.model in ~/.spoon/config.json.
     #[arg(long, global = true)]
     ears_model: Option<String>,

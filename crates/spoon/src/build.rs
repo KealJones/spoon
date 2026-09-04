@@ -103,6 +103,7 @@ pub async fn assemble(cli: &Cli) -> Result<Brain> {
             .await
     };
 
+    let teaching = online && !cli.no_teaching;
     let (ears, mouth, teacher): SeatTrio = if online {
         (
             Box::new(ModelEars::new(LlmClient::new(
@@ -113,10 +114,12 @@ pub async fn assemble(cli: &Cli) -> Result<Brain> {
                 LlmClient::new(LlmConfig::ollama(&mouth_model), counters.clone()),
                 table.clone(),
             )),
-            Some(Box::new(ModelTeacher::new(
-                LlmClient::new(LlmConfig::ollama(&teacher_model), counters.clone()),
-                table.clone(),
-            ))),
+            teaching.then(|| {
+                Box::new(ModelTeacher::new(
+                    LlmClient::new(LlmConfig::ollama(&teacher_model), counters.clone()),
+                    table.clone(),
+                )) as Box<dyn Teacher>
+            }),
         )
     } else {
         (
@@ -128,7 +131,7 @@ pub async fn assemble(cli: &Cli) -> Result<Brain> {
 
     let config = BrainConfig {
         permission: permission(&permissions),
-        teaching: online,
+        teaching,
         ..BrainConfig::default()
     };
     let seats = Seats {

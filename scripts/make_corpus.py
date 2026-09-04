@@ -58,16 +58,28 @@ def arithmetic():
                 f"hey quick one, {a} {name} {b}",
             ]
             out.append(case(random.choice(forms), want, f"arith-{name}"))
-    for _ in range(30):
+    for _ in range(40):
         a = random.randint(2, 40)
-        b = random.randint(2, 12)
+        b = random.randint(2, 4)
         out.append(case(random.choice([
-            f"what is {a} to the power of {b if b < 5 else 2}",
-            f"{a} squared",
-        ]).replace("squared", "to the power of 2"), str(a ** (b if b < 5 else 2)) if "power" in "power" else "", "arith-pow"))
-    # Drop the malformed pow cases rather than ship a wrong expectation.
-    out = [c for c in out if c["expect"]]
+            f"what is {a} to the power of {b}",
+            f"{a} to the power of {b}",
+            f"raise {a} to the {b}",
+        ]), str(a ** b), "arith-pow"))
+    for _ in range(40):
+        a, b = random.randint(2, 40), random.randint(2, 12)
+        out.append(case(random.choice([
+            f"what is {a * b} divided by {b}",
+            f"{a * b} / {b}",
+            f"divide {a * b} by {b}",
+        ]), str(a), "arith-div"))
     for _ in range(30):
+        a, b = random.randint(10, 90), random.randint(3, 9)
+        out.append(case(random.choice([
+            f"what is the remainder of {a} divided by {b}",
+            f"{a} mod {b}",
+        ]), str(a % b), "arith-mod"))
+    for _ in range(40):
         a, b = random.randint(2, 30), random.randint(2, 30)
         out.append(case(f"is {a} bigger than {b}", "true" if a > b else "false", "compare"))
     for _ in range(20):
@@ -155,6 +167,169 @@ def collections():
     return out
 
 
+def lists():
+    """Ranges, filters and the shapes that come back as lists."""
+    out = []
+    for _ in range(40):
+        hi = random.randint(3, 9)
+        want = "list<" + ", ".join(str(i) for i in range(1, hi + 1)) + ">"
+        out.append(case(random.choice([
+            f"the numbers from 1 to {hi}",
+            f"list the numbers 1 through {hi}",
+            f"give me 1 to {hi}",
+        ]), want, "range"))
+    for _ in range(40):
+        hi = random.choice([6, 8, 10, 12])
+        evens = [i for i in range(1, hi + 1) if i % 2 == 0]
+        want = "list<" + ", ".join(str(i) for i in evens) + ">"
+        out.append(case(random.choice([
+            f"the even numbers from 1 to {hi}",
+            f"which numbers between 1 and {hi} are even",
+        ]), want, "filter-even"))
+    for _ in range(40):
+        xs = [random.randint(1, 40) for _ in range(random.randint(3, 5))]
+        shown = ", ".join(str(x) for x in xs)
+        want = "list<" + ", ".join(str(x) for x in sorted(xs)) + ">"
+        out.append(case(random.choice([
+            f"sort {shown}",
+            f"put {shown} in order",
+            f"sort these numbers: {shown}",
+        ]), want, "sort"))
+        rev = "list<" + ", ".join(str(x) for x in reversed(xs)) + ">"
+        out.append(case(f"reverse the list {shown}", rev, "reverse-list"))
+    for _ in range(30):
+        xs = [random.randint(1, 9) for _ in range(6)]
+        shown = ", ".join(str(x) for x in xs)
+        want = "list<" + ", ".join(str(x) for x in sorted(set(xs), key=xs.index)) + ">"
+        out.append(case(random.choice([
+            f"remove the duplicates from {shown}",
+            f"what are the unique values in {shown}",
+        ]), want, "unique"))
+    for _ in range(30):
+        xs = [random.randint(1, 40) for _ in range(4)]
+        shown = ", ".join(str(x) for x in xs)
+        out.append(case(random.choice([
+            f"what is the first of {shown}",
+            f"first item in {shown}",
+        ]), str(xs[0]), "first"))
+        out.append(case(f"what is the product of {shown}", str(
+            xs[0] * xs[1] * xs[2] * xs[3]), "product"))
+    return out
+
+
+def more_strings():
+    out = []
+    for _ in range(30):
+        w = random.choice(WORDS)
+        out.append(case(random.choice([
+            f"lowercase {w.upper()}", f"make {w.upper()} lowercase",
+        ]), f'"{w}"', "lower"))
+    for _ in range(30):
+        w = random.choice(WORDS)
+        a, b = w[0], "z"
+        out.append(case(random.choice([
+            f"replace every {a} in {w} with {b}",
+            f"swap the {a}s in {w} for {b}",
+        ]), f'"{w.replace(a, b)}"', "replace"))
+    for _ in range(30):
+        w = random.choice(WORDS)
+        n = random.randint(2, min(5, len(w) - 1))
+        out.append(case(random.choice([
+            f"the first {n} letters of {w}",
+            f"first {n} characters of {w}",
+        ]), f'"{w[:n]}"', "substring"))
+    for _ in range(30):
+        parts = random.sample(WORDS, 3)
+        joined = ",".join(parts)
+        want = "list<" + ", ".join(f'"{p}"' for p in parts) + ">"
+        out.append(case(random.choice([
+            f"split {joined} on commas",
+            f"break {joined} apart at the commas",
+        ]), want, "split"))
+    for _ in range(25):
+        w = random.choice(WORDS)
+        out.append(case(f"does {w} end with {w[-2:]}", "true", "ends-with"))
+        out.append(case(f"does {w} end with qz", "false", "ends-with"))
+    for _ in range(25):
+        w = random.choice(WORDS)
+        out.append(case(random.choice([
+            f'trim the spaces off "  {w}  "',
+            f'strip the whitespace from "  {w}  "',
+        ]), f'"{w}"', "trim"))
+    return out
+
+
+def logic():
+    out = []
+    for _ in range(40):
+        a, b = random.choice([True, False]), random.choice([True, False])
+        sa, sb = str(a).lower(), str(b).lower()
+        out.append(case(f"is {sa} and {sb}", str(a and b).lower(), "and"))
+        out.append(case(f"is {sa} or {sb}", str(a or b).lower(), "or"))
+    for _ in range(20):
+        n = random.randint(-40, 40)
+        out.append(case(f"is {n} negative", str(n < 0).lower(), "sign"))
+        out.append(case(f"is {n} zero", str(n == 0).lower(), "sign"))
+    return out
+
+
+NAMES = ["alice", "bob", "carol", "dave", "erin", "frank", "grace", "heidi",
+         "ivan", "judy", "mallory", "olivia", "peggy", "trent", "victor", "walter"]
+
+
+def setup(say, category):
+    return {"say": say, "expect": None, "category": category, "setup": True}
+
+
+def inference():
+    """The meta-vocabulary, tested the only way it means anything: say a
+    thing, then ask something that was never said.
+
+    Yes-or-no questions on purpose. A question with a hole comes back as the
+    list of facts that satisfy it, and grading that shape would be grading the
+    renderer rather than the inference.
+    """
+    out = []
+    pool = NAMES[:]
+    random.shuffle(pool)
+
+    def take(n):
+        if len(pool) < n:
+            pool.extend(NAMES)
+        return [pool.pop() for _ in range(n)]
+
+    for rel, phrase in [("friends-with", "friends with"),
+                        ("married-to", "married to"),
+                        ("sibling-of", "a sibling of")]:
+        out.append(setup(f"{rel} is symmetric", "symmetric"))
+        for _ in range(12):
+            a, b = take(2)
+            out.append(setup(f"{a} is {phrase} {b}", "symmetric"))
+            out.append(case(f"is {b} {phrase} {a}", "true", "symmetric"))
+
+    for rel, phrase in [("part-of", "part of"), ("ancestor-of", "an ancestor of")]:
+        out.append(setup(f"{rel} is transitive", "transitive"))
+        for _ in range(10):
+            a, b, c = take(3)
+            out.append(setup(f"{a} is {phrase} {b}", "transitive"))
+            out.append(setup(f"{b} is {phrase} {c}", "transitive"))
+            out.append(case(f"is {a} {phrase} {c}", "true", "transitive"))
+
+    out.append(setup("parent-of is the inverse of child-of", "inverse"))
+    for _ in range(12):
+        a, b = take(2)
+        out.append(setup(f"{a} is the parent of {b}", "inverse"))
+        out.append(case(f"is {b} the child of {a}", "true", "inverse"))
+
+    for _ in range(10):
+        a = take(1)[0]
+        out.append(setup(f"a {a}-fish is a subtype of fish", "subtype"))
+        out.append(setup("a fish is a subtype of animal", "subtype"))
+        out.append(case(f"is a {a}-fish an animal", "true", "subtype"))
+
+    return out
+
+
 def build(name, note, cases):
     path = OUT / f"{name}.json"
     path.write_text(json.dumps(
@@ -164,7 +339,17 @@ def build(name, note, cases):
 
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
-    full = arithmetic() + counting() + strings() + collections()
+    full = (arithmetic() + counting() + strings() + collections()
+            + lists() + more_strings() + logic())
+    # Deduplicate by utterance. Generators repeat themselves, and the same
+    # sentence landing in both halves would put a test case in the training
+    # set, which is the one mistake that makes every later number a lie.
+    seen, unique = set(), []
+    for c in full:
+        if c["say"] not in seen:
+            seen.add(c["say"])
+            unique.append(c)
+    full = unique
     random.shuffle(full)
     build("graded", "Everything checkable, asked several ways each. The night run.", full)
 
@@ -177,6 +362,30 @@ def main():
     for cat in sorted(by_cat):
         core.extend(by_cat[cat][:6])
     build("graded_core", "A stratified sample of graded, small enough to run between edits.", core)
+
+    # Never shuffled. Each question depends on the turns before it, which is
+    # the whole point: the answer was never said, only implied.
+    # Split before anything learns, so a score on the test half is a score on
+    # utterances Spoon has never been shown. Running a corpus with teaching on
+    # is training; scoring on that same corpus measures memorization.
+    #
+    # Split within each category so both halves cover the same ground: a test
+    # set that happened to lose every arithmetic case would look like progress.
+    train, test = [], []
+    for cat in sorted(by_cat):
+        items = by_cat[cat][:]
+        random.Random(11).shuffle(items)
+        cut = int(len(items) * 0.7)
+        train.extend(items[:cut])
+        test.extend(items[cut:])
+    random.Random(12).shuffle(train)
+    random.Random(13).shuffle(test)
+    build("graded_train", "The half Spoon is allowed to learn from.", train)
+    build("graded_test", "Held out. Never run with teaching on before scoring.", test)
+
+    build("graded_facts",
+          "Say a thing, then ask something that was never said. Order matters.",
+          inference())
 
 
 if __name__ == "__main__":
