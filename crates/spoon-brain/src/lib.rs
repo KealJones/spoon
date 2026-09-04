@@ -11,7 +11,7 @@ mod episode;
 mod reconcile;
 mod resolve;
 
-pub use brain::{Brain, BrainConfig, Seats, TurnResult, is_answer};
+pub use brain::{Brain, BrainConfig, Seats, TurnResult, is_answer, is_unknown};
 pub use correct::{Correction, apply as apply_correction, is_correction};
 pub use credit::{Blame, Stage, assign as assign_blame, assign_all};
 pub use episode::{EarsPath, Episode, MouthPath, TraceStep, TurnMetrics};

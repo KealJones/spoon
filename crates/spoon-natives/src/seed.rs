@@ -18,6 +18,8 @@ pub struct SeedStats {
     pub realizations: usize,
     /// Bootstrap natives that no longer exist in the binary and were dropped.
     pub retired: usize,
+    /// Learned phrasings that pointed at one of those and were forgotten.
+    pub forgotten: usize,
 }
 
 /// Store a `Native` realization for every registered native, naming the
@@ -64,13 +66,49 @@ pub fn seed_bootstrap(store: &Store, registry: &NativeRegistry) -> Result<SeedSt
     // Only bootstrap natives are ours to retire. A learned composed body or a
     // rule the Teacher wrote is not made stale by a Rust rename, and dropping
     // one would throw away the evidence behind it.
+    let mut orphaned = Vec::new();
     for r in store.all_realizations()? {
         let RealizationSpec::Native { native } = &r.spec else {
             continue;
         };
         if r.provenance == Provenance::Bootstrap && !registry.contains(native) {
             store.retire_realization(&r.name)?;
+            // Marked, not just deleted. A name that used to work leaks into
+            // places a realization lookup cannot reach: the Teacher writes
+            // durable advice about it, and that advice keeps steering the ears
+            // back at a head that is gone. Anything holding a name needs to be
+            // able to ask whether it still means something.
+            store.assert_concept(
+                &Concept::call("retired", [r.target.clone()]),
+                Provenance::Bootstrap,
+                None,
+                None,
+            )?;
+            orphaned.push(r.target.clone());
             stats.retired += 1;
+        }
+    }
+
+    // A phrasing that produces a dead head is worse than no phrasing at all.
+    //
+    // Retiring the realization is not enough on its own: the learned pair that
+    // says "how many X in Y" reads as `count-matching<...>` outlives it, so
+    // the ears keep confidently producing a head nothing can carry out. The
+    // brain that had used the capability most was the one that could no longer
+    // answer, while a fresh brain got it right, because the fresh one had no
+    // phrasing to mislead it.
+    //
+    // Only pairs that mention a head that just died. A phrasing that still
+    // resolves is none of this function's business.
+    if !orphaned.is_empty() {
+        for pair in store.all_pairs(usize::MAX)? {
+            let mentions_dead = pair.steps.iter().any(|step| {
+                spoon_concept::pre_order(step).any(|node| orphaned.iter().any(|o| node == o))
+            });
+            if mentions_dead {
+                store.forget_pair(pair.id)?;
+                stats.forgotten += 1;
+            }
         }
     }
 

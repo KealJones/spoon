@@ -75,3 +75,53 @@ fn a_learned_body_survives_seeding() {
             .is_empty()
     );
 }
+
+#[test]
+fn a_phrasing_pointing_at_a_retired_head_is_forgotten() {
+    // Retiring the realization alone was not enough. The learned pair that
+    // read "how many rs in X" as count-matching outlived it, so the brain
+    // that had used the capability most was the one that could no longer
+    // answer, while a fresh brain got it right for want of a bad memory.
+    let store = Store::open_in_memory().expect("store");
+    let registry = spoon_natives::bootstrap();
+    let dead = Concept::call(
+        "count-matching",
+        [Concept::hole(0), Concept::hole(1)],
+    );
+
+    store
+        .put_realization(&Realization {
+            target: Concept::named("count-matching"),
+            name: "native-count-matching".into(),
+            spec: RealizationSpec::Native {
+                native: NativeId::new("count-matching"),
+            },
+            effect: Effect::Pure,
+            activation: Activation::new(Utc::now()),
+            provenance: Provenance::Bootstrap,
+            tier: Tier::Kernel,
+        })
+        .expect("stale realization");
+    store
+        .put_pair(
+            "how many rs are in strawberry",
+            &[dead],
+            spoon_store::pairs::PairSource::Confirmed,
+        )
+        .expect("stale pair");
+    let keep = store
+        .put_pair(
+            "how many things are in this",
+            &[Concept::call("count", [Concept::hole(0)])],
+            spoon_store::pairs::PairSource::Confirmed,
+        )
+        .expect("live pair");
+
+    let stats = seed_bootstrap(&store, &registry).expect("seed");
+
+    assert_eq!(stats.retired, 1);
+    assert_eq!(stats.forgotten, 1);
+    let left = store.all_pairs(100).expect("pairs");
+    assert_eq!(left.len(), 1);
+    assert_eq!(left[0].id, keep);
+}

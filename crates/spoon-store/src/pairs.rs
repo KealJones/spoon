@@ -231,6 +231,17 @@ impl Store {
         Ok(pairs)
     }
 
+    /// Forget a learned phrasing.
+    ///
+    /// For phrasings that can no longer produce a working reading, not ones
+    /// that merely read something badly. A pair that keeps losing is left
+    /// alone: its failure count is the evidence that demotes it.
+    pub fn forget_pair(&self, id: i64) -> Result<bool> {
+        let conn = self.conn.lock();
+        let n = conn.execute("DELETE FROM pairs WHERE id = ?1", [id])?;
+        Ok(n > 0)
+    }
+
     /// Record how a reading built from this pair turned out.
     ///
     /// A missing id is an error rather than a no-op: the caller believes it is

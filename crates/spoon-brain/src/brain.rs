@@ -215,6 +215,45 @@ impl Brain {
             learning = self
                 .consult_teacher(text, &heard, &gaps, &mut metrics)
                 .await;
+
+            // Use what was just learned, on this turn.
+            //
+            // Teaching ran after the interior and nothing re-ran it, so a turn
+            // that synthesized exactly the capability it needed still answered
+            // "unknown" and made the user ask twice. Learning a thing and then
+            // not using it is the most annoying possible way to succeed.
+            //
+            // Only when the first pass came up short, and only once. A turn
+            // that already had an answer has nothing to redo, and a second
+            // consultation could not use its own results either, so it would
+            // just be a slower way to reach the same place.
+            let fell_short = result
+                .as_ref()
+                .is_none_or(|r| !is_answer(&self.store, r) || is_unknown(r));
+            if fell_short && !learning.is_empty() {
+                let retry_started = Instant::now();
+                let mut retried = None;
+                for m in &moves {
+                    if let Ok(Some(value)) = self.act(
+                        m,
+                        &mut metrics,
+                        &mut gaps,
+                        &mut realizations,
+                        &mut interior,
+                        &mut rules,
+                    ) {
+                        retried = Some(value);
+                    }
+                }
+                if let Some(value) = retried
+                    && is_answer(&self.store, &value)
+                    && !is_unknown(&value)
+                {
+                    result = Some(value);
+                    learning.push("used what it just learned".to_string());
+                }
+                metrics.millis_interior += retry_started.elapsed().as_millis() as u64;
+            }
         }
 
         // ---- mouth ----
@@ -331,6 +370,7 @@ impl Brain {
     /// rule costs more attention than it buys.
     fn ears_rules(&self) -> Vec<String> {
         const MAX_RULES: usize = 12;
+        let retired = self.retired_names();
         self.store
             .concepts_by_head(spoon_concept::SymbolId::of("ears-rule"), 64)
             .unwrap_or_default()
@@ -341,7 +381,25 @@ impl Brain {
                     .and_then(Concept::as_ground)
                     .and_then(|g| g.as_str().map(str::to_string))
             })
+            // Advice about a capability that no longer exists is worse than no
+            // advice: it reads with all the authority of something Spoon
+            // learned the hard way, and it steers the ears straight at a head
+            // nothing can carry out. Dropping it at read time means rules
+            // written before a rename die on their own, with no migration.
+            .filter(|rule| !mentions_any(rule, &retired))
             .take(MAX_RULES)
+            .collect()
+    }
+
+    /// Names that used to mean something and no longer do.
+    fn retired_names(&self) -> Vec<String> {
+        self.store
+            .concepts_by_head(spoon_concept::SymbolId::of("retired"), 128)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|c| self.store.holds(c).unwrap_or(false))
+            .filter_map(|c| c.arg(0)?.as_symbol())
+            .filter_map(|id| self.symbols.resolve(id).map(|n| n.to_lowercase()))
             .collect()
     }
 
@@ -384,9 +442,17 @@ impl Brain {
     /// domain's vocabulary and a rarely used concept stops costing prompt
     /// space without being forgotten.
     fn vocabulary(&self) -> Vec<Arc<str>> {
+        // Retired names keep their meta, which is what makes them still look
+        // like vocabulary. Offering one to the ears or the Teacher is how a
+        // dead capability gets written back into a durable rule two turns
+        // after it was retired.
+        let retired = self.retired_names();
         self.store
             .ranked_surface_forms(self.config.vocabulary_size, Utc::now())
             .unwrap_or_default()
+            .into_iter()
+            .filter(|name| !retired.iter().any(|r| r == &name.to_lowercase()))
+            .collect()
     }
 
     /// What already realizes this concept, and how each one just fared.
@@ -1250,6 +1316,32 @@ fn episode_json(episode: &Episode) -> spoon_store::Result<String> {
 /// when it does not. `friend-with<greg, keal>` is a fact and stays an
 /// answer; a head applied to arguments that nothing can carry out and
 /// nobody ever claimed is a gap.
+/// Whether a value is Spoon reporting that it could not answer.
+///
+/// `unknown<...>` is a real result in the sense that the turn produced it, and
+/// not one in the sense the user cares about.
+/// Whether free text names any of these concepts.
+///
+/// Word boundaries matter: `count` must not match inside `count-matching`, or
+/// retiring one name would silently mute advice about the other.
+fn mentions_any(text: &str, names: &[String]) -> bool {
+    let lower = text.to_lowercase();
+    let boundary = |c: char| !c.is_alphanumeric() && c != '-';
+    names.iter().any(|name| {
+        lower.match_indices(name.as_str()).any(|(at, _)| {
+            let before = lower[..at].chars().next_back().is_none_or(boundary);
+            let after = lower[at + name.len()..].chars().next().is_none_or(boundary);
+            before && after
+        })
+    })
+}
+
+pub fn is_unknown(value: &Concept) -> bool {
+    value
+        .head_symbol()
+        .is_some_and(|h| h == spoon_concept::SymbolId::of("unknown"))
+}
+
 pub fn is_answer(store: &Store, value: &Concept) -> bool {
     spoon_concept::pre_order(value).all(|node| {
         let Concept::Compound { head, .. } = node else {
