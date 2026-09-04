@@ -1,0 +1,84 @@
+{
+ "name": "smoke_facts",
+ "note": "Say a thing, then ask something that was never said. Order matters.",
+ "cases": [
+  {
+   "say": "friends-with is symmetric",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "frank is friends with carol",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is carol friends with frank",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "olivia is friends with walter",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is walter friends with olivia",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "grace is friends with erin",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is erin friends with grace",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "victor is friends with trent",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is trent friends with victor",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "heidi is friends with peggy",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is peggy friends with heidi",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "ivan is friends with alice",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is alice friends with ivan",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "mallory is friends with dave",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  }
+ ]
+}

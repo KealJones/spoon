@@ -1,0 +1,66 @@
+{
+ "name": "smoke_test",
+ "note": "Held out. Never run with teaching on before scoring.",
+ "cases": [
+  {
+   "say": "divide 50 by 10",
+   "expect": "5",
+   "category": "arith-div"
+  },
+  {
+   "say": "make REALIZATION lowercase",
+   "expect": "\"realization\"",
+   "category": "lower"
+  },
+  {
+   "say": "what is the product of 17, 26, 7, 15",
+   "expect": "46410",
+   "category": "product"
+  },
+  {
+   "say": "make MISSISSIPPI lowercase",
+   "expect": "\"mississippi\"",
+   "category": "lower"
+  },
+  {
+   "say": "um reverse assessment if you can",
+   "expect": "\"tnemssessa\"",
+   "category": "messy-reverse"
+  },
+  {
+   "say": "hey quick one, 91 times 89",
+   "expect": "8099",
+   "category": "arith-times"
+  },
+  {
+   "say": "can you work out 371 times 181 for me",
+   "expect": "67151",
+   "category": "arith-times"
+  },
+  {
+   "say": "how many s characters are in spoon",
+   "expect": "1",
+   "category": "count-chars"
+  },
+  {
+   "say": "how many numbers are in 49, 5, 37, 47, 47, 4",
+   "expect": "6",
+   "category": "count"
+  },
+  {
+   "say": "quick one whats 50 times 58",
+   "expect": "2900",
+   "category": "messy-arith"
+  },
+  {
+   "say": "whats 37 plus 51. scratch that, 37 plus 82",
+   "expect": "119",
+   "category": "correction"
+  },
+  {
+   "say": "put 26, 7, 13 in order",
+   "expect": "list<7, 13, 26>",
+   "category": "sort"
+  }
+ ]
+}

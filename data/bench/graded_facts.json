@@ -9,90 +9,90 @@
    "setup": true
   },
   {
-   "say": "erin is friends with victor",
+   "say": "frank is friends with carol",
    "expect": null,
    "category": "symmetric",
    "setup": true
   },
   {
-   "say": "is victor friends with erin",
+   "say": "is carol friends with frank",
    "expect": "true",
    "category": "symmetric"
   },
   {
-   "say": "judy is friends with ivan",
+   "say": "olivia is friends with walter",
    "expect": null,
    "category": "symmetric",
    "setup": true
   },
   {
-   "say": "is ivan friends with judy",
+   "say": "is walter friends with olivia",
    "expect": "true",
    "category": "symmetric"
   },
   {
-   "say": "walter is friends with bob",
+   "say": "grace is friends with erin",
    "expect": null,
    "category": "symmetric",
    "setup": true
   },
   {
-   "say": "is bob friends with walter",
+   "say": "is erin friends with grace",
    "expect": "true",
    "category": "symmetric"
   },
   {
-   "say": "heidi is friends with mallory",
+   "say": "victor is friends with trent",
    "expect": null,
    "category": "symmetric",
    "setup": true
   },
   {
-   "say": "is mallory friends with heidi",
+   "say": "is trent friends with victor",
    "expect": "true",
    "category": "symmetric"
   },
   {
-   "say": "carol is friends with dave",
+   "say": "heidi is friends with peggy",
    "expect": null,
    "category": "symmetric",
    "setup": true
   },
   {
-   "say": "is dave friends with carol",
+   "say": "is peggy friends with heidi",
    "expect": "true",
    "category": "symmetric"
   },
   {
-   "say": "olivia is friends with frank",
+   "say": "ivan is friends with alice",
    "expect": null,
    "category": "symmetric",
    "setup": true
   },
   {
-   "say": "is frank friends with olivia",
+   "say": "is alice friends with ivan",
    "expect": "true",
    "category": "symmetric"
   },
   {
-   "say": "trent is friends with peggy",
+   "say": "mallory is friends with dave",
    "expect": null,
    "category": "symmetric",
    "setup": true
   },
   {
-   "say": "is peggy friends with trent",
+   "say": "is dave friends with mallory",
    "expect": "true",
    "category": "symmetric"
   },
   {
-   "say": "grace is friends with alice",
+   "say": "bob is friends with judy",
    "expect": null,
    "category": "symmetric",
    "setup": true
   },
   {
-   "say": "is alice friends with grace",
+   "say": "is judy friends with bob",
    "expect": "true",
    "category": "symmetric"
   },

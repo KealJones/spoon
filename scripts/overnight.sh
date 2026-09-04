@@ -7,8 +7,8 @@
 # untrained brain, so the difference is attributable to the training rather
 # than to whatever else changed today.
 #
-#   scripts/overnight.sh            full run
-#   RUNS=graded_core scripts/overnight.sh    a shorter one
+#   scripts/overnight.sh                          full run
+#   TRAIN=graded_core TEST=graded_core scripts/overnight.sh   a smoke test
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -17,6 +17,9 @@ mkdir -p "$out"
 brain="$out/brain.db"
 base="$out/baseline.db"
 spoon=./target/debug/spoon
+train_suite="${TRAIN:-graded_train}"
+test_suite="${TEST:-graded_test}"
+facts_suite="${FACTS:-graded_facts}"
 
 cargo build -q --workspace || exit 1
 echo "results: $out"
@@ -32,14 +35,14 @@ step() {
 }
 
 # What an untrained brain scores, for comparison.
-step baseline-test "$base" bench graded_test --no-teaching
+step baseline-test "$base" bench "$test_suite" --no-teaching
 
-step teach       "$brain" teach data/curriculum/basics.json
-step train       "$brain" bench graded_train
-step train-facts "$brain" bench graded_facts
+step teach       "$brain" teach --file data/curriculum/basics.json
+step train       "$brain" bench "$train_suite"
+step train-facts "$brain" bench "$facts_suite"
 # The only number that means anything.
-step trained-test "$brain" bench graded_test --no-teaching
-step trained-facts "$brain" bench graded_facts --no-teaching
+step trained-test "$brain" bench "$test_suite" --no-teaching
+step trained-facts "$brain" bench "$facts_suite" --no-teaching
 
 echo
 echo "== summary"

@@ -3,8 +3,8 @@
  "note": "A stratified sample of graded, small enough to run between edits.",
  "cases": [
   {
-   "say": "is false and false",
-   "expect": "false",
+   "say": "is true and true",
+   "expect": "true",
    "category": "and"
   },
   {
@@ -13,8 +13,8 @@
    "category": "and"
   },
   {
-   "say": "is true and true",
-   "expect": "true",
+   "say": "is false and false",
+   "expect": "false",
    "category": "and"
   },
   {
@@ -23,28 +23,13 @@
    "category": "and"
   },
   {
+   "say": "what is 320 divided by 10",
+   "expect": "32",
+   "category": "arith-div"
+  },
+  {
    "say": "divide 312 by 12",
    "expect": "26",
-   "category": "arith-div"
-  },
-  {
-   "say": "what is 48 divided by 4",
-   "expect": "12",
-   "category": "arith-div"
-  },
-  {
-   "say": "divide 40 by 2",
-   "expect": "20",
-   "category": "arith-div"
-  },
-  {
-   "say": "what is 48 divided by 8",
-   "expect": "6",
-   "category": "arith-div"
-  },
-  {
-   "say": "what is 156 divided by 4",
-   "expect": "39",
    "category": "arith-div"
   },
   {
@@ -53,18 +38,23 @@
    "category": "arith-div"
   },
   {
-   "say": "whats 205 minus 126?",
-   "expect": "79",
-   "category": "arith-minus"
+   "say": "what is 48 divided by 8",
+   "expect": "6",
+   "category": "arith-div"
+  },
+  {
+   "say": "divide 125 by 5",
+   "expect": "25",
+   "category": "arith-div"
+  },
+  {
+   "say": "divide 66 by 6",
+   "expect": "11",
+   "category": "arith-div"
   },
   {
    "say": "whats 24 minus 136?",
    "expect": "-112",
-   "category": "arith-minus"
-  },
-  {
-   "say": "can you work out 265 minus 148 for me",
-   "expect": "117",
    "category": "arith-minus"
   },
   {
@@ -73,18 +63,28 @@
    "category": "arith-minus"
   },
   {
-   "say": "whats 155 minus 79?",
-   "expect": "76",
-   "category": "arith-minus"
-  },
-  {
    "say": "399 - 41",
    "expect": "358",
    "category": "arith-minus"
   },
   {
-   "say": "71 mod 3",
-   "expect": "2",
+   "say": "hey quick one, 386 minus 41",
+   "expect": "345",
+   "category": "arith-minus"
+  },
+  {
+   "say": "hey quick one, 168 minus 158",
+   "expect": "10",
+   "category": "arith-minus"
+  },
+  {
+   "say": "102 - 93",
+   "expect": "9",
+   "category": "arith-minus"
+  },
+  {
+   "say": "56 mod 4",
+   "expect": "0",
    "category": "arith-mod"
   },
   {
@@ -93,18 +93,18 @@
    "category": "arith-mod"
   },
   {
-   "say": "87 mod 7",
+   "say": "what is the remainder of 69 divided by 5",
+   "expect": "4",
+   "category": "arith-mod"
+  },
+  {
+   "say": "what is the remainder of 43 divided by 8",
    "expect": "3",
    "category": "arith-mod"
   },
   {
-   "say": "what is the remainder of 40 divided by 7",
-   "expect": "5",
-   "category": "arith-mod"
-  },
-  {
-   "say": "38 mod 5",
-   "expect": "3",
+   "say": "61 mod 9",
+   "expect": "7",
    "category": "arith-mod"
   },
   {
@@ -118,13 +118,13 @@
    "category": "arith-plus"
   },
   {
-   "say": "can you work out 205 plus 102 for me",
-   "expect": "307",
+   "say": "whats 150 plus 109?",
+   "expect": "259",
    "category": "arith-plus"
   },
   {
-   "say": "whats 150 plus 109?",
-   "expect": "259",
+   "say": "whats 389 plus 89?",
+   "expect": "478",
    "category": "arith-plus"
   },
   {
@@ -143,8 +143,13 @@
    "category": "arith-plus"
   },
   {
-   "say": "raise 25 to the 4",
-   "expect": "390625",
+   "say": "what is 21 to the power of 3",
+   "expect": "9261",
+   "category": "arith-pow"
+  },
+  {
+   "say": "27 to the power of 4",
+   "expect": "531441",
    "category": "arith-pow"
   },
   {
@@ -158,23 +163,28 @@
    "category": "arith-pow"
   },
   {
-   "say": "raise 21 to the 4",
-   "expect": "194481",
+   "say": "29 to the power of 2",
+   "expect": "841",
    "category": "arith-pow"
   },
   {
-   "say": "what is 24 to the power of 2",
-   "expect": "576",
-   "category": "arith-pow"
-  },
-  {
-   "say": "what is 17 to the power of 4",
-   "expect": "83521",
+   "say": "raise 25 to the 4",
+   "expect": "390625",
    "category": "arith-pow"
   },
   {
    "say": "what is 29 times 56",
    "expect": "1624",
+   "category": "arith-times"
+  },
+  {
+   "say": "whats 87 times 166?",
+   "expect": "14442",
+   "category": "arith-times"
+  },
+  {
+   "say": "what is 344 times 102",
+   "expect": "35088",
    "category": "arith-times"
   },
   {
@@ -188,37 +198,12 @@
    "category": "arith-times"
   },
   {
-   "say": "whats 209 times 169?",
-   "expect": "35321",
-   "category": "arith-times"
-  },
-  {
    "say": "whats 136 times 94?",
    "expect": "12784",
    "category": "arith-times"
   },
   {
-   "say": "can you work out 16 times 196 for me",
-   "expect": "3136",
-   "category": "arith-times"
-  },
-  {
-   "say": "is 13 bigger than 28",
-   "expect": "false",
-   "category": "compare"
-  },
-  {
-   "say": "is 24 bigger than 21",
-   "expect": "true",
-   "category": "compare"
-  },
-  {
-   "say": "is 176 even?",
-   "expect": "true",
-   "category": "compare"
-  },
-  {
-   "say": "is 17 bigger than 23",
+   "say": "is 10 bigger than 19",
    "expect": "false",
    "category": "compare"
   },
@@ -228,28 +213,43 @@
    "category": "compare"
   },
   {
-   "say": "is 14 bigger than 19",
+   "say": "is 155 even",
    "expect": "false",
    "category": "compare"
   },
   {
-   "say": "does hello contain zqx",
+   "say": "is 100 even?",
+   "expect": "true",
+   "category": "compare"
+  },
+  {
+   "say": "is 110 even",
+   "expect": "true",
+   "category": "compare"
+  },
+  {
+   "say": "is 13 bigger than 28",
+   "expect": "false",
+   "category": "compare"
+  },
+  {
+   "say": "does kubernetes contain zqx",
    "expect": "false",
    "category": "contains"
   },
   {
-   "say": "does realization contain eal",
+   "say": "does spoon contain zqx",
+   "expect": "false",
+   "category": "contains"
+  },
+  {
+   "say": "is onc in concept?",
    "expect": "true",
    "category": "contains"
   },
   {
-   "say": "does science contain zqx",
-   "expect": "false",
-   "category": "contains"
-  },
-  {
-   "say": "does keyboard contain zqx",
-   "expect": "false",
+   "say": "is omm in committee?",
+   "expect": "true",
    "category": "contains"
   },
   {
@@ -258,9 +258,19 @@
    "category": "contains"
   },
   {
-   "say": "does science contain cie",
-   "expect": "true",
+   "say": "does hello contain zqx",
+   "expect": "false",
    "category": "contains"
+  },
+  {
+   "say": "whats 48 plus 53. scratch that, 48 plus 61",
+   "expect": "109",
+   "category": "correction"
+  },
+  {
+   "say": "reverse science sorry i meant banana",
+   "expect": "\"ananab\"",
+   "category": "correction"
   },
   {
    "say": "reverse assessment, no wait, reverse bookkeeper",
@@ -268,32 +278,22 @@
    "category": "correction"
   },
   {
-   "say": "what is 14 plus 40, no wait, 14 plus 67",
-   "expect": "81",
+   "say": "reverse hello sorry i meant committee",
+   "expect": "\"eettimmoc\"",
    "category": "correction"
   },
   {
-   "say": "what is 16 plus 43, no wait, 16 plus 13",
-   "expect": "29",
+   "say": "reverse concept sorry i meant spoon",
+   "expect": "\"noops\"",
    "category": "correction"
   },
   {
-   "say": "reverse strawberry sorry i meant assessment",
-   "expect": "\"tnemssessa\"",
+   "say": "reverse realization, no wait, reverse possession",
+   "expect": "\"noissessop\"",
    "category": "correction"
   },
   {
-   "say": "reverse banana. actually no, keyboard",
-   "expect": "\"draobyek\"",
-   "category": "correction"
-  },
-  {
-   "say": "reverse banana. actually no, concept",
-   "expect": "\"tpecnoc\"",
-   "category": "correction"
-  },
-  {
-   "say": "how many numbers are in 35, 1, 5",
+   "say": "count of 26, 8, 32",
    "expect": "3",
    "category": "count"
   },
@@ -303,97 +303,92 @@
    "category": "count"
   },
   {
-   "say": "how many numbers are in 5, 35, 8, 30, 11",
-   "expect": "5",
-   "category": "count"
-  },
-  {
-   "say": "how many numbers are in 15, 12, 17, 58",
-   "expect": "4",
-   "category": "count"
-  },
-  {
-   "say": "how many numbers are in 7, 59, 13, 52",
-   "expect": "4",
-   "category": "count"
-  },
-  {
-   "say": "count of 39, 14, 58, 15, 20",
-   "expect": "5",
-   "category": "count"
-  },
-  {
-   "say": "how many times does n appear in kubernetes",
-   "expect": "1",
-   "category": "count-chars"
-  },
-  {
-   "say": "how many times does l appear in hello",
-   "expect": "2",
-   "category": "count-chars"
-  },
-  {
-   "say": "number of p in bookkeeper",
-   "expect": "1",
-   "category": "count-chars"
-  },
-  {
-   "say": "how many ms are in recommend",
-   "expect": "2",
-   "category": "count-chars"
-  },
-  {
-   "say": "number of c in recommend",
-   "expect": "1",
-   "category": "count-chars"
-  },
-  {
-   "say": "count the ks in bookkeeper",
-   "expect": "2",
-   "category": "count-chars"
-  },
-  {
-   "say": "how many ts in strabwerry",
-   "expect": "1",
-   "category": "count-chars-typo"
-  },
-  {
-   "say": "how many ps in possesison",
-   "expect": "1",
-   "category": "count-chars-typo"
-  },
-  {
-   "say": "how many ns in bnaana",
-   "expect": "2",
-   "category": "count-chars-typo"
-  },
-  {
-   "say": "how many ys in strabwerry",
-   "expect": "1",
-   "category": "count-chars-typo"
-  },
-  {
-   "say": "how many ps in sopon",
-   "expect": "1",
-   "category": "count-chars-typo"
-  },
-  {
-   "say": "count the es in bookkeeper",
+   "say": "count of 5, 33, 15",
    "expect": "3",
+   "category": "count"
+  },
+  {
+   "say": "how many numbers are in 49, 5, 37, 47, 47, 4",
+   "expect": "6",
+   "category": "count"
+  },
+  {
+   "say": "count of 34, 23, 21",
+   "expect": "3",
+   "category": "count"
+  },
+  {
+   "say": "how many numbers are in 46, 27, 50, 46, 24, 35",
+   "expect": "6",
+   "category": "count"
+  },
+  {
+   "say": "number of p letters in spoon",
+   "expect": "1",
+   "category": "count-chars"
+  },
+  {
+   "say": "count the letter d in keyboard",
+   "expect": "1",
+   "category": "count-chars"
+  },
+  {
+   "say": "count the letter c in coffee",
+   "expect": "1",
+   "category": "count-chars"
+  },
+  {
+   "say": "count the letter r in recommend",
+   "expect": "1",
+   "category": "count-chars"
+  },
+  {
+   "say": "how many times does \"b\" appear in banana",
+   "expect": "1",
+   "category": "count-chars"
+  },
+  {
+   "say": "how many e characters are in concept",
+   "expect": "1",
+   "category": "count-chars"
+  },
+  {
+   "say": "count the letter a in paarllel",
+   "expect": "2",
    "category": "count-chars-typo"
   },
   {
-   "say": "does science end with qz",
+   "say": "how many e characters in commtitee",
+   "expect": "2",
+   "category": "count-chars-typo"
+  },
+  {
+   "say": "how many z characters in relaization",
+   "expect": "1",
+   "category": "count-chars-typo"
+  },
+  {
+   "say": "count the letter o in sopon",
+   "expect": "2",
+   "category": "count-chars-typo"
+  },
+  {
+   "say": "how many n characters in bnaana",
+   "expect": "2",
+   "category": "count-chars-typo"
+  },
+  {
+   "say": "how many y characters in strabwerry",
+   "expect": "1",
+   "category": "count-chars-typo"
+  },
+  {
+   "say": "does concept end with qz",
    "expect": "false",
    "category": "ends-with"
   },
   {
-   "say": "does science end with ce",
-   "expect": "true",
-   "category": "ends-with"
-  },
-  {
-   "say": "does bookkeeper end with qz",
+   "say": "does kubernetes end with qz",
    "expect": "false",
    "category": "ends-with"
   },
@@ -403,14 +398,24 @@
    "category": "ends-with"
   },
   {
-   "say": "does bookkeeper end with er",
+   "say": "does coffee end with ee",
    "expect": "true",
    "category": "ends-with"
   },
   {
-   "say": "does coffee end with qz",
+   "say": "does spoon end with qz",
    "expect": "false",
    "category": "ends-with"
+  },
+  {
+   "say": "does bookkeeper end with qz",
+   "expect": "false",
+   "category": "ends-with"
+  },
+  {
+   "say": "the even numbers from 1 to 10",
+   "expect": "list<2, 4, 6, 8, 10>",
+   "category": "filter-even"
   },
   {
    "say": "the even numbers from 1 to 12",
@@ -420,11 +425,6 @@
   {
    "say": "which numbers between 1 and 6 are even",
    "expect": "list<2, 4, 6>",
-   "category": "filter-even"
-  },
-  {
-   "say": "the even numbers from 1 to 10",
-   "expect": "list<2, 4, 6, 8, 10>",
    "category": "filter-even"
   },
   {
@@ -443,38 +443,48 @@
    "category": "filter-even"
   },
   {
-   "say": "what is the first of 25, 22, 25, 8",
-   "expect": "25",
+   "say": "first item in 15, 8, 3, 6",
+   "expect": "15",
    "category": "first"
   },
   {
-   "say": "first item in 19, 21, 29, 30",
-   "expect": "19",
+   "say": "what is the first of 13, 13, 35, 33",
+   "expect": "13",
    "category": "first"
   },
   {
-   "say": "first item in 21, 13, 28, 17",
-   "expect": "21",
+   "say": "what is the first of 40, 6, 8, 29",
+   "expect": "40",
    "category": "first"
   },
   {
-   "say": "what is the first of 19, 8, 24, 38",
-   "expect": "19",
+   "say": "what is the first of 10, 20, 15, 1",
+   "expect": "10",
    "category": "first"
   },
   {
-   "say": "what is the first of 22, 27, 40, 17",
-   "expect": "22",
+   "say": "what is the first of 9, 12, 21, 26",
+   "expect": "9",
    "category": "first"
   },
   {
-   "say": "first item in 8, 14, 28, 21",
-   "expect": "8",
+   "say": "first item in 9, 16, 30, 4",
+   "expect": "9",
    "category": "first"
   },
   {
-   "say": "lowercase KEYBOARD",
-   "expect": "\"keyboard\"",
+   "say": "lowercase REALIZATION",
+   "expect": "\"realization\"",
+   "category": "lower"
+  },
+  {
+   "say": "make BOOKKEEPER lowercase",
+   "expect": "\"bookkeeper\"",
+   "category": "lower"
+  },
+  {
+   "say": "make CONCEPT lowercase",
+   "expect": "\"concept\"",
    "category": "lower"
   },
   {
@@ -483,177 +493,177 @@
    "category": "lower"
   },
   {
-   "say": "make PARALLEL lowercase",
-   "expect": "\"parallel\"",
+   "say": "lowercase BOOKKEEPER",
+   "expect": "\"bookkeeper\"",
    "category": "lower"
   },
   {
-   "say": "make STRAWBERRY lowercase",
-   "expect": "\"strawberry\"",
+   "say": "make MISSISSIPPI lowercase",
+   "expect": "\"mississippi\"",
    "category": "lower"
   },
   {
-   "say": "lowercase ASSESSMENT",
-   "expect": "\"assessment\"",
-   "category": "lower"
-  },
-  {
-   "say": "make REALIZATION lowercase",
-   "expect": "\"realization\"",
-   "category": "lower"
-  },
-  {
-   "say": "max of 34, 6, 10, 26, 45, 7",
-   "expect": "45",
+   "say": "max of 59, 50, 43, 9, 34",
+   "expect": "59",
    "category": "max"
   },
   {
-   "say": "what is the biggest of 30, 21, 51, 15",
-   "expect": "51",
-   "category": "max"
-  },
-  {
-   "say": "whats the largest number in 49, 40, 54, 49, 49, 49",
+   "say": "what is the biggest of 2, 12, 54, 33",
    "expect": "54",
    "category": "max"
   },
   {
-   "say": "whats the largest number in 4, 8, 13, 5, 18, 24",
-   "expect": "24",
+   "say": "what is the biggest of 26, 8, 32",
+   "expect": "32",
    "category": "max"
   },
   {
-   "say": "max of 60, 59, 34, 45, 50, 41",
-   "expect": "60",
+   "say": "max of 34, 25, 30, 27",
+   "expect": "34",
    "category": "max"
   },
   {
-   "say": "what is the biggest of 55, 43, 57, 50, 38, 3",
+   "say": "whats the largest number in 39, 3, 58, 3, 21",
+   "expect": "58",
+   "category": "max"
+  },
+  {
+   "say": "max of 16, 57, 5, 57, 36",
    "expect": "57",
    "category": "max"
   },
   {
-   "say": "um whats 60 minus 43 if you can",
-   "expect": "17",
+   "say": "quick one whats 50 times 58",
+   "expect": "2900",
    "category": "messy-arith"
   },
   {
-   "say": "alright whats 109 plus 29 if you can",
-   "expect": "138",
+   "say": "ok so whats 157 times 32 lol",
+   "expect": "5024",
    "category": "messy-arith"
   },
   {
-   "say": "sorry whats 120 times 33 lol",
-   "expect": "3960",
+   "say": "ok wait whats 122 plus 30 thanks",
+   "expect": "152",
    "category": "messy-arith"
   },
   {
-   "say": "one more whats 119 times 67",
-   "expect": "7973",
+   "say": "hmm whats 128 plus 33 thanks",
+   "expect": "161",
    "category": "messy-arith"
   },
   {
-   "say": "um whats 89 minus 69",
-   "expect": "20",
+   "say": "one more whats 113 minus 28",
+   "expect": "85",
    "category": "messy-arith"
   },
   {
-   "say": "one more whats 126 minus 51 please",
-   "expect": "75",
+   "say": "ok so whats 174 plus 75 if you can",
+   "expect": "249",
    "category": "messy-arith"
   },
   {
-   "say": "hey how many es in possession",
+   "say": "another one how many o characters in hello if you can",
    "expect": "1",
    "category": "messy-count"
   },
   {
-   "say": "one more how many ps in parallel",
+   "say": "another one how many i characters in committee",
    "expect": "1",
    "category": "messy-count"
   },
   {
-   "say": "hey how many ss in spoon",
+   "say": "ok so how many t characters in concept",
    "expect": "1",
    "category": "messy-count"
   },
   {
-   "say": "hmm how many ts in kubernetes please",
+   "say": "sorry how many e characters in possession",
    "expect": "1",
    "category": "messy-count"
   },
   {
-   "say": "lol ok how many es in parallel please",
+   "say": "ok wait how many o characters in coffee",
    "expect": "1",
    "category": "messy-count"
   },
   {
-   "say": "lol ok how many ps in possession ?",
+   "say": "lol ok how many y characters in keyboard if you can",
    "expect": "1",
    "category": "messy-count"
   },
   {
-   "say": "um reverse strawberry if you can",
-   "expect": "\"yrrebwarts\"",
+   "say": "ok wait reverse hello",
+   "expect": "\"olleh\"",
    "category": "messy-reverse"
   },
   {
-   "say": "um reverse concept please",
-   "expect": "\"tpecnoc\"",
+   "say": "quick one reverse realization if you can",
+   "expect": "\"noitazilaer\"",
    "category": "messy-reverse"
   },
   {
-   "say": "so like reverse committee if you can",
-   "expect": "\"eettimmoc\"",
-   "category": "messy-reverse"
-  },
-  {
-   "say": "one more reverse banana lol",
-   "expect": "\"ananab\"",
-   "category": "messy-reverse"
-  },
-  {
-   "say": "um reverse keyboard real quick",
+   "say": "so like reverse keyboard lol",
    "expect": "\"draobyek\"",
    "category": "messy-reverse"
   },
   {
-   "say": "um reverse possession ?",
-   "expect": "\"noissessop\"",
+   "say": "ok wait reverse strawberry",
+   "expect": "\"yrrebwarts\"",
    "category": "messy-reverse"
   },
   {
-   "say": "what is the minimum of 39, 30, 58",
-   "expect": "30",
+   "say": "sorry reverse concept",
+   "expect": "\"tpecnoc\"",
+   "category": "messy-reverse"
+  },
+  {
+   "say": "sorry reverse spoon",
+   "expect": "\"noops\"",
+   "category": "messy-reverse"
+  },
+  {
+   "say": "what is the minimum of 29, 16, 32",
+   "expect": "16",
    "category": "min"
   },
   {
-   "say": "smallest of 30, 21, 51, 15",
+   "say": "smallest of 26, 27, 45, 45, 12",
+   "expect": "12",
+   "category": "min"
+  },
+  {
+   "say": "what is the minimum of 15, 33, 19",
    "expect": "15",
    "category": "min"
   },
   {
-   "say": "what is the minimum of 16, 60, 15, 50, 44, 3",
-   "expect": "3",
-   "category": "min"
-  },
-  {
-   "say": "what is the minimum of 50, 13, 51, 46, 48, 13",
-   "expect": "13",
-   "category": "min"
-  },
-  {
-   "say": "what is the minimum of 37, 9, 28, 30, 44, 57",
+   "say": "smallest of 10, 59, 9, 34, 9, 38",
    "expect": "9",
    "category": "min"
   },
   {
-   "say": "smallest of 5, 52, 1",
-   "expect": "1",
+   "say": "smallest of 8, 40, 6, 35, 34, 23",
+   "expect": "6",
    "category": "min"
   },
   {
+   "say": "what is the minimum of 39, 3, 58, 3, 21",
+   "expect": "3",
+   "category": "min"
+  },
+  {
+   "say": "is false or true",
+   "expect": "true",
+   "category": "or"
+  },
+  {
    "say": "is true or false",
+   "expect": "true",
+   "category": "or"
+  },
+  {
+   "say": "is true or true",
    "expect": "true",
    "category": "or"
   },
@@ -663,53 +673,43 @@
    "category": "or"
   },
   {
-   "say": "is true or true",
-   "expect": "true",
-   "category": "or"
-  },
-  {
-   "say": "is false or true",
-   "expect": "true",
-   "category": "or"
-  },
-  {
-   "say": "what is the product of 5, 10, 36, 21",
-   "expect": "37800",
+   "say": "what is the product of 20, 24, 34, 34",
+   "expect": "554880",
    "category": "product"
   },
   {
-   "say": "what is the product of 9, 14, 24, 8",
-   "expect": "24192",
+   "say": "what is the product of 28, 24, 25, 7",
+   "expect": "117600",
    "category": "product"
   },
   {
-   "say": "what is the product of 29, 8, 2, 26",
-   "expect": "12064",
+   "say": "what is the product of 31, 1, 17, 19",
+   "expect": "10013",
    "category": "product"
   },
   {
-   "say": "what is the product of 4, 11, 4, 23",
-   "expect": "4048",
+   "say": "what is the product of 40, 21, 1, 1",
+   "expect": "840",
    "category": "product"
   },
   {
-   "say": "what is the product of 17, 39, 7, 16",
-   "expect": "74256",
+   "say": "what is the product of 17, 7, 12, 29",
+   "expect": "41412",
    "category": "product"
   },
   {
-   "say": "what is the product of 5, 20, 34, 8",
-   "expect": "27200",
+   "say": "what is the product of 37, 15, 20, 14",
+   "expect": "155400",
    "category": "product"
   },
   {
-   "say": "give me 1 to 8",
-   "expect": "list<1, 2, 3, 4, 5, 6, 7, 8>",
+   "say": "give me 1 to 7",
+   "expect": "list<1, 2, 3, 4, 5, 6, 7>",
    "category": "range"
   },
   {
-   "say": "the numbers from 1 to 8",
-   "expect": "list<1, 2, 3, 4, 5, 6, 7, 8>",
+   "say": "the numbers from 1 to 6",
+   "expect": "list<1, 2, 3, 4, 5, 6>",
    "category": "range"
   },
   {
@@ -718,44 +718,19 @@
    "category": "range"
   },
   {
-   "say": "list the numbers 1 through 9",
-   "expect": "list<1, 2, 3, 4, 5, 6, 7, 8, 9>",
+   "say": "list the numbers 1 through 4",
+   "expect": "list<1, 2, 3, 4>",
    "category": "range"
   },
   {
-   "say": "give me 1 to 7",
-   "expect": "list<1, 2, 3, 4, 5, 6, 7>",
+   "say": "the numbers from 1 to 8",
+   "expect": "list<1, 2, 3, 4, 5, 6, 7, 8>",
    "category": "range"
   },
   {
-   "say": "give me 1 to 9",
-   "expect": "list<1, 2, 3, 4, 5, 6, 7, 8, 9>",
+   "say": "give me 1 to 3",
+   "expect": "list<1, 2, 3>",
    "category": "range"
-  },
-  {
-   "say": "replace every k in kubernetes with z",
-   "expect": "\"zubernetes\"",
-   "category": "replace"
-  },
-  {
-   "say": "replace every s in strawberry with z",
-   "expect": "\"ztrawberry\"",
-   "category": "replace"
-  },
-  {
-   "say": "replace every b in bookkeeper with z",
-   "expect": "\"zookkeeper\"",
-   "category": "replace"
-  },
-  {
-   "say": "replace every h in hello with z",
-   "expect": "\"zello\"",
-   "category": "replace"
-  },
-  {
-   "say": "replace every s in science with z",
-   "expect": "\"zcience\"",
-   "category": "replace"
   },
   {
    "say": "replace every c in coffee with z",
@@ -763,8 +738,33 @@
    "category": "replace"
   },
   {
-   "say": "spell strawberry backwards",
-   "expect": "\"yrrebwarts\"",
+   "say": "replace \"s\" with \"z\" in spoon",
+   "expect": "\"zpoon\"",
+   "category": "replace"
+  },
+  {
+   "say": "swap every s in spoon for z",
+   "expect": "\"zpoon\"",
+   "category": "replace"
+  },
+  {
+   "say": "replace \"c\" with \"z\" in concept",
+   "expect": "\"zonzept\"",
+   "category": "replace"
+  },
+  {
+   "say": "swap every c in concept for z",
+   "expect": "\"zonzept\"",
+   "category": "replace"
+  },
+  {
+   "say": "replace \"b\" with \"z\" in banana",
+   "expect": "\"zanana\"",
+   "category": "replace"
+  },
+  {
+   "say": "what is recommend backwards",
+   "expect": "\"dnemmocer\"",
    "category": "reverse"
   },
   {
@@ -773,17 +773,12 @@
    "category": "reverse"
   },
   {
-   "say": "reverse possession",
-   "expect": "\"noissessop\"",
+   "say": "what is assessment backwards",
+   "expect": "\"tnemssessa\"",
    "category": "reverse"
   },
   {
-   "say": "what is banana backwards",
-   "expect": "\"ananab\"",
-   "category": "reverse"
-  },
-  {
-   "say": "what is strawberry backwards",
+   "say": "reverse strawberry",
    "expect": "\"yrrebwarts\"",
    "category": "reverse"
   },
@@ -793,34 +788,54 @@
    "category": "reverse"
   },
   {
-   "say": "reverse the list 19, 18, 20, 6, 14",
-   "expect": "list<14, 6, 20, 18, 19>",
+   "say": "spell spoon backwards",
+   "expect": "\"noops\"",
+   "category": "reverse"
+  },
+  {
+   "say": "reverse the list 11, 23, 18",
+   "expect": "list<18, 23, 11>",
    "category": "reverse-list"
   },
   {
-   "say": "reverse the list 20, 19, 16",
-   "expect": "list<16, 19, 20>",
+   "say": "reverse the list 18, 37, 24, 7",
+   "expect": "list<7, 24, 37, 18>",
    "category": "reverse-list"
   },
   {
-   "say": "reverse the list 30, 35, 16",
-   "expect": "list<16, 35, 30>",
+   "say": "reverse the list 8, 19, 7, 13, 38",
+   "expect": "list<38, 13, 7, 19, 8>",
    "category": "reverse-list"
   },
   {
-   "say": "reverse the list 14, 29, 23, 20",
-   "expect": "list<20, 23, 29, 14>",
+   "say": "reverse the list 4, 35, 13",
+   "expect": "list<13, 35, 4>",
    "category": "reverse-list"
   },
   {
-   "say": "reverse the list 33, 10, 28, 24",
-   "expect": "list<24, 28, 10, 33>",
+   "say": "reverse the list 27, 10, 21, 10",
+   "expect": "list<10, 21, 10, 27>",
    "category": "reverse-list"
   },
   {
-   "say": "reverse the list 33, 10, 18, 5, 12",
-   "expect": "list<12, 5, 18, 10, 33>",
+   "say": "reverse the list 32, 37, 29",
+   "expect": "list<29, 37, 32>",
    "category": "reverse-list"
+  },
+  {
+   "say": "is -18 zero",
+   "expect": "false",
+   "category": "sign"
+  },
+  {
+   "say": "is 40 negative",
+   "expect": "false",
+   "category": "sign"
+  },
+  {
+   "say": "is 18 negative",
+   "expect": "false",
+   "category": "sign"
   },
   {
    "say": "is 19 zero",
@@ -828,102 +843,77 @@
    "category": "sign"
   },
   {
-   "say": "is -3 negative",
-   "expect": "true",
-   "category": "sign"
-  },
-  {
-   "say": "is -17 zero",
+   "say": "is 26 zero",
    "expect": "false",
    "category": "sign"
   },
   {
-   "say": "is 13 zero",
+   "say": "is -32 zero",
    "expect": "false",
    "category": "sign"
   },
   {
-   "say": "is -12 zero",
-   "expect": "false",
-   "category": "sign"
-  },
-  {
-   "say": "is -17 negative",
-   "expect": "true",
-   "category": "sign"
-  },
-  {
-   "say": "sort these numbers: 2, 5, 39, 28, 8",
-   "expect": "list<2, 5, 8, 28, 39>",
+   "say": "sort these numbers: 10, 10, 8",
+   "expect": "list<8, 10, 10>",
    "category": "sort"
   },
   {
-   "say": "put 26, 7, 13 in order",
-   "expect": "list<7, 13, 26>",
+   "say": "sort 38, 37, 40",
+   "expect": "list<37, 38, 40>",
    "category": "sort"
   },
   {
-   "say": "put 31, 38, 25 in order",
-   "expect": "list<25, 31, 38>",
+   "say": "sort 13, 10, 24, 33",
+   "expect": "list<10, 13, 24, 33>",
    "category": "sort"
   },
   {
-   "say": "sort these numbers: 2, 4, 28",
-   "expect": "list<2, 4, 28>",
+   "say": "put 19, 18, 20, 6, 14 in order",
+   "expect": "list<6, 14, 18, 19, 20>",
    "category": "sort"
   },
   {
-   "say": "sort these numbers: 36, 37, 18, 19, 6",
-   "expect": "list<6, 18, 19, 36, 37>",
+   "say": "sort 18, 36, 1, 4, 19",
+   "expect": "list<1, 4, 18, 19, 36>",
    "category": "sort"
   },
   {
-   "say": "sort these numbers: 30, 19, 23, 34, 24",
-   "expect": "list<19, 23, 24, 30, 34>",
+   "say": "sort these numbers: 6, 22, 6, 22",
+   "expect": "list<6, 6, 22, 22>",
    "category": "sort"
   },
   {
-   "say": "split parallel,recommend,mississippi on commas",
-   "expect": "list<\"parallel\", \"recommend\", \"mississippi\">",
+   "say": "split committee,kubernetes,coffee on commas",
+   "expect": "list<\"committee\", \"kubernetes\", \"coffee\">",
    "category": "split"
   },
   {
-   "say": "split mississippi,coffee,strawberry on commas",
-   "expect": "list<\"mississippi\", \"coffee\", \"strawberry\">",
+   "say": "split keyboard,bookkeeper,science on commas",
+   "expect": "list<\"keyboard\", \"bookkeeper\", \"science\">",
    "category": "split"
   },
   {
-   "say": "break banana,science,recommend apart at the commas",
-   "expect": "list<\"banana\", \"science\", \"recommend\">",
+   "say": "split keyboard,assessment,possession on commas",
+   "expect": "list<\"keyboard\", \"assessment\", \"possession\">",
    "category": "split"
   },
   {
-   "say": "split recommend,strawberry,assessment on commas",
-   "expect": "list<\"recommend\", \"strawberry\", \"assessment\">",
+   "say": "break realization,banana,recommend apart at the commas",
+   "expect": "list<\"realization\", \"banana\", \"recommend\">",
    "category": "split"
   },
   {
-   "say": "break spoon,committee,realization apart at the commas",
-   "expect": "list<\"spoon\", \"committee\", \"realization\">",
+   "say": "break realization,keyboard,banana apart at the commas",
+   "expect": "list<\"realization\", \"keyboard\", \"banana\">",
    "category": "split"
   },
   {
-   "say": "break recommend,parallel,science apart at the commas",
-   "expect": "list<\"recommend\", \"parallel\", \"science\">",
+   "say": "split concept,hello,science on commas",
+   "expect": "list<\"concept\", \"hello\", \"science\">",
    "category": "split"
   },
   {
-   "say": "does banana start with b",
-   "expect": "true",
-   "category": "starts-with"
-  },
-  {
-   "say": "does hello start with h",
-   "expect": "true",
-   "category": "starts-with"
-  },
-  {
-   "say": "does committee begin with co",
+   "say": "does banana begin with ba",
    "expect": "true",
    "category": "starts-with"
   },
@@ -933,98 +923,88 @@
    "category": "starts-with"
   },
   {
-   "say": "does banana begin with ba",
+   "say": "does kubernetes start with k",
    "expect": "true",
    "category": "starts-with"
   },
   {
-   "say": "does bookkeeper begin with bo",
+   "say": "does committee begin with co",
    "expect": "true",
    "category": "starts-with"
   },
   {
-   "say": "the first 2 letters of realization",
-   "expect": "\"re\"",
-   "category": "substring"
+   "say": "does banana start with b",
+   "expect": "true",
+   "category": "starts-with"
   },
   {
-   "say": "first 3 characters of kubernetes",
+   "say": "does science begin with sc",
+   "expect": "true",
+   "category": "starts-with"
+  },
+  {
+   "say": "the first 3 letters of kubernetes",
    "expect": "\"kub\"",
    "category": "substring"
   },
   {
-   "say": "the first 3 letters of bookkeeper",
-   "expect": "\"boo\"",
+   "say": "first 2 characters of science",
+   "expect": "\"sc\"",
    "category": "substring"
   },
   {
-   "say": "the first 4 letters of hello",
-   "expect": "\"hell\"",
+   "say": "first 2 characters of keyboard",
+   "expect": "\"ke\"",
    "category": "substring"
   },
   {
-   "say": "first 4 characters of parallel",
-   "expect": "\"para\"",
+   "say": "first 2 characters of mississippi",
+   "expect": "\"mi\"",
    "category": "substring"
   },
   {
-   "say": "the first 3 letters of coffee",
-   "expect": "\"cof\"",
+   "say": "the first 5 letters of bookkeeper",
+   "expect": "\"bookk\"",
    "category": "substring"
   },
   {
-   "say": "what is the sum of 5, 7, 8, 21",
-   "expect": "41",
+   "say": "the first 2 letters of science",
+   "expect": "\"sc\"",
+   "category": "substring"
+  },
+  {
+   "say": "what is the sum of 51, 35, 23",
+   "expect": "109",
    "category": "sum"
   },
   {
-   "say": "add up 45, 57, 31, 39, 10, 8",
-   "expect": "190",
+   "say": "total of 10, 18, 49",
+   "expect": "77",
    "category": "sum"
   },
   {
-   "say": "add up 54, 31, 13, 20",
+   "say": "what is the sum of 55, 43, 57, 50, 38, 3",
+   "expect": "246",
+   "category": "sum"
+  },
+  {
+   "say": "add up 43, 35, 40",
    "expect": "118",
    "category": "sum"
   },
   {
-   "say": "add up 24, 40, 23, 26, 25",
-   "expect": "138",
+   "say": "total of 17, 43, 2, 59, 13",
+   "expect": "134",
    "category": "sum"
   },
   {
-   "say": "what is the sum of 41, 49, 9, 29, 18, 33",
-   "expect": "179",
+   "say": "what is the sum of 55, 23, 2, 21, 25",
+   "expect": "126",
    "category": "sum"
   },
   {
-   "say": "what is the sum of 18, 40, 1, 55, 13",
-   "expect": "127",
-   "category": "sum"
-  },
-  {
-   "say": "how many letters in possession",
-   "expect": "10",
-   "category": "text-length"
-  },
-  {
-   "say": "how many letters in kubernetes",
-   "expect": "10",
-   "category": "text-length"
-  },
-  {
-   "say": "how many letters in assessment",
-   "expect": "10",
-   "category": "text-length"
-  },
-  {
-   "say": "what is the length of science",
-   "expect": "7",
-   "category": "text-length"
-  },
-  {
-   "say": "how long is the word kubernetes",
-   "expect": "10",
+   "say": "how long is the word realization",
+   "expect": "11",
    "category": "text-length"
   },
   {
@@ -1033,23 +1013,33 @@
    "category": "text-length"
   },
   {
-   "say": "trim the spaces off \"  coffee  \"",
-   "expect": "\"coffee\"",
+   "say": "how long is the word science",
+   "expect": "7",
+   "category": "text-length"
+  },
+  {
+   "say": "what is the length of science",
+   "expect": "7",
+   "category": "text-length"
+  },
+  {
+   "say": "how long is the word parallel",
+   "expect": "8",
+   "category": "text-length"
+  },
+  {
+   "say": "how long is the word kubernetes",
+   "expect": "10",
+   "category": "text-length"
+  },
+  {
+   "say": "trim the spaces off \"  banana  \"",
+   "expect": "\"banana\"",
    "category": "trim"
   },
   {
-   "say": "trim the spaces off \"  strawberry  \"",
-   "expect": "\"strawberry\"",
-   "category": "trim"
-  },
-  {
-   "say": "trim the spaces off \"  mississippi  \"",
-   "expect": "\"mississippi\"",
-   "category": "trim"
-  },
-  {
-   "say": "trim the spaces off \"  recommend  \"",
-   "expect": "\"recommend\"",
+   "say": "trim the spaces off \"  parallel  \"",
+   "expect": "\"parallel\"",
    "category": "trim"
   },
   {
@@ -1058,48 +1048,63 @@
    "category": "trim"
   },
   {
-   "say": "trim the spaces off \"  banana  \"",
-   "expect": "\"banana\"",
+   "say": "strip the whitespace from \"  recommend  \"",
+   "expect": "\"recommend\"",
    "category": "trim"
   },
   {
-   "say": "remove the duplicates from 3, 5, 7, 1, 4, 2",
-   "expect": "list<3, 5, 7, 1, 4, 2>",
+   "say": "trim the spaces off \"  science  \"",
+   "expect": "\"science\"",
+   "category": "trim"
+  },
+  {
+   "say": "strip the whitespace from \"  committee  \"",
+   "expect": "\"committee\"",
+   "category": "trim"
+  },
+  {
+   "say": "remove the duplicates from 3, 8, 3, 9, 5, 6",
+   "expect": "list<3, 8, 9, 5, 6>",
    "category": "unique"
   },
   {
-   "say": "remove the duplicates from 2, 7, 2, 8, 7, 9",
-   "expect": "list<2, 7, 8, 9>",
+   "say": "what are the unique values in 6, 5, 5, 2, 5, 4",
+   "expect": "list<6, 5, 2, 4>",
    "category": "unique"
   },
   {
-   "say": "remove the duplicates from 8, 1, 1, 8, 7, 9",
-   "expect": "list<8, 1, 7, 9>",
+   "say": "what are the unique values in 7, 3, 5, 9, 1, 2",
+   "expect": "list<7, 3, 5, 9, 1, 2>",
    "category": "unique"
   },
   {
-   "say": "what are the unique values in 6, 4, 7, 9, 5, 4",
-   "expect": "list<6, 4, 7, 9, 5>",
+   "say": "remove the duplicates from 6, 7, 1, 5, 5, 3",
+   "expect": "list<6, 7, 1, 5, 3>",
    "category": "unique"
   },
   {
-   "say": "remove the duplicates from 7, 2, 4, 5, 8, 5",
-   "expect": "list<7, 2, 4, 5, 8>",
+   "say": "remove the duplicates from 1, 2, 8, 7, 9, 2",
+   "expect": "list<1, 2, 8, 7, 9>",
    "category": "unique"
   },
   {
-   "say": "what are the unique values in 8, 6, 8, 9, 6, 9",
-   "expect": "list<8, 6, 9>",
+   "say": "what are the unique values in 2, 5, 3, 6, 5, 4",
+   "expect": "list<2, 5, 3, 6, 4>",
    "category": "unique"
   },
   {
-   "say": "shout parallel",
-   "expect": "\"PARALLEL\"",
+   "say": "uppercase committee",
+   "expect": "\"COMMITTEE\"",
    "category": "upper"
   },
   {
-   "say": "uppercase spoon",
-   "expect": "\"SPOON\"",
+   "say": "make bookkeeper uppercase",
+   "expect": "\"BOOKKEEPER\"",
+   "category": "upper"
+  },
+  {
+   "say": "uppercase coffee",
+   "expect": "\"COFFEE\"",
    "category": "upper"
   },
   {
@@ -1108,18 +1113,13 @@
    "category": "upper"
   },
   {
-   "say": "make banana uppercase",
-   "expect": "\"BANANA\"",
+   "say": "shout concept",
+   "expect": "\"CONCEPT\"",
    "category": "upper"
   },
   {
-   "say": "uppercase banana",
-   "expect": "\"BANANA\"",
-   "category": "upper"
-  },
-  {
-   "say": "make bookkeeper uppercase",
-   "expect": "\"BOOKKEEPER\"",
+   "say": "shout parallel",
+   "expect": "\"PARALLEL\"",
    "category": "upper"
   }
  ]

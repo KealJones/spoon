@@ -108,11 +108,11 @@ def counting():
         ch = random.choice(sorted(set(w)))
         want = str(w.count(ch))
         forms = [
-            f"how many {ch}s are in {w}",
-            f"how many {ch}s are there in {w}?",
-            f"count the {ch}s in {w}",
-            f"number of {ch} in {w}",
-            f"how many times does {ch} appear in {w}",
+            f"how many times does the letter {ch} appear in {w}",
+            f"how many {ch} characters are in {w}",
+            f"count the letter {ch} in {w}",
+            f"number of {ch} letters in {w}",
+            f'how many times does "{ch}" appear in {w}',
         ]
         out.append(case(random.choice(forms), want, "count-chars"))
     # Typos get their own cases, with the answer computed from the word as
@@ -123,8 +123,8 @@ def counting():
         ch = random.choice(sorted(set(w)))
         out.append(case(
             random.choice([
-                f"how many {ch}s in {w}",
-                f"count the {ch}s in {w}",
+                f"how many {ch} characters in {w}",
+                f"count the letter {ch} in {w}",
             ]),
             str(w.count(ch)),
             "count-chars-typo",
@@ -253,7 +253,8 @@ def more_strings():
         a, b = w[0], "z"
         out.append(case(random.choice([
             f"replace every {a} in {w} with {b}",
-            f"swap the {a}s in {w} for {b}",
+            f"swap every {a} in {w} for {b}",
+            f'replace "{a}" with "{b}" in {w}',
         ]), f'"{w.replace(a, b)}"', "replace"))
     for _ in range(many(30)):
         w = random.choice(WORDS)
@@ -388,7 +389,7 @@ def messy():
     for _ in range(many(60)):
         w = random.choice(WORDS)
         ch = random.choice(sorted(set(w)))
-        say = (f"{random.choice(FILLER_OPENERS)} how many {ch}s in {w}"
+        say = (f"{random.choice(FILLER_OPENERS)} how many {ch} characters in {w}"
                f"{random.choice(FILLER_TAILS)}")
         out.append(case(say, str(w.count(ch)), "messy-count"))
     return out

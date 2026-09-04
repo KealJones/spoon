@@ -1,0 +1,66 @@
+{
+ "name": "smoke_train",
+ "note": "The half Spoon is allowed to learn from.",
+ "cases": [
+  {
+   "say": "raise 4 to the 4",
+   "expect": "256",
+   "category": "arith-pow"
+  },
+  {
+   "say": "48 / 3",
+   "expect": "16",
+   "category": "arith-div"
+  },
+  {
+   "say": "does kubernetes begin with ku",
+   "expect": "true",
+   "category": "starts-with"
+  },
+  {
+   "say": "one more whats 119 times 67",
+   "expect": "7973",
+   "category": "messy-arith"
+  },
+  {
+   "say": "make realization uppercase",
+   "expect": "\"REALIZATION\"",
+   "category": "upper"
+  },
+  {
+   "say": "what is the minimum of 52, 24, 35",
+   "expect": "24",
+   "category": "min"
+  },
+  {
+   "say": "how long is the word science",
+   "expect": "7",
+   "category": "text-length"
+  },
+  {
+   "say": "make COMMITTEE lowercase",
+   "expect": "\"committee\"",
+   "category": "lower"
+  },
+  {
+   "say": "what is the remainder of 64 divided by 7",
+   "expect": "1",
+   "category": "arith-mod"
+  },
+  {
+   "say": "ok so reverse committee thanks",
+   "expect": "\"eettimmoc\"",
+   "category": "messy-reverse"
+  },
+  {
+   "say": "count the letter i in realization",
+   "expect": "2",
+   "category": "count-chars"
+  },
+  {
+   "say": "make CONCEPT lowercase",
+   "expect": "\"concept\"",
+   "category": "lower"
+  }
+ ]
+}
