@@ -102,9 +102,22 @@ def counting():
             f"count the {ch}s in {w}",
             f"number of {ch} in {w}",
             f"how many times does {ch} appear in {w}",
-            f"how many {ch}s in {typo(w)}".replace(typo(w), w),
         ]
         out.append(case(random.choice(forms), want, "count-chars"))
+    # Typos get their own cases, with the answer computed from the word as
+    # actually typed. Expecting the count for the correct spelling would be
+    # grading Spoon on a question nobody asked.
+    for _ in range(30):
+        w = typo(random.choice(WORDS))
+        ch = random.choice(sorted(set(w)))
+        out.append(case(
+            random.choice([
+                f"how many {ch}s in {w}",
+                f"count the {ch}s in {w}",
+            ]),
+            str(w.count(ch)),
+            "count-chars-typo",
+        ))
     return out
 
 

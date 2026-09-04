@@ -374,6 +374,34 @@ fn sort_key(native: &str, c: &Concept) -> Result<SortKey, EvalError> {
     }
 }
 
+/// Sorting by the elements themselves.
+///
+/// `sort-by<xs, ?0>` already said this, and expecting everyone to know that is
+/// how "sort 18, 28, 11, 38" came back unsorted: the ears reached for the name
+/// anybody would reach for, found nothing, and produced a `sort-by` whose key
+/// function was wrong. A name people actually use is worth a native.
+fn sort(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let items = want_list("sort", &args[0])?.to_vec();
+    let mut keyed: Vec<(SortKey, Concept)> = Vec::with_capacity(items.len());
+    for item in items {
+        keyed.push((sort_key("sort", &item)?, item));
+    }
+    if let Some((first, _)) = keyed.first() {
+        let kind = first.kind();
+        if let Some((odd, _)) = keyed.iter().find(|(k, _)| k.kind() != kind) {
+            return Err(native_error(
+                "sort",
+                format!(
+                    "values mix {kind} and {}, which have no shared order",
+                    odd.kind()
+                ),
+            ));
+        }
+    }
+    keyed.sort_by(|(a, _), (b, _)| a.compare(b));
+    Ok(make_list(keyed.into_iter().map(|(_, item)| item).collect()))
+}
+
 /// Stable and deterministic. Keys are computed once up front rather than inside
 /// the comparator, so a key function with a trace or a store read runs exactly
 /// once per element and the sort cannot depend on comparison order.
@@ -629,6 +657,12 @@ pub fn register(registry: &mut NativeRegistry) {
         reverse,
         Arity::Exact(1),
         "a list in the opposite order",
+    );
+    registry.pure(
+        "sort",
+        sort,
+        Arity::Exact(1),
+        "a list in ascending order",
     );
     registry.pure(
         "slice",

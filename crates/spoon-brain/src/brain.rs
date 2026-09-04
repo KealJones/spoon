@@ -719,10 +719,20 @@ impl Brain {
                     }
                 }
                 let _ = evaluator.commit_evidence();
+                // A stall is not a result. Handing the unevaluated term back
+                // as the answer is how `reverse the word banana` replied
+                // `reverse<"banana">`: the gap was recorded correctly and then
+                // the stalled term was reported as though it were the answer.
+                // Saying so plainly is both more honest and what the mouth
+                // already knows how to phrase.
                 Ok(match outcome {
                     Outcome::Value(v) => Some(v),
-                    Outcome::Stuck { concept, .. } => Some(concept),
-                    Outcome::Exhausted { concept, .. } => Some(concept),
+                    Outcome::Stuck { concept, .. } => {
+                        Some(Concept::call("cannot-yet", [concept]))
+                    }
+                    Outcome::Exhausted { concept, .. } => {
+                        Some(Concept::call("cannot-yet", [concept]))
+                    }
                     Outcome::NeedsPermission {
                         concept, effect, ..
                     } => Some(Concept::call(
@@ -1343,6 +1353,12 @@ pub fn is_unknown(value: &Concept) -> bool {
 }
 
 pub fn is_answer(store: &Store, value: &Concept) -> bool {
+    // A hole is an unfilled blank. `make keyboard uppercase` came back as
+    // `map<?0, upper<?0>>`, which is a function, not an answer: nothing was
+    // ever substituted into it.
+    if !spoon_concept::holes(value).is_empty() {
+        return false;
+    }
     spoon_concept::pre_order(value).all(|node| {
         let Concept::Compound { head, .. } = node else {
             return true;

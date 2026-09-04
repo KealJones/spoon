@@ -771,3 +771,38 @@ fn a_predicate_whose_function_does_not_exist_leaves_the_call_unfinished() {
     );
     assert!(message.contains("filter"), "got {message}");
 }
+
+#[test]
+fn sort_orders_a_list_by_its_own_elements() {
+    let (store, reg) = brain();
+    assert_eq!(
+        value(&store, &reg, &Concept::call("sort", [ints([3, 1, 2])])),
+        ints([1, 2, 3])
+    );
+    assert_eq!(
+        value(
+            &store,
+            &reg,
+            &Concept::call("sort", [texts(["pear", "apple", "fig"])])
+        ),
+        texts(["apple", "fig", "pear"])
+    );
+    // Already ordered, and an empty list, both stay themselves.
+    assert_eq!(
+        value(&store, &reg, &Concept::call("sort", [ints([1, 2, 3])])),
+        ints([1, 2, 3])
+    );
+    assert_eq!(
+        value(&store, &reg, &Concept::call("sort", [ints([])])),
+        ints([])
+    );
+}
+
+#[test]
+fn sort_refuses_values_with_no_shared_order() {
+    // Guessing an order between 1 and "one" would sort silently and wrongly.
+    let (store, reg) = brain();
+    let mixed = list([Concept::int(1), Concept::text("one")]);
+    let message = why_failed(&store, &reg, &Concept::call("sort", [mixed]));
+    assert!(message.contains("sort"), "got {message}");
+}
