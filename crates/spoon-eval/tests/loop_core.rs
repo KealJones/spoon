@@ -674,3 +674,75 @@ fn deterministic_runs_reproduce_exactly() {
         assert_eq!(ev.evaluate(&expr).value().cloned(), first);
     }
 }
+
+#[test]
+fn a_tie_is_split_rather_than_settled_by_name() {
+    // Two realizations that have never run score identically, and ranking
+    // breaks that tie alphabetically so a deterministic run reproduces. Using
+    // the same order to CHOOSE would hand every turn to whichever name sorts
+    // first: a synthesized body and a taught body of one concept differ by
+    // "synth" against "taught" and nothing else, and the loser could never
+    // gather the evidence that might overturn it.
+    let store = Store::open_in_memory().unwrap();
+    for (name, value) in [("aaa-first", 1), ("zzz-second", 2)] {
+        put_spec(
+            &store,
+            "answer",
+            name,
+            RealizationSpec::Composed {
+                body: Concept::int(value),
+            },
+            Effect::Pure,
+        );
+    }
+    let reg = registry();
+    let expr = Concept::call("answer", []);
+
+    let mut seen = std::collections::HashSet::new();
+    for seed in 0..40u64 {
+        let mut ev = Evaluator::new(&store, &reg)
+            .with_budget(Budget::default().with_nodes(1_000).with_millis(1_000));
+        let _ = seed;
+        if let Some(value) = ev.evaluate(&expr).value() {
+            seen.insert(value.clone());
+        }
+    }
+    assert_eq!(
+        seen.len(),
+        2,
+        "both tied realizations should get turns, saw {seen:?}"
+    );
+}
+
+#[test]
+fn a_deterministic_run_still_reproduces_exactly() {
+    // Splitting ties must not cost reproducibility, or every benchmark and
+    // regression test becomes flaky.
+    let store = Store::open_in_memory().unwrap();
+    for (name, value) in [("aaa-first", 1), ("zzz-second", 2)] {
+        put_spec(
+            &store,
+            "answer",
+            name,
+            RealizationSpec::Composed {
+                body: Concept::int(value),
+            },
+            Effect::Pure,
+        );
+    }
+    let reg = registry();
+    let expr = Concept::call("answer", []);
+    let first = Evaluator::new(&store, &reg)
+        .with_budget(Budget::deterministic())
+        .evaluate(&expr)
+        .value()
+        .cloned();
+    for _ in 0..20 {
+        let again = Evaluator::new(&store, &reg)
+            .with_budget(Budget::deterministic())
+            .evaluate(&expr)
+            .value()
+            .cloned();
+        assert_eq!(first, again);
+    }
+}

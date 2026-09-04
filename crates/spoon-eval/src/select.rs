@@ -36,6 +36,12 @@ const EXPLORE_BAND: f64 = 0.5;
 /// Probability of exploring instead of exploiting.
 pub const DEFAULT_EPSILON: f64 = 0.05;
 
+/// How close two scores must be to count as a tie rather than a ranking.
+///
+/// Generous enough to catch realizations that differ only by floating point,
+/// which is what two fresh ones with identical history actually are.
+pub const TIE_EPSILON: f64 = 1e-9;
+
 /// Squash an ACT-R base level into `[0, 1)`.
 ///
 /// Base levels are logarithms and can be negative, so they cannot be used as a
@@ -132,6 +138,26 @@ pub fn choose_first(ranked: &[Scored], explore: bool, rng: &mut Rng) -> usize {
     if ranked.len() < 2 || !explore {
         return 0;
     }
+
+    // An exact tie is decided by a coin, not by the name.
+    //
+    // Ranking breaks ties alphabetically so a deterministic run reproduces, and
+    // that is fine as an ordering and wrong as a choice: two realizations that
+    // have never run score identically, so the one whose name sorts first would
+    // take every turn but the rare exploratory one. A synthesized body and a
+    // taught body of the same concept are exactly that case, and "synth" sorts
+    // before "taught" for reasons that have nothing to do with which is better.
+    //
+    // Spreading the tie is what lets evidence accumulate on both, which is the
+    // only thing that can separate them later.
+    let tied = ranked
+        .iter()
+        .take_while(|s| (ranked[0].score - s.score).abs() < TIE_EPSILON)
+        .count();
+    if tied > 1 {
+        return rng.below(tied);
+    }
+
     if rng.next_f64() >= DEFAULT_EPSILON {
         return 0;
     }
