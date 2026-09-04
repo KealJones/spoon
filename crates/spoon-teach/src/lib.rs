@@ -8,7 +8,7 @@
 use std::sync::Arc;
 
 use spoon_concept::{Concept, SymbolTable, parse, render};
-use spoon_seat::{LlmClient, LlmError, Message, Seat, Teacher, TeacherAsk, TeacherReply};
+use spoon_seat::{LlmClient, LlmError, Message, Seat, Spec, Teacher, TeacherAsk, TeacherReply};
 
 pub struct ModelTeacher {
     client: LlmClient,
@@ -20,27 +20,69 @@ impl ModelTeacher {
         ModelTeacher { client, table }
     }
 
-    fn prompt() -> &'static str {
-        r#"You help a reasoning system fill a gap in what it knows. You never write code.
+    /// The reply forms, tailored to what was actually asked.
+    ///
+    /// Offering every form for every question does not work: handed a menu, a
+    /// small model reliably picks the cheapest item on it, so asking how to
+    /// build a capability came back as a synonym. Each ask now names the one
+    /// form that answers it, with UNKNOWN as the only alternative.
+    fn prompt(ask: &TeacherAsk, vocabulary: &[Arc<str>]) -> String {
+        let known = if vocabulary.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "\n\nConcepts available to build from: {}\n\nUse these. \
+Do not invent a concept that is not listed unless nothing listed can express it.",
+                vocabulary
+                    .iter()
+                    .map(|v| v.as_ref())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        };
+        let common = "Concepts are written Head<Arg, Arg>. Names are kebab-case. Arguments are \
+concepts, quoted \"text\", numbers, true/false, or ?0 ?1 for a function's arguments. \
+Reply with ONE line and nothing else: no prose, no explanation, no code fences. \
+If you genuinely cannot answer, reply exactly: UNKNOWN <short reason>";
 
-Reply with exactly one line, in one of these forms:
+        match ask {
+            TeacherAsk::Vocabulary { .. } | TeacherAsk::Concept { .. } => format!(
+                "You say what an unfamiliar word means to a reasoning system.\n\n\
+Reply in ONE of these two forms:\n\n\
+SYNONYM <word> = <concept>\n    \
+the word means something the system already has\n\n\
+CONCEPT <name> | <surface forms, comma separated> | <relations, comma separated>\n    \
+a genuinely new idea. Relations give it consequences, for example\n    \
+participates<name, thing> or subtype-of<name, thing>\n\n{common}{known}"
+            ),
 
-SYNONYM <word> = <concept>
-    the word means something the system already has
+            TeacherAsk::Capability { .. } => format!(
+                "You say how a missing capability could be BUILT from simpler ones.\n\n\
+Reply in exactly this form:\n\n\
+COMPOSE <target> = <body>\n    \
+the body is a concept expression using ?0, ?1 for the arguments\n\n\
+Examples:\n\
+COMPOSE double = add<?0, ?0>\n\
+COMPOSE reverse-text = join<reverse<chars<?0>>, \"\">\n\
+COMPOSE average = div<sum<?0>, count<?0>>\n\n\
+Do NOT reply with a synonym. The word is not the problem; the system cannot \
+DO the thing. If you cannot express it with the concepts listed, say UNKNOWN.\n\n{common}{known}"
+            ),
 
-CONCEPT <name> | <surface forms, comma separated> | <relations, comma separated>
-    a genuinely new idea. Relations are concepts like participates<name, thing>
-    or subtype-of<name, thing> that give the new idea consequences.
-
-COMPOSE <target> = <body>
-    the missing capability is built from ones that exist, written as a concept
-    expression using ?0, ?1 for its arguments. Example:
-    COMPOSE double = add<?0, ?0>
-
-UNKNOWN <short reason>
-    you genuinely cannot say. This is a real answer and better than a guess.
-
-Concepts are written Head<Arg, Arg>, names are kebab-case. No prose, no code fences."#
+            TeacherAsk::Examples { .. } => format!(
+                "You give worked input and output examples so a program synthesizer \
+can search for a body that fits them.\n\n\
+Reply in exactly this form, on one line:\n\n\
+EXAMPLES <target> : <in> -> <out> ; <in> -> <out> ; <in> -> <out>\n\n\
+Multiple inputs to one example are separated by commas.\n\n\
+Examples:\n\
+EXAMPLES double : 3 -> 6 ; 5 -> 10 ; 0 -> 0\n\
+EXAMPLES add-two : 1, 2 -> 3 ; 10, 5 -> 15\n\
+EXAMPLES shout : \"ab\" -> \"AB\" ; \"hi\" -> \"HI\"\n\n\
+Give at least three examples. They must be literally correct: the synthesizer \
+verifies every one and discards anything that fails even a single case.\n\n{common}{known}"
+            ),
+        }
     }
 
     fn describe(&self, ask: &TeacherAsk) -> String {
@@ -126,6 +168,37 @@ Concepts are written Head<Arg, Arg>, names are kebab-case. No prose, no code fen
                 body,
             };
         }
+        if let Some(rest) = line.strip_prefix("EXAMPLES ")
+            && let Some((target, cases)) = rest.split_once(':')
+        {
+            let mut examples = Vec::new();
+            for case in cases.split(';') {
+                let Some((inputs, output)) = case.split_once("->") else {
+                    continue;
+                };
+                let parsed_inputs: Vec<Concept> = inputs
+                    .split(',')
+                    .filter_map(|i| parse(i.trim(), &self.table).ok())
+                    .collect();
+                let Ok(parsed_output) = parse(output.trim(), &self.table) else {
+                    continue;
+                };
+                if !parsed_inputs.is_empty() {
+                    examples.push((parsed_inputs, parsed_output));
+                }
+            }
+            // Three minimum. Two examples fit far too many programs, and the
+            // search returns the first thing that matches, so a body that
+            // memorizes both would be accepted and called learned.
+            if examples.len() < 3 {
+                return unknown("too few usable examples");
+            }
+            return TeacherReply::Spec(Spec {
+                target: Concept::named(target.trim()),
+                examples,
+                note: None,
+            });
+        }
         if let Some(rest) = line.strip_prefix("UNKNOWN ") {
             return unknown(rest.trim());
         }
@@ -136,9 +209,13 @@ Concepts are written Head<Arg, Arg>, names are kebab-case. No prose, no code fen
 
 #[async_trait::async_trait]
 impl Teacher for ModelTeacher {
-    async fn teach(&self, ask: &TeacherAsk) -> Result<TeacherReply, LlmError> {
+    async fn teach(
+        &self,
+        ask: &TeacherAsk,
+        vocabulary: &[Arc<str>],
+    ) -> Result<TeacherReply, LlmError> {
         let messages = [
-            Message::system(Self::prompt()),
+            Message::system(Self::prompt(ask, vocabulary)),
             Message::user(self.describe(ask)),
         ];
         let reply = self.client.chat(Seat::Teacher, &messages).await?;

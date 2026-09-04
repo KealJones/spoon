@@ -465,6 +465,11 @@ impl Brain {
         metrics: &mut TurnMetrics,
     ) {
         let Some(teacher) = &self.teacher else { return };
+        // The same ranked vocabulary the ears get. A Teacher that does not know
+        // what Spoon already has will refuse work it could have done: asked to
+        // build string reversal without being told `chars` exists, it correctly
+        // reports that nothing turns a string into a list.
+        let vocabulary = self.vocabulary();
         let mut asks = Vec::new();
         for word in &heard.unknown {
             asks.push(TeacherAsk::Vocabulary {
@@ -488,7 +493,7 @@ impl Brain {
         }
 
         for ask in asks.into_iter().take(4) {
-            let Ok(reply) = teacher.teach(&ask).await else {
+            let Ok(reply) = teacher.teach(&ask, &vocabulary).await else {
                 continue;
             };
             metrics.teacher_calls += 1;

@@ -6,6 +6,66 @@ Decisions in PIVOT_PLAN.md; rules in AGENTS.md; design in docs/CONCEPT-IR-DESIGN
 
 ---
 
+## 2026-09-03  The Teacher was broken in three ways, and the learning loop is one fix short
+
+WHAT WAS WRONG WITH THE TEACHER
+Asked how to build a missing capability, it replied with a synonym. Asked for
+examples, it produced "malformed synonym". Three causes, all mine:
+
+1. **There was no EXAMPLES reply form at all.** The prompt offered SYNONYM,
+   CONCEPT, COMPOSE and UNKNOWN. `TeacherReply::Spec` was therefore
+   unreachable, which means the synthesizer had never once been fed in the
+   entire history of this system. Synthesis was tested and worked and was wired
+   into the brain, and nothing could reach it.
+2. **Every question got the same menu of four forms**, and a 4B model handed a
+   menu reliably picks the cheapest item on it. Each ask now names the one form
+   that answers it, with UNKNOWN as the only alternative.
+3. **The Teacher was never told what concepts exist.** Asked to build string
+   reversal it answered, correctly given what it knew, that no concept turns a
+   string into a list, while `chars` sat in the store unmentioned. It now gets
+   the same activation-ranked vocabulary the ears get.
+
+With those fixed it produces exactly the right things:
+```
+COMPOSE  -> join<reverse<chars<?0>>, "">
+EXAMPLES -> "ab" -> "ba" ; "hello" -> "olleh" ; "a" -> "a"
+```
+
+THE ONE REMAINING BREAK, stated precisely
+The Teacher answers about a concept it names itself. Asked how to reverse a
+string it proposes `reverse-text`, while the gap the interior actually hit is
+`reverse` applied to text. The composition is correct and gets stored, and
+nothing ever calls it, because no utterance produces `reverse-text`.
+
+The fix is to bind the Teacher's answer to the concept that failed rather than
+to the name it invented, which is the same name-reconciliation problem already
+solved for the ears and not yet applied here. That is the next thing to do and
+it is a small change.
+
+A SECOND FINDING, from a run that did learn
+Before the example minimum was raised, synthesis returned
+`replace<"helloworld", "hello", ?0>` for string reversal: a body that fits two
+examples perfectly and has learned nothing. Constants drawn from the examples
+are what make `mul<?0, 3>` reachable, and the same mechanism lets a body
+memorize. The minimum is now three examples.
+
+An explicit guard rejecting bodies that embed an expected answer was written,
+tried, and reverted: it broke `at-least-ten`, where the constant 10 is both a
+needed constant and an expected output. The comment predicting that exact cost
+was written before the test proved it, which is the useful part. More examples
+is the honest fix; a cleverer guard needs evidence this one does not have.
+
+ALSO IN THIS ROUND
+- Gaps now include realizations that exist and fail on the given arguments, not
+  only heads with no realization at all. `reverse` can reverse a list and was
+  handed a string, which is a gap in what Spoon can do.
+- A regression I introduced and fixed within the hour: treating any irreducible
+  expression as a fact turned unknown capability requests into stored facts, so
+  no gap was reported and the Teacher was never asked. Only the declarative
+  meta-vocabulary counts now.
+
+---
+
 ## 2026-09-03  Stages 4-7: it holds a conversation (437 tests, 0 warnings)
 
 DONE, verified against a real brain with a real local model (qwen3.5:4b)

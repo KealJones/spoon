@@ -155,5 +155,15 @@ pub enum TeacherReply {
 /// Fills gaps, and never writes executable bodies by default.
 #[async_trait::async_trait]
 pub trait Teacher: Send + Sync {
-    async fn teach(&self, ask: &TeacherAsk) -> Result<TeacherReply, LlmError>;
+    /// Answer a question about something Spoon could not do.
+    ///
+    /// `vocabulary` is what Spoon currently knows, ranked. Without it the
+    /// Teacher is guessing at what it may compose from and will refuse work it
+    /// could have done: asked to build string reversal it will say no concept
+    /// turns a string into a list, while `chars` sits in the store unmentioned.
+    async fn teach(
+        &self,
+        ask: &TeacherAsk,
+        vocabulary: &[Arc<str>],
+    ) -> Result<TeacherReply, LlmError>;
 }
