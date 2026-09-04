@@ -169,6 +169,21 @@ impl Store {
         })?;
         collect(rows)
     }
+
+    /// Remove a realization outright.
+    ///
+    /// For realizations that should never have survived, as opposed to ones
+    /// that lost: a bootstrap native whose Rust function was renamed away is
+    /// not a weak candidate to be outcompeted, it is a promise the binary can
+    /// no longer keep. Leaving it in place means every brain that ever ran an
+    /// older build keeps offering a capability that cannot run.
+    ///
+    /// Losing realizations are deprecated instead, so their evidence survives.
+    pub fn retire_realization(&self, name: &str) -> Result<bool> {
+        let conn = self.conn.lock();
+        let n = conn.execute("DELETE FROM realizations WHERE name = ?1", [name])?;
+        Ok(n > 0)
+    }
 }
 
 fn collect<I>(rows: I) -> Result<Vec<Realization>>

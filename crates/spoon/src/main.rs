@@ -1,6 +1,7 @@
 //! The Spoon binary.
 
 mod build;
+mod config;
 mod repl;
 mod serve;
 
@@ -20,15 +21,18 @@ struct Cli {
     /// Never consult a model. Everything still works, with less fluency.
     #[arg(long, global = true)]
     offline: bool,
-    #[arg(long, global = true, default_value = "qwen3.5:4b")]
-    ears_model: String,
-    #[arg(long, global = true, default_value = "qwen3.5:4b")]
-    mouth_model: String,
-    #[arg(long, global = true, default_value = "qwen3.5:4b")]
-    teacher_model: String,
+    /// Overrides ears.model in ~/.spoon/config.json.
+    #[arg(long, global = true)]
+    ears_model: Option<String>,
+    /// Overrides mouth.model in ~/.spoon/config.json.
+    #[arg(long, global = true)]
+    mouth_model: Option<String>,
+    /// Overrides teacher.model in ~/.spoon/config.json.
+    #[arg(long, global = true)]
+    teacher_model: Option<String>,
     /// ask-writes (default), always-ask, or bypass.
-    #[arg(long, global = true, default_value = "ask-writes")]
-    permissions: String,
+    #[arg(long, global = true)]
+    permissions: Option<String>,
     #[command(subcommand)]
     command: Command,
 }

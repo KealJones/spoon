@@ -13,6 +13,14 @@ use spoon_store::Store;
 use spoon_teach::ModelTeacher;
 
 use crate::Cli;
+use crate::config::Config;
+
+const DEFAULT_MODEL: &str = "qwen3.5:4b";
+
+/// Which model a seat should use: flag, then config file, then default.
+fn seat_model<'a>(flag: &'a Option<String>, configured: Option<&'a str>) -> &'a str {
+    flag.as_deref().or(configured).unwrap_or(DEFAULT_MODEL)
+}
 
 /// Whichever implementations the configuration ended up with.
 type SeatTrio = (Box<dyn Ears>, Box<dyn Mouth>, Option<Box<dyn Teacher>>);
@@ -55,6 +63,27 @@ fn permission(mode: &str) -> PermissionMode {
 
 /// Build a brain, seeding a fresh one so it can actually do something.
 pub async fn assemble(cli: &Cli) -> Result<Brain> {
+    let settings = Config::load()?;
+    // The v1 config points database.path at a v1 brain, whose schema this
+    // build cannot read. Opening it would create v2 tables inside a file v1
+    // still needs, so it is refused loudly rather than honored.
+    if let Some(db) = settings.database.as_ref().and_then(|d| d.path.as_ref()) {
+        eprintln!(
+            "ignoring database.path {} in config: v2 uses its own brain file",
+            db.display()
+        );
+    }
+    let ears_model = seat_model(&cli.ears_model, Config::model(&settings.ears)).to_string();
+    let mouth_model = seat_model(&cli.mouth_model, Config::model(&settings.mouth)).to_string();
+    let teacher_model =
+        seat_model(&cli.teacher_model, Config::model(&settings.teacher)).to_string();
+    let permissions = cli
+        .permissions
+        .as_deref()
+        .or_else(|| settings.permission_mode())
+        .unwrap_or("ask-writes")
+        .to_string();
+
     let store = open_store(cli)?;
     let registry = spoon_natives::bootstrap();
 
@@ -69,7 +98,7 @@ pub async fn assemble(cli: &Cli) -> Result<Brain> {
     let online = if cli.offline {
         false
     } else {
-        LlmClient::new(LlmConfig::ollama(&cli.ears_model), counters.clone())
+        LlmClient::new(LlmConfig::ollama(&ears_model), counters.clone())
             .reachable()
             .await
     };
@@ -77,15 +106,15 @@ pub async fn assemble(cli: &Cli) -> Result<Brain> {
     let (ears, mouth, teacher): SeatTrio = if online {
         (
             Box::new(ModelEars::new(LlmClient::new(
-                LlmConfig::ollama(&cli.ears_model),
+                LlmConfig::ollama(&ears_model),
                 counters.clone(),
             ))),
             Box::new(ModelMouth::new(
-                LlmClient::new(LlmConfig::ollama(&cli.mouth_model), counters.clone()),
+                LlmClient::new(LlmConfig::ollama(&mouth_model), counters.clone()),
                 table.clone(),
             )),
             Some(Box::new(ModelTeacher::new(
-                LlmClient::new(LlmConfig::ollama(&cli.teacher_model), counters.clone()),
+                LlmClient::new(LlmConfig::ollama(&teacher_model), counters.clone()),
                 table.clone(),
             ))),
         )
@@ -98,7 +127,7 @@ pub async fn assemble(cli: &Cli) -> Result<Brain> {
     };
 
     let config = BrainConfig {
-        permission: permission(&cli.permissions),
+        permission: permission(&permissions),
         teaching: online,
         ..BrainConfig::default()
     };
@@ -367,7 +396,8 @@ pub async fn eval(cli: &Cli, expression: &str) -> Result<()> {
         .map_err(|e| anyhow::anyhow!("cannot parse {expression:?}: {e}"))?;
 
     let mut evaluator =
-        spoon_eval::Evaluator::new(&store, &registry).with_permission(permission(&cli.permissions));
+        spoon_eval::Evaluator::new(&store, &registry)
+            .with_permission(permission(cli.permissions.as_deref().unwrap_or("ask-writes")));
     let outcome = evaluator.evaluate(&concept);
     let trace = evaluator.trace();
 

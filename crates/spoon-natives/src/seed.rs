@@ -16,6 +16,8 @@ use spoon_store::{Result, Store};
 pub struct SeedStats {
     pub concepts: usize,
     pub realizations: usize,
+    /// Bootstrap natives that no longer exist in the binary and were dropped.
+    pub retired: usize,
 }
 
 /// Store a `Native` realization for every registered native, naming the
@@ -23,6 +25,12 @@ pub struct SeedStats {
 ///
 /// Idempotent: running it against an existing brain refreshes the bootstrap
 /// realizations without disturbing anything learned since.
+///
+/// Refreshing is only half the job. A native that gets renamed or removed
+/// leaves its realization behind in every brain that ever ran an older build,
+/// pointing at a Rust function that is gone. The concept still looks realized,
+/// so evaluation keeps picking it and keeps stalling, and the gap is never
+/// reported because on paper the capability exists. Seeding retires those too.
 pub fn seed_bootstrap(store: &Store, registry: &NativeRegistry) -> Result<SeedStats> {
     let now = Utc::now();
     let mut stats = SeedStats::default();
@@ -51,6 +59,19 @@ pub fn seed_bootstrap(store: &Store, registry: &NativeRegistry) -> Result<SeedSt
             tier: Tier::Kernel,
         })?;
         stats.realizations += 1;
+    }
+
+    // Only bootstrap natives are ours to retire. A learned composed body or a
+    // rule the Teacher wrote is not made stale by a Rust rename, and dropping
+    // one would throw away the evidence behind it.
+    for r in store.all_realizations()? {
+        let RealizationSpec::Native { native } = &r.spec else {
+            continue;
+        };
+        if r.provenance == Provenance::Bootstrap && !registry.contains(native) {
+            store.retire_realization(&r.name)?;
+            stats.retired += 1;
+        }
     }
 
     Ok(stats)
