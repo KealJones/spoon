@@ -153,8 +153,15 @@ impl Brain {
         // acting on what follows. Doing it after would leave the bad claim
         // standing while the replacement is stored beside it, and Spoon would
         // then believe both.
+        // A repair inside the sentence is not about the previous turn.
+        // "reverse banana, actually no, possession" withdraws something the
+        // speaker said half a second ago and never stored, and retracting the
+        // last turn's claim over it would undo a fact nobody questioned.
+        let self_repair = crate::correct::split_repair(text)
+            .is_some_and(|r| !r.before.is_empty());
         let mut correction = None;
         if crate::correct::is_correction(text)
+            && !self_repair
             && let Some(previous) = self.last_asserting_episode(session)?
         {
             let applied = crate::correct::apply(&self.store, &previous, Utc::now())?;
@@ -165,8 +172,13 @@ impl Brain {
         }
 
         // ---- ears ----
+        // The sentence the speaker meant, which is not always the sentence
+        // they typed. An elliptical repair leaves the verb implied, so the
+        // ears are given the spliced version and the episode keeps the
+        // original.
+        let heard_text = crate::correct::repaired(text).unwrap_or_else(|| text.to_string());
         let ears_started = Instant::now();
-        let (heard, ears_path) = self.hear(session, text, &mut metrics).await;
+        let (heard, ears_path) = self.hear(session, &heard_text, &mut metrics).await;
         // Record spellings in the session table so everything downstream can
         // print words instead of hex. They are deliberately NOT persisted here:
         // the store's symbol set is what reconciliation treats as established
@@ -189,7 +201,7 @@ impl Brain {
 
         // ---- interior ----
         let interior_started = Instant::now();
-        let moves = resolve(&steps, crate::resolve::is_question(text));
+        let moves = resolve(&steps, crate::resolve::is_question(&heard_text));
         let mut gaps = Vec::new();
         let mut realizations = Vec::new();
         let mut interior = Vec::new();
@@ -248,7 +260,7 @@ impl Brain {
         let mut learning = Vec::new();
         if self.config.teaching && (went_wrong || spot_check) {
             learning = self
-                .consult_teacher(text, &heard, &gaps, &mut metrics)
+                .consult_teacher(&heard_text, &heard, &gaps, &mut metrics)
                 .await;
 
             // Use what was just learned, on this turn.
@@ -363,8 +375,11 @@ impl Brain {
             .is_some_and(|r| is_answer(&self.store, r) && !is_unknown(r));
         if ears_path == EarsPath::Model && episode.gaps.is_empty() && !steps.is_empty() && answered
         {
-            let _ = self.store.put_pair(text, &steps, PairSource::Model);
-            self.phrasing.learn(text, &steps);
+            // The repaired sentence, not the one with the abandoned clause
+            // still in it. A template built from "reverse banana, actually
+            // no, possession" would only ever match another change of mind.
+            let _ = self.store.put_pair(&heard_text, &steps, PairSource::Model);
+            self.phrasing.learn(&heard_text, &steps);
         }
 
         self.store

@@ -188,3 +188,54 @@ fn a_correction_with_nothing_to_undo_is_harmless() {
     );
     assert!(out.is_empty());
 }
+
+#[test]
+fn an_elliptical_repair_borrows_the_verb_it_left_out() {
+    // "reverse banana, actually no, possession" replaces one word and leaves
+    // the verb implied. Reading only the part after the marker gets a bare
+    // noun; reading only the part before gets the answer to a question that
+    // was withdrawn mid-sentence. Both were happening.
+    for (say, want) in [
+        ("reverse banana. actually no, possession", "reverse possession"),
+        ("reverse committee. actually no, hello", "reverse hello"),
+        ("reverse science sorry i meant banana", "reverse banana"),
+    ] {
+        assert_eq!(
+            spoon_brain::repaired(say).as_deref(),
+            Some(want),
+            "{say:?}"
+        );
+    }
+}
+
+#[test]
+fn a_repair_keeps_the_words_it_does_not_replace() {
+    // The repair covers three words, so it replaces three, and "what is"
+    // survives because the speaker never withdrew it.
+    assert_eq!(
+        spoon_brain::repaired("what is 32 plus 50. scratch that, 32 plus 57").as_deref(),
+        Some("what is 32 plus 57")
+    );
+}
+
+#[test]
+fn a_marker_opening_the_utterance_repairs_the_previous_turn() {
+    // Nothing before it to splice into, so the repair is the whole sentence
+    // and the retraction machinery is what handles it.
+    let repair = spoon_brain::split_repair("no wait, reverse spoon").expect("marker");
+    assert!(repair.before.is_empty());
+    assert_eq!(repair.after, "reverse spoon");
+}
+
+#[test]
+fn changing_your_mind_twice_means_the_third_thing() {
+    assert_eq!(
+        spoon_brain::repaired("reverse banana, no wait, coffee, actually no, spoon").as_deref(),
+        Some("reverse spoon")
+    );
+}
+
+#[test]
+fn an_utterance_with_no_marker_needs_no_repair() {
+    assert!(spoon_brain::repaired("reverse banana").is_none());
+}

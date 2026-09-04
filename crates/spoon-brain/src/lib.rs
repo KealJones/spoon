@@ -12,7 +12,9 @@ mod reconcile;
 mod resolve;
 
 pub use brain::{Brain, BrainConfig, Seats, TurnResult, is_answer, is_unknown};
-pub use correct::{Correction, apply as apply_correction, is_correction};
+pub use correct::{
+    Correction, Repair, apply as apply_correction, is_correction, repaired, split_repair,
+};
 pub use credit::{Blame, Stage, assign as assign_blame, assign_all};
 pub use episode::{EarsPath, Episode, MouthPath, TraceStep, TurnMetrics};
 pub use reconcile::{Reconciliation, reconcile, remember};

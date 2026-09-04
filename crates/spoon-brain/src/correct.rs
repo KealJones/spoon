@@ -83,30 +83,32 @@ pub fn apply(
 /// understanding the sentence, which is why it works without a model, and the
 /// list is short on purpose: a false positive silently deletes something the
 /// user asserted.
+/// Ways a speaker signals that what they just said was wrong.
+const MARKERS: &[&str] = &[
+    "no wait",
+    "wait no",
+    "actually no",
+    "no,",
+    "no.",
+    "nope",
+    "that's wrong",
+    "thats wrong",
+    "that is wrong",
+    "wrong",
+    "i meant",
+    "i ment",
+    "sorry i meant",
+    "not that",
+    "scratch that",
+    "never mind",
+    "nevermind",
+    "nvm",
+    "correction",
+    "no i said",
+    "not what i said",
+];
+
 pub fn is_correction(text: &str) -> bool {
-    const MARKERS: &[&str] = &[
-        "no wait",
-        "wait no",
-        "actually no",
-        "no,",
-        "no.",
-        "nope",
-        "that's wrong",
-        "thats wrong",
-        "that is wrong",
-        "wrong",
-        "i meant",
-        "i ment",
-        "sorry i meant",
-        "not that",
-        "scratch that",
-        "never mind",
-        "nevermind",
-        "nvm",
-        "correction",
-        "no i said",
-        "not what i said",
-    ];
     let lowered = text.trim().to_lowercase();
     MARKERS.iter().any(|m| {
         lowered == *m
@@ -114,4 +116,102 @@ pub fn is_correction(text: &str) -> bool {
             || lowered.starts_with(&format!("{m}, "))
             || lowered.contains(&format!(" {m} "))
     })
+}
+
+/// Where a repair marker sits, and what surrounds it.
+///
+/// A marker at the start of an utterance repairs the previous turn. A marker
+/// in the middle repairs the same sentence, and the difference matters: acting
+/// on the second as though it were the first retracts something the speaker
+/// never mentioned.
+pub struct Repair {
+    /// The clause before the marker, empty when the marker opened the
+    /// utterance.
+    pub before: String,
+    /// The clause after it.
+    pub after: String,
+}
+
+/// Find the last repair marker in an utterance and split around it.
+///
+/// The last, not the first, because a speaker who changes their mind twice
+/// means the third thing.
+pub fn split_repair(text: &str) -> Option<Repair> {
+    let lowered = text.to_lowercase();
+    let mut hits: Vec<(usize, usize)> = Vec::new();
+    for marker in MARKERS {
+        let mut from = 0;
+        while let Some(at) = lowered[from..].find(marker) {
+            let start = from + at;
+            hits.push((start, marker.len()));
+            from = start + marker.len();
+        }
+    }
+    // Markers overlap: "no," starts inside "actually no". Splitting on the
+    // shorter one leaves "actually" stranded in the clause being repaired,
+    // so a match that any earlier-starting match runs into is dropped in
+    // favour of the fuller phrase. Overlap rather than containment, because
+    // "actually no" stops one character short of "no,".
+    let outer: Vec<(usize, usize)> = hits
+        .iter()
+        .copied()
+        .filter(|(start, len)| {
+            !hits.iter().any(|(other, other_len)| {
+                (*other, *other_len) != (*start, *len)
+                    && *other < *start
+                    && other + other_len > *start
+            })
+        })
+        .collect();
+    // The last one, because a speaker who changes their mind twice means the
+    // third thing.
+    let (start, len) = outer.into_iter().max_by_key(|(start, _)| *start)?;
+    // Punctuation on either side belongs to the marker, not to the clauses.
+    // A leading comma left on the repair counts as a word and throws off the
+    // splice, which is decided by counting them.
+    let trim = |s: &str| {
+        s.trim()
+            .trim_matches([',', '.', '!', '?', ';', ':'])
+            .trim()
+            .to_string()
+    };
+    Some(Repair {
+        before: trim(&text[..start]),
+        after: trim(&text[start + len..]),
+    })
+}
+
+/// The sentence the speaker meant, once the repair is applied.
+///
+/// A repair is usually elliptical: "reverse banana, actually no, possession"
+/// replaces one word and leaves the verb implied, so reading only the part
+/// after the marker gets a bare noun and reading only the part before it gets
+/// the answer to a question that was withdrawn mid-sentence. Both were
+/// happening, across every correction case in the corpus.
+///
+/// Splicing by token count is enough to tell the two apart. A repair as long
+/// as what it replaces is a whole new sentence and stands on its own; a
+/// shorter one replaces that many words at the end of the original.
+pub fn repaired(text: &str) -> Option<String> {
+    let repair = split_repair(text)?;
+    if repair.after.is_empty() {
+        return None;
+    }
+    if repair.before.is_empty() {
+        return Some(repair.after);
+    }
+    // Repair the earlier clause first. "reverse banana, no wait, coffee,
+    // actually no, spoon" has to become "reverse coffee" before "spoon" can
+    // replace anything, or the splice counts the abandoned words and keeps
+    // some of them.
+    let earlier = repaired(&repair.before).unwrap_or(repair.before);
+    let before: Vec<&str> = earlier.split_whitespace().collect();
+    let after: Vec<&str> = repair.after.split_whitespace().collect();
+    if after.len() >= before.len() {
+        return Some(repair.after);
+    }
+    let keep = before.len() - after.len();
+    let mut words: Vec<&str> = before[..keep].to_vec();
+    words.extend(after);
+    Some(words.join(" "))
 }
