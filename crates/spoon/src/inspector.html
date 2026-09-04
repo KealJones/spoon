@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>spoon</title>
 <style>
-  :root { color-scheme: light dark; --line: #8884; }
+  :root { color-scheme: light dark; --line: #8884; --bg2: #8881; }
   body { font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; margin: 0; padding: 1.5rem; }
   h1 { font-size: 1.1rem; margin: 0 0 1rem; font-weight: 600; }
   nav { display: flex; gap: .25rem; border-bottom: 1px solid var(--line); margin-bottom: 1rem; flex-wrap: wrap; }
@@ -44,6 +44,24 @@
   .hint { opacity: .45; font-size: .8rem; }
   tr.body td { border-bottom: 0; padding-top: 0; opacity: .7; }
   tr.body code { font-size: .85rem; }
+  /* SSE event steps */
+  .step { font-size: .8rem; padding: .15rem 0 .15rem 1rem; opacity: .7; border-left: 2px solid var(--line); margin: .1rem 0; }
+  .step.ears { border-left-color: #6b9; }
+  .step.interior { border-left-color: #69b; }
+  .step.teacher { border-left-color: #b96; }
+  .step.mouth { border-left-color: #96b; }
+  .step summary { cursor: pointer; }
+  .step pre { font-size: .75rem; opacity: .6; margin: .2rem 0; }
+  /* Episode timeline */
+  .timeline { margin: .5rem 0; }
+  .timeline .stage { margin: .4rem 0; padding: .3rem .6rem; background: var(--bg2); border-radius: 4px; }
+  .timeline .stage-head { font-weight: 600; font-size: .8rem; opacity: .7; }
+  .timeline .stage-body { font-size: .8rem; margin-top: .2rem; }
+  .timeline .stage-body pre { font-size: .75rem; opacity: .65; max-height: 12rem; overflow: auto; }
+  /* Expandable rows */
+  tr.expandable { cursor: pointer; }
+  tr.expandable:hover { background: var(--bg2); }
+  tr.detail-row td { padding: .5rem; background: var(--bg2); border-bottom: 2px solid var(--line); }
 </style>
 </head>
 <body>
@@ -58,44 +76,112 @@
 <div id="view"></div>
 <script>
 const view = document.getElementById('view');
-let tab = 'chat';
 const history = [];
+let tab = location.hash.split('&')[0].slice(1) || 'chat';
 
-document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
-  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
-  tab = b.dataset.tab;
+// --- nav ---
+function selectTab(t) {
+  tab = t;
+  document.querySelectorAll('nav button').forEach(x =>
+    x.classList.toggle('on', x.dataset.tab === t));
+  location.hash = t;
   render();
+}
+document.querySelectorAll('nav button').forEach(b =>
+  b.onclick = () => selectTab(b.dataset.tab));
+window.addEventListener('hashchange', () => {
+  const t = location.hash.split('&')[0].slice(1) || 'chat';
+  if (t !== tab) selectTab(t);
 });
 
+// --- helpers ---
 const get = (url) => fetch(url).then(r => r.json());
 const esc = (s) => String(s).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+const num = (v) => v == null ? '-' : (Math.round(v * 100) / 100).toFixed(2);
 
-function table(cols, rows) {
+function table(cols, rows, opts = {}) {
   return `<table><thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>${
-    rows.map(r => `<tr>${r.map((c, i) => `<td class="${typeof c === 'number' ? 'n' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')
+    rows.map((r, i) => {
+      const cls = opts.expandable ? ' class="expandable" data-idx="' + i + '"' : '';
+      return `<tr${cls}>${r.map((c, j) => `<td class="${typeof c === 'number' ? 'n' : ''}">${esc(c)}</td>`).join('')}</tr>`;
+    }).join('')
   }</tbody></table>`;
 }
 
+// --- SSE chat ---
 async function send(text) {
   if (!text.trim()) return;
-  history.push({ you: text, reply: '...', meta: '', learned: [] });
+  const turn = { you: text, reply: '', steps: [], done: false };
+  history.push(turn);
   render();
-  const r = await fetch('/v1/chat/completions', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'spoon', user: 'inspector', messages: [{ role: 'user', content: text }] })
-  }).then(r => r.json());
-  const last = history[history.length - 1];
-  last.reply = r.choices?.[0]?.message?.content ?? r.error ?? '(no reply)';
-  const s = r.spoon || {};
-  last.meta = `ears ${s.ears_path} · ${s.metrics?.millis_total ?? '?'}ms` +
-    (s.steps?.length ? ` · ${s.steps.join('  ')}` : '') +
-    (s.gaps?.length ? ` · gaps: ${s.gaps.join(', ')}` : '') +
-    (s.rules?.length ? ` · rules: ${s.rules.join(', ')}` : '');
-  last.learned = s.learning || [];
-  render();
+
+  try {
+    const resp = await fetch('/v1/chat/stream', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'spoon', user: 'inspector', messages: [{ role: 'user', content: text }] })
+    });
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (line.startsWith('data:')) {
+          try {
+            const event = JSON.parse(line.slice(5).trim());
+            turn.steps.push(event);
+            if (event.type === 'mouth-result') turn.reply = event.reply;
+            if (event.type === 'turn-finished') turn.done = true;
+            renderChat();
+          } catch {}
+        }
+      }
+    }
+  } catch (err) {
+    turn.reply = 'error: ' + err.message;
+    turn.done = true;
+  }
+  renderChat();
 }
 
-const num = (v) => v == null ? '-' : (Math.round(v * 100) / 100).toFixed(2);
+function stepHtml(ev) {
+  const t = ev.type;
+  let cls = 'step';
+  if (t.startsWith('ears')) cls += ' ears';
+  else if (t.startsWith('interior') || t === 'act-step' || t === 'gap-found') cls += ' interior';
+  else if (t.startsWith('teacher') || t === 'learned') cls += ' teacher';
+  else if (t.startsWith('mouth')) cls += ' mouth';
+
+  let summary = t;
+  if (t === 'ears-result') summary = `ears: ${ev.path} - ${(ev.steps||[]).join(', ')}`;
+  else if (t === 'interior-result') summary = `interior: ${ev.result || 'no result'}`;
+  else if (t === 'gap-found') summary = `gap: ${ev.concept}`;
+  else if (t === 'teacher-reply') summary = `teacher: ${ev.kind} - ${ev.summary}`;
+  else if (t === 'learned') summary = `learned: ${ev.note}`;
+  else if (t === 'mouth-result') summary = `mouth: ${ev.path}`;
+  else if (t === 'turn-finished') summary = `done in ${ev.millis_total}ms`;
+  else if (t === 'act-step') summary = `eval: ${ev.concept} -> ${ev.outcome}`;
+
+  const json = JSON.stringify(ev, null, 2);
+  return `<details class="${cls}"><summary>${esc(summary)}</summary><pre>${esc(json)}</pre></details>`;
+}
+
+function renderChat() {
+  const container = document.getElementById('chat-history');
+  if (!container) return;
+  container.innerHTML = history.slice().reverse().map(h => {
+    const stepsHtml = h.steps
+      .filter(s => s.type !== 'turn-started')
+      .map(stepHtml).join('');
+    const replyText = h.done ? (h.reply || '(no reply)') : (h.reply || '...');
+    return `<div class="turn"><div class="you">&gt; ${esc(h.you)}</div>${stepsHtml}<pre>${esc(replyText)}</pre></div>`;
+  }).join('');
+}
 
 let picked = null;
 
@@ -135,12 +221,50 @@ async function showConcept(name) {
     <p class="hint">${esc(d.id)}</p>`;
 }
 
+function renderEpisodeTimeline(ep) {
+  const stage = (name, cls, content) =>
+    content ? `<div class="stage"><div class="stage-head ${cls}">${name}</div><div class="stage-body">${content}</div></div>` : '';
+
+  const ears = ep.ears_exchange
+    ? `<pre>${esc(ep.ears_exchange.raw_response)}</pre>`
+    : '';
+  const steps = (ep.steps || []).length
+    ? `<div>${ep.steps.map(s => `<span class="chip">${esc(typeof s === 'string' ? s : JSON.stringify(s))}</span>`).join('')}</div>`
+    : '';
+  const trace = (ep.trace || []).length
+    ? `<table><thead><tr><th>concept</th><th>realization</th><th>outcome</th><th>depth</th></tr></thead><tbody>${
+        ep.trace.map(t => `<tr><td>${esc(t.concept)}</td><td>${esc(t.realization||'-')}</td><td>${esc(t.outcome)}</td><td class="n">${t.depth}</td></tr>`).join('')
+      }</tbody></table>`
+    : '';
+  const teacher = (ep.teacher_exchanges || []).length
+    ? ep.teacher_exchanges.map((ex, i) =>
+        `<details><summary>exchange ${i+1}</summary><pre>${esc(ex.raw_response)}</pre></details>`
+      ).join('')
+    : '';
+  const mouth = ep.mouth_exchange
+    ? `<pre>${esc(ep.mouth_exchange.raw_response)}</pre>`
+    : '';
+  const learning = (ep.learning || []).length
+    ? ep.learning.map(l => `<div class="learned">+ ${esc(l)}</div>`).join('')
+    : '';
+
+  return `<div class="timeline">
+    ${stage('Input', '', `<pre>${esc(ep.user_text)}</pre>`)}
+    ${stage('Ears', 'ears', `<span class="chip">${esc(ep.ears_path)}</span> ${steps}${ears}`)}
+    ${trace ? stage('Eval trace', 'interior', trace) : ''}
+    ${(ep.gaps||[]).length ? stage('Gaps', '', (ep.gaps||[]).map(g => `<span class="chip">${esc(typeof g === 'string' ? g : JSON.stringify(g))}</span>`).join('')) : ''}
+    ${teacher ? stage('Teacher', 'teacher', teacher) : ''}
+    ${learning ? stage('Learned', 'teacher', learning) : ''}
+    ${stage('Mouth', 'mouth', `<span class="chip">${esc(ep.mouth_path)}</span>${mouth}`)}
+    ${stage('Reply', '', `<pre>${esc(ep.reply)}</pre>`)}
+    <div style="font-size:.75rem;opacity:.4">episode ${ep.id} - ${ep.metrics?.millis_total ?? '?'}ms total (ears ${ep.metrics?.millis_ears ?? '?'}ms, interior ${ep.metrics?.millis_interior ?? '?'}ms, mouth ${ep.metrics?.millis_mouth ?? '?'}ms)</div>
+  </div>`;
+}
+
 async function render() {
   if (tab === 'chat') {
-    view.innerHTML = `<div class="chat"><input id="msg" placeholder="say something" autofocus><button id="go">send</button></div>` +
-      history.map(h => `<div class="turn"><div class="you">&gt; ${esc(h.you)}</div><pre>${esc(h.reply)}</pre><div class="meta">${esc(h.meta)}</div>${
-        (h.learned || []).map(l => `<div class="learned">+ ${esc(l)}</div>`).join('')
-      }</div>`).reverse().join('');
+    view.innerHTML = `<div class="chat"><input id="msg" placeholder="say something" autofocus><button id="go">send</button></div><div id="chat-history"></div>`;
+    renderChat();
     const msg = document.getElementById('msg');
     const go = () => { const t = msg.value; msg.value = ''; send(t); };
     document.getElementById('go').onclick = go;
@@ -155,11 +279,8 @@ async function render() {
     }</div>`;
     return;
   }
-  const q = new URLSearchParams(location.hash.slice(1)).get('q') || '';
+  const q = new URLSearchParams(location.hash.split('&').slice(1).join('&')).get('q') || '';
   const filter = `<input id="q" placeholder="filter" value="${esc(q)}">`;
-  const was = document.getElementById('q');
-  const focused = was === document.activeElement;
-  const caret = was ? was.selectionStart : 0;
   if (tab === 'concepts') {
     const d = await get('/debug/concepts?limit=800&q=' + encodeURIComponent(q));
     view.innerHTML = filter +
@@ -182,18 +303,37 @@ async function render() {
         .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
         .map(r => [r.name, r.target, r.source, r.kind, r.effect, r.tier,
                    num(r.score), num(r.success_rate), r.uses, r.successes, r.failures]));
-  } else {
+  } else if (tab === 'episodes') {
     const d = await get('/debug/episodes?limit=100');
-    view.innerHTML = table(['#', 'said', 'replied', 'ears', 'gaps', 'ms'],
-      d.episodes.map(e => [e.id, e.user_text, e.reply, e.ears_path, (e.gaps || []).length, e.metrics?.millis_total ?? 0]));
+    view.innerHTML = `<table><thead><tr><th>#</th><th>said</th><th>replied</th><th>ears</th><th>gaps</th><th>ms</th></tr></thead><tbody>${
+      d.episodes.map(e => {
+        const row = `<tr class="expandable" data-id="${e.id}"><td class="n">${e.id}</td><td>${esc(e.user_text)}</td><td>${esc(e.reply)}</td><td>${esc(e.ears_path)}</td><td class="n">${(e.gaps||[]).length}</td><td class="n">${e.metrics?.millis_total ?? 0}</td></tr>`;
+        return row;
+      }).join('')
+    }</tbody></table>`;
+    document.querySelectorAll('tr.expandable').forEach(tr => {
+      tr.onclick = async () => {
+        const existing = tr.nextElementSibling;
+        if (existing && existing.classList.contains('detail-row')) {
+          existing.remove();
+          return;
+        }
+        const ep = await get('/debug/episode?id=' + tr.dataset.id);
+        const detail = document.createElement('tr');
+        detail.classList.add('detail-row');
+        detail.innerHTML = `<td colspan="6">${renderEpisodeTimeline(ep)}</td>`;
+        tr.after(detail);
+      };
+    });
   }
   const input = document.getElementById('q');
   if (input) {
-    input.oninput = () => { location.hash = 'q=' + encodeURIComponent(input.value); render(); };
-    if (focused) { input.focus(); input.setSelectionRange(caret, caret); }
+    input.oninput = () => { location.hash = tab + '&q=' + encodeURIComponent(input.value); render(); };
   }
 }
-render();
+
+// init
+selectTab(tab);
 </script>
 </body>
 </html>

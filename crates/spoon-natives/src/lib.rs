@@ -12,7 +12,10 @@ pub mod arith;
 pub mod collections;
 pub mod data;
 pub mod io;
+pub mod map;
+pub mod set;
 pub mod text;
+pub mod type_check;
 
 mod seed;
 
@@ -28,5 +31,8 @@ pub fn bootstrap() -> NativeRegistry {
     text::register(&mut registry);
     data::register(&mut registry);
     io::register(&mut registry);
+    type_check::register(&mut registry);
+    map::register(&mut registry);
+    set::register(&mut registry);
     registry
 }

@@ -253,6 +253,142 @@ fn flatten(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     Ok(make_list(items))
 }
 
+/// Pairs elements positionally, stopping at the shorter list. Padding the
+/// shorter side would mean inventing a filler value with no honest default,
+/// and any default chosen would be indistinguishable from a real element.
+fn zip(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let a = want_list("list-zip", &args[0])?;
+    let b = want_list("list-zip", &args[1])?;
+    Ok(make_list(
+        a.into_iter()
+            .zip(b)
+            .map(|(x, y)| make_list(vec![x, y]))
+            .collect(),
+    ))
+}
+
+/// `List<index, element>` pairs, zero-based, in the same order as the input.
+fn enumerate(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let items = want_list("list-enumerate", &args[0])?;
+    Ok(make_list(
+        items
+            .into_iter()
+            .enumerate()
+            .map(|(i, item)| make_list(vec![Concept::int(i as i64), item]))
+            .collect(),
+    ))
+}
+
+/// The first `n` elements. Asking for more than the list holds is not an
+/// error: `Take<List<1, 2>, 5>` is `List<1, 2>` in the same way a slice that
+/// runs past the end of a string just gives back what there is, and a caller
+/// who cares whether there were enough elements already has `Count` for that.
+fn take(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let items = want_list("list-take", &args[0])?;
+    let n = want_index("list-take", &args[1])?;
+    Ok(make_list(items.into_iter().take(n).collect()))
+}
+
+/// Everything after the first `n` elements, or nothing when `n` reaches past
+/// the end.
+fn drop(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let items = want_list("list-drop", &args[0])?;
+    let n = want_index("list-drop", &args[1])?;
+    Ok(make_list(items.into_iter().skip(n).collect()))
+}
+
+/// Consecutive sub-lists of `size`, in order. The last chunk holds whatever is
+/// left over rather than being padded or dropped, because both of those
+/// options destroy information the caller might need.
+fn chunk(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let items = want_list("list-chunk", &args[0])?;
+    let size = want_index("list-chunk", &args[1])?;
+    if size == 0 {
+        return Err(native_error("list-chunk", "chunk size must be at least 1"));
+    }
+    Ok(make_list(
+        items
+            .chunks(size)
+            .map(|c| make_list(c.to_vec()))
+            .collect(),
+    ))
+}
+
+/// Alternates elements from both lists, stopping once either runs out. The
+/// tail of the longer list is dropped rather than appended, because "then the
+/// rest of the longer one" is a second, different operation with its own name
+/// were anyone to ask for it.
+fn interleave(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let a = want_list("list-interleave", &args[0])?;
+    let b = want_list("list-interleave", &args[1])?;
+    let mut out = Vec::with_capacity(a.len().min(b.len()) * 2);
+    for (x, y) in a.into_iter().zip(b) {
+        out.push(x);
+        out.push(y);
+    }
+    Ok(make_list(out))
+}
+
+/// Every count of a distinct element, in first-appearance order. Shaped like
+/// `list-group-by` without the key function: the element is its own key.
+fn frequencies(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let items = want_list("list-frequencies", &args[0])?;
+    let mut counts: Vec<(Concept, i64)> = Vec::new();
+    for item in items {
+        match counts.iter_mut().find(|(k, _)| k == &item) {
+            Some((_, n)) => *n += 1,
+            None => counts.push((item, 1)),
+        }
+    }
+    Ok(make_list(
+        counts
+            .into_iter()
+            .map(|(item, n)| make_list(vec![item, Concept::int(n)]))
+            .collect(),
+    ))
+}
+
+/// Overlapping runs of `size` consecutive elements. Shorter than `size`
+/// elements gives no windows at all, the same way a slice past the end of a
+/// list is empty rather than an error: there is nothing dishonest about zero
+/// windows, only about a window that isn't the size asked for.
+fn window(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let items = want_list("list-window", &args[0])?;
+    let size = want_index("list-window", &args[1])?;
+    if size == 0 {
+        return Err(native_error("list-window", "window size must be at least 1"));
+    }
+    if size > items.len() {
+        return Ok(make_list(Vec::new()));
+    }
+    Ok(make_list(
+        items.windows(size).map(|w| make_list(w.to_vec())).collect(),
+    ))
+}
+
+/// Rotate left by `n`, wrapping around. `n` is taken modulo the length so a
+/// rotation by the list's own length or a multiple of it is the identity
+/// rather than a special case the caller has to avoid.
+fn rotate(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let items = want_list("list-rotate", &args[0])?;
+    let n = want_int_arg("list-rotate", &args[1])?;
+    if items.is_empty() {
+        return Ok(make_list(items));
+    }
+    let len = items.len() as i64;
+    let shift = n.rem_euclid(len) as usize;
+    let mut out = items;
+    out.rotate_left(shift);
+    Ok(make_list(out))
+}
+
+/// `n` copies of a single element. `Repeat<x, 0>` is the empty list, the same
+/// way `Range` collapses to empty when the bound gives no integers to name.
+fn repeat(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let n = want_index("list-repeat", &args[1])?;
+    Ok(make_list(vec![args[0].clone(); n]))
+}
+
 // ---------------------------------------------------------------------------
 // Higher-order
 // ---------------------------------------------------------------------------
@@ -463,6 +599,140 @@ fn group_by(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
             .map(|(key, members)| Concept::call("group", [key, make_list(members)]))
             .collect(),
     ))
+}
+
+/// `Map` followed by one level of `Flatten`. A mapper is free to answer with
+/// a list per element, and that shape needs unwrapping exactly once, not
+/// however deep the caller's function happens to nest things.
+fn flat_map(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let items = want_list("list-flat-map", &args[0])?;
+    let mut out = Vec::new();
+    for item in items {
+        let mapped = call(ctx, &args[1], vec![item])?;
+        match want_list("list-flat-map", &mapped) {
+            Ok(inner) => out.extend(inner.iter().cloned()),
+            Err(_) => out.push(mapped),
+        }
+    }
+    Ok(make_list(out))
+}
+
+/// The elements that satisfy the predicate, then the ones that do not, each
+/// keeping their original relative order. This is `Filter` run once instead
+/// of twice: the negation of a predicate is not always cheap to compute and
+/// should not have to be, when the answer to "the rest" was already sitting
+/// in the same pass.
+fn partition(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let items = want_list("list-partition", &args[0])?;
+    let mut yes = Vec::new();
+    let mut no = Vec::new();
+    for item in items {
+        let verdict = call(ctx, &args[1], vec![item.clone()])?;
+        if want_bool("list-partition", &verdict)? {
+            yes.push(item);
+        } else {
+            no.push(item);
+        }
+    }
+    Ok(make_list(vec![make_list(yes), make_list(no)]))
+}
+
+/// `min-by` and `max-by` share everything but the comparison, the same way
+/// `extremum` does for `min-of`/`max-of`. Keys are ordered with the same
+/// `SortKey` rule as `sort-by`, so the two stay consistent about what counts
+/// as comparable.
+fn extremum_by(ctx: &mut dyn Ctx, native: &str, args: &[Concept], want_greater: bool) -> EvalResult {
+    let items = want_list(native, &args[0])?;
+    if items.is_empty() {
+        return Err(native_error(native, "an empty list has no extreme value"));
+    }
+    let mut best: Option<(SortKey, Concept)> = None;
+    for item in items {
+        let key = sort_key(native, &call(ctx, &args[1], vec![item.clone()])?)?;
+        match &best {
+            None => best = Some((key, item)),
+            Some((best_key, _)) => {
+                if best_key.kind() != key.kind() {
+                    return Err(native_error(
+                        native,
+                        format!(
+                            "keys mix {} and {}, which have no shared order",
+                            best_key.kind(),
+                            key.kind()
+                        ),
+                    ));
+                }
+                let better = if want_greater {
+                    key.compare(best_key) == Ordering::Greater
+                } else {
+                    key.compare(best_key) == Ordering::Less
+                };
+                if better {
+                    best = Some((key, item));
+                }
+            }
+        }
+    }
+    Ok(best.expect("checked non-empty above").1)
+}
+
+fn min_by(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    extremum_by(ctx, "list-min-by", args, false)
+}
+
+fn max_by(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    extremum_by(ctx, "list-max-by", args, true)
+}
+
+/// Elements from the front while the predicate holds, stopping at the first
+/// one that fails it. Unlike `Filter`, order matters to the question itself:
+/// this is "the leading run", not "the ones that qualify".
+fn take_while(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let items = want_list("list-take-while", &args[0])?;
+    let mut out = Vec::new();
+    for item in items {
+        let verdict = call(ctx, &args[1], vec![item.clone()])?;
+        if !want_bool("list-take-while", &verdict)? {
+            break;
+        }
+        out.push(item);
+    }
+    Ok(make_list(out))
+}
+
+/// The complement of `take-while`: everything from the first element that
+/// fails the predicate onward.
+fn drop_while(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let items = want_list("list-drop-while", &args[0])?;
+    let mut dropping = true;
+    let mut out = Vec::new();
+    for item in items {
+        if dropping {
+            let verdict = call(ctx, &args[1], vec![item.clone()])?;
+            if want_bool("list-drop-while", &verdict)? {
+                continue;
+            }
+            dropping = false;
+        }
+        out.push(item);
+    }
+    Ok(make_list(out))
+}
+
+/// The running results of a fold, one per element, with the initial value
+/// first. `Reduce` throws away every intermediate accumulator but the last;
+/// `Scan` is for when those intermediate values are the answer, e.g. a
+/// running total rather than just the final one.
+fn scan(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let items = want_list("list-scan", &args[0])?;
+    let mut acc = args[1].clone();
+    let mut out = Vec::with_capacity(items.len() + 1);
+    out.push(acc.clone());
+    for item in items {
+        acc = call(ctx, &args[2], vec![acc, item])?;
+        out.push(acc.clone());
+    }
+    Ok(make_list(out))
 }
 
 // ---------------------------------------------------------------------------
@@ -710,6 +980,66 @@ pub fn register(registry: &mut NativeRegistry) {
         Arity::Exact(1),
         "a list with any inner lists spliced in, one level deep",
     );
+    registry.pure(
+        "list-zip",
+        zip,
+        Arity::Exact(2),
+        "pairs of elements at the same position from two lists, truncated to the shorter",
+    );
+    registry.pure(
+        "list-enumerate",
+        enumerate,
+        Arity::Exact(1),
+        "a list of List<index, element> pairs, zero-based",
+    );
+    registry.pure(
+        "list-take",
+        take,
+        Arity::Exact(2),
+        "the first n elements of a list",
+    );
+    registry.pure(
+        "list-drop",
+        drop,
+        Arity::Exact(2),
+        "a list with its first n elements removed",
+    );
+    registry.pure(
+        "list-chunk",
+        chunk,
+        Arity::Exact(2),
+        "a list split into consecutive sub-lists of a given size; the last may be shorter",
+    );
+    registry.pure(
+        "list-interleave",
+        interleave,
+        Arity::Exact(2),
+        "elements alternating from two lists, stopping once either runs out",
+    );
+    registry.pure(
+        "list-frequencies",
+        frequencies,
+        Arity::Exact(1),
+        "a list of List<element, count> pairs, in first-appearance order",
+    );
+    registry.pure(
+        "list-window",
+        window,
+        Arity::Exact(2),
+        "overlapping sliding windows of a given size",
+    );
+    registry.pure(
+        "list-rotate",
+        rotate,
+        Arity::Exact(2),
+        "a list rotated by n positions; positive rotates left",
+    );
+    registry.pure(
+        "list-repeat",
+        repeat,
+        Arity::Exact(2),
+        "a list of n copies of a given element",
+    );
 
     registry.register(
         "list-map",
@@ -798,5 +1128,61 @@ pub fn register(registry: &mut NativeRegistry) {
         ArgStrategy::Selective(0b001),
         Effect::Pure,
         "a list of Group<key, List<..>> collecting elements by a key function",
+    );
+    registry.register(
+        "list-flat-map",
+        flat_map,
+        Arity::Exact(2),
+        ArgStrategy::Selective(0b001),
+        Effect::Pure,
+        "map a function over a list, then flatten the result one level",
+    );
+    registry.register(
+        "list-partition",
+        partition,
+        Arity::Exact(2),
+        ArgStrategy::Selective(0b001),
+        Effect::Pure,
+        "List<matching, non_matching> for a predicate over a list",
+    );
+    registry.register(
+        "list-min-by",
+        min_by,
+        Arity::Exact(2),
+        ArgStrategy::Selective(0b001),
+        Effect::Pure,
+        "the element of a list whose key function gives the smallest result",
+    );
+    registry.register(
+        "list-max-by",
+        max_by,
+        Arity::Exact(2),
+        ArgStrategy::Selective(0b001),
+        Effect::Pure,
+        "the element of a list whose key function gives the largest result",
+    );
+    registry.register(
+        "list-take-while",
+        take_while,
+        Arity::Exact(2),
+        ArgStrategy::Selective(0b001),
+        Effect::Pure,
+        "the leading elements of a list for which a predicate holds",
+    );
+    registry.register(
+        "list-drop-while",
+        drop_while,
+        Arity::Exact(2),
+        ArgStrategy::Selective(0b001),
+        Effect::Pure,
+        "a list with its leading run of predicate-satisfying elements removed",
+    );
+    registry.register(
+        "list-scan",
+        scan,
+        Arity::Exact(3),
+        ArgStrategy::Selective(0b011),
+        Effect::Pure,
+        "the running accumulator values of a fold, initial value first",
     );
 }

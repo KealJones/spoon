@@ -544,6 +544,190 @@ fn parity_is_an_integer_question() {
 }
 
 // ---------------------------------------------------------------------------
+// Rounding
+// ---------------------------------------------------------------------------
+
+#[test]
+fn rounding_passes_integers_through_unchanged() {
+    for native in [
+        "math-floor",
+        "math-ceil",
+        "math-round",
+        "math-trunc",
+    ] {
+        assert_eq!(value(Concept::call(native, [int(5)])), int(5));
+        assert_eq!(value(Concept::call(native, [int(-5)])), int(-5));
+    }
+}
+
+#[test]
+fn floor_and_ceil_round_toward_the_nearer_infinity() {
+    assert_eq!(value(Concept::call("math-floor", [float(1.5)])), float(1.0));
+    assert_eq!(value(Concept::call("math-floor", [float(-1.5)])), float(-2.0));
+    assert_eq!(value(Concept::call("math-ceil", [float(1.5)])), float(2.0));
+    assert_eq!(value(Concept::call("math-ceil", [float(-1.5)])), float(-1.0));
+}
+
+#[test]
+fn round_goes_half_away_from_zero() {
+    assert_eq!(value(Concept::call("math-round", [float(1.5)])), float(2.0));
+    assert_eq!(value(Concept::call("math-round", [float(-1.5)])), float(-2.0));
+    assert_eq!(value(Concept::call("math-round", [float(1.4)])), float(1.0));
+}
+
+#[test]
+fn trunc_rounds_toward_zero_unlike_floor() {
+    assert_eq!(value(Concept::call("math-trunc", [float(1.9)])), float(1.0));
+    assert_eq!(value(Concept::call("math-trunc", [float(-1.9)])), float(-1.0));
+    assert_eq!(
+        value(Concept::call("math-floor", [float(-1.9)])),
+        float(-2.0),
+        "trunc and floor disagree on negative numbers"
+    );
+}
+
+#[test]
+fn fract_is_always_a_float_even_for_an_integer() {
+    assert_eq!(value(Concept::call("math-fract", [float(1.25)])), float(0.25));
+    assert_eq!(value(Concept::call("math-fract", [int(5)])), float(0.0));
+}
+
+#[test]
+fn sign_answers_minus_one_zero_or_one() {
+    assert_eq!(value(Concept::call("math-sign", [int(5)])), int(1));
+    assert_eq!(value(Concept::call("math-sign", [int(-5)])), int(-1));
+    assert_eq!(value(Concept::call("math-sign", [int(0)])), int(0));
+    assert_eq!(value(Concept::call("math-sign", [float(0.5)])), int(1));
+    assert_eq!(value(Concept::call("math-sign", [float(-0.5)])), int(-1));
+    assert_eq!(
+        value(Concept::call("math-sign", [float(f64::NAN)])),
+        int(0),
+        "NaN has no sign to report"
+    );
+}
+
+#[test]
+fn clamp_restricts_to_the_given_bounds() {
+    assert_eq!(
+        value(Concept::call("math-clamp", [int(5), int(0), int(10)])),
+        int(5)
+    );
+    assert_eq!(
+        value(Concept::call("math-clamp", [int(-5), int(0), int(10)])),
+        int(0)
+    );
+    assert_eq!(
+        value(Concept::call("math-clamp", [int(15), int(0), int(10)])),
+        int(10)
+    );
+    // A float anywhere in the call widens the result, same as elsewhere.
+    assert_eq!(
+        value(Concept::call("math-clamp", [int(15), int(0), float(10.0)])),
+        float(10.0)
+    );
+}
+
+#[test]
+fn clamp_refuses_an_inverted_range_instead_of_panicking() {
+    assert_errors(Concept::call("math-clamp", [int(1), int(5), int(3)]));
+    assert_errors(Concept::call("math-clamp", [float(1.0), float(5.0), float(3.0)]));
+}
+
+// ---------------------------------------------------------------------------
+// Transcendental functions
+// ---------------------------------------------------------------------------
+
+#[test]
+fn sqrt_computes_and_always_answers_a_float() {
+    assert_eq!(value(Concept::call("math-sqrt", [int(4)])), float(2.0));
+    assert_eq!(value(Concept::call("math-sqrt", [float(2.0)])), float(2.0f64.sqrt()));
+}
+
+#[test]
+fn sqrt_of_a_negative_number_is_refused() {
+    assert_errors(Concept::call("math-sqrt", [int(-4)]));
+    assert_errors(Concept::call("math-sqrt", [float(-0.001)]));
+}
+
+#[test]
+fn logarithms_compute_in_their_own_base() {
+    assert_eq!(value(Concept::call("math-log", [float(1.0)])), float(0.0));
+    assert_eq!(
+        value(Concept::call("math-log", [Concept::float(std::f64::consts::E)])),
+        float(1.0)
+    );
+    assert_eq!(value(Concept::call("math-log2", [int(8)])), float(3.0));
+    assert_eq!(value(Concept::call("math-log10", [int(1000)])), float(3.0));
+}
+
+#[test]
+fn logarithms_of_non_positive_numbers_are_refused() {
+    for native in ["math-log", "math-log2", "math-log10"] {
+        assert_errors(Concept::call(native, [int(0)]));
+        assert_errors(Concept::call(native, [int(-1)]));
+    }
+}
+
+#[test]
+fn trig_functions_compute_in_radians() {
+    assert_eq!(value(Concept::call("math-sin", [int(0)])), float(0.0));
+    assert_eq!(value(Concept::call("math-cos", [int(0)])), float(1.0));
+    assert_eq!(value(Concept::call("math-tan", [int(0)])), float(0.0));
+    assert_eq!(value(Concept::call("math-asin", [int(0)])), float(0.0));
+    assert_eq!(value(Concept::call("math-acos", [int(1)])), float(0.0));
+    assert_eq!(value(Concept::call("math-atan", [int(0)])), float(0.0));
+}
+
+#[test]
+fn asin_and_acos_are_refused_outside_their_domain() {
+    assert_errors(Concept::call("math-asin", [float(1.5)]));
+    assert_errors(Concept::call("math-asin", [float(-1.5)]));
+    assert_errors(Concept::call("math-acos", [float(1.5)]));
+    assert_errors(Concept::call("math-acos", [float(-1.5)]));
+}
+
+#[test]
+fn atan2_uses_both_signs_to_pick_the_quadrant() {
+    assert_eq!(
+        value(Concept::call("math-atan2", [float(1.0), float(1.0)])),
+        float(1.0f64.atan2(1.0))
+    );
+    // Atan alone cannot tell (1, -1) from (-1, 1); Atan2 can.
+    assert_ne!(
+        value(Concept::call("math-atan2", [float(1.0), float(-1.0)])),
+        value(Concept::call("math-atan2", [float(-1.0), float(1.0)]))
+    );
+}
+
+#[test]
+fn hypot_is_the_length_of_the_hypotenuse() {
+    assert_eq!(
+        value(Concept::call("math-hypot", [int(3), int(4)])),
+        float(5.0)
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+#[test]
+fn the_constants_answer_their_values() {
+    assert_eq!(
+        value(Concept::call("math-pi", [])),
+        float(std::f64::consts::PI)
+    );
+    assert_eq!(
+        value(Concept::call("math-e", [])),
+        float(std::f64::consts::E)
+    );
+    assert_eq!(
+        value(Concept::call("math-infinity", [])),
+        float(f64::INFINITY)
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Composition
 // ---------------------------------------------------------------------------
 
@@ -601,7 +785,7 @@ fn no_native_panics_on_a_nonsense_argument() {
         .map(|id| id.as_str().to_string())
         .collect();
     assert!(
-        names.len() >= 26,
+        names.len() >= 48,
         "expected the full arith set, got {names:?}"
     );
 
@@ -617,6 +801,13 @@ fn no_native_panics_on_a_nonsense_argument() {
             // so Eq<nonsense, nonsense> is a legitimate `true`.
             if (name == "logic-eq" || name == "logic-ne") && arity == 2 {
                 assert!(out.is_value(), "{name}/{arity} should compare: {out:?}");
+                continue;
+            }
+            // Pi, e, and infinity are zero-arity constants: called with no
+            // arguments they legitimately answer a value rather than invent
+            // one, because there was nothing to invent an answer about.
+            if matches!(name.as_str(), "math-pi" | "math-e" | "math-infinity") && arity == 0 {
+                assert!(out.is_value(), "{name}/{arity} should answer: {out:?}");
                 continue;
             }
             assert!(

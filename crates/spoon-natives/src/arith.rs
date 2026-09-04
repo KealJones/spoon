@@ -536,6 +536,247 @@ fn is_odd(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 }
 
 // ---------------------------------------------------------------------------
+// Rounding
+// ---------------------------------------------------------------------------
+
+/// An integer is already whole, so rounding it is a passthrough rather than a
+/// trip through `f64`, which would risk losing precision past 2^53 for no
+/// reason: an `Int` has nothing to round.
+fn floor(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let value = match Num::of("math-floor", one("math-floor", args)?)? {
+        Num::Int(i) => Num::Int(i),
+        Num::Float(f) => Num::Float(f.floor()),
+    };
+    Ok(value.into_concept())
+}
+
+fn ceil(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let value = match Num::of("math-ceil", one("math-ceil", args)?)? {
+        Num::Int(i) => Num::Int(i),
+        Num::Float(f) => Num::Float(f.ceil()),
+    };
+    Ok(value.into_concept())
+}
+
+/// Rounds half away from zero, which is `f64::round`'s rule and the one most
+/// callers expect.
+fn round(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let value = match Num::of("math-round", one("math-round", args)?)? {
+        Num::Int(i) => Num::Int(i),
+        Num::Float(f) => Num::Float(f.round()),
+    };
+    Ok(value.into_concept())
+}
+
+/// Truncation toward zero, as opposed to `floor`'s truncation toward negative
+/// infinity: `Trunc<-1.5>` is `-1.0`, `Floor<-1.5>` is `-2.0`.
+fn trunc(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let value = match Num::of("math-trunc", one("math-trunc", args)?)? {
+        Num::Int(i) => Num::Int(i),
+        Num::Float(f) => Num::Float(f.trunc()),
+    };
+    Ok(value.into_concept())
+}
+
+/// What `trunc` throws away. An integer has no fraction, so it always answers
+/// `0.0`, always a float: the fractional part of a number is a magnitude, not
+/// the same kind of number as its input.
+fn fract(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let f = want_number("math-fract", one("math-fract", args)?)?;
+    Ok(Concept::float(f.fract()))
+}
+
+/// -1, 0, or 1, always an integer: the sign of a number is a discrete
+/// question with three answers, not a magnitude that needs the input's own
+/// kind preserved. `NaN`'s sign is undefined, so it answers `0` rather than
+/// inventing one.
+fn sign(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let f = want_number("math-sign", one("math-sign", args)?)?;
+    let s = if f.is_nan() {
+        0
+    } else if f > 0.0 {
+        1
+    } else if f < 0.0 {
+        -1
+    } else {
+        0
+    };
+    Ok(Concept::int(s))
+}
+
+/// Keeps a value inside `[min, max]`, clamping toward whichever bound it
+/// crosses. Integers stay integers only when every argument is one; a float
+/// bound widens the result, same as everywhere else the widening rule applies.
+///
+/// A `min` greater than `max` is refused rather than handed to `f64::clamp`
+/// or `i64::clamp`, both of which panic on an inverted range instead of
+/// answering something. There is no sensible value to invent for an empty
+/// range, so this says so instead of taking the process down.
+fn clamp(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    if args.len() != 3 {
+        return Err(native_error("math-clamp", "expected three arguments"));
+    }
+    let value = Num::of("math-clamp", &args[0])?;
+    let min = Num::of("math-clamp", &args[1])?;
+    let max = Num::of("math-clamp", &args[2])?;
+    if min.as_f64() > max.as_f64() {
+        return Err(native_error(
+            "math-clamp",
+            "the minimum must not be greater than the maximum",
+        ));
+    }
+    let saw_float = value.is_float() || min.is_float() || max.is_float();
+    let result = match (value, min, max) {
+        (Num::Int(v), Num::Int(lo), Num::Int(hi)) => Num::Int(v.clamp(lo, hi)),
+        _ => Num::Float(value.as_f64().clamp(min.as_f64(), max.as_f64())),
+    };
+    let result = if saw_float { result.widen() } else { result };
+    Ok(result.into_concept())
+}
+
+// ---------------------------------------------------------------------------
+// Transcendental functions
+//
+// Everything here reads its argument as an `f64` regardless of whether it
+// came in as an `Int` or a `Float`, and always answers a `Float`: a square
+// root or a logarithm is almost never itself an integer, so there is no
+// widening rule to preserve. `Sqrt<4>` is `2.0`, not `2`.
+// ---------------------------------------------------------------------------
+
+fn sqrt(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let f = want_number("math-sqrt", one("math-sqrt", args)?)?;
+    if f < 0.0 {
+        return Err(native_error(
+            "math-sqrt",
+            "the square root of a negative number is not real",
+        ));
+    }
+    Ok(Concept::float(f.sqrt()))
+}
+
+fn ln(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let f = want_number("math-log", one("math-log", args)?)?;
+    if f <= 0.0 {
+        return Err(native_error(
+            "math-log",
+            "the logarithm of a non-positive number is not real",
+        ));
+    }
+    Ok(Concept::float(f.ln()))
+}
+
+fn log2(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let f = want_number("math-log2", one("math-log2", args)?)?;
+    if f <= 0.0 {
+        return Err(native_error(
+            "math-log2",
+            "the logarithm of a non-positive number is not real",
+        ));
+    }
+    Ok(Concept::float(f.log2()))
+}
+
+fn log10(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let f = want_number("math-log10", one("math-log10", args)?)?;
+    if f <= 0.0 {
+        return Err(native_error(
+            "math-log10",
+            "the logarithm of a non-positive number is not real",
+        ));
+    }
+    Ok(Concept::float(f.log10()))
+}
+
+fn sin(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    Ok(Concept::float(
+        want_number("math-sin", one("math-sin", args)?)?.sin(),
+    ))
+}
+
+fn cos(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    Ok(Concept::float(
+        want_number("math-cos", one("math-cos", args)?)?.cos(),
+    ))
+}
+
+fn tan(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    Ok(Concept::float(
+        want_number("math-tan", one("math-tan", args)?)?.tan(),
+    ))
+}
+
+/// Domain-restricted to `[-1, 1]`, same as the mathematical function. Outside
+/// it, `f64::asin` would answer `NaN`; refusing instead says plainly that the
+/// input was never a valid sine.
+fn asin(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let f = want_number("math-asin", one("math-asin", args)?)?;
+    if !(-1.0..=1.0).contains(&f) {
+        return Err(native_error(
+            "math-asin",
+            "arcsine is only defined between -1 and 1",
+        ));
+    }
+    Ok(Concept::float(f.asin()))
+}
+
+fn acos(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let f = want_number("math-acos", one("math-acos", args)?)?;
+    if !(-1.0..=1.0).contains(&f) {
+        return Err(native_error(
+            "math-acos",
+            "arccosine is only defined between -1 and 1",
+        ));
+    }
+    Ok(Concept::float(f.acos()))
+}
+
+fn atan(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    Ok(Concept::float(
+        want_number("math-atan", one("math-atan", args)?)?.atan(),
+    ))
+}
+
+/// The two-argument arctangent, which keeps the sign of both `y` and `x` and
+/// so can tell all four quadrants apart. `Atan<y/x>` cannot: it has already
+/// lost the signs to the division.
+fn atan2(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let (y, x) = pair("math-atan2", args)?;
+    let y = want_number("math-atan2", y)?;
+    let x = want_number("math-atan2", x)?;
+    Ok(Concept::float(y.atan2(x)))
+}
+
+/// The length of the hypotenuse of a right triangle with the given legs.
+/// `hypot` rather than `Sqrt<Add<Pow<x,2>, Pow<y,2>>>` because it avoids the
+/// overflow and precision loss that squaring large legs would cause.
+fn hypot(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let (x, y) = pair("math-hypot", args)?;
+    let x = want_number("math-hypot", x)?;
+    let y = want_number("math-hypot", y)?;
+    Ok(Concept::float(x.hypot(y)))
+}
+
+// ---------------------------------------------------------------------------
+// Constants
+//
+// Zero-arity natives, each Effect::Pure: unlike `time-now` these observe
+// nothing about the outside world, so there is no clock to inject and no
+// reason to mark them anything but pure.
+// ---------------------------------------------------------------------------
+
+fn pi(_ctx: &mut dyn Ctx, _args: &[Concept]) -> EvalResult {
+    Ok(Concept::float(std::f64::consts::PI))
+}
+
+fn e(_ctx: &mut dyn Ctx, _args: &[Concept]) -> EvalResult {
+    Ok(Concept::float(std::f64::consts::E))
+}
+
+fn infinity(_ctx: &mut dyn Ctx, _args: &[Concept]) -> EvalResult {
+    Ok(Concept::float(f64::INFINITY))
+}
+
+// ---------------------------------------------------------------------------
 // Registration
 // ---------------------------------------------------------------------------
 
@@ -711,5 +952,120 @@ pub fn register(registry: &mut NativeRegistry) {
         is_odd,
         Arity::Exact(1),
         "true when the integer does not divide evenly by two",
+    );
+
+    // Rounding. Integers pass through unchanged; floats round according to
+    // each native's own rule.
+    registry.pure(
+        "math-floor",
+        floor,
+        Arity::Exact(1),
+        "the largest integer value not greater than the number",
+    );
+    registry.pure(
+        "math-ceil",
+        ceil,
+        Arity::Exact(1),
+        "the smallest integer value not less than the number",
+    );
+    registry.pure(
+        "math-round",
+        round,
+        Arity::Exact(1),
+        "the number rounded to the nearest integer, half away from zero",
+    );
+    registry.pure(
+        "math-trunc",
+        trunc,
+        Arity::Exact(1),
+        "the number truncated toward zero",
+    );
+    registry.pure(
+        "math-fract",
+        fract,
+        Arity::Exact(1),
+        "the fractional part of the number",
+    );
+    registry.pure(
+        "math-sign",
+        sign,
+        Arity::Exact(1),
+        "-1, 0, or 1 depending on the sign of the number",
+    );
+    registry.pure(
+        "math-clamp",
+        clamp,
+        Arity::Exact(3),
+        "the value restricted to the given minimum and maximum",
+    );
+
+    // Transcendental functions. All read their argument as a float and answer
+    // a float, regardless of the input's own kind.
+    registry.pure(
+        "math-sqrt",
+        sqrt,
+        Arity::Exact(1),
+        "the square root of the number",
+    );
+    registry.pure(
+        "math-log",
+        ln,
+        Arity::Exact(1),
+        "the natural logarithm of the number",
+    );
+    registry.pure(
+        "math-log2",
+        log2,
+        Arity::Exact(1),
+        "the base-2 logarithm of the number",
+    );
+    registry.pure(
+        "math-log10",
+        log10,
+        Arity::Exact(1),
+        "the base-10 logarithm of the number",
+    );
+    registry.pure("math-sin", sin, Arity::Exact(1), "the sine of the number, in radians");
+    registry.pure("math-cos", cos, Arity::Exact(1), "the cosine of the number, in radians");
+    registry.pure("math-tan", tan, Arity::Exact(1), "the tangent of the number, in radians");
+    registry.pure(
+        "math-asin",
+        asin,
+        Arity::Exact(1),
+        "the arcsine of the number, in radians",
+    );
+    registry.pure(
+        "math-acos",
+        acos,
+        Arity::Exact(1),
+        "the arccosine of the number, in radians",
+    );
+    registry.pure(
+        "math-atan",
+        atan,
+        Arity::Exact(1),
+        "the arctangent of the number, in radians",
+    );
+    registry.pure(
+        "math-atan2",
+        atan2,
+        Arity::Exact(2),
+        "the arctangent of the first number divided by the second, using the sign of both to pick the quadrant",
+    );
+    registry.pure(
+        "math-hypot",
+        hypot,
+        Arity::Exact(2),
+        "the length of the hypotenuse of a right triangle with the given legs",
+    );
+
+    // Constants.
+    registry.pure("math-pi", pi, Arity::Exact(0), "the constant pi");
+    registry.pure("math-e", e, Arity::Exact(0), "the constant e");
+    registry.pure(
+        "math-infinity",
+        infinity,
+        Arity::Exact(0),
+        "positive infinity",
     );
 }

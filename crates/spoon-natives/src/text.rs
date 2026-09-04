@@ -312,6 +312,242 @@ fn parse_float(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 }
 
 // ---------------------------------------------------------------------------
+// Regular expressions
+// ---------------------------------------------------------------------------
+
+fn want_regex(native: &str, pattern: &str) -> Result<regex::Regex, EvalError> {
+    regex::Regex::new(pattern)
+        .map_err(|e| native_error(native, format!("{pattern:?} is not a valid pattern: {e}")))
+}
+
+fn regex_match(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let text = want_text("text-regex-match", &args[0])?;
+    let pattern = want_text("text-regex-match", &args[1])?;
+    let re = want_regex("text-regex-match", pattern)?;
+    Ok(Concept::bool(re.is_match(text)))
+}
+
+fn regex_replace(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let text = want_text("text-regex-replace", &args[0])?;
+    let pattern = want_text("text-regex-replace", &args[1])?;
+    let replacement = want_text("text-regex-replace", &args[2])?;
+    let re = want_regex("text-regex-replace", pattern)?;
+    Ok(Concept::text(re.replace_all(text, replacement)))
+}
+
+// ---------------------------------------------------------------------------
+// Characters and code points
+// ---------------------------------------------------------------------------
+
+/// The Unicode scalar value of the first character. Refused on an empty
+/// string rather than answering with a made-up code point, for the same
+/// reason `Char-At` refuses an out-of-range index instead of clamping.
+fn char_code(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let text = want_text("text-char-code", &args[0])?;
+    match text.chars().next() {
+        Some(c) => Ok(Concept::int(c as i64)),
+        None => Err(native_error(
+            "text-char-code",
+            "an empty string has no first character",
+        )),
+    }
+}
+
+/// The inverse of `text-char-code`. A code point with no assigned character
+/// (a surrogate half, or simply out of range) is refused rather than answered
+/// with the Unicode replacement character, which would silently swap one
+/// input for another.
+fn from_char_code(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let code = args[0]
+        .as_ground()
+        .and_then(Ground::as_i64)
+        .ok_or_else(|| type_error("text-from-char-code", "an integer", &args[0]))?;
+    let code = u32::try_from(code).map_err(|_| {
+        native_error(
+            "text-from-char-code",
+            format!("{code} is not a valid code point"),
+        )
+    })?;
+    match char::from_u32(code) {
+        Some(c) => Ok(Concept::text(c.to_string())),
+        None => Err(native_error(
+            "text-from-char-code",
+            format!("{code} is not a valid code point"),
+        )),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Word case
+// ---------------------------------------------------------------------------
+
+/// Splits on runs of characters that are neither letters nor digits, which is
+/// what lets `"helloWorld"` and `"hello_world"` and `"hello-world"` all be
+/// read as the same two words `hello` and `world`. A run of digits is its own
+/// word, so `"v2Beta"` comes apart as `v`, `2`, `beta` rather than gluing the
+/// digit onto whichever neighbor happens to be first.
+fn case_words(text: &str) -> Vec<String> {
+    let mut words = Vec::new();
+    let mut current = String::new();
+    let mut prev_lower = false;
+    for c in text.chars() {
+        if c.is_alphanumeric() {
+            let is_upper = c.is_uppercase();
+            // A lowercase-to-uppercase transition starts a new word, so
+            // "helloWorld" splits at the W rather than reading as one word.
+            if is_upper && prev_lower && !current.is_empty() {
+                words.push(std::mem::take(&mut current));
+            }
+            current.push(c);
+            prev_lower = c.is_lowercase();
+        } else {
+            if !current.is_empty() {
+                words.push(std::mem::take(&mut current));
+            }
+            prev_lower = false;
+        }
+    }
+    if !current.is_empty() {
+        words.push(current);
+    }
+    words
+}
+
+fn capitalize_word(word: &str) -> String {
+    let mut chars = word.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        None => String::new(),
+    }
+}
+
+/// Only the very first letter changes case; the rest of the string is left
+/// exactly as given. `Title-Case` is the native for capitalizing every word.
+fn capitalize(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let text = want_text("text-capitalize", &args[0])?;
+    let mut chars = text.chars();
+    let out = match chars.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        None => String::new(),
+    };
+    Ok(Concept::text(out))
+}
+
+fn title_case(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let text = want_text("text-title-case", &args[0])?;
+    let out = text
+        .split_inclusive(char::is_whitespace)
+        .map(|chunk| {
+            let trimmed_end = chunk.trim_end_matches(char::is_whitespace);
+            let ws = &chunk[trimmed_end.len()..];
+            format!("{}{ws}", capitalize_word(trimmed_end))
+        })
+        .collect::<String>();
+    Ok(Concept::text(out))
+}
+
+fn camel_case(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let text = want_text("text-camel-case", &args[0])?;
+    let words = case_words(text);
+    let mut out = String::new();
+    for (i, word) in words.iter().enumerate() {
+        if i == 0 {
+            out.push_str(&word.to_lowercase());
+        } else {
+            out.push_str(&capitalize_word(&word.to_lowercase()));
+        }
+    }
+    Ok(Concept::text(out))
+}
+
+fn kebab_case(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let text = want_text("text-kebab-case", &args[0])?;
+    let words = case_words(text);
+    let parts: Vec<String> = words.iter().map(|w| w.to_lowercase()).collect();
+    Ok(Concept::text(parts.join("-")))
+}
+
+fn snake_case(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let text = want_text("text-snake-case", &args[0])?;
+    let words = case_words(text);
+    let parts: Vec<String> = words.iter().map(|w| w.to_lowercase()).collect();
+    Ok(Concept::text(parts.join("_")))
+}
+
+// ---------------------------------------------------------------------------
+// Words, counting, and layout
+// ---------------------------------------------------------------------------
+
+/// Splits on runs of whitespace and drops empty pieces, so leading, trailing,
+/// and doubled-up spaces disappear rather than showing up as empty words.
+fn words(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let text = want_text("text-words", &args[0])?;
+    Ok(make_list(text.split_whitespace().map(Concept::text).collect()))
+}
+
+/// An empty needle is refused for the same reason `text-replace` refuses one:
+/// counting the gaps between every character is never what was meant.
+fn count_occurrences(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let text = want_text("text-count-occurrences", &args[0])?;
+    let needle = want_text("text-count-occurrences", &args[1])?;
+    if needle.is_empty() {
+        return Err(native_error(
+            "text-count-occurrences",
+            "an empty search string has no meaning",
+        ));
+    }
+    Ok(Concept::int(text.matches(needle).count() as i64))
+}
+
+/// Extra padding favors the right side when the total does not split evenly,
+/// matching how `str.center` reads left to right in most implementations.
+fn center(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let native = "text-center";
+    let text = want_text(native, &args[0])?;
+    let width = want_count(native, &args[1])?;
+    let fill = match args.get(2) {
+        Some(c) => {
+            let s = want_text(native, c)?;
+            let mut chars = s.chars();
+            match (chars.next(), chars.next()) {
+                (Some(one), None) => one,
+                _ => {
+                    return Err(native_error(
+                        native,
+                        "the padding must be exactly one character",
+                    ));
+                }
+            }
+        }
+        None => ' ',
+    };
+    let len = char_count(text);
+    if len >= width {
+        return Ok(Concept::text(text));
+    }
+    if width > MAX_REPEAT_CHARS {
+        return Err(native_error(
+            native,
+            format!("width {width} exceeds the {MAX_REPEAT_CHARS} character cap"),
+        ));
+    }
+    let total_pad = width - len;
+    let left = total_pad / 2;
+    let right = total_pad - left;
+    let left_pad: String = std::iter::repeat_n(fill, left).collect();
+    let right_pad: String = std::iter::repeat_n(fill, right).collect();
+    Ok(Concept::text(format!("{left_pad}{text}{right_pad}")))
+}
+
+/// Character-level reversal, dedicated to text rather than shared with
+/// `list-reverse`'s runtime dispatch. `Text-Reverse<42>` is a type error here
+/// instead of a native quietly deciding what a number "as a list" means.
+fn text_reverse(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let text = want_text("text-reverse", &args[0])?;
+    Ok(Concept::text(text.chars().rev().collect::<String>()))
+}
+
+// ---------------------------------------------------------------------------
 // Registration
 // ---------------------------------------------------------------------------
 
@@ -446,5 +682,83 @@ pub fn register(registry: &mut NativeRegistry) {
         parse_float,
         Arity::Exact(1),
         "a float read from a string",
+    );
+    registry.pure(
+        "text-regex-match",
+        regex_match,
+        Arity::Exact(2),
+        "whether a regular expression matches anywhere in a string",
+    );
+    registry.pure(
+        "text-regex-replace",
+        regex_replace,
+        Arity::Exact(3),
+        "a string with every match of a regular expression swapped for a replacement",
+    );
+    registry.pure(
+        "text-char-code",
+        char_code,
+        Arity::Exact(1),
+        "the Unicode code point of a string's first character",
+    );
+    registry.pure(
+        "text-from-char-code",
+        from_char_code,
+        Arity::Exact(1),
+        "the one-character string for a Unicode code point",
+    );
+    registry.pure(
+        "text-capitalize",
+        capitalize,
+        Arity::Exact(1),
+        "a string with only its first letter upper case",
+    );
+    registry.pure(
+        "text-title-case",
+        title_case,
+        Arity::Exact(1),
+        "a string with the first letter of every word upper case",
+    );
+    registry.pure(
+        "text-camel-case",
+        camel_case,
+        Arity::Exact(1),
+        "words run together as camelCase, such as \"hello world\" to \"helloWorld\"",
+    );
+    registry.pure(
+        "text-kebab-case",
+        kebab_case,
+        Arity::Exact(1),
+        "words run together as kebab-case, such as \"helloWorld\" to \"hello-world\"",
+    );
+    registry.pure(
+        "text-snake-case",
+        snake_case,
+        Arity::Exact(1),
+        "words run together as snake_case, such as \"helloWorld\" to \"hello_world\"",
+    );
+    registry.pure(
+        "text-words",
+        words,
+        Arity::Exact(1),
+        "a list of the whitespace-separated words of a string",
+    );
+    registry.pure(
+        "text-count-occurrences",
+        count_occurrences,
+        Arity::Exact(2),
+        "how many non-overlapping times one string occurs inside another",
+    );
+    registry.pure(
+        "text-center",
+        center,
+        Arity::Between(2, 3),
+        "a string centered in a field of a given width, with spaces or a given character",
+    );
+    registry.pure(
+        "text-reverse",
+        text_reverse,
+        Arity::Exact(1),
+        "a string with its characters in reverse order",
     );
 }

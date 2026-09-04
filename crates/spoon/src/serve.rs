@@ -33,6 +33,7 @@ pub async fn run(cli: &Cli, host: &str, port: u16) -> Result<()> {
         .route("/debug/concept", get(concept_detail))
         .route("/debug/realizations", get(realizations))
         .route("/debug/episodes", get(episodes))
+        .route("/debug/episode", get(episode_detail))
         .with_state(brain);
 
     let addr = format!("{host}:{port}");
@@ -236,7 +237,7 @@ async fn concepts(State(brain): State<Shared>, Query(f): Query<Filter>) -> impl 
     names.dedup();
     names.truncate(f.limit);
 
-    Json(json!({ "list-count": rendered.len(), "concepts": rendered, "names": names }))
+    Json(json!({ "count": rendered.len(), "concepts": rendered, "names": names }))
 }
 
 #[derive(serde::Deserialize)]
@@ -389,7 +390,7 @@ async fn realizations(State(brain): State<Shared>, Query(f): Query<Filter>) -> i
         .map(|(source, (count, uses, failures, rate_sum))| {
             json!({
                 "source": source,
-                "list-count": count,
+                "count": count,
                 "uses": uses,
                 "failures": failures,
                 "mean_success_rate": rate_sum / count as f64,
@@ -430,7 +431,7 @@ async fn realizations(State(brain): State<Shared>, Query(f): Query<Filter>) -> i
             })
         })
         .collect();
-    Json(json!({ "list-count": rows.len(), "by_source": summary, "realizations": rows }))
+    Json(json!({ "count": rows.len(), "by_source": summary, "realizations": rows }))
 }
 
 async fn episodes(State(brain): State<Shared>, Query(f): Query<Filter>) -> impl IntoResponse {
@@ -443,7 +444,31 @@ async fn episodes(State(brain): State<Shared>, Query(f): Query<Filter>) -> impl 
         .iter()
         .filter_map(|r| serde_json::from_str(r).ok())
         .collect();
-    Json(json!({ "list-count": parsed.len(), "episodes": parsed }))
+    Json(json!({ "count": parsed.len(), "episodes": parsed }))
+}
+
+#[derive(serde::Deserialize)]
+struct EpisodeId {
+    id: u64,
+}
+
+async fn episode_detail(
+    State(brain): State<Shared>,
+    Query(q): Query<EpisodeId>,
+) -> impl IntoResponse {
+    let guard = brain.lock().await;
+    let raw = guard
+        .store()
+        .recent_episodes(10000, None)
+        .unwrap_or_default();
+    let found: Option<serde_json::Value> = raw
+        .iter()
+        .filter_map(|r| serde_json::from_str::<serde_json::Value>(r).ok())
+        .find(|ep| ep["id"].as_u64() == Some(q.id));
+    match found {
+        Some(ep) => Json(ep).into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
 }
 
 /// A short, readable name for where something came from.

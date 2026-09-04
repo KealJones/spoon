@@ -614,6 +614,375 @@ fn parsing_numbers_reports_failure_rather_than_defaulting() {
 }
 
 // ---------------------------------------------------------------------------
+// Regular expressions
+// ---------------------------------------------------------------------------
+
+#[test]
+fn regex_match_tells_whether_a_pattern_appears_anywhere() {
+    let (store, reg) = brain();
+    assert_eq!(
+        value(
+            &store,
+            &reg,
+            &Concept::call(
+                "text-regex-match",
+                [Concept::text("hello123"), Concept::text(r"\d+")]
+            )
+        ),
+        Concept::bool(true)
+    );
+    assert_eq!(
+        value(
+            &store,
+            &reg,
+            &Concept::call(
+                "text-regex-match",
+                [Concept::text("hello"), Concept::text(r"^\d+$")]
+            )
+        ),
+        Concept::bool(false)
+    );
+
+    let message = why_failed(
+        &store,
+        &reg,
+        &Concept::call(
+            "text-regex-match",
+            [Concept::text("hello"), Concept::text("(unclosed")],
+        ),
+    );
+    assert!(message.contains("text-regex-match"), "got {message}");
+}
+
+#[test]
+fn regex_replace_swaps_every_match() {
+    let (store, reg) = brain();
+    assert_eq!(
+        value(
+            &store,
+            &reg,
+            &Concept::call(
+                "text-regex-replace",
+                [
+                    Concept::text("a1 b22 c333"),
+                    Concept::text(r"\d+"),
+                    Concept::text("#")
+                ]
+            )
+        ),
+        Concept::text("a# b# c#")
+    );
+    assert_eq!(
+        value(
+            &store,
+            &reg,
+            &Concept::call(
+                "text-regex-replace",
+                [Concept::text("no digits here"), Concept::text(r"\d+"), Concept::text("#")]
+            )
+        ),
+        Concept::text("no digits here")
+    );
+
+    let message = why_failed(
+        &store,
+        &reg,
+        &Concept::call(
+            "text-regex-replace",
+            [Concept::text("hello"), Concept::text("["), Concept::text("x")],
+        ),
+    );
+    assert!(message.contains("text-regex-replace"), "got {message}");
+}
+
+// ---------------------------------------------------------------------------
+// Characters and code points
+// ---------------------------------------------------------------------------
+
+#[test]
+fn char_code_and_from_char_code_round_trip() {
+    let (store, reg) = brain();
+    assert_eq!(
+        value(&store, &reg, &Concept::call("text-char-code", [Concept::text("A")])),
+        Concept::int(65)
+    );
+    assert_eq!(
+        value(&store, &reg, &Concept::call("text-char-code", [Concept::text("🌍")])),
+        Concept::int(0x1F30D)
+    );
+    assert_eq!(
+        value(
+            &store,
+            &reg,
+            &Concept::call("text-from-char-code", [Concept::int(65)])
+        ),
+        Concept::text("A")
+    );
+    assert_eq!(
+        value(
+            &store,
+            &reg,
+            &Concept::call("text-from-char-code", [Concept::int(0x1F30D)])
+        ),
+        Concept::text("🌍")
+    );
+
+    let message = why_failed(&store, &reg, &Concept::call("text-char-code", [Concept::text("")]));
+    assert!(message.contains("text-char-code"), "got {message}");
+
+    let message = why_failed(
+        &store,
+        &reg,
+        &Concept::call("text-from-char-code", [Concept::int(0xD800)]),
+    );
+    assert!(message.contains("text-from-char-code"), "got {message}");
+
+    let message = why_failed(
+        &store,
+        &reg,
+        &Concept::call("text-from-char-code", [Concept::int(-1)]),
+    );
+    assert!(message.contains("text-from-char-code"), "got {message}");
+}
+
+// ---------------------------------------------------------------------------
+// Word case
+// ---------------------------------------------------------------------------
+
+#[test]
+fn capitalize_changes_only_the_first_letter() {
+    let (store, reg) = brain();
+    assert_eq!(
+        value(
+            &store,
+            &reg,
+            &Concept::call("text-capitalize", [Concept::text("hello world")])
+        ),
+        Concept::text("Hello world")
+    );
+    assert_eq!(
+        value(
+            &store,
+            &reg,
+            &Concept::call("text-capitalize", [Concept::text("HELLO")])
+        ),
+        Concept::text("HELLO")
+    );
+    assert_eq!(
+        value(&store, &reg, &Concept::call("text-capitalize", [Concept::text("")])),
+        Concept::text("")
+    );
+}
+
+#[test]
+fn title_case_capitalizes_every_word() {
+    let (store, reg) = brain();
+    assert_eq!(
+        value(
+            &store,
+            &reg,
+            &Concept::call("text-title-case", [Concept::text("hello world  again")])
+        ),
+        Concept::text("Hello World  Again"),
+        "internal spacing is preserved"
+    );
+    assert_eq!(
+        value(&store, &reg, &Concept::call("text-title-case", [Concept::text("")])),
+        Concept::text("")
+    );
+}
+
+#[test]
+fn camel_kebab_and_snake_case_all_read_the_same_words() {
+    let (store, reg) = brain();
+    assert_eq!(
+        value(
+            &store,
+            &reg,
+            &Concept::call("text-camel-case", [Concept::text("hello world")])
+        ),
+        Concept::text("helloWorld")
+    );
+    assert_eq!(
+        value(
+            &store,
+            &reg,
+            &Concept::call("text-kebab-case", [Concept::text("helloWorld")])
+        ),
+        Concept::text("hello-world")
+    );
+    assert_eq!(
+        value(
+            &store,
+            &reg,
+            &Concept::call("text-snake-case", [Concept::text("helloWorld")])
+        ),
+        Concept::text("hello_world")
+    );
+    assert_eq!(
+        value(
+            &store,
+            &reg,
+            &Concept::call("text-kebab-case", [Concept::text("hello_world again")])
+        ),
+        Concept::text("hello-world-again"),
+        "underscores and spaces are both word boundaries"
+    );
+    assert_eq!(
+        value(
+            &store,
+            &reg,
+            &Concept::call("text-camel-case", [Concept::text("")])
+        ),
+        Concept::text("")
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Words, counting, and layout
+// ---------------------------------------------------------------------------
+
+#[test]
+fn words_splits_on_whitespace_and_drops_empty_pieces() {
+    let (store, reg) = brain();
+    assert_eq!(
+        value(
+            &store,
+            &reg,
+            &Concept::call("text-words", [Concept::text("  hello   world  ")])
+        ),
+        texts(["hello", "world"])
+    );
+    assert_eq!(
+        value(&store, &reg, &Concept::call("text-words", [Concept::text("")])),
+        texts([])
+    );
+}
+
+#[test]
+fn count_occurrences_counts_non_overlapping_matches() {
+    let (store, reg) = brain();
+    assert_eq!(
+        value(
+            &store,
+            &reg,
+            &Concept::call(
+                "text-count-occurrences",
+                [Concept::text("banana"), Concept::text("ana")]
+            )
+        ),
+        Concept::int(1),
+        "non-overlapping: consuming the first \"ana\" leaves no room for a second"
+    );
+    assert_eq!(
+        value(
+            &store,
+            &reg,
+            &Concept::call(
+                "text-count-occurrences",
+                [Concept::text("aaaa"), Concept::text("aa")]
+            )
+        ),
+        Concept::int(2)
+    );
+    assert_eq!(
+        value(
+            &store,
+            &reg,
+            &Concept::call(
+                "text-count-occurrences",
+                [Concept::text("no match"), Concept::text("xyz")]
+            )
+        ),
+        Concept::int(0)
+    );
+
+    let message = why_failed(
+        &store,
+        &reg,
+        &Concept::call(
+            "text-count-occurrences",
+            [Concept::text("abc"), Concept::text("")],
+        ),
+    );
+    assert!(message.contains("empty search string"), "got {message}");
+}
+
+#[test]
+fn center_pads_both_sides_favoring_the_right() {
+    let (store, reg) = brain();
+    assert_eq!(
+        value(
+            &store,
+            &reg,
+            &Concept::call("text-center", [Concept::text("hi"), Concept::int(6)])
+        ),
+        Concept::text("  hi  ")
+    );
+    assert_eq!(
+        value(
+            &store,
+            &reg,
+            &Concept::call("text-center", [Concept::text("hi"), Concept::int(5)])
+        ),
+        Concept::text(" hi  "),
+        "odd padding favors the right"
+    );
+    assert_eq!(
+        value(
+            &store,
+            &reg,
+            &Concept::call(
+                "text-center",
+                [Concept::text("hi"), Concept::int(6), Concept::text("*")]
+            )
+        ),
+        Concept::text("**hi**")
+    );
+    assert_eq!(
+        value(
+            &store,
+            &reg,
+            &Concept::call("text-center", [Concept::text("longer"), Concept::int(3)])
+        ),
+        Concept::text("longer"),
+        "already wide enough means unchanged"
+    );
+
+    let message = why_failed(
+        &store,
+        &reg,
+        &Concept::call(
+            "text-center",
+            [Concept::text("x"), Concept::int(4), Concept::text("ab")],
+        ),
+    );
+    assert!(message.contains("exactly one character"), "got {message}");
+}
+
+#[test]
+fn text_reverse_reverses_by_character() {
+    let (store, reg) = brain();
+    assert_eq!(
+        value(&store, &reg, &Concept::call("text-reverse", [Concept::text("spoon")])),
+        Concept::text("noops")
+    );
+    assert_eq!(
+        value(
+            &store,
+            &reg,
+            &Concept::call("text-reverse", [Concept::text("🌍🌱")])
+        ),
+        Concept::text("🌱🌍"),
+        "reversed by character, not by byte"
+    );
+    assert_eq!(
+        value(&store, &reg, &Concept::call("text-reverse", [Concept::text("")])),
+        Concept::text("")
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Bad input never panics
 // ---------------------------------------------------------------------------
 
@@ -652,6 +1021,21 @@ fn every_native_refuses_a_wrong_typed_argument_instead_of_panicking() {
         Concept::call("text-to-text", [Concept::hole(0)]),
         Concept::call("text-parse-int", [n.clone()]),
         Concept::call("text-parse-float", [n.clone()]),
+        Concept::call("text-regex-match", [n.clone(), t.clone()]),
+        Concept::call("text-regex-match", [t.clone(), n.clone()]),
+        Concept::call("text-regex-replace", [n.clone(), t.clone(), t.clone()]),
+        Concept::call("text-char-code", [n.clone()]),
+        Concept::call("text-from-char-code", [t.clone()]),
+        Concept::call("text-capitalize", [n.clone()]),
+        Concept::call("text-title-case", [n.clone()]),
+        Concept::call("text-camel-case", [n.clone()]),
+        Concept::call("text-kebab-case", [n.clone()]),
+        Concept::call("text-snake-case", [n.clone()]),
+        Concept::call("text-words", [n.clone()]),
+        Concept::call("text-count-occurrences", [n.clone(), t.clone()]),
+        Concept::call("text-center", [n.clone(), n.clone()]),
+        Concept::call("text-center", [t.clone(), t.clone()]),
+        Concept::call("text-reverse", [n.clone()]),
         // Arity mismatches are caught before the native ever runs.
         Concept::call("text-upper", []),
         Concept::call("text-substring", [t.clone(), n.clone()]),

@@ -52,7 +52,7 @@ impl Default for BrainConfig {
             permission: PermissionMode::AskWrites,
             eval_budget: Budget::default(),
             derive_budget: DeriveBudget::default(),
-            vocabulary_size: 120,
+            vocabulary_size: 250,
             teaching: true,
             check_clean_readings: 8,
         }
