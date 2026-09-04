@@ -158,6 +158,33 @@ pub fn status(cli: &Cli) -> Result<()> {
     println!("realizations: {}", store.all_realizations()?.len());
     println!("episodes:     {}", store.count_episodes()?);
     println!("symbols:      {}", store.all_symbols()?.len());
+
+    // What the ears have learned, and whether it is holding up. A count alone
+    // hides the failure that matters: phrasings piling up while the ones being
+    // used are the wrong ones.
+    let pairs = store.all_pairs(usize::MAX)?;
+    let tried: Vec<_> = pairs
+        .iter()
+        .filter(|p| p.successes + p.failures > 0)
+        .collect();
+    let wins: u32 = tried.iter().map(|p| p.successes).sum();
+    let losses: u32 = tried.iter().map(|p| p.failures).sum();
+    println!("phrasings:    {}", pairs.len());
+    if !tried.is_empty() {
+        println!(
+            "  used:       {} of them, {wins} worked and {losses} did not",
+            tried.len()
+        );
+        let weak = tried.iter().filter(|p| p.standing() < 0.5).count();
+        println!("  below half: {weak}");
+    }
+
+    let learned = store
+        .all_realizations()?
+        .into_iter()
+        .filter(|r| !matches!(r.provenance, spoon_concept::Provenance::Bootstrap))
+        .count();
+    println!("learned:      {learned} realizations beyond the bootstrap set");
     Ok(())
 }
 
