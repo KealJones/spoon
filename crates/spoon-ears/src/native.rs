@@ -5,7 +5,6 @@
 //! A native reading that is wrong is worse than no native reading, because the
 //! model would have got it right and now nothing will.
 
-use std::sync::Arc;
 
 use spoon_concept::Concept;
 use spoon_seat::{Ears, Heard, LlmError, Turn};
@@ -196,8 +195,9 @@ impl Ears for NativeEars {
     async fn hear(
         &self,
         text: &str,
-        _vocabulary: &[Arc<str>],
+        _vocabulary: &[String],
         _recent: &[Turn],
+        _rules: &[String],
     ) -> Result<Heard, LlmError> {
         self.hear_native(text).ok_or(LlmError::NoSeat("ears"))
     }

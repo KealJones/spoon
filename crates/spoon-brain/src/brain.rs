@@ -285,9 +285,14 @@ impl Brain {
             heard.names = name_shaped_words(text);
             return (heard, EarsPath::Native);
         }
-        let vocabulary = self.vocabulary();
+        let vocabulary: Vec<String> = self
+            .described_vocabulary()
+            .iter()
+            .map(Described::line)
+            .collect();
         let recent = self.recent_turns(session);
-        match self.ears.hear(text, &vocabulary, &recent).await {
+        let rules = self.ears_rules();
+        match self.ears.hear(text, &vocabulary, &recent, &rules).await {
             Ok(heard) => {
                 metrics.ears_model += 1;
                 (heard, EarsPath::Model)
@@ -297,6 +302,28 @@ impl Brain {
                 (Heard::native(Vec::new(), 0.0), EarsPath::Failed)
             }
         }
+    }
+
+    /// Rules the Teacher has written about how to read things.
+    ///
+    /// Ordinary stored concepts, so they survive a restart, appear in the
+    /// inspector, and can be retracted like anything else that turns out to be
+    /// wrong. Capped because the prompt is working memory: past a point another
+    /// rule costs more attention than it buys.
+    fn ears_rules(&self) -> Vec<String> {
+        const MAX_RULES: usize = 12;
+        self.store
+            .concepts_by_head(spoon_concept::SymbolId::of("ears-rule"), 64)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|c| self.store.holds(c).unwrap_or(false))
+            .filter_map(|c| {
+                c.arg(0)
+                    .and_then(Concept::as_ground)
+                    .and_then(|g| g.as_str().map(str::to_string))
+            })
+            .take(MAX_RULES)
+            .collect()
     }
 
     /// The last few turns of this session, oldest first.
@@ -343,6 +370,99 @@ impl Brain {
             .unwrap_or_default()
     }
 
+    /// What already realizes this concept, and how each one just fared.
+    ///
+    /// Answering a gap well needs to know the concept is not missing, only
+    /// incomplete. Sent as plain sentences because the Teacher is a language
+    /// model and this is the context a person would give.
+    fn existing_forms(&self, gap: &Concept) -> Vec<Arc<str>> {
+        let Some(head) = gap.head() else {
+            return Vec::new();
+        };
+        let mut out: Vec<Arc<str>> = Vec::new();
+
+        for realization in self.store.realizations_for(head).unwrap_or_default() {
+            let shape = match &realization.spec {
+                spoon_concept::RealizationSpec::Native { native } => self
+                    .registry
+                    .get(native)
+                    .map(|e| format!("{} ({})", e.doc, e.arity.describe()))
+                    .unwrap_or_else(|| "a native".to_string()),
+                spoon_concept::RealizationSpec::Composed { body } => {
+                    format!("built as {}", render(body, &self.symbols))
+                }
+                other => format!("a {} realization", other.kind().as_str()),
+            };
+            out.push(Arc::from(
+                format!("{} already exists: {shape}", realization.name).as_str(),
+            ));
+        }
+
+        // The arguments it was actually given, which is what the existing forms
+        // could not handle and what a new one has to.
+        let given: Vec<String> = gap
+            .args()
+            .iter()
+            .map(|a| render(a, &self.symbols))
+            .collect();
+        if !given.is_empty() {
+            out.push(Arc::from(
+                format!(
+                    "it was called with {}, which none of those accept",
+                    given.join(", ")
+                )
+                .as_str(),
+            ));
+        }
+        out
+    }
+
+    /// The same vocabulary, with each concept's shape and what it does.
+    ///
+    /// A bare list of names makes the ears guess at how a concept is called,
+    /// and every wrong guess turns into a hand-written accommodation somewhere
+    /// else: `list<[4, 9, 2, 7]>` where `list<4, 9, 2, 7>` was meant, `reverse`
+    /// handed text when it takes a list. Those are one bug wearing different
+    /// clothes, and patching each place it surfaces is how a system accumulates
+    /// special cases instead of getting better.
+    ///
+    /// Arity comes from the registry for natives and from the hole count for
+    /// learned bodies, since those are the only places that know it.
+    fn described_vocabulary(&self) -> Vec<Described> {
+        self.vocabulary()
+            .into_iter()
+            .map(|name| {
+                let target = Concept::named(&name);
+                let native_arity = self
+                    .store
+                    .realizations_for(&target)
+                    .ok()
+                    .into_iter()
+                    .flatten()
+                    .find_map(|r| match &r.spec {
+                        spoon_concept::RealizationSpec::Native { native } => {
+                            self.registry.get(native).map(|e| e.arity.describe())
+                        }
+                        spoon_concept::RealizationSpec::Composed { body } => {
+                            Some(format!("exactly {} argument(s)", holes(body).len()))
+                        }
+                        _ => None,
+                    });
+                let doc = self
+                    .store
+                    .get_meta(&target)
+                    .ok()
+                    .flatten()
+                    .and_then(|m| m.note.map(|n| n.to_string()));
+                Described {
+                    name,
+                    arity: native_arity,
+                    doc,
+                }
+            })
+            .collect()
+    }
+
     fn act(
         &mut self,
         m: &Move,
@@ -368,6 +488,26 @@ impl Brain {
                 metrics.derive_steps += engine.steps_used();
                 for d in &derived {
                     rules.extend(d.rules_used().iter().map(|r| r.to_string()));
+                }
+                // A question can be answered two ways, and derivation is only
+                // one of them. "Who owns a dog" is recalled; "what is the
+                // smallest of these" is worked out. Routing every question to
+                // the fact store means anything computable comes back unknown
+                // while the answer was one evaluation away.
+                if derived.is_empty() && holes(goal).is_empty() {
+                    let mut evaluator = Evaluator::new(&self.store, &self.registry)
+                        .with_budget(self.config.eval_budget)
+                        .with_permission(self.config.permission);
+                    if let Outcome::Value(value) = evaluator.evaluate(goal) {
+                        // Only when something actually reduced. A concept that
+                        // evaluates to itself is data, and answering a question
+                        // by repeating it is not an answer.
+                        if value != *goal {
+                            metrics.eval_nodes += evaluator.trace().nodes_used;
+                            let _ = evaluator.commit_evidence();
+                            return Ok(Some(value));
+                        }
+                    }
                 }
                 if derived.is_empty() {
                     // A question can go unanswered for two very different
@@ -533,7 +673,7 @@ impl Brain {
     }
 
     async fn consult_teacher(
-        &self,
+        &mut self,
         text: &str,
         heard: &Heard,
         gaps: &[Concept],
@@ -553,10 +693,55 @@ impl Brain {
                 position: Arc::from("unknown"),
             });
         }
+        // Ask about the reading first. When a turn goes wrong the cause is
+        // often how it was heard rather than a capability that is missing, and
+        // fixing a capability to serve a misreading builds the wrong thing
+        // carefully. It is also the only answer that compounds: a corrected
+        // reading becomes a phrasing the native path reuses for free.
+        if !heard.steps.is_empty() {
+            asks.insert(
+                0,
+                TeacherAsk::Reading {
+                    utterance: Arc::from(text),
+                    heard: Arc::from(
+                        heard
+                            .steps
+                            .iter()
+                            .map(|s| render(s, &self.symbols))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                            .as_str(),
+                    ),
+                    trouble: Arc::from(
+                        if gaps.is_empty() {
+                            "nothing could be worked out from it".to_string()
+                        } else {
+                            format!(
+                                "nothing realizes {}",
+                                gaps.iter()
+                                    .map(|g| render(g, &self.symbols))
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            )
+                        }
+                        .as_str(),
+                    ),
+                },
+            );
+        }
         for gap in gaps.iter().take(2) {
             asks.push(TeacherAsk::Capability {
                 concept: gap.clone(),
-                attempted: Vec::new(),
+                // What already exists for this concept, and how it just failed.
+                //
+                // A concept that fails is usually not one Spoon cannot do at
+                // all: `reverse` reverses lists perfectly well and was handed
+                // text. Told only "cannot carry out reverse<text>", the Teacher
+                // proposes a replacement. Told that a list form already exists
+                // and this input was text, it can propose the form that is
+                // missing, which is what having several realizations per
+                // concept is for.
+                attempted: self.existing_forms(gap),
             });
             // Examples are the only thing the synthesizer can actually search
             // against, so asking for them is what turns a gap into a capability
@@ -583,7 +768,13 @@ impl Brain {
         let mut proposal: Option<(Concept, Concept)> = None;
         let mut spec: Option<Spec> = None;
 
-        for ask in asks.into_iter().take(4) {
+        // Enough for the reading plus a capability and its examples for each
+        // gap. Truncating below that would drop the capability questions the
+        // moment a reading question is added, which is not a trade: the reading
+        // says whether the request was understood and the capability says
+        // whether it can be carried out, and a wrong turn can be either.
+        const MAX_ASKS: usize = 6;
+        for ask in asks.into_iter().take(MAX_ASKS) {
             let Ok(reply) = teacher.teach(&ask, &vocabulary).await else {
                 continue;
             };
@@ -603,6 +794,27 @@ impl Brain {
                     });
                 }
                 // Vocabulary answers stand on their own and need no checking.
+                // A corrected reading is kept as a phrasing, not just applied
+                // here. The same shape will be said again, and the point is to
+                // stop paying a model for it.
+                TeacherReply::Reading { steps, lesson } => {
+                    let _ = self.store.put_pair(text, &steps, PairSource::Confirmed);
+                    self.phrasing.learn(text, &steps);
+                    // A rule outlives the sentence that produced it, so it is
+                    // stored as an ordinary concept and read back into the ears
+                    // prompt. The prompt stops being a fixed string somebody
+                    // maintains and becomes something Spoon accumulates from
+                    // its own mistakes.
+                    if let Some(lesson) = lesson {
+                        let rule = Concept::call("ears-rule", [Concept::text(&*lesson)]);
+                        let _ = self.store.assert_concept(
+                            &rule,
+                            Provenance::Teacher { episode: None },
+                            None,
+                            None,
+                        );
+                    }
+                }
                 other => self.absorb(other, subject),
             }
         }
@@ -721,6 +933,9 @@ impl Brain {
                 };
                 self.learn_from_spec(&spec);
             }
+            // Handled where the reply arrives, since it is kept as a phrasing
+            // rather than absorbed as knowledge.
+            TeacherReply::Reading { .. } => {}
             // An admitted blank is a real answer. Nothing to store yet, but it
             // is worth not treating as a failure.
             TeacherReply::Unknown { .. } => {}
@@ -821,6 +1036,13 @@ impl Brain {
             (Some(Move::Do(_)), Some(value)) if gaps.is_empty() && self.holds(value) => {
                 Concept::call("noted", [value.clone()])
             }
+            // Nothing reduced and something was missing, so the "result" is
+            // just the request read back. Showing it is worse than useless:
+            // the reader gets internal notation instead of an answer and no
+            // indication that anything went wrong.
+            (Some(m), Some(value)) if !gaps.is_empty() && value == m.concept() => {
+                Concept::call("cannot-yet", [value.clone()])
+            }
             (_, Some(value)) if !gaps.is_empty() => {
                 Concept::call("partial", [value.clone(), Concept::int(gaps.len() as i64)])
             }
@@ -868,7 +1090,10 @@ fn subject_of(ask: &TeacherAsk) -> Option<Concept> {
             // the capability being taught is `reverse`.
             concept.head().cloned().or_else(|| Some(concept.clone()))
         }
-        TeacherAsk::Vocabulary { .. } | TeacherAsk::Concept { .. } => None,
+        // A reading is about the whole utterance, not about one concept.
+        TeacherAsk::Vocabulary { .. } | TeacherAsk::Concept { .. } | TeacherAsk::Reading { .. } => {
+            None
+        }
     }
 }
 
@@ -914,6 +1139,28 @@ fn is_declarative(concept: &Concept) -> bool {
             .iter()
             .any(|d| head == spoon_concept::SymbolId::of(d))
     })
+}
+
+/// A concept as the ears should see it: what it is called, what shape it takes,
+/// and what it does.
+#[derive(Debug, Clone)]
+pub struct Described {
+    pub name: Arc<str>,
+    pub arity: Option<String>,
+    pub doc: Option<String>,
+}
+
+impl Described {
+    /// One line for a prompt. Compact on purpose: this appears a hundred times
+    /// over, and a paragraph each would crowd out the utterance being read.
+    pub fn line(&self) -> String {
+        match (&self.arity, &self.doc) {
+            (Some(a), Some(d)) => format!("{} ({a}) - {d}", self.name),
+            (Some(a), None) => format!("{} ({a})", self.name),
+            (None, Some(d)) => format!("{} - {d}", self.name),
+            (None, None) => self.name.to_string(),
+        }
+    }
 }
 
 /// Words in an utterance that look like names.

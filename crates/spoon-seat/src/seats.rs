@@ -78,10 +78,18 @@ impl Heard {
 pub trait Ears: Send + Sync {
     /// Interpret an utterance.
     ///
-    /// `vocabulary` is the concept names worth showing the model this turn,
-    /// already ranked by activation, most useful first. Passing the whole
-    /// vocabulary would be both slower and worse: a prompt listing everything
-    /// Spoon knows buries the handful of concepts this user actually uses.
+    /// `vocabulary` is the concepts worth showing this turn, ranked by
+    /// activation and already described: name, shape, and what each does.
+    /// Passing everything Spoon knows would be slower and worse, since it
+    /// buries the handful this user actually reaches for.
+    ///
+    /// Descriptions rather than bare names because a name alone leaves the
+    /// model guessing at how a concept is called, and every wrong guess becomes
+    /// a special case somewhere else in the system.
+    ///
+    /// `rules` are lessons the Teacher wrote after earlier misreadings. They
+    /// are what makes the prompt something Spoon accumulates rather than a
+    /// fixed string somebody maintains.
     ///
     /// `recent` is the last few turns, newest last, each as what was said and
     /// what it was read as. Without it every utterance is heard in isolation,
@@ -91,8 +99,9 @@ pub trait Ears: Send + Sync {
     async fn hear(
         &self,
         text: &str,
-        vocabulary: &[Arc<str>],
+        vocabulary: &[String],
         recent: &[Turn],
+        rules: &[String],
     ) -> Result<Heard, LlmError>;
 
     /// A reading produced without consulting a model, or `None` when the native
@@ -134,6 +143,23 @@ pub enum TeacherAsk {
     Examples { concept: Concept, arity: usize },
     /// What a word means, when Spoon has no concept for it at all.
     Concept { word: Arc<str>, context: Arc<str> },
+    /// Whether an utterance was read correctly, and what it should have been.
+    ///
+    /// The question the Teacher is best at. When a turn goes wrong the cause is
+    /// often the reading rather than a missing capability, and judging whether
+    /// an interpretation matches what someone said is a far easier job than
+    /// writing a body that satisfies examples.
+    ///
+    /// It is also the only ask whose answer compounds. A corrected reading is
+    /// stored as a phrasing, so the native path handles that shape from then on
+    /// without a model at all. Everything else the Teacher does helps once.
+    Reading {
+        utterance: Arc<str>,
+        /// How it was read, rendered.
+        heard: Arc<str>,
+        /// What went wrong with acting on it.
+        trouble: Arc<str>,
+    },
 }
 
 /// A specification the synthesizer can search against.
@@ -166,6 +192,22 @@ pub enum TeacherReply {
     Spec(Spec),
     /// A realization built from concepts Spoon already has.
     Composition { target: Concept, body: Concept },
+    /// A corrected reading of the utterance, as concept steps.
+    ///
+    /// Kept as a phrasing rather than only applied to this turn, because the
+    /// same shape will be said again and the point is to stop paying for it.
+    Reading {
+        steps: Vec<Concept>,
+        /// A rule worth remembering, when the mistake was one of a kind rather
+        /// than one of a shape.
+        ///
+        /// A phrasing fixes the sentence that was said. A rule fixes every
+        /// sentence that would have gone the same way: writing a list as
+        /// `list<[a, b, c]>` is not a fact about that utterance, it is a
+        /// misunderstanding of the notation, and stating it once is worth more
+        /// than correcting it a hundred times.
+        lesson: Option<Arc<str>>,
+    },
     /// The Teacher had nothing useful, which is a real answer and not a
     /// failure. Recording it stops Spoon asking the same question forever.
     Unknown { why: Arc<str> },

@@ -29,12 +29,25 @@ impl ModelEars {
     /// Built fresh each turn from the activation-ranked vocabulary, so the
     /// concepts this user actually reaches for sit at the top where the model
     /// will see them.
-    fn prompt(vocabulary: &[Arc<str>]) -> String {
-        let known = vocabulary
-            .iter()
-            .map(|w| w.as_ref())
-            .collect::<Vec<_>>()
-            .join(", ");
+    fn prompt(vocabulary: &[String], rules: &[String]) -> String {
+        // Rules the Teacher wrote after earlier mistakes. Placed last so they
+        // are the final thing read before the utterance, which is where a
+        // correction does the most good.
+        let learned = if rules.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "\n\nLearned from earlier mistakes:\n{}",
+                rules
+                    .iter()
+                    .map(|r| format!("- {r}"))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            )
+        };
+        // One per line, because each carries a shape and a description now and
+        // a comma-separated run of those is unreadable.
+        let known = vocabulary.join("\n  ");
         format!(
             r#"You translate messy human speech into concept expressions. You never compute, resolve, or answer anything. You only translate.
 
@@ -46,6 +59,10 @@ do<CONCEPT>            the speaker wants something done or computed
 chat<CONCEPT>          social talk with no request in it
 correction<STEP>       the speaker is repairing what they just said; STEP is the replacement
 
+A list is written list<a, b, c> with the items as separate arguments. Never
+write list<[a, b, c]>: that is a list of one thing, the bracketed value itself,
+which is almost never what someone means.
+
 A CONCEPT is written Head<Arg, Arg>. Arguments are concepts, quoted "text", numbers, true/false, or ?0 for something unspecified. Names are kebab-case.
 
 Examples:
@@ -53,6 +70,7 @@ Examples:
   "who owns a dog"             -> ask<owns<?0, dog>>
   "is keal friends with greg"  -> ask<friends<keal, greg>>
   "add 2 and 3"                -> do<add<2, 3>>
+  "biggest of 4, 9, 2 and 7"   -> do<max-of<list<4, 9, 2, 7>>>
   "hey"                        -> chat<greet<>>
   "the weights, no the scores" -> do<sum<weights>>
                                   correction<do<sum<scores>>>
@@ -81,10 +99,10 @@ Multi-step requests use let, binding a name to each intermediate result:
 
 If a word means nothing you can express, write it as unknown<"the word"> inside the concept rather than guessing.
 
-Concepts currently known: {known}
+Concepts currently known:\n  {known}
 
 Prefer a known concept. Invent a new kebab-case name only when nothing fits.
-Reply with the steps and nothing else. No prose, no explanation, no code fences."#
+Reply with the steps and nothing else. No prose, no explanation, no code fences.{learned}"#
         )
     }
 
@@ -126,13 +144,14 @@ impl Ears for ModelEars {
     async fn hear(
         &self,
         text: &str,
-        vocabulary: &[Arc<str>],
+        vocabulary: &[String],
         recent: &[Turn],
+        rules: &[String],
     ) -> Result<Heard, LlmError> {
         // Recent turns go in as prior exchanges rather than as a block of
         // prose, because that is the shape a chat model is trained to resolve
         // references against.
-        let mut messages = vec![Message::system(Self::prompt(vocabulary))];
+        let mut messages = vec![Message::system(Self::prompt(vocabulary, rules))];
         for turn in recent {
             messages.push(Message::user(turn.said.to_string()));
             messages.push(Message::assistant(turn.understood.to_string()));

@@ -35,6 +35,7 @@ const RESPONSE_HEADS: &[&str] = &[
     "error",
     "did-not-understand",
     "nothing-to-say",
+    "cannot-yet",
     "greet",
     "acknowledge-thanks",
     "farewell",
@@ -77,6 +78,16 @@ impl TemplateMouth {
                 format!("{} (some of that I could not work out)", self.plain(c))
             }
             ("unknown", Some(c)) => format!("I do not know about {}", self.plain(c)),
+            // Names what was wanted rather than echoing how it was written
+            // down, because the notation is Spoon's business and the reader
+            // asked a question.
+            ("cannot-yet", Some(c)) => {
+                let what = c.head_symbol().map(|h| self.table.display(h));
+                match what {
+                    Some(name) => format!("I cannot do {name} yet"),
+                    None => "I cannot work that out yet".to_string(),
+                }
+            }
             ("needs-permission", Some(c)) => {
                 format!("that needs your say-so first: {}", self.plain(c))
             }

@@ -31,7 +31,11 @@ impl ModelTeacher {
             String::new()
         } else {
             format!(
-                "\n\nConcepts available to build from: {}\n\nUse these. \
+                "\n\nHey Homie, You are a Teacher. You are here to help assist \"spoon\" \
+become smarter and more capable. Its entire mind is built using \"Concepts\" \
+and right now it isnt very good at figuring out stuff on its own. That is why
+we need your help. These are the things that spoon currently knows as concepts.
+                \n\nConcepts available to build from: {}\n\nUse these. \
 Do not invent a concept that is not listed unless nothing listed can express it.",
                 vocabulary
                     .iter()
@@ -66,7 +70,36 @@ COMPOSE double = add<?0, ?0>\n\
 COMPOSE average = div<sum<?0>, count<?0>>\n\
 COMPOSE longest = max-of<map<?0, text-length>>\n\n\
 Do NOT reply with a synonym. The word is not the problem; the system cannot \
-DO the thing. If you cannot express it with the concepts listed, say UNKNOWN.\n\n{common}{known}"
+DO the thing. If you cannot express it with the concepts listed, say UNKNOWN.\n\n\
+If the notes below say a form of this concept already exists, you are adding a \
+second one for the input it could not handle, not replacing it. Both are kept \
+and whichever works is used. Your body may call the existing form: reversing \
+text can use the list reversal, given something either side to convert.\n\n{common}{known}"
+            ),
+
+            TeacherAsk::Reading { .. } => format!(
+                "You check whether a sentence was understood correctly, and \
+correct it if not.\n\n\
+Reply in exactly this form, one step per line:\n\n\
+READING\n\
+assert-that<CONCEPT>   the speaker stated something true\n\
+ask<CONCEPT>           the speaker asked whether something holds, or for a value\n\
+do<CONCEPT>            the speaker wants something done or computed\n\
+chat<CONCEPT>          social talk with no request in it\n\n\
+Example:\n\
+READING\n\
+do<max-of<list<4, 9, 2, 7>>>\n\n\
+If the reading shown to you is already right, reply exactly: CORRECT\n\n\
+After the steps you may add one line beginning RULE, stating a general lesson \
+if the mistake would repeat on other sentences. Write it as an instruction to \
+whoever reads the next sentence, not as a remark about this one. Omit it when \
+the mistake was particular to this sentence.\n\n\
+Example:\n\
+READING\n\
+do<max-of<list<4, 9, 2, 7>>>\n\
+RULE Write a list as list<a, b, c>, never list<[a, b, c]>.\n\n\
+A list is written list<a, b, c> with the items as separate arguments, never \
+list<[a, b, c]>. Use the concepts listed below and match their stated shapes.\n\n{common}{known}"
             ),
 
             TeacherAsk::Examples { .. } => format!(
@@ -104,6 +137,14 @@ verifies every one and discards anything that fails even a single case.\n\n{comm
             TeacherAsk::Examples { concept, arity } => format!(
                 "Give input and output examples for {} which takes {arity} argument(s).",
                 render(concept, &self.table)
+            ),
+            TeacherAsk::Reading {
+                utterance,
+                heard,
+                trouble,
+            } => format!(
+                "Someone said: {utterance:?}\n\nIt was read as:\n{heard}\n\n\
+Acting on that went wrong: {trouble}\n\nWas the reading right, and if not what should it be?"
             ),
             TeacherAsk::Concept { word, context } => {
                 format!("\"{word}\" appeared in: \"{context}\". What kind of thing is it?")
@@ -198,6 +239,28 @@ verifies every one and discards anything that fails even a single case.\n\n{comm
                 examples,
                 note: None,
             });
+        }
+        if line.eq_ignore_ascii_case("CORRECT") {
+            // The reading was fine, so the trouble lies elsewhere. Saying so is
+            // useful: it rules out the ears and points at the capability.
+            return unknown("the reading was already correct");
+        }
+        if line.eq_ignore_ascii_case("READING") {
+            let steps: Vec<Concept> = reply
+                .lines()
+                .skip_while(|l| !l.trim().eq_ignore_ascii_case("READING"))
+                .skip(1)
+                .take_while(|l| !l.trim().starts_with("RULE "))
+                .filter_map(|l| parse(l.trim(), &self.table).ok())
+                .collect();
+            if steps.is_empty() {
+                return unknown("a reading with no usable steps");
+            }
+            let lesson = reply
+                .lines()
+                .find_map(|l| l.trim().strip_prefix("RULE "))
+                .map(|r| Arc::from(r.trim()));
+            return TeacherReply::Reading { steps, lesson };
         }
         if let Some(rest) = line.strip_prefix("UNKNOWN ") {
             return unknown(rest.trim());
