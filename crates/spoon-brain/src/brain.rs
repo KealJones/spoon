@@ -1098,7 +1098,20 @@ impl Brain {
                 // here. The same shape will be said again, and the point is to
                 // stop paying a model for it.
                 TeacherReply::Reading { steps, lesson } => {
-                    learning.push("the Teacher corrected how this was read".to_string());
+                    let original = if let TeacherAsk::Reading { heard, .. } = &ask {
+                        heard.to_string()
+                    } else {
+                        "?".to_string()
+                    };
+                    let corrected: Vec<String> = steps
+                        .iter()
+                        .map(|s| render(s, &self.symbols))
+                        .collect();
+                    learning.push(format!(
+                        "corrected reading: {} -> {}",
+                        original,
+                        corrected.join("; ")
+                    ));
                     let _ = self.store.put_pair(text, &steps, PairSource::Confirmed);
                     self.phrasing.learn(text, &steps);
                     // A rule outlives the sentence that produced it, so it is
