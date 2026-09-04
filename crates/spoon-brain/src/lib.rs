@@ -16,4 +16,4 @@ pub use correct::{Correction, apply as apply_correction, is_correction};
 pub use credit::{Blame, Stage, assign as assign_blame, assign_all};
 pub use episode::{EarsPath, Episode, MouthPath, TraceStep, TurnMetrics};
 pub use reconcile::{Reconciliation, reconcile, remember};
-pub use resolve::{Move, resolve};
+pub use resolve::{Move, is_question, resolve};

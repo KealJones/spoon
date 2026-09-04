@@ -180,7 +180,7 @@ impl Brain {
 
         // ---- interior ----
         let interior_started = Instant::now();
-        let moves = resolve(&steps);
+        let moves = resolve(&steps, crate::resolve::is_question(text));
         let mut gaps = Vec::new();
         let mut realizations = Vec::new();
         let mut interior = Vec::new();

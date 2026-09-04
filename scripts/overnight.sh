@@ -37,7 +37,7 @@ step() {
 # What an untrained brain scores, for comparison.
 step baseline-test "$base" bench "$test_suite" --no-teaching
 
-step teach       "$brain" teach --file data/curriculum/basics.json
+step teach       "$brain" teach --file data/curriculum/basics.json ${LESSONS:+--limit "$LESSONS"}
 step train       "$brain" bench "$train_suite"
 step train-facts "$brain" bench "$facts_suite"
 # The only number that means anything.
