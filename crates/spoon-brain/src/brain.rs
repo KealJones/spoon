@@ -339,14 +339,30 @@ impl Brain {
             metrics,
             correction: correction.as_ref().map(|_| text.to_string()),
         };
-        // A reading the model produced that the interior then acted on without
-        // getting stuck is worth remembering, so the same shape costs nothing
-        // next time. This is the only part of the ears that improves with use.
+        // A reading the model produced that then answered the question is
+        // worth remembering, so the same shape costs nothing next time. This
+        // is the only part of the ears that improves with use.
         //
         // Readings that hit a gap are deliberately not learned: reusing a bad
         // one makes it permanent, because the model that would have got it
         // right is never consulted again for that shape.
-        if ears_path == EarsPath::Model && episode.gaps.is_empty() && !steps.is_empty() {
+        //
+        // Nor is "it did not get stuck" enough on its own. An assertion always
+        // succeeds, whatever it asserts, so a turn that stored something is no
+        // evidence the sentence was read correctly. "frank is friends with
+        // carol" was read as `participates<frank, ...>`, asserted happily, and
+        // learned as a phrasing; every later question about friendship then
+        // matched that phrasing and came back unknown. Requiring an answer
+        // means the reading has been used for something that could fail.
+        //
+        // Statements still get phrasings, through the Teacher-confirmed path,
+        // which is the better evidence anyway.
+        let answered = episode
+            .result
+            .as_ref()
+            .is_some_and(|r| is_answer(&self.store, r) && !is_unknown(r));
+        if ears_path == EarsPath::Model && episode.gaps.is_empty() && !steps.is_empty() && answered
+        {
             let _ = self.store.put_pair(text, &steps, PairSource::Model);
             self.phrasing.learn(text, &steps);
         }
