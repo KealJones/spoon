@@ -520,11 +520,39 @@ impl Brain {
         // dead capability gets written back into a durable rule two turns
         // after it was retired.
         let retired = self.retired_names();
-        self.store
-            .ranked_surface_forms(self.config.vocabulary_size, Utc::now())
+        let live: Vec<Arc<str>> = self
+            .store
+            // Ask for more than will be shown, because the ranking that
+            // matters here is not the one activation produces.
+            .ranked_surface_forms(self.config.vocabulary_size * 4, Utc::now())
             .unwrap_or_default()
             .into_iter()
             .filter(|name| !retired.iter().any(|r| r == &name.to_lowercase()))
+            .collect();
+
+        // Capabilities first, entities with whatever room is left.
+        //
+        // The ears prompt is working memory and it fills up. After a training
+        // run that mentioned a few dozen people, those names outranked the
+        // verbs on recency and pushed them out, and the model started failing
+        // sentences it had been reading correctly an hour earlier: "make
+        // REALIZATION lowercase" came back as a shrug once `lower` was no
+        // longer in front of it.
+        //
+        // The asymmetry is real rather than a heuristic. The ears' job is to
+        // choose an operation, and the operations are a small closed set that
+        // has to be visible. Entities arrive in the sentence itself and can be
+        // read straight off it, so a name absent from the prompt costs much
+        // less than a verb absent from it.
+        let (capabilities, entities): (Vec<_>, Vec<_>) = live.into_iter().partition(|name| {
+            self.store
+                .realizations_for(&Concept::named(name))
+                .is_ok_and(|r| !r.is_empty())
+        });
+        capabilities
+            .into_iter()
+            .chain(entities)
+            .take(self.config.vocabulary_size)
             .collect()
     }
 
