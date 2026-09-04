@@ -31,6 +31,19 @@ pub struct BrainConfig {
     /// Let the Teacher fill gaps. Off means Spoon says what it cannot do
     /// instead of going and finding out.
     pub teaching: bool,
+    /// Check one in this many otherwise-clean model readings.
+    ///
+    /// A reading that is wrong and still evaluates is the worst case, because
+    /// it produces a confident wrong answer and reports no gap at all, so the
+    /// only way to catch it is to check readings that went fine. Checking
+    /// every one of them was affordable when the Teacher was the same small
+    /// model as the ears. Against a 27b model it costs tens of seconds a turn,
+    /// which is most of the time a long run spends.
+    ///
+    /// So: always check a turn that visibly went wrong, and sample the rest.
+    /// Silent wrong readings still get caught, just not all in the same hour.
+    /// 1 checks everything, 0 checks none of the clean ones.
+    pub check_clean_readings: u32,
 }
 
 impl Default for BrainConfig {
@@ -41,6 +54,7 @@ impl Default for BrainConfig {
             derive_budget: DeriveBudget::default(),
             vocabulary_size: 120,
             teaching: true,
+            check_clean_readings: 8,
         }
     }
 }
@@ -208,10 +222,22 @@ impl Brain {
         // thing the Teacher does and the only answer that compounds, since a
         // correction is kept as a phrasing and the native path takes that shape
         // for free from then on.
-        let worth_checking = ears_path == EarsPath::Model;
+        // Something visibly went wrong, so there is a specific thing to ask
+        // about. These are always worth the Teacher's time.
+        let went_wrong = !gaps.is_empty()
+            || !heard.unknown.is_empty()
+            || result
+                .as_ref()
+                .is_none_or(|r| !is_answer(&self.store, r) || is_unknown(r));
+        // Nothing went wrong, which is exactly when a wrong reading hides.
+        // Sampled rather than skipped.
+        let spot_check = ears_path == EarsPath::Model
+            && self.config.check_clean_readings > 0
+            && self
+                .next_episode
+                .is_multiple_of(u64::from(self.config.check_clean_readings));
         let mut learning = Vec::new();
-        if self.config.teaching && (worth_checking || !gaps.is_empty() || !heard.unknown.is_empty())
-        {
+        if self.config.teaching && (went_wrong || spot_check) {
             learning = self
                 .consult_teacher(text, &heard, &gaps, &mut metrics)
                 .await;
