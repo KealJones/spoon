@@ -10,7 +10,8 @@ use axum::response::{Html, IntoResponse};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde_json::json;
-use spoon_brain::Brain;
+use futures::StreamExt;
+use spoon_brain::{Brain, EventSink, TurnEvent};
 use tokio::sync::Mutex;
 
 use crate::Cli;
@@ -26,6 +27,7 @@ pub async fn run(cli: &Cli, host: &str, port: u16) -> Result<()> {
         .route("/health", get(|| async { "ok" }))
         .route("/v1/models", get(models))
         .route("/v1/chat/completions", post(chat))
+        .route("/v1/chat/stream", post(chat_events))
         .route("/debug/status", get(status))
         .route("/debug/concepts", get(concepts))
         .route("/debug/concept", get(concept_detail))
@@ -42,7 +44,7 @@ pub async fn run(cli: &Cli, host: &str, port: u16) -> Result<()> {
 
 async fn models() -> impl IntoResponse {
     Json(json!({
-        "object": "list-list",
+        "object": "list",
         "data": [{ "id": "spoon", "object": "model", "owned_by": "spoon" }]
     }))
 }
@@ -151,6 +153,37 @@ async fn stream_chat(brain: Shared, body: serde_json::Value) -> impl IntoRespons
     events.push(Ok(Event::default().data("[DONE]")));
 
     Sse::new(futures::stream::iter(events))
+}
+
+async fn chat_events(
+    State(brain): State<Shared>,
+    Json(body): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let session = body["user"].as_str().unwrap_or("http").to_string();
+    let text = body["messages"]
+        .as_array()
+        .and_then(|m| m.last())
+        .and_then(|m| m["content"].as_str())
+        .unwrap_or_default()
+        .to_string();
+
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<TurnEvent>();
+    let sink = EventSink::new(tx);
+
+    let brain2 = brain.clone();
+    tokio::spawn(async move {
+        let mut guard = brain2.lock().await;
+        let _ = guard.turn_with_events(&session, &text, Some(sink)).await;
+    });
+
+    let stream = tokio_stream::wrappers::UnboundedReceiverStream::new(rx).map(|event| {
+        Ok::<_, std::convert::Infallible>(
+            Event::default()
+                .event(event.event_name())
+                .data(serde_json::to_string(&event).unwrap_or_default()),
+        )
+    });
+    Sse::new(stream).keep_alive(axum::response::sse::KeepAlive::default())
 }
 
 async fn status(State(brain): State<Shared>) -> impl IntoResponse {
