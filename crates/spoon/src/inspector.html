@@ -228,8 +228,9 @@ function renderEpisodeTimeline(ep) {
   const ears = ep.ears_exchange
     ? `<pre>${esc(ep.ears_exchange.raw_response)}</pre>`
     : '';
-  const steps = (ep.steps || []).length
-    ? `<div>${ep.steps.map(s => `<span class="chip">${esc(typeof s === 'string' ? s : JSON.stringify(s))}</span>`).join('')}</div>`
+  const stepsSource = ep.steps_rendered || ep.steps || [];
+  const steps = stepsSource.length
+    ? `<div>${stepsSource.map(s => `<span class="chip">${esc(typeof s === 'string' ? s : JSON.stringify(s))}</span>`).join('')}</div>`
     : '';
   const trace = (ep.trace || []).length
     ? `<table><thead><tr><th>concept</th><th>realization</th><th>outcome</th><th>depth</th></tr></thead><tbody>${
@@ -250,12 +251,14 @@ function renderEpisodeTimeline(ep) {
 
   return `<div class="timeline">
     ${stage('Input', '', `<pre>${esc(ep.user_text)}</pre>`)}
+    ${ep.goal_rendered ? stage('Goal', '', `<span class="chip">${esc(ep.goal_rendered)}</span>`) : ''}
     ${stage('Ears', 'ears', `<span class="chip">${esc(ep.ears_path)}</span> ${steps}${ears}`)}
     ${trace ? stage('Eval trace', 'interior', trace) : ''}
-    ${(ep.gaps||[]).length ? stage('Gaps', '', (ep.gaps||[]).map(g => `<span class="chip">${esc(typeof g === 'string' ? g : JSON.stringify(g))}</span>`).join('')) : ''}
+    ${(ep.gaps||[]).length ? stage('Gaps', '', (ep.gaps_rendered || ep.gaps || []).map(g => `<span class="chip">${esc(typeof g === 'string' ? g : JSON.stringify(g))}</span>`).join('')) : ''}
     ${teacher ? stage('Teacher', 'teacher', teacher) : ''}
     ${learning ? stage('Learned', 'teacher', learning) : ''}
     ${stage('Mouth', 'mouth', `<span class="chip">${esc(ep.mouth_path)}</span>${mouth}`)}
+    ${ep.result_rendered ? stage('Result', '', `<span class="chip">${esc(ep.result_rendered)}</span>`) : ''}
     ${stage('Reply', '', `<pre>${esc(ep.reply)}</pre>`)}
     <div style="font-size:.75rem;opacity:.4">episode ${ep.id} - ${ep.metrics?.millis_total ?? '?'}ms total (ears ${ep.metrics?.millis_ears ?? '?'}ms, interior ${ep.metrics?.millis_interior ?? '?'}ms, mouth ${ep.metrics?.millis_mouth ?? '?'}ms)</div>
   </div>`;

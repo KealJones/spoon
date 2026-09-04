@@ -466,7 +466,29 @@ async fn episode_detail(
         .filter_map(|r| serde_json::from_str::<serde_json::Value>(r).ok())
         .find(|ep| ep["id"].as_u64() == Some(q.id));
     match found {
-        Some(ep) => Json(ep).into_response(),
+        Some(mut ep) => {
+            if let Ok(episode) = serde_json::from_value::<spoon_brain::Episode>(ep.clone()) {
+                let rendered_steps: Vec<String> = episode
+                    .steps
+                    .iter()
+                    .map(|s| guard.render(s))
+                    .collect();
+                ep["steps_rendered"] = serde_json::json!(rendered_steps);
+                if let Some(goal) = &episode.goal {
+                    ep["goal_rendered"] = serde_json::json!(guard.render(goal));
+                }
+                if let Some(result) = &episode.result {
+                    ep["result_rendered"] = serde_json::json!(guard.render(result));
+                }
+                let rendered_gaps: Vec<String> = episode
+                    .gaps
+                    .iter()
+                    .map(|g| guard.render(g))
+                    .collect();
+                ep["gaps_rendered"] = serde_json::json!(rendered_gaps);
+            }
+            Json(ep).into_response()
+        }
         None => StatusCode::NOT_FOUND.into_response(),
     }
 }
