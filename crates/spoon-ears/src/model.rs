@@ -7,6 +7,7 @@
 //! of becoming a confident wrong answer.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use spoon_concept::{Concept, SymbolTable, parse};
 use spoon_seat::{Ears, Heard, LlmClient, LlmError, Message, Seat, Turn};
@@ -20,10 +21,37 @@ pub enum EarsFormat {
     PythonCall,
 }
 
+/// Shared flag toggling Python-style ears format at runtime.
+#[derive(Clone, Default)]
+pub struct EarsFormatFlag(Arc<AtomicBool>);
+
+impl EarsFormatFlag {
+    pub fn new(python: bool) -> Self {
+        EarsFormatFlag(Arc::new(AtomicBool::new(python)))
+    }
+
+    pub fn get(&self) -> EarsFormat {
+        if self.0.load(Ordering::Relaxed) {
+            EarsFormat::PythonCall
+        } else {
+            EarsFormat::AngleBracket
+        }
+    }
+
+    pub fn set(&self, format: EarsFormat) {
+        self.0.store(format == EarsFormat::PythonCall, Ordering::Relaxed);
+    }
+
+    pub fn toggle(&self) -> EarsFormat {
+        let was_python = self.0.fetch_xor(true, Ordering::Relaxed);
+        if was_python { EarsFormat::AngleBracket } else { EarsFormat::PythonCall }
+    }
+}
+
 pub struct ModelEars {
     client: LlmClient,
     native: NativeEars,
-    pub format: EarsFormat,
+    format_flag: EarsFormatFlag,
 }
 
 impl ModelEars {
@@ -31,13 +59,22 @@ impl ModelEars {
         ModelEars {
             client,
             native: NativeEars::new(),
-            format: EarsFormat::AngleBracket,
+            format_flag: EarsFormatFlag::default(),
         }
     }
 
     pub fn with_format(mut self, format: EarsFormat) -> Self {
-        self.format = format;
+        self.format_flag.set(format);
         self
+    }
+
+    pub fn with_format_flag(mut self, flag: EarsFormatFlag) -> Self {
+        self.format_flag = flag;
+        self
+    }
+
+    pub fn format_flag(&self) -> &EarsFormatFlag {
+        &self.format_flag
     }
 
     /// Built fresh each turn from the activation-ranked vocabulary, so the
@@ -281,7 +318,8 @@ impl Ears for ModelEars {
         recent: &[Turn],
         rules: &[String],
     ) -> Result<Heard, LlmError> {
-        let system_prompt = match self.format {
+        let format = self.format_flag.get();
+        let system_prompt = match format {
             EarsFormat::AngleBracket => Self::prompt(vocabulary, rules),
             EarsFormat::PythonCall => Self::prompt_python(vocabulary, rules),
         };
@@ -297,7 +335,7 @@ impl Ears for ModelEars {
             .await?;
 
         let table = SymbolTable::new();
-        let (steps, unknown) = match self.format {
+        let (steps, unknown) = match format {
             EarsFormat::AngleBracket => Self::parse_steps(&reply, &table),
             EarsFormat::PythonCall => Self::parse_python_steps(&reply, &table),
         };

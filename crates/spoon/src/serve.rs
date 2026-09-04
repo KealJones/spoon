@@ -18,9 +18,11 @@ use crate::Cli;
 use crate::build::assemble;
 
 type Shared = Arc<Mutex<Brain>>;
+type FormatFlag = spoon_ears::EarsFormatFlag;
 
 pub async fn run(cli: &Cli, host: &str, port: u16) -> Result<()> {
-    let brain: Shared = Arc::new(Mutex::new(assemble(cli).await?));
+    let (brain_val, ears_flag) = assemble(cli).await?;
+    let brain: Shared = Arc::new(Mutex::new(brain_val));
     let app = Router::new()
         .route("/", get(inspector))
         .route("/inspector", get(inspector))
@@ -34,6 +36,8 @@ pub async fn run(cli: &Cli, host: &str, port: u16) -> Result<()> {
         .route("/debug/realizations", get(realizations))
         .route("/debug/episodes", get(episodes))
         .route("/debug/episode", get(episode_detail))
+        .route("/debug/ears-format", get(get_ears_format).post(toggle_ears_format))
+        .layer(axum::Extension(ears_flag))
         .with_state(brain);
 
     let addr = format!("{host}:{port}");
@@ -491,6 +495,30 @@ async fn episode_detail(
         }
         None => StatusCode::NOT_FOUND.into_response(),
     }
+}
+
+async fn get_ears_format(
+    axum::Extension(flag): axum::Extension<FormatFlag>,
+) -> impl IntoResponse {
+    let format = flag.get();
+    Json(json!({
+        "format": match format {
+            spoon_ears::EarsFormat::AngleBracket => "angle-bracket",
+            spoon_ears::EarsFormat::PythonCall => "python",
+        }
+    }))
+}
+
+async fn toggle_ears_format(
+    axum::Extension(flag): axum::Extension<FormatFlag>,
+) -> impl IntoResponse {
+    let new = flag.toggle();
+    Json(json!({
+        "format": match new {
+            spoon_ears::EarsFormat::AngleBracket => "angle-bracket",
+            spoon_ears::EarsFormat::PythonCall => "python",
+        }
+    }))
 }
 
 /// A short, readable name for where something came from.

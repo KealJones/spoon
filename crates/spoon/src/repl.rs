@@ -9,7 +9,7 @@ use crate::Cli;
 use crate::build::assemble;
 
 pub async fn run(cli: &Cli) -> Result<()> {
-    let mut brain = assemble(cli).await?;
+    let (mut brain, _ears_flag) = assemble(cli).await?;
     println!("spoon. ctrl-d to leave. :help for commands.");
     let stdin = std::io::stdin();
     loop {
@@ -74,7 +74,7 @@ pub async fn run(cli: &Cli) -> Result<()> {
 }
 
 pub async fn stdio(cli: &Cli) -> Result<()> {
-    let mut brain = assemble(cli).await?;
+    let (mut brain, _ears_flag) = assemble(cli).await?;
     let stdin = std::io::stdin();
     for line in stdin.lock().lines() {
         let line = line?;
@@ -184,7 +184,7 @@ pub async fn bench(cli: &Cli, suite: &str) -> Result<()> {
             .collect()
     };
 
-    let mut brain = assemble(cli).await?;
+    let (mut brain, _ears_flag) = assemble(cli).await?;
     let mut native = 0usize;
     let mut model = 0usize;
     let mut failed = 0usize;

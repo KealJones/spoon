@@ -10,6 +10,6 @@ mod native;
 mod phrasing;
 pub mod pycall;
 
-pub use model::{EarsFormat, ModelEars};
+pub use model::{EarsFormat, EarsFormatFlag, ModelEars};
 pub use native::NativeEars;
 pub use phrasing::{MIN_CONFIDENCE, PhrasingIndex};

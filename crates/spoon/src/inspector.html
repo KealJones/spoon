@@ -98,6 +98,18 @@ window.addEventListener('hashchange', () => {
 // --- helpers ---
 const get = (url) => fetch(url).then(r => r.json());
 const esc = (s) => String(s).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+let earsFormat = 'angle-bracket';
+get('/debug/ears-format').then(r => { earsFormat = r.format; updateFormatButton(); });
+
+function updateFormatButton() {
+  const btn = document.getElementById('format-toggle');
+  if (btn) btn.textContent = earsFormat === 'python' ? 'ears: python' : 'ears: angle-bracket';
+}
+async function toggleFormat() {
+  const r = await fetch('/debug/ears-format', { method: 'POST' }).then(r => r.json());
+  earsFormat = r.format;
+  updateFormatButton();
+}
 const num = (v) => v == null ? '-' : (Math.round(v * 100) / 100).toFixed(2);
 
 function table(cols, rows, opts = {}) {
@@ -274,7 +286,7 @@ function renderEpisodeTimeline(ep) {
 
 async function render() {
   if (tab === 'chat') {
-    view.innerHTML = `<div class="chat"><input id="msg" placeholder="say something" autofocus><button id="go">send</button></div><div id="chat-history"></div>`;
+    view.innerHTML = `<div class="chat"><input id="msg" placeholder="say something" autofocus><button id="go">send</button><button id="format-toggle" onclick="toggleFormat()" style="opacity:.6;font-size:.8rem">${earsFormat === 'python' ? 'ears: python' : 'ears: angle-bracket'}</button></div><div id="chat-history"></div>`;
     renderChat();
     const msg = document.getElementById('msg');
     const go = () => { const t = msg.value; msg.value = ''; send(t); };

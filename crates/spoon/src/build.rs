@@ -62,7 +62,7 @@ fn permission(mode: &str) -> PermissionMode {
 }
 
 /// Build a brain, seeding a fresh one so it can actually do something.
-pub async fn assemble(cli: &Cli) -> Result<Brain> {
+pub async fn assemble(cli: &Cli) -> Result<(Brain, spoon_ears::EarsFormatFlag)> {
     let settings = Config::load()?;
     // The v1 config points database.path at a v1 brain, whose schema this
     // build cannot read. Opening it would create v2 tables inside a file v1
@@ -104,22 +104,18 @@ pub async fn assemble(cli: &Cli) -> Result<Brain> {
     };
 
     let teaching = online && !cli.no_teaching;
+    let ears_format_flag = spoon_ears::EarsFormatFlag::new(
+        std::env::var("SPOON_EARS_PYTHON").is_ok(),
+    );
     let (ears, mouth, teacher): SeatTrio = if online {
         (
-            {
-                let ears_format = if std::env::var("SPOON_EARS_PYTHON").is_ok() {
-                    spoon_ears::EarsFormat::PythonCall
-                } else {
-                    spoon_ears::EarsFormat::AngleBracket
-                };
-                Box::new(
-                    ModelEars::new(LlmClient::new(
-                        LlmConfig::ollama(&ears_model),
-                        counters.clone(),
-                    ))
-                    .with_format(ears_format),
-                )
-            },
+            Box::new(
+                ModelEars::new(LlmClient::new(
+                    LlmConfig::ollama(&ears_model),
+                    counters.clone(),
+                ))
+                .with_format_flag(ears_format_flag.clone()),
+            ),
             Box::new(ModelMouth::new(
                 LlmClient::new(LlmConfig::ollama(&mouth_model), counters.clone()),
                 table.clone(),
@@ -150,7 +146,7 @@ pub async fn assemble(cli: &Cli) -> Result<Brain> {
         teacher,
         counters,
     };
-    Ok(Brain::new(store, registry, table, seats, config)?)
+    Ok((Brain::new(store, registry, table, seats, config)?, ears_format_flag))
 }
 
 pub fn status(cli: &Cli) -> Result<()> {
@@ -318,7 +314,7 @@ pub async fn teach(cli: &Cli, file: &Path, limit: Option<usize>) -> Result<()> {
         None => lessons,
     };
 
-    let mut brain = assemble(cli).await?;
+    let (mut brain, _ears_flag) = assemble(cli).await?;
     let before = open_store(cli)?.count_concepts()?;
     println!("teaching {} lessons", lessons.len());
     for (i, lesson) in lessons.iter().enumerate() {
