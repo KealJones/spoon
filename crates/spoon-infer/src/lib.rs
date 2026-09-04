@@ -7,10 +7,12 @@
 //! rewriting does not: two-way unification with an occurs check, an index so
 //! rule lookup does not scan, and backward chaining with cycle handling.
 
+mod derive;
 mod error;
 mod rule;
 mod unify;
 
+pub use derive::{Derivation, DeriveBudget, Engine, Support};
 pub use error::{InferError, Result};
 pub use rule::{RuleIndex, ScanIndex, StoredRule, load_rules};
 pub use unify::{Substitution, unify, unify_terms};
