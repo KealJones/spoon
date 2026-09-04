@@ -7,6 +7,8 @@
 
 mod model;
 mod native;
+mod phrasing;
 
 pub use model::ModelEars;
 pub use native::NativeEars;
+pub use phrasing::{MIN_CONFIDENCE, PhrasingIndex};

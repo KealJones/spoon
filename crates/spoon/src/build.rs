@@ -221,3 +221,187 @@ pub fn doctor(cli: &Cli, limit: usize) -> Result<()> {
 pub async fn bench(cli: &Cli, suite: &str) -> Result<()> {
     crate::repl::bench(cli, suite).await
 }
+
+/// Run a curriculum against a brain.
+///
+/// A fresh brain knows its natives and nothing about the world, so the first
+/// real conversation spends itself teaching vocabulary. A curriculum front-loads
+/// that: ordinary turns, run in order, with everything they establish persisted
+/// exactly as if a user had typed them. There is no separate teaching mode,
+/// because a lesson that took a different path than a conversation would not be
+/// teaching the thing that gets used.
+pub async fn teach(cli: &Cli, file: &Path, limit: Option<usize>) -> Result<()> {
+    let raw = std::fs::read_to_string(file)
+        .map_err(|e| anyhow::anyhow!("cannot read {}: {e}", file.display()))?;
+    let curriculum: serde_json::Value = serde_json::from_str(&raw)?;
+    let lessons: Vec<&str> = curriculum["lessons"]
+        .as_array()
+        .map(|a| a.iter().filter_map(|v| v.as_str()).collect())
+        .unwrap_or_default();
+    let lessons: Vec<&str> = match limit {
+        Some(n) => lessons.into_iter().take(n).collect(),
+        None => lessons,
+    };
+
+    let mut brain = assemble(cli).await?;
+    let before = open_store(cli)?.count_concepts()?;
+    println!("teaching {} lessons", lessons.len());
+    for (i, lesson) in lessons.iter().enumerate() {
+        let result = brain.turn("teach", lesson).await?;
+        let short: String = result.reply.chars().take(60).collect();
+        println!("{:>3}  {:<52}  {}", i + 1, truncate(lesson, 50), short);
+    }
+    let after = open_store(cli)?.count_concepts()?;
+    println!("\nconcepts: {before} -> {after}");
+    Ok(())
+}
+
+fn truncate(s: &str, n: usize) -> String {
+    let t: String = s.chars().take(n).collect();
+    if s.chars().count() > n {
+        format!("{t}...")
+    } else {
+        t
+    }
+}
+
+/// Name the shapes this brain keeps rebuilding.
+pub fn consolidate(cli: &Cli, dry_run: bool) -> Result<()> {
+    let store = open_store(cli)?;
+    let bodies: Vec<spoon_concept::Concept> = store
+        .all_realizations()?
+        .iter()
+        .filter_map(|r| match &r.spec {
+            spoon_concept::RealizationSpec::Composed { body } => Some(body.clone()),
+            _ => None,
+        })
+        .collect();
+
+    if bodies.len() < 3 {
+        println!(
+            "only {} learned bodies; nothing to compress yet",
+            bodies.len()
+        );
+        return Ok(());
+    }
+
+    let config = spoon_learn::ConsolidateConfig::default();
+    if dry_run {
+        let found = spoon_learn::consolidate(&bodies, config);
+        println!("{} abstraction(s) would be named:", found.len());
+        for a in &found {
+            println!(
+                "  {:<28} {} uses, utility {:.1}",
+                a.name, a.instances, a.utility
+            );
+        }
+        return Ok(());
+    }
+
+    let named = spoon_learn::consolidate_store(&store, config)?;
+    println!("named {} abstraction(s):", named.len());
+    for a in &named {
+        println!(
+            "  {:<28} {} uses, utility {:.1}",
+            a.name, a.instances, a.utility
+        );
+    }
+    Ok(())
+}
+
+/// Which stage is producing the wrong answers.
+pub fn blame(cli: &Cli, limit: usize) -> Result<()> {
+    let store = open_store(cli)?;
+    let episodes: Vec<spoon_brain::Episode> = store
+        .recent_episodes(limit, None)?
+        .iter()
+        .filter_map(|json| serde_json::from_str(json).ok())
+        .collect();
+
+    let unsatisfying = episodes.iter().filter(|e| e.looks_unsatisfying()).count();
+    println!(
+        "{} episodes, {unsatisfying} of them unsatisfying",
+        episodes.len()
+    );
+    if unsatisfying == 0 {
+        println!("nothing to apportion");
+        return Ok(());
+    }
+
+    println!("\nblame by stage:");
+    for (stage, weight) in spoon_brain::assign_all(&episodes) {
+        let bar = "#".repeat((weight * 4.0).round() as usize);
+        println!("  {:<16} {:>5.1}  {bar}", stage.as_str(), weight);
+    }
+
+    println!("\nworst turns:");
+    for episode in episodes.iter().filter(|e| e.looks_unsatisfying()).take(8) {
+        let blame = spoon_brain::assign_blame(episode);
+        let suspect = blame
+            .prime_suspect()
+            .map(|s| s.as_str().to_string())
+            .unwrap_or_else(|| "unclear".to_string());
+        println!("  {:<12} {}", suspect, truncate(&episode.user_text, 60));
+    }
+    Ok(())
+}
+
+/// Evaluate a concept expression with no ears and no mouth in the way.
+pub async fn eval(cli: &Cli, expression: &str) -> Result<()> {
+    let store = open_store(cli)?;
+    let registry = spoon_natives::bootstrap();
+    spoon_natives::seed_bootstrap(&store, &registry)?;
+    spoon_infer::seed_meta_rules(&store)?;
+    let table = store.load_symbol_table()?;
+    for name in registry.names() {
+        table.intern(name.as_str());
+    }
+
+    let concept = spoon_concept::parse(expression, &table)
+        .map_err(|e| anyhow::anyhow!("cannot parse {expression:?}: {e}"))?;
+
+    let mut evaluator =
+        spoon_eval::Evaluator::new(&store, &registry).with_permission(permission(&cli.permissions));
+    let outcome = evaluator.evaluate(&concept);
+    let trace = evaluator.trace();
+
+    match &outcome {
+        spoon_eval::Outcome::Value(v) => {
+            println!("{}", spoon_concept::render(v, &table));
+        }
+        spoon_eval::Outcome::Stuck { concept, gaps } => {
+            println!("stuck: {}", spoon_concept::render(concept, &table));
+            for gap in gaps {
+                println!(
+                    "  no realization for {}",
+                    spoon_concept::render(&gap.concept, &table)
+                );
+            }
+        }
+        spoon_eval::Outcome::NeedsPermission {
+            effect,
+            realization,
+            ..
+        } => {
+            println!(
+                "needs permission: {realization} wants {} access",
+                effect.as_str()
+            );
+            println!("rerun with --permissions bypass to allow it");
+        }
+        other => println!("{other:?}"),
+    }
+
+    if std::env::var("SPOON_DEBUG").is_ok() {
+        println!("\n{} nodes, {}ms", trace.nodes_used, trace.millis);
+        for step in &trace.steps {
+            println!(
+                "  {:<40} {}",
+                truncate(&spoon_concept::render(&step.concept, &table), 38),
+                step.realization.as_deref().unwrap_or("(data)")
+            );
+        }
+    }
+    let _ = evaluator.commit_evidence();
+    Ok(())
+}

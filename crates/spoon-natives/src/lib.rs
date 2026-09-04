@@ -11,6 +11,7 @@
 pub mod arith;
 pub mod collections;
 pub mod data;
+pub mod io;
 pub mod text;
 
 mod seed;
@@ -26,5 +27,6 @@ pub fn bootstrap() -> NativeRegistry {
     collections::register(&mut registry);
     text::register(&mut registry);
     data::register(&mut registry);
+    io::register(&mut registry);
     registry
 }

@@ -36,6 +36,7 @@ mod encode;
 mod episodes;
 mod error;
 mod meta;
+pub mod pairs;
 mod realizations;
 mod seed;
 mod symbols;

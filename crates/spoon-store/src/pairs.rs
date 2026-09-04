@@ -1,0 +1,263 @@
+//! Worked examples: what was said, and the reading it produced.
+//!
+//! Every reading the model hands back is a data point about how *this* user
+//! talks. Thrown away, the ears cost a model call for the same phrasing
+//! forever. Kept, the native path can learn the shape and stop paying. That is
+//! the whole weaning curve, and this table is where it lives.
+//!
+//! A pair is keyed on `(utterance, steps)` rather than on the utterance alone.
+//! The same sentence can legitimately produce two different readings over the
+//! life of a brain, and collapsing them would throw away the disagreement
+//! instead of letting the two compete on evidence.
+//!
+//! # Trust is not uniform
+//!
+//! Where a pair came from bounds how far it can be trusted before any evidence
+//! arrives. A reading a user explicitly confirmed is the strongest thing Spoon
+//! has: a human looked at it and said yes. A seeded pair is curated but was
+//! written for nobody in particular. A model reading is plausible and nothing
+//! more. [`PairSource::prior`] is that ordering, and [`Pair::standing`] is what
+//! outcomes do to it afterwards.
+
+use chrono::{DateTime, Utc};
+use rusqlite::{OptionalExtension, params};
+use spoon_concept::Concept;
+
+use crate::Store;
+use crate::encode::{ts_from_sql, ts_to_sql};
+use crate::error::{Result, StoreError};
+
+/// Where a reading came from, which is what bounds how far it is trusted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PairSource {
+    /// The model produced it and it parsed. Plausible, unverified.
+    Model,
+    /// A user confirmed it. The strongest evidence a brain can have about how
+    /// its own user talks.
+    Confirmed,
+    /// It shipped in a seed. Curated, but written for nobody in particular, so
+    /// it ranks below something this user actually said yes to.
+    Seed,
+}
+
+impl PairSource {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            PairSource::Model => "model",
+            PairSource::Confirmed => "confirmed",
+            PairSource::Seed => "seed",
+        }
+    }
+
+    /// Standing a pair from this source starts at, before any outcome is
+    /// recorded.
+    ///
+    /// These are ceilings as much as starting points: a phrasing learned from a
+    /// model guess never gets to be as sure of itself as one a human approved,
+    /// no matter how many times it has worked. That asymmetry is deliberate,
+    /// because a model reading that keeps "working" may simply never have been
+    /// checked.
+    pub fn prior(self) -> f64 {
+        match self {
+            PairSource::Model => 0.80,
+            PairSource::Confirmed => 1.00,
+            PairSource::Seed => 0.90,
+        }
+    }
+
+    fn parse(raw: &str) -> Result<PairSource> {
+        match raw {
+            "model" => Ok(PairSource::Model),
+            "confirmed" => Ok(PairSource::Confirmed),
+            "seed" => Ok(PairSource::Seed),
+            other => Err(StoreError::corrupt(
+                "pairs",
+                format!("unknown pair source {other:?}"),
+            )),
+        }
+    }
+}
+
+/// One utterance and the concept steps it produced, with how that has gone.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Pair {
+    pub id: i64,
+    pub utterance: String,
+    pub steps: Vec<Concept>,
+    pub source: PairSource,
+    pub at: DateTime<Utc>,
+    /// Times a reading built from this pair turned out to be right.
+    pub successes: u32,
+    /// Times it turned out to be wrong. A phrasing that keeps misfiring has to
+    /// be able to lose, or one bad generalization poisons the native path
+    /// permanently.
+    pub failures: u32,
+}
+
+impl Pair {
+    /// How much to trust this pair now, in `[0, 1]`.
+    ///
+    /// With no outcomes recorded this is exactly the source prior: a fresh pair
+    /// is worth what its provenance is worth and nothing more. As outcomes
+    /// accumulate the observed rate takes over, so three failures in a row pull
+    /// a model pair well below the threshold the ears will act on, and the
+    /// prior stops mattering.
+    ///
+    /// The blend weight `n / (n + 3)` is what makes early evidence count
+    /// without letting a single unlucky turn erase a source's standing.
+    pub fn standing(&self) -> f64 {
+        let successes = f64::from(self.successes);
+        let failures = f64::from(self.failures);
+        let observations = successes + failures;
+        if observations == 0.0 {
+            return self.source.prior();
+        }
+        // Laplace smoothing keeps a single failure from meaning "never right".
+        let observed = (successes + 1.0) / (observations + 2.0);
+        let weight = observations / (observations + 3.0);
+        (self.source.prior() * (1.0 - weight) + observed * weight).clamp(0.0, 1.0)
+    }
+}
+
+/// Structural key for a reading.
+///
+/// Content ids are already stable across processes and machines, so hashing
+/// them (with the length mixed in, so `[a, b]` cannot collide with `[ab]`)
+/// gives a key that means the same thing in every brain that ever stores it.
+fn steps_digest(steps: &[Concept]) -> Vec<u8> {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(&(steps.len() as u32).to_le_bytes());
+    for step in steps {
+        hasher.update(step.content_id().as_bytes());
+    }
+    hasher.finalize().as_bytes().to_vec()
+}
+
+impl Store {
+    /// Record that this utterance was read as these steps.
+    ///
+    /// Storing the same pair again is not new evidence and does not touch the
+    /// outcome counters: only [`Store::record_pair_outcome`] moves those. It
+    /// does upgrade the source, because a model guess the user later confirms
+    /// should stop being ranked as a guess.
+    ///
+    /// The store records; it does not judge. An empty utterance or an empty
+    /// step list is stored as given, and the phrasing index refuses to build a
+    /// template from either. Rejecting here would mean two places deciding what
+    /// counts as a usable example.
+    pub fn put_pair(&self, utterance: &str, steps: &[Concept], source: PairSource) -> Result<i64> {
+        let digest = steps_digest(steps);
+        let encoded = serde_json::to_string(steps)?;
+        let conn = self.conn.lock();
+        let existing: Option<(i64, String)> = conn
+            .query_row(
+                "SELECT id, source FROM pairs WHERE utterance = ?1 AND steps_id = ?2",
+                params![utterance, digest],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()?;
+        if let Some((id, current)) = existing {
+            if source.prior() > PairSource::parse(&current)?.prior() {
+                conn.execute(
+                    "UPDATE pairs SET source = ?1 WHERE id = ?2",
+                    params![source.as_str(), id],
+                )?;
+            }
+            return Ok(id);
+        }
+        conn.execute(
+            "INSERT INTO pairs (utterance, steps_id, steps, source, at, successes, failures)
+             VALUES (?1, ?2, ?3, ?4, ?5, 0, 0)",
+            params![
+                utterance,
+                digest,
+                encoded,
+                source.as_str(),
+                ts_to_sql(Utc::now())
+            ],
+        )?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    /// Pairs worth building templates from, best standing first.
+    ///
+    /// Ranking happens here rather than in the `ORDER BY` because standing is
+    /// the source prior blended with the outcome history, and the source prior
+    /// is a policy decision that lives in [`PairSource::prior`]. Restating it
+    /// as a SQL `CASE` would put the same judgement in two places, ready to
+    /// drift. The table holds one row per distinct reading, so sorting it in
+    /// memory is not the expensive part of anything.
+    pub fn all_pairs(&self, limit: usize) -> Result<Vec<Pair>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn
+            .prepare("SELECT id, utterance, steps, source, at, successes, failures FROM pairs")?;
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, i64>(4)?,
+                row.get::<_, i64>(5)?,
+                row.get::<_, i64>(6)?,
+            ))
+        })?;
+
+        let mut pairs = Vec::new();
+        for row in rows {
+            let (id, utterance, encoded, source, at, successes, failures) = row?;
+            let steps: Vec<Concept> = serde_json::from_str(&encoded).map_err(|e| {
+                StoreError::corrupt("pairs", format!("undecodable steps in pair {id}: {e}"))
+            })?;
+            pairs.push(Pair {
+                id,
+                utterance,
+                steps,
+                source: PairSource::parse(&source)?,
+                at: ts_from_sql("pairs", at)?,
+                successes: successes.max(0) as u32,
+                failures: failures.max(0) as u32,
+            });
+        }
+        // Ties break on id so two brains built the same way rank the same way,
+        // which is what makes a failed recognition reproducible.
+        pairs.sort_by(|a, b| {
+            b.standing()
+                .partial_cmp(&a.standing())
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.id.cmp(&b.id))
+        });
+        pairs.truncate(limit);
+        Ok(pairs)
+    }
+
+    /// Record how a reading built from this pair turned out.
+    ///
+    /// A missing id is an error rather than a no-op: the caller believes it is
+    /// crediting a specific pair, and silently crediting nothing would hide the
+    /// bug for as long as the brain lives.
+    pub fn record_pair_outcome(&self, id: i64, succeeded: bool) -> Result<()> {
+        let conn = self.conn.lock();
+        let changed = if succeeded {
+            conn.execute(
+                "UPDATE pairs SET successes = successes + 1 WHERE id = ?1",
+                params![id],
+            )?
+        } else {
+            conn.execute(
+                "UPDATE pairs SET failures = failures + 1 WHERE id = ?1",
+                params![id],
+            )?
+        };
+        if changed == 0 {
+            return Err(StoreError::missing("pair", id.to_string()));
+        }
+        Ok(())
+    }
+
+    pub fn count_pairs(&self) -> Result<usize> {
+        let conn = self.conn.lock();
+        let n: i64 = conn.query_row("SELECT COUNT(*) FROM pairs", [], |row| row.get(0))?;
+        Ok(n.max(0) as usize)
+    }
+}

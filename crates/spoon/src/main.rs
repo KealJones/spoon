@@ -65,6 +65,34 @@ enum Command {
     Import { file: PathBuf },
     /// What this brain knows.
     Status,
+    /// Evaluate a concept expression directly, with no ears and no mouth.
+    ///
+    /// The interior on its own. Useful for seeing what Spoon can actually do
+    /// separately from whether the model phrased the request well, which are
+    /// different questions and get confused constantly.
+    Eval {
+        /// A concept expression, for example: sum<list<1, 2, 3>>
+        expression: String,
+    },
+    /// Run a curriculum so a fresh brain starts with something.
+    Teach {
+        #[arg(long, default_value = "data/curriculum/basics.json")]
+        file: PathBuf,
+        /// Stop after this many lessons.
+        #[arg(long)]
+        limit: Option<usize>,
+    },
+    /// Name the shapes this brain keeps rebuilding.
+    Consolidate {
+        /// Report what would be named without storing anything.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Which stage is producing the wrong answers.
+    Blame {
+        #[arg(long, default_value = "100")]
+        limit: usize,
+    },
 }
 
 #[tokio::main]
@@ -79,5 +107,9 @@ async fn main() -> anyhow::Result<()> {
         Command::Export { ref out } => build::export(&cli, out.as_deref()),
         Command::Import { ref file } => build::import(&cli, file),
         Command::Status => build::status(&cli),
+        Command::Eval { ref expression } => build::eval(&cli, expression).await,
+        Command::Teach { ref file, limit } => build::teach(&cli, file, limit).await,
+        Command::Consolidate { dry_run } => build::consolidate(&cli, dry_run),
+        Command::Blame { limit } => build::blame(&cli, limit),
     }
 }

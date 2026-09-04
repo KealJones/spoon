@@ -5,6 +5,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
+use axum::response::sse::{Event, Sse};
 use axum::response::{Html, IntoResponse};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -49,6 +50,11 @@ async fn chat(
     State(brain): State<Shared>,
     Json(body): Json<serde_json::Value>,
 ) -> impl IntoResponse {
+    // Every OpenAI client asks for streaming, and one that asks and gets a
+    // silent socket followed by everything at once reads that as a hang.
+    if body["stream"].as_bool().unwrap_or(false) {
+        return stream_chat(brain, body).await.into_response();
+    }
     let session = body["user"].as_str().unwrap_or("http").to_string();
     let text = body["messages"]
         .as_array()
@@ -85,6 +91,61 @@ async fn chat(
         )
             .into_response(),
     }
+}
+
+/// The streaming form of the same endpoint.
+///
+/// The interior does not stream: a turn is interpreted, reasoned about, and
+/// answered as one act, and there is no half-formed answer to send. What
+/// streams is the finished reply, chunked, because every OpenAI client expects
+/// this shape and refusing to speak it would mean none of them work. The
+/// alternative, holding the socket silent and then sending everything at once,
+/// is what clients read as a hang.
+async fn stream_chat(brain: Shared, body: serde_json::Value) -> impl IntoResponse {
+    let session = body["user"].as_str().unwrap_or("http").to_string();
+    let text = body["messages"]
+        .as_array()
+        .and_then(|m| m.last())
+        .and_then(|m| m["content"].as_str())
+        .unwrap_or_default()
+        .to_string();
+
+    let reply = {
+        let mut guard = brain.lock().await;
+        match guard.turn(&session, &text).await {
+            Ok(result) => result.reply,
+            Err(err) => format!("error: {err}"),
+        }
+    };
+
+    let id = format!("chatcmpl-{}", chrono::Utc::now().timestamp_millis());
+    let mut events: Vec<Result<Event, std::convert::Infallible>> = Vec::new();
+    let chunk = |id: &str, delta: serde_json::Value, finish: Option<&str>| {
+        Event::default().data(
+            serde_json::json!({
+                "id": id,
+                "object": "chat.completion.chunk",
+                "model": "spoon",
+                "choices": [{ "index": 0, "delta": delta, "finish_reason": finish }]
+            })
+            .to_string(),
+        )
+    };
+
+    events.push(Ok(chunk(
+        &id,
+        serde_json::json!({ "role": "assistant" }),
+        None,
+    )));
+    // Word-sized pieces: small enough to render progressively, large enough not
+    // to drown a client in single-character frames.
+    for word in reply.split_inclusive(' ') {
+        events.push(Ok(chunk(&id, serde_json::json!({ "content": word }), None)));
+    }
+    events.push(Ok(chunk(&id, serde_json::json!({}), Some("stop"))));
+    events.push(Ok(Event::default().data("[DONE]")));
+
+    Sse::new(futures::stream::iter(events))
 }
 
 async fn status(State(brain): State<Shared>) -> impl IntoResponse {

@@ -10,6 +10,8 @@ spoon-store = { workspace = true }
 spoon-eval = { workspace = true }
 spoon-infer = { workspace = true }
 spoon-natives = { workspace = true }
+spoon-learn = { workspace = true }
+spoon-ears = { workspace = true }
 spoon-seat = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

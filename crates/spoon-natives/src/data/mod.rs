@@ -8,7 +8,7 @@
 //! - [`time`]: the clock and arithmetic over it. Pure except `now`, which
 //!   observes something outside the computation.
 
-mod json;
+pub(crate) mod json;
 mod store;
 mod time;
 

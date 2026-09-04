@@ -27,11 +27,22 @@ use spoon_eval::{Arity, Ctx, EvalError, EvalResult, NativeRegistry, native_error
 // ---------------------------------------------------------------------------
 
 /// Read the elements of a list concept.
-pub(crate) fn want_list<'a>(native: &str, c: &'a Concept) -> Result<&'a [Concept], EvalError> {
-    match c.head_symbol() {
-        Some(head) if head == SymbolId::of("list") => Ok(c.args()),
-        _ => Err(type_error(native, "a list", c)),
+pub(crate) fn want_list(native: &str, c: &Concept) -> Result<Vec<Concept>, spoon_eval::EvalError> {
+    if let Some(head) = c.head_symbol()
+        && head == SymbolId::of("list")
+    {
+        return Ok(c.args().to_vec());
     }
+    // A JSON array is a list that happens to have arrived from outside.
+    // Refusing it would mean every fetch is followed by a conversion step that
+    // exists only to satisfy a type distinction the user never made, and
+    // `first<fetch-json<url>>` is exactly what anyone would try first.
+    if let Some(spoon_concept::Ground::Json(blob)) = c.as_ground()
+        && let Some(items) = blob.value().as_array()
+    {
+        return Ok(items.iter().map(crate::data::json::from_json).collect());
+    }
+    Err(type_error(native, "a list", c))
 }
 
 /// Build a list concept from elements.
@@ -187,7 +198,7 @@ fn index_of(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 
 fn unique(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     let mut seen: Vec<Concept> = Vec::new();
-    for item in want_list("unique", &args[0])? {
+    for item in &want_list("unique", &args[0])? {
         if !seen.contains(item) {
             seen.push(item.clone());
         }
@@ -199,7 +210,7 @@ fn unique(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// asked for partially, whereas one level composes: apply it twice for two.
 fn flatten(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     let mut items = Vec::new();
-    for item in want_list("flatten", &args[0])? {
+    for item in &want_list("flatten", &args[0])? {
         match want_list("flatten", item) {
             Ok(inner) => items.extend(inner.iter().cloned()),
             Err(_) => items.push(item.clone()),
@@ -410,7 +421,7 @@ fn want_numbers(native: &str, c: &Concept) -> Result<Numbers, EvalError> {
     let mut floats = Vec::with_capacity(items.len());
     let mut ints = Vec::with_capacity(items.len());
     let mut any_float = false;
-    for item in items {
+    for item in items.iter() {
         match item.as_ground() {
             Some(Ground::Int(i)) => {
                 ints.push(*i);
@@ -499,7 +510,53 @@ fn max_of(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 // Registration
 // ---------------------------------------------------------------------------
 
+/// The integers from one bound to another.
+///
+/// Without this there is no way to say "do something for each number", because
+/// every collection operation needs a list to start from and nothing in the
+/// language produces one from a count. `Map` over a range is how iteration is
+/// spelled here; there is no loop construct and there does not need to be.
+///
+/// The upper bound is inclusive, because `range<1, 100>` is what someone asking
+/// for one to a hundred means, and off-by-one at the language level is a tax on
+/// every use.
+fn range(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let (from, to) = match args.len() {
+        1 => (1i64, want_int_arg("range", &args[0])?),
+        _ => (
+            want_int_arg("range", &args[0])?,
+            want_int_arg("range", &args[1])?,
+        ),
+    };
+    if to < from {
+        return Ok(make_list(Vec::new()));
+    }
+    // A range is materialized, so an unbounded one is a memory exhaustion the
+    // evaluator's node budget cannot see: the whole list is built inside one
+    // native before any budget is charged.
+    const MAX: i64 = 1_000_000;
+    if to - from >= MAX {
+        return Err(spoon_eval::native_error(
+            "range",
+            format!("{} values is over the {MAX} cap", to - from + 1),
+        ));
+    }
+    Ok(make_list((from..=to).map(Concept::int).collect()))
+}
+
+fn want_int_arg(native: &str, c: &Concept) -> Result<i64, spoon_eval::EvalError> {
+    c.as_ground()
+        .and_then(spoon_concept::Ground::as_i64)
+        .ok_or_else(|| type_error(native, "an integer", c))
+}
+
 pub fn register(registry: &mut NativeRegistry) {
+    registry.pure(
+        "range",
+        range,
+        Arity::Between(1, 2),
+        "the integers between two bounds, both included",
+    );
     registry.pure(
         "list",
         list,

@@ -5,10 +5,13 @@ use std::time::Instant;
 
 use chrono::Utc;
 use spoon_concept::{Concept, ConceptMeta, Provenance, SymbolTable, Tier, holes, render};
+use spoon_ears::PhrasingIndex;
 use spoon_eval::{Budget, Evaluator, NativeRegistry, Outcome, PermissionMode};
 use spoon_infer::{DeriveBudget, DiscriminationTree, Engine};
-use spoon_seat::{Ears, Heard, Mouth, Seat, SeatCounters, Teacher, TeacherAsk, TeacherReply};
+use spoon_learn::{SynthBudget, SynthOutcome, synthesize};
+use spoon_seat::{Ears, Heard, Mouth, Seat, SeatCounters, Spec, Teacher, TeacherAsk, TeacherReply};
 use spoon_store::Store;
+use spoon_store::pairs::PairSource;
 
 use crate::episode::{EarsPath, Episode, MouthPath, TurnMetrics};
 use crate::resolve::{Move, resolve};
@@ -67,6 +70,12 @@ pub struct Brain {
     counters: Arc<SeatCounters>,
     config: BrainConfig,
     next_episode: u64,
+    /// Readings learned from turns the model got right.
+    ///
+    /// Held here rather than inside the ears because it is fed by what the
+    /// whole turn concluded, not by what the ears alone produced: a reading is
+    /// only worth reusing once the interior acted on it without complaint.
+    phrasing: PhrasingIndex,
 }
 
 impl Brain {
@@ -83,6 +92,7 @@ impl Brain {
         config: BrainConfig,
     ) -> spoon_store::Result<Self> {
         let next_episode = store.next_episode_id()?;
+        let phrasing = PhrasingIndex::from_store(&store).unwrap_or_default();
         Ok(Brain {
             store,
             registry,
@@ -93,6 +103,7 @@ impl Brain {
             counters: seats.counters,
             config,
             next_episode,
+            phrasing,
         })
     }
 
@@ -156,13 +167,21 @@ impl Brain {
         let moves = resolve(&steps);
         let mut gaps = Vec::new();
         let mut realizations = Vec::new();
+        let mut interior = Vec::new();
         let mut rules = Vec::new();
         let mut result = None;
         let mut goal = None;
 
         for m in &moves {
             goal = Some(m.concept().clone());
-            match self.act(m, &mut metrics, &mut gaps, &mut realizations, &mut rules) {
+            match self.act(
+                m,
+                &mut metrics,
+                &mut gaps,
+                &mut realizations,
+                &mut interior,
+                &mut rules,
+            ) {
                 Ok(Some(value)) => result = Some(value),
                 Ok(None) => {}
                 Err(err) => {
@@ -198,12 +217,25 @@ impl Brain {
             result,
             gaps,
             realizations,
+            trace: interior,
             rules,
             reply: reply.clone(),
             mouth_path,
             metrics,
             correction: correction.as_ref().map(|_| text.to_string()),
         };
+        // A reading the model produced that the interior then acted on without
+        // getting stuck is worth remembering, so the same shape costs nothing
+        // next time. This is the only part of the ears that improves with use.
+        //
+        // Readings that hit a gap are deliberately not learned: reusing a bad
+        // one makes it permanent, because the model that would have got it
+        // right is never consulted again for that shape.
+        if ears_path == EarsPath::Model && episode.gaps.is_empty() && !steps.is_empty() {
+            let _ = self.store.put_pair(text, &steps, PairSource::Model);
+            self.phrasing.learn(text, &steps);
+        }
+
         self.store
             .put_episode(&episode_json(&episode)?, episode.id)?;
         self.next_episode += 1;
@@ -228,11 +260,22 @@ impl Brain {
             .find(|e| e.correction.is_none() && e.reply.starts_with("noted")))
     }
 
-    async fn hear(&self, text: &str, metrics: &mut TurnMetrics) -> (Heard, EarsPath) {
+    async fn hear(&mut self, text: &str, metrics: &mut TurnMetrics) -> (Heard, EarsPath) {
         // Native first, always. Every turn the model does not handle is the
         // weaning curve moving.
         if let Some(heard) = self.ears.hear_native(text) {
             metrics.ears_native += 1;
+            return (heard, EarsPath::Native);
+        }
+        // Then whatever this user has said before. A phrasing learned from an
+        // earlier turn costs nothing and is the only part of the ears that gets
+        // better with use.
+        if let Some((steps, confidence)) = self.phrasing.recognize(text) {
+            metrics.ears_native += 1;
+            let mut heard = Heard::native(steps, confidence);
+            // A recognized reading can mint names the store has never seen, and
+            // an id whose spelling was never recorded prints as hex.
+            heard.names = name_shaped_words(text);
             return (heard, EarsPath::Native);
         }
         let vocabulary = self.vocabulary();
@@ -265,6 +308,7 @@ impl Brain {
         metrics: &mut TurnMetrics,
         gaps: &mut Vec<Concept>,
         realizations: &mut Vec<(String, bool)>,
+        interior: &mut Vec<crate::episode::TraceStep>,
         rules: &mut Vec<String>,
     ) -> spoon_store::Result<Option<Concept>> {
         match m {
@@ -297,6 +341,25 @@ impl Brain {
             // realization, record a capability gap, and turn a hello into a
             // report about what Spoon cannot do.
             Move::Chat(expr) => Ok(Some(expr.clone())),
+            // A hole-free expression that nothing can reduce is not a
+            // computation, it is a claim. `Symmetric<Friends>` has no
+            // realization and never will: saying it at Spoon is telling it
+            // something, and evaluating it to itself and discarding the result
+            // means the turn taught nothing.
+            //
+            // Holes exclude questions, since `Owns<?0, Dog>` is asking rather
+            // than stating, and anything reducible is excluded because `Add<2,
+            // 3>` is a computation whose answer is 5, not a fact about addition.
+            Move::Do(expr)
+                if holes(expr).is_empty()
+                    && is_declarative(expr)
+                    && self.is_irreducible_data(expr) =>
+            {
+                self.store
+                    .assert_concept(expr, Provenance::User { episode: None }, None, None)?;
+                self.remember_names(expr);
+                Ok(Some(expr.clone()))
+            }
             Move::Do(expr) => {
                 let mut evaluator = Evaluator::new(&self.store, &self.registry)
                     .with_budget(self.config.eval_budget)
@@ -311,8 +374,38 @@ impl Brain {
                             matches!(step.outcome, spoon_eval::StepOutcome::Reduced(_)),
                         ));
                     }
+                    interior.push(crate::episode::TraceStep {
+                        concept: render(&step.concept, &self.symbols),
+                        realization: step.realization.as_ref().map(|r| r.to_string()),
+                        alternatives: step
+                            .alternatives
+                            .iter()
+                            .map(|(n, s)| (n.to_string(), *s))
+                            .collect(),
+                        explored: step.explored,
+                        effect: step.effect.as_str().to_string(),
+                        depth: step.depth,
+                        outcome: match &step.outcome {
+                            spoon_eval::StepOutcome::Reduced(c) => {
+                                format!("reduced to {}", render(c, &self.symbols))
+                            }
+                            spoon_eval::StepOutcome::Irreducible => "irreducible".to_string(),
+                            spoon_eval::StepOutcome::Failed(why) => format!("failed: {why}"),
+                        },
+                    });
                 }
+                // Two different shapes of "I cannot do that", and both are
+                // worth telling the Teacher about. Nothing realizes this head
+                // at all is the obvious one. A realization existing and failing
+                // on these arguments is the other: `reverse` can reverse a list
+                // and was handed a string, which is a gap in what Spoon can do
+                // even though the concept is not unknown.
                 gaps.extend(trace.irreducible().into_iter().cloned());
+                for (concept, _, _) in trace.failures() {
+                    if !gaps.contains(concept) {
+                        gaps.push(concept.clone());
+                    }
+                }
                 let _ = evaluator.commit_evidence();
                 Ok(match outcome {
                     Outcome::Value(v) => Some(v),
@@ -329,6 +422,25 @@ impl Brain {
                     }
                 })
             }
+        }
+    }
+
+    /// Does this reduce to itself with nothing applied?
+    ///
+    /// Checked by evaluating rather than by inspecting the store, because
+    /// "irreducible" means no realization fired anywhere in the term, which is
+    /// exactly what the evaluator already reports. Pure only: a probe must not
+    /// have side effects, and anything needing authority is a computation by
+    /// definition.
+    fn is_irreducible_data(&self, expr: &Concept) -> bool {
+        let mut probe = Evaluator::new(&self.store, &self.registry)
+            .with_budget(self.config.eval_budget)
+            .with_permission(PermissionMode::AlwaysAsk);
+        match probe.evaluate(expr) {
+            Outcome::Value(v) => {
+                v == *expr && probe.trace().steps.iter().all(|s| s.realization.is_none())
+            }
+            _ => false,
         }
     }
 
@@ -366,9 +478,16 @@ impl Brain {
                 concept: gap.clone(),
                 attempted: Vec::new(),
             });
+            // Examples are the only thing the synthesizer can actually search
+            // against, so asking for them is what turns a gap into a capability
+            // rather than a note about one.
+            asks.push(TeacherAsk::Examples {
+                concept: gap.clone(),
+                arity: gap.arity().max(1),
+            });
         }
 
-        for ask in asks.into_iter().take(3) {
+        for ask in asks.into_iter().take(4) {
             let Ok(reply) = teacher.teach(&ask).await else {
                 continue;
             };
@@ -428,10 +547,47 @@ impl Brain {
                 };
                 let _ = self.store.put_realization(&realization);
             }
-            // A spec is what the synthesizer searches against, and an admitted
-            // blank is worth storing so the same question is not asked forever.
-            TeacherReply::Spec(_) | TeacherReply::Unknown { .. } => {}
+            // A spec is examples, and examples are searchable. This is the
+            // path that turns "I cannot do that" into something Spoon can do.
+            TeacherReply::Spec(spec) => self.learn_from_spec(&spec),
+            // An admitted blank is a real answer. Nothing to store yet, but it
+            // is worth not treating as a failure.
+            TeacherReply::Unknown { .. } => {}
         }
+    }
+
+    /// Search for a body satisfying the Teacher's examples, and keep it if one
+    /// exists.
+    ///
+    /// The Teacher proposes; the synthesizer verifies. That separation is why a
+    /// model is allowed near this at all: nothing it says is trusted, only its
+    /// examples are, and a body that fails one of them is discarded.
+    fn learn_from_spec(&self, spec: &Spec) {
+        if spec.examples.is_empty() {
+            return;
+        }
+        let outcome = synthesize(spec, &self.store, &self.registry, SynthBudget::default());
+        let SynthOutcome::Found { body, .. } = outcome else {
+            return;
+        };
+        let now = Utc::now();
+        let realization = spoon_concept::Realization {
+            target: spec.target.clone(),
+            name: format!("synth-{}", now.timestamp_millis()).into(),
+            spec: spoon_concept::RealizationSpec::Composed { body },
+            effect: spoon_concept::Effect::Pure,
+            activation: spoon_concept::Activation::new(now),
+            // Provisional: it fits the examples it was shown, which is evidence
+            // rather than proof. Use decides the rest.
+            provenance: Provenance::Synthesized { episode: None },
+            tier: Tier::Provisional,
+        };
+        let _ = self.store.put_realization(&realization);
+    }
+
+    /// Is this something the store now actively asserts?
+    fn holds(&self, concept: &Concept) -> bool {
+        self.store.holds(concept).unwrap_or(false)
     }
 
     fn build_response(
@@ -447,6 +603,10 @@ impl Brain {
         match (moves.first(), result) {
             (Some(Move::Chat(c)), _) => c.clone(),
             (Some(Move::Assert(c)), _) => Concept::call("noted", [c.clone()]),
+            // A statement that arrived as a `Do` was still a statement.
+            (Some(Move::Do(_)), Some(value)) if gaps.is_empty() && self.holds(value) => {
+                Concept::call("noted", [value.clone()])
+            }
             (_, Some(value)) if !gaps.is_empty() => {
                 Concept::call("partial", [value.clone(), Concept::int(gaps.len() as i64)])
             }
@@ -484,6 +644,51 @@ impl Brain {
     pub fn seat_calls(&self, seat: Seat) -> u64 {
         self.counters.get(seat)
     }
+}
+
+/// Is this concept a statement rather than a request?
+///
+/// Only the declarative meta-vocabulary counts. An irreducible concept is
+/// ambiguous on its face: `Symmetric<Friends>` is something Spoon was told,
+/// while `FindIndicesSummingTo<[2,7], 9>` is something Spoon was asked for and
+/// cannot do. Both reduce to themselves.
+///
+/// Guessing "fact" for the second is the expensive mistake: it stores the
+/// request as though it were true, reports no capability gap, and so the
+/// Teacher is never asked and the capability is never learned. Guessing
+/// "request" for the first only means a fact goes unstored and the user says it
+/// again.
+fn is_declarative(concept: &Concept) -> bool {
+    const DECLARATIVE: &[&str] = &[
+        "symmetric",
+        "transitive",
+        "inverse-of",
+        "subtype-of",
+        "participates",
+        "synonym",
+        "default-expectation",
+        "denotes",
+        "works-well-with",
+        "works-poorly-with",
+    ];
+    concept.head_symbol().is_some_and(|head| {
+        DECLARATIVE
+            .iter()
+            .any(|d| head == spoon_concept::SymbolId::of(d))
+    })
+}
+
+/// Words in an utterance that look like names.
+///
+/// A phrasing match can produce a concept for something the store has never
+/// heard of, and a symbol id is derived from its name, so without recording the
+/// spelling the reply prints hex where it should print "mary".
+fn name_shaped_words(text: &str) -> Vec<Arc<str>> {
+    text.split_whitespace()
+        .map(|w| w.trim_matches(|c: char| !c.is_alphanumeric()))
+        .filter(|w| w.len() > 1 && w.chars().all(|c| c.is_alphanumeric()))
+        .map(|w| Arc::from(w.to_lowercase().as_str()))
+        .collect()
 }
 
 fn episode_json(episode: &Episode) -> spoon_store::Result<String> {

@@ -164,7 +164,7 @@ fn json_type(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 
 /// JSON value to concept. See the module docs for why each arm lands where it
 /// does.
-fn from_json(value: &Value) -> Concept {
+pub(crate) fn from_json(value: &Value) -> Concept {
     match value {
         Value::Bool(b) => Concept::bool(*b),
         Value::String(s) => Concept::text(s),

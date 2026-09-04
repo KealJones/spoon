@@ -43,6 +43,24 @@ pub enum MouthPath {
     Model,
 }
 
+/// One decision the interior made.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TraceStep {
+    /// What was being reduced, rendered with the names in force at the time.
+    pub concept: String,
+    /// What was applied, if anything.
+    pub realization: Option<String>,
+    /// What it was chosen over, with the score each got. This is the part that
+    /// cannot be reconstructed later.
+    pub alternatives: Vec<(String, f64)>,
+    /// True when exploration overrode the top-ranked candidate, so a failure
+    /// can be read as the cost of looking rather than a bad realization.
+    pub explored: bool,
+    pub effect: String,
+    pub depth: u32,
+    pub outcome: String,
+}
+
 /// One turn, start to finish.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Episode {
@@ -61,9 +79,17 @@ pub struct Episode {
     /// Concepts reached that nothing could realize. The capability-gap report,
     /// and what the Teacher is pointed at.
     pub gaps: Vec<Concept>,
-    /// Realizations applied, in order, with whether each worked. This is what
-    /// credit assignment reads.
+    /// Realizations applied, in order, with whether each worked.
     pub realizations: Vec<(String, bool)>,
+    /// The interior's own reasoning, step by step.
+    ///
+    /// Knowing a realization ran is not enough to diagnose anything. The
+    /// question after a wrong answer is which alternatives existed and why this
+    /// one beat them, and that is unrecoverable afterwards: scores depend on
+    /// activation at the time, and the store has moved on since. Written down
+    /// or lost.
+    #[serde(default)]
+    pub trace: Vec<TraceStep>,
     /// Rules that fired, when the answer came from derivation rather than
     /// evaluation.
     pub rules: Vec<String>,

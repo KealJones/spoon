@@ -539,7 +539,32 @@ fn is_odd(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 // Registration
 // ---------------------------------------------------------------------------
 
+/// Identity predicates on booleans.
+///
+/// `Filter` needs a predicate concept to hand each element, and until now there
+/// was no way to say "keep the true ones" without writing `eq<?0, true>`, which
+/// is the same thing spelled worse.
+fn is_true(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    Ok(Concept::bool(want_bool("is-true", &args[0])?))
+}
+
+fn is_false(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    Ok(Concept::bool(!want_bool("is-false", &args[0])?))
+}
+
 pub fn register(registry: &mut NativeRegistry) {
+    registry.pure(
+        "is-true",
+        is_true,
+        Arity::Exact(1),
+        "whether a boolean is true",
+    );
+    registry.pure(
+        "is-false",
+        is_false,
+        Arity::Exact(1),
+        "whether a boolean is false",
+    );
     // Arithmetic. All pure and eager: nothing here reads the world, and every
     // argument is needed.
     registry.pure(

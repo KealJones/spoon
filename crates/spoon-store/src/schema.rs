@@ -10,7 +10,7 @@ use rusqlite::{Connection, OptionalExtension};
 use crate::error::{Result, StoreError};
 
 /// Schema version this build writes and understands.
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 
 pub(crate) const SCHEMA_VERSION_KEY: &str = "schema_version";
 
@@ -30,7 +30,48 @@ const MIGRATIONS: &[Migration] = &[
         version: 2,
         sql: V2,
     },
+    Migration {
+        version: 3,
+        sql: V3,
+    },
 ];
+
+/// Pairs: an utterance and the reading it produced.
+///
+/// This is what makes the native ears improve instead of staying frozen at
+/// whatever was hand-coded. Every reading the model produces that turns out to
+/// work is a worked example of how this user talks, and the phrasing index
+/// builds slot-abstracted templates out of these rows on open.
+///
+/// The key is `(utterance, steps_id)`, not the utterance alone: the same
+/// sentence can produce two different readings over the life of a brain, and
+/// those should compete on evidence rather than overwrite each other.
+///
+/// `steps_id` is a digest of the reading's content ids, so it means the same
+/// thing in every brain, and `steps` is the reading itself as JSON, read whole
+/// exactly like an episode is.
+///
+/// Note the name collides with `V1_ERA_TABLES` below. That check only runs on a
+/// database with no recorded schema version at all, and a database that has run
+/// this migration has version 3, so a v2-lineage brain is never mistaken for a
+/// v1 one. A genuine v1 brain still has its own `pairs` table and is still
+/// correctly refused.
+const V3: &str = r#"
+CREATE TABLE pairs (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    utterance TEXT NOT NULL,
+    steps_id  BLOB NOT NULL,
+    steps     TEXT NOT NULL,
+    source    TEXT NOT NULL,
+    at        INTEGER NOT NULL,
+    successes INTEGER NOT NULL DEFAULT 0,
+    failures  INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (utterance, steps_id)
+);
+
+CREATE INDEX pairs_source ON pairs(source);
+CREATE INDEX pairs_at ON pairs(at);
+"#;
 
 /// Episodes: the record of what actually happened, turn by turn.
 ///

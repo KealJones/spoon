@@ -95,7 +95,7 @@ fn join(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     let items = want_list("join", &args[0])?;
     let sep = want_text("join", &args[1])?;
     let mut parts = Vec::with_capacity(items.len());
-    for item in items {
+    for item in items.iter() {
         parts.push(want_text("join", item)?);
     }
     Ok(Concept::text(parts.join(sep)))
@@ -315,7 +315,28 @@ fn parse_float(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 // Registration
 // ---------------------------------------------------------------------------
 
+/// A string as a list of its characters.
+///
+/// Characters, not bytes, so a multibyte string comes apart into the pieces a
+/// reader would call characters rather than into fragments that cannot be put
+/// back together.
+fn chars(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
+    let text = want_text("chars", &args[0])?;
+    Ok(Concept::call(
+        "list",
+        text.chars()
+            .map(|c| Concept::text(c.to_string()))
+            .collect::<Vec<_>>(),
+    ))
+}
+
 pub fn register(registry: &mut NativeRegistry) {
+    registry.pure(
+        "chars",
+        chars,
+        Arity::Exact(1),
+        "a string as a list of characters",
+    );
     registry.pure(
         "concat",
         concat,

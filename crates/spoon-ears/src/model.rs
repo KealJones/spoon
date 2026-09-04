@@ -49,12 +49,35 @@ correction<STEP>       the speaker is repairing what they just said; STEP is the
 A CONCEPT is written Head<Arg, Arg>. Arguments are concepts, quoted "text", numbers, true/false, or ?0 for something unspecified. Names are kebab-case.
 
 Examples:
-  "john has a dog"            -> assert-that<owns<john, dog>>
-  "who owns a dog"            -> ask<owns<?0, dog>>
-  "add 2 and 3"               -> do<add<2, 3>>
-  "hey"                       -> chat<greet<>>
+  "john has a dog"             -> assert-that<owns<john, dog>>
+  "who owns a dog"             -> ask<owns<?0, dog>>
+  "is keal friends with greg"  -> ask<friends<keal, greg>>
+  "add 2 and 3"                -> do<add<2, 3>>
+  "hey"                        -> chat<greet<>>
   "the weights, no the scores" -> do<sum<weights>>
                                   correction<do<sum<scores>>>
+
+A statement ABOUT a relation is still a statement, so it is assert-that. These
+shapes matter and have exact spellings:
+
+  "friendship is symmetric"        -> assert-that<symmetric<friends>>
+  "X is the inverse of Y"          -> assert-that<inverse-of<X, Y>>
+  "part-of is transitive"          -> assert-that<transitive<part-of>>
+  "a dog is a subtype of animal"   -> assert-that<subtype-of<dog, animal>>
+  "rex is a dog"                   -> assert-that<participates<rex, dog>>
+  "animals are alive by default"   -> assert-that<default-expectation<animal, alive, true>>
+  "\"pup\" means dog"              -> assert-that<synonym<"pup", dog>>
+
+Use the plain relation name, not a noun form: "friendship is symmetric" is
+about the relation `friends`, so write symmetric<friends>. Naming it
+`friendship` makes a second, unrelated concept.
+
+Multi-step requests use let, binding a name to each intermediate result:
+
+  "fetch the todos and count them"
+      -> do<json-length<fetch-json<"https://example.com/todos">>>
+  "get the json and add up the scores"
+      -> do<sum<pluck<fetch-json<"URL">, "score">>>
 
 If a word means nothing you can express, write it as unknown<"the word"> inside the concept rather than guessing.
 
