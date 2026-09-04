@@ -1,0 +1,18 @@
+[package]
+name = "spoon-mouth"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+spoon-concept = { workspace = true }
+spoon-store = { workspace = true }
+spoon-seat = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

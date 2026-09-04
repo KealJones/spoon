@@ -10,7 +10,7 @@ use rusqlite::{Connection, OptionalExtension};
 use crate::error::{Result, StoreError};
 
 /// Schema version this build writes and understands.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 pub(crate) const SCHEMA_VERSION_KEY: &str = "schema_version";
 
@@ -21,10 +21,33 @@ struct Migration {
     sql: &'static str,
 }
 
-const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    sql: V1,
-}];
+const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        sql: V1,
+    },
+    Migration {
+        version: 2,
+        sql: V2,
+    },
+];
+
+/// Episodes: the record of what actually happened, turn by turn.
+///
+/// Stored as JSON rather than shredded into columns because an episode is read
+/// whole, by the doctor and by credit assignment, and its shape will keep
+/// changing as the cognitive loop grows. Indexing what is queried (session,
+/// time) gets the useful part without freezing the rest.
+const V2: &str = r#"
+CREATE TABLE episodes (
+    id         INTEGER PRIMARY KEY,
+    at         INTEGER NOT NULL,
+    session    TEXT NOT NULL,
+    json       TEXT NOT NULL
+);
+CREATE INDEX episodes_session ON episodes(session);
+CREATE INDEX episodes_at ON episodes(at);
+"#;
 
 const V1: &str = r#"
 CREATE TABLE concepts (
@@ -131,9 +154,41 @@ pub(crate) fn apply_pragmas(conn: &Connection) -> Result<()> {
 }
 
 /// Bring the database up to [`SCHEMA_VERSION`], creating it if it is empty.
+/// Tables only the v1 system ever created.
+///
+/// v2 is a different system with an incompatible schema, not a later version of
+/// v1, so there is no migration between them. Opening a v1 brain and creating
+/// v2 tables alongside would leave a file that neither system can read, which
+/// is a worse outcome than refusing.
+const V1_ERA_TABLES: &[&str] = &["actions", "fact_args", "pairs", "stances"];
+
+fn looks_like_v1_brain(conn: &Connection) -> Result<bool> {
+    for table in V1_ERA_TABLES {
+        let found: Option<String> = conn
+            .query_row(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?1",
+                [table],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if found.is_some() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 pub(crate) fn migrate(conn: &mut Connection) -> Result<()> {
     ensure_meta_table(conn)?;
     let current = read_version(conn)?;
+    if current == 0 && looks_like_v1_brain(conn)? {
+        return Err(StoreError::corrupt(
+            "meta",
+            "this file is a v1 Spoon brain, whose schema v2 cannot read. \
+             v2 keeps its own file so the v1 brain stays intact; point --db \
+             somewhere else, or use the default ~/.spoon/spoon-v2.db",
+        ));
+    }
     if current > SCHEMA_VERSION {
         return Err(StoreError::SchemaTooNew {
             found: current,

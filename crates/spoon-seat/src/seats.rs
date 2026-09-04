@@ -1,0 +1,159 @@
+//! What each seat is asked for, and what it must give back.
+
+use std::sync::Arc;
+
+use spoon_concept::Concept;
+
+use crate::client::LlmError;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Seat {
+    Ears,
+    Mouth,
+    Teacher,
+}
+
+impl Seat {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Seat::Ears => "ears",
+            Seat::Mouth => "mouth",
+            Seat::Teacher => "teacher",
+        }
+    }
+}
+
+/// What the ears produce from one utterance.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Heard {
+    /// The utterance as a sequence of concept operations.
+    ///
+    /// Flat rather than nested, because that is the shape speech actually has:
+    /// bind, correct, qualify, qualify. Spoon reshapes it into a tree during
+    /// resolution, where it has the context to do so.
+    pub steps: Vec<Concept>,
+    /// Words the ears could not place, in the position they appeared. Each one
+    /// is a lead for the Teacher rather than a failure.
+    pub unknown: Vec<Arc<str>>,
+    /// How much the ears trust this reading, in `[0, 1]`.
+    pub confidence: f64,
+    /// Whether a model was consulted. The headline weaning metric is how often
+    /// this is false.
+    pub used_model: bool,
+    /// Every name as it was written.
+    ///
+    /// A symbol id is computed from its name, so parsing a concept teaches the
+    /// store nothing about spelling. Without carrying the words back, a brain
+    /// prints `#8faadc4403462050` where it should print `owns`, and every reply
+    /// about anything newly learned is unreadable.
+    pub names: Vec<Arc<str>>,
+}
+
+impl Heard {
+    pub fn native(steps: Vec<Concept>, confidence: f64) -> Self {
+        Heard {
+            steps,
+            unknown: Vec::new(),
+            confidence,
+            used_model: false,
+            names: Vec::new(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.steps.is_empty()
+    }
+}
+
+/// Messy language in, concepts out.
+#[async_trait::async_trait]
+pub trait Ears: Send + Sync {
+    /// Interpret an utterance.
+    ///
+    /// `vocabulary` is the concept names worth showing the model this turn,
+    /// already ranked by activation, most useful first. Passing the whole
+    /// vocabulary would be both slower and worse: a prompt listing everything
+    /// Spoon knows buries the handful of concepts this user actually uses.
+    async fn hear(&self, text: &str, vocabulary: &[Arc<str>]) -> Result<Heard, LlmError>;
+
+    /// A reading produced without consulting a model, or `None` when the native
+    /// path does not recognize the utterance. Always tried first.
+    fn hear_native(&self, text: &str) -> Option<Heard>;
+}
+
+/// Structured result out, prose back.
+#[async_trait::async_trait]
+pub trait Mouth: Send + Sync {
+    /// Render a response.
+    ///
+    /// `must_mention` holds the values that have to survive into the output.
+    /// The check is what stops the mouth quietly inventing or dropping a number
+    /// on its way to sounding natural.
+    async fn say(&self, response: &Concept, must_mention: &[Concept]) -> Result<String, LlmError>;
+
+    /// Deterministic rendering, used offline and whenever the model's output
+    /// fails the faithfulness check.
+    fn say_native(&self, response: &Concept, must_mention: &[Concept]) -> String;
+}
+
+/// What the Teacher is being asked for.
+#[derive(Debug, Clone, PartialEq)]
+pub enum TeacherAsk {
+    /// A word the ears could not place, with the utterance it appeared in.
+    Vocabulary {
+        word: Arc<str>,
+        utterance: Arc<str>,
+        position: Arc<str>,
+    },
+    /// A concept with no realization, with what was tried.
+    Capability {
+        concept: Concept,
+        attempted: Vec<Arc<str>>,
+    },
+    /// Input and output examples for a capability, so the synthesizer has
+    /// something to search against.
+    Examples { concept: Concept, arity: usize },
+    /// What a word means, when Spoon has no concept for it at all.
+    Concept { word: Arc<str>, context: Arc<str> },
+}
+
+/// A specification the synthesizer can search against.
+///
+/// The Teacher writes these. It does not write executable bodies: proposing
+/// structure is a different act from writing code that runs, and the
+/// synthesizer verifies what it builds against these examples.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Spec {
+    pub target: Concept,
+    pub examples: Vec<(Vec<Concept>, Concept)>,
+    pub note: Option<Arc<str>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TeacherReply {
+    /// The word means an existing concept.
+    Synonym {
+        word: Arc<str>,
+        concept: Concept,
+        confidence: f64,
+    },
+    /// A new concept, with the relationships that give it consequences.
+    NewConcept {
+        concept: Concept,
+        relations: Vec<Concept>,
+        surface_forms: Vec<Arc<str>>,
+    },
+    /// Examples for the synthesizer.
+    Spec(Spec),
+    /// A realization built from concepts Spoon already has.
+    Composition { target: Concept, body: Concept },
+    /// The Teacher had nothing useful, which is a real answer and not a
+    /// failure. Recording it stops Spoon asking the same question forever.
+    Unknown { why: Arc<str> },
+}
+
+/// Fills gaps, and never writes executable bodies by default.
+#[async_trait::async_trait]
+pub trait Teacher: Send + Sync {
+    async fn teach(&self, ask: &TeacherAsk) -> Result<TeacherReply, LlmError>;
+}

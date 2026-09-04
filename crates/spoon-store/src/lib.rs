@@ -33,6 +33,7 @@
 mod assertions;
 mod concepts;
 mod encode;
+mod episodes;
 mod error;
 mod meta;
 mod realizations;

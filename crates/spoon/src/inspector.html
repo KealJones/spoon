@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>spoon</title>
+<style>
+  :root { color-scheme: light dark; --line: #8884; }
+  body { font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; margin: 0; padding: 1.5rem; }
+  h1 { font-size: 1.1rem; margin: 0 0 1rem; font-weight: 600; }
+  nav { display: flex; gap: .25rem; border-bottom: 1px solid var(--line); margin-bottom: 1rem; flex-wrap: wrap; }
+  nav button { font: inherit; background: none; border: 0; border-bottom: 2px solid transparent;
+               padding: .5rem .9rem; cursor: pointer; color: inherit; opacity: .6; }
+  nav button.on { border-bottom-color: currentColor; opacity: 1; }
+  input { font: inherit; padding: .4rem .6rem; border: 1px solid var(--line); border-radius: 4px;
+          background: transparent; color: inherit; width: 22rem; margin-bottom: .8rem; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: .35rem .7rem .35rem 0; border-bottom: 1px solid var(--line);
+           vertical-align: top; }
+  th { font-weight: 600; opacity: .65; position: sticky; top: 0; background: Canvas; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .stats { display: flex; gap: 2rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  .stat b { display: block; font-size: 1.4rem; font-weight: 600; }
+  .stat span { opacity: .6; font-size: .8rem; }
+  .chat { display: flex; gap: .5rem; margin-bottom: 1rem; }
+  .chat input { flex: 1; width: auto; margin: 0; }
+  .chat button { font: inherit; padding: .4rem 1rem; cursor: pointer; }
+  .turn { border-bottom: 1px solid var(--line); padding: .6rem 0; }
+  .turn .you { opacity: .6; }
+  .turn .meta { opacity: .5; font-size: .8rem; margin-top: .2rem; }
+  pre { margin: .2rem 0; white-space: pre-wrap; word-break: break-word; }
+</style>
+</head>
+<body>
+<h1>spoon</h1>
+<nav>
+  <button data-tab="chat" class="on">chat</button>
+  <button data-tab="status">status</button>
+  <button data-tab="concepts">concepts</button>
+  <button data-tab="realizations">realizations</button>
+  <button data-tab="episodes">episodes</button>
+</nav>
+<div id="view"></div>
+<script>
+const view = document.getElementById('view');
+let tab = 'chat';
+const history = [];
+
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
+  tab = b.dataset.tab;
+  render();
+});
+
+const get = (url) => fetch(url).then(r => r.json());
+const esc = (s) => String(s).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+
+function table(cols, rows) {
+  return `<table><thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>${
+    rows.map(r => `<tr>${r.map((c, i) => `<td class="${typeof c === 'number' ? 'n' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')
+  }</tbody></table>`;
+}
+
+async function send(text) {
+  if (!text.trim()) return;
+  history.push({ you: text, reply: '...', meta: '' });
+  render();
+  const r = await fetch('/v1/chat/completions', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'spoon', user: 'inspector', messages: [{ role: 'user', content: text }] })
+  }).then(r => r.json());
+  const last = history[history.length - 1];
+  last.reply = r.choices?.[0]?.message?.content ?? r.error ?? '(no reply)';
+  const s = r.spoon || {};
+  last.meta = `ears ${s.ears_path} · ${s.metrics?.millis_total ?? '?'}ms` +
+    (s.steps?.length ? ` · ${s.steps.join('  ')}` : '') +
+    (s.gaps?.length ? ` · gaps: ${s.gaps.join(', ')}` : '') +
+    (s.rules?.length ? ` · rules: ${s.rules.join(', ')}` : '');
+  render();
+}
+
+async function render() {
+  if (tab === 'chat') {
+    view.innerHTML = `<div class="chat"><input id="msg" placeholder="say something" autofocus><button id="go">send</button></div>` +
+      history.map(h => `<div class="turn"><div class="you">&gt; ${esc(h.you)}</div><pre>${esc(h.reply)}</pre><div class="meta">${esc(h.meta)}</div></div>`).reverse().join('');
+    const msg = document.getElementById('msg');
+    const go = () => { const t = msg.value; msg.value = ''; send(t); };
+    document.getElementById('go').onclick = go;
+    msg.onkeydown = e => { if (e.key === 'Enter') go(); };
+    msg.focus();
+    return;
+  }
+  if (tab === 'status') {
+    const s = await get('/debug/status');
+    view.innerHTML = `<div class="stats">${
+      Object.entries(s).map(([k, v]) => `<div class="stat"><b>${esc(v)}</b><span>${esc(k)}</span></div>`).join('')
+    }</div>`;
+    return;
+  }
+  const q = new URLSearchParams(location.hash.slice(1)).get('q') || '';
+  const filter = `<input id="q" placeholder="filter" value="${esc(q)}">`;
+  if (tab === 'concepts') {
+    const d = await get('/debug/concepts?limit=500&q=' + encodeURIComponent(q));
+    view.innerHTML = filter + table(['concept'], d.concepts.map(c => [c]));
+  } else if (tab === 'realizations') {
+    const d = await get('/debug/realizations?limit=500&q=' + encodeURIComponent(q));
+    view.innerHTML = filter + table(
+      ['name', 'target', 'kind', 'effect', 'tier', 'uses', 'ok', 'fail'],
+      d.realizations.map(r => [r.name, r.target, r.kind, r.effect, r.tier, r.uses, r.successes, r.failures]));
+  } else {
+    const d = await get('/debug/episodes?limit=100');
+    view.innerHTML = table(['#', 'said', 'replied', 'ears', 'gaps', 'ms'],
+      d.episodes.map(e => [e.id, e.user_text, e.reply, e.ears_path, (e.gaps || []).length, e.metrics?.millis_total ?? 0]));
+  }
+  const input = document.getElementById('q');
+  if (input) input.oninput = () => { location.hash = 'q=' + encodeURIComponent(input.value); render(); };
+}
+render();
+</script>
+</body>
+</html>

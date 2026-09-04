@@ -13,6 +13,11 @@ spoon-store = { path = "crates/spoon-store" }
 spoon-eval = { path = "crates/spoon-eval" }
 spoon-natives = { path = "crates/spoon-natives" }
 spoon-infer = { path = "crates/spoon-infer" }
+spoon-brain = { path = "crates/spoon-brain" }
+spoon-teach = { path = "crates/spoon-teach" }
+spoon-mouth = { path = "crates/spoon-mouth" }
+spoon-ears = { path = "crates/spoon-ears" }
+spoon-seat = { path = "crates/spoon-seat" }
 
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
