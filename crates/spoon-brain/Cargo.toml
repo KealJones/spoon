@@ -17,6 +17,8 @@ chrono = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 async-trait = { workspace = true }
+strsim = { workspace = true }
+rust-stemmers = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

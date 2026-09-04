@@ -14,6 +14,7 @@ spoon-eval = { path = "crates/spoon-eval" }
 spoon-natives = { path = "crates/spoon-natives" }
 spoon-infer = { path = "crates/spoon-infer" }
 spoon-brain = { path = "crates/spoon-brain" }
+spoon-learn = { path = "crates/spoon-learn" }
 spoon-teach = { path = "crates/spoon-teach" }
 spoon-mouth = { path = "crates/spoon-mouth" }
 spoon-ears = { path = "crates/spoon-ears" }

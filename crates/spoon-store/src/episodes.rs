@@ -109,3 +109,46 @@ impl Store {
         Ok(scored.into_iter().take(limit).map(|(_, w)| w).collect())
     }
 }
+
+impl Store {
+    /// Record that a later turn said this one was wrong.
+    ///
+    /// The episode is amended rather than replaced: the original reading, the
+    /// realization chosen, and the answer given all stay exactly as they were,
+    /// because the point of keeping them is to be able to ask what went wrong.
+    pub fn mark_episode_corrected(&self, id: u64, correction: &str) -> Result<bool> {
+        let conn = self.conn.lock();
+        let existing: Option<String> = conn
+            .query_row(
+                "SELECT json FROM episodes WHERE id = ?1",
+                params![id as i64],
+                |r| r.get(0),
+            )
+            .optional()?;
+        let Some(existing) = existing else {
+            return Ok(false);
+        };
+        let mut value: serde_json::Value = serde_json::from_str(&existing)?;
+        value["correction"] = serde_json::Value::String(correction.to_string());
+        conn.execute(
+            "UPDATE episodes SET json = ?1 WHERE id = ?2",
+            params![serde_json::to_string(&value)?, id as i64],
+        )?;
+        Ok(true)
+    }
+
+    /// Turns a later message said were wrong. The doctor reads these first.
+    pub fn corrected_episodes(&self, limit: usize) -> Result<Vec<String>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(
+            "SELECT json FROM episodes WHERE json_extract(json, '$.correction') IS NOT NULL \
+             ORDER BY id DESC LIMIT ?1",
+        )?;
+        let rows = stmt.query_map(params![limit as i64], |r| r.get::<_, String>(0))?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row?);
+        }
+        Ok(out)
+    }
+}

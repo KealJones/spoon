@@ -113,20 +113,47 @@ impl Brain {
         let started = Instant::now();
         let mut metrics = TurnMetrics::default();
 
+        // A repair marker means the previous turn was wrong, so undo it before
+        // acting on what follows. Doing it after would leave the bad claim
+        // standing while the replacement is stored beside it, and Spoon would
+        // then believe both.
+        let mut correction = None;
+        if crate::correct::is_correction(text)
+            && let Some(previous) = self.last_asserting_episode(session)?
+        {
+            let applied = crate::correct::apply(&self.store, &previous, Utc::now())?;
+            if !applied.is_empty() {
+                self.store.mark_episode_corrected(previous.id, text)?;
+            }
+            correction = Some(applied);
+        }
+
         // ---- ears ----
         let ears_started = Instant::now();
         let (heard, ears_path) = self.hear(text, &mut metrics).await;
-        // Register spellings first. Everything downstream renders concepts, and
-        // an id whose name was never recorded can only print as hex.
+        // Record spellings in the session table so everything downstream can
+        // print words instead of hex. They are deliberately NOT persisted here:
+        // the store's symbol set is what reconciliation treats as established
+        // concepts, and writing every name the ears just invented into it would
+        // make each one look already known and defeat the reconciliation that
+        // runs on the next line. A name earns a store row by being used in
+        // something stored, which `remember_names` does.
         for name in &heard.names {
             self.symbols.intern(name);
-            let _ = self.store.register_symbol(name);
         }
         metrics.millis_ears = ears_started.elapsed().as_millis() as u64;
 
+        // ---- reconcile names before acting on them ----
+        // The model names things freshly each time it speaks, so a reading can
+        // easily refer to something Spoon already knows under a different
+        // spelling. Resolving that here keeps one idea as one concept.
+        let reconciled = crate::reconcile::reconcile(&heard.steps, &self.store, &self.symbols);
+        crate::reconcile::remember(&reconciled, &self.store);
+        let steps = reconciled.steps.clone();
+
         // ---- interior ----
         let interior_started = Instant::now();
-        let moves = resolve(&heard.steps);
+        let moves = resolve(&steps);
         let mut gaps = Vec::new();
         let mut realizations = Vec::new();
         let mut rules = Vec::new();
@@ -164,7 +191,7 @@ impl Brain {
             at: Utc::now(),
             session: session.to_string(),
             user_text: text.to_string(),
-            steps: heard.steps.clone(),
+            steps: steps.clone(),
             ears_path,
             unknown_words: heard.unknown.iter().map(|w| w.to_string()).collect(),
             goal,
@@ -175,13 +202,30 @@ impl Brain {
             reply: reply.clone(),
             mouth_path,
             metrics,
-            correction: None,
+            correction: correction.as_ref().map(|_| text.to_string()),
         };
         self.store
             .put_episode(&episode_json(&episode)?, episode.id)?;
         self.next_episode += 1;
 
         Ok(TurnResult { reply, episode })
+    }
+
+    /// The most recent turn that actually claimed something.
+    ///
+    /// Not simply the previous turn. "no wait, mary has the dog" repairs the
+    /// last thing Spoon was told, and questions asked in between do not reset
+    /// that: a user who states a fact, asks about it, then corrects themselves
+    /// means the fact, not the question. Looking only one turn back would find
+    /// the query, have nothing to withdraw, and quietly leave the wrong claim
+    /// standing.
+    fn last_asserting_episode(&self, session: &str) -> spoon_store::Result<Option<Episode>> {
+        const LOOKBACK: usize = 12;
+        let raw = self.store.recent_episodes(LOOKBACK, Some(session))?;
+        Ok(raw
+            .iter()
+            .filter_map(|json| serde_json::from_str::<Episode>(json).ok())
+            .find(|e| e.correction.is_none() && e.reply.starts_with("noted")))
     }
 
     async fn hear(&self, text: &str, metrics: &mut TurnMetrics) -> (Heard, EarsPath) {
