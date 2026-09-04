@@ -8,6 +8,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use spoon_concept::Concept;
+use spoon_seat::Exchange;
 
 /// Counters for one turn, and the guarantee the design rests on.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -108,6 +109,12 @@ pub struct Episode {
     /// purpose: silence is weak evidence, not approval, because a user may
     /// simply move on after a bad answer.
     pub correction: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ears_exchange: Option<Exchange>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub teacher_exchanges: Vec<Exchange>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mouth_exchange: Option<Exchange>,
 }
 
 impl Episode {

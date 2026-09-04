@@ -146,6 +146,22 @@ impl Brain {
 
     /// One turn.
     pub async fn turn(&mut self, session: &str, text: &str) -> spoon_store::Result<TurnResult> {
+        self.turn_with_events(session, text, None).await
+    }
+
+    pub async fn turn_with_events(
+        &mut self,
+        session: &str,
+        text: &str,
+        sink: Option<crate::event::EventSink>,
+    ) -> spoon_store::Result<TurnResult> {
+        use crate::event::{TurnEvent, emit};
+        let sink = sink.as_ref();
+        emit(sink, TurnEvent::TurnStarted {
+            session: session.to_string(),
+            text: text.to_string(),
+        });
+
         let started = Instant::now();
         let mut metrics = TurnMetrics::default();
 
@@ -177,6 +193,7 @@ impl Brain {
         // ears are given the spliced version and the episode keeps the
         // original.
         let heard_text = crate::correct::repaired(text).unwrap_or_else(|| text.to_string());
+        emit(sink, TurnEvent::EarsStarted);
         let ears_started = Instant::now();
         let (heard, ears_path) = self.hear(session, &heard_text, &mut metrics).await;
         // Record spellings in the session table so everything downstream can
@@ -190,6 +207,15 @@ impl Brain {
             self.symbols.intern(name);
         }
         metrics.millis_ears = ears_started.elapsed().as_millis() as u64;
+        emit(sink, TurnEvent::EarsResult {
+            path: ears_path,
+            steps: heard
+                .steps
+                .iter()
+                .map(|s| spoon_concept::render(s, &self.symbols))
+                .collect(),
+            unknown: heard.unknown.iter().map(|w| w.to_string()).collect(),
+        });
 
         // ---- reconcile names before acting on them ----
         // The model names things freshly each time it speaks, so a reading can
@@ -200,6 +226,9 @@ impl Brain {
         let steps = reconciled.steps.clone();
 
         // ---- interior ----
+        emit(sink, TurnEvent::InteriorStarted {
+            goal: steps.first().map(|s| spoon_concept::render(s, &self.symbols)),
+        });
         let interior_started = Instant::now();
         let moves = resolve(&steps, crate::resolve::is_question(&heard_text));
         let mut gaps = Vec::new();
@@ -227,6 +256,9 @@ impl Brain {
             }
         }
         metrics.millis_interior = interior_started.elapsed().as_millis() as u64;
+        emit(sink, TurnEvent::InteriorResult {
+            result: result.as_ref().map(|r| spoon_concept::render(r, &self.symbols)),
+        });
 
         // ---- teacher, only for what the interior could not do ----
         // Checked on every turn the model read, not only on ones that visibly
@@ -258,8 +290,9 @@ impl Brain {
                 .next_episode
                 .is_multiple_of(u64::from(self.config.check_clean_readings));
         let mut learning = Vec::new();
+        let mut teacher_exchanges = Vec::new();
         if self.config.teaching && (went_wrong || spot_check) {
-            learning = self
+            (learning, teacher_exchanges) = self
                 .consult_teacher(&heard_text, &heard, &gaps, &mut metrics)
                 .await;
 
@@ -324,13 +357,20 @@ impl Brain {
         }
 
         // ---- mouth ----
+        emit(sink, TurnEvent::MouthStarted);
         let mouth_started = Instant::now();
         let response = self.build_response(&moves, result.as_ref(), &gaps, &heard);
         let must_mention: Vec<Concept> = result.iter().cloned().collect();
-        let (reply, mouth_path) = self.say(&response, &must_mention, &mut metrics).await;
+        let (reply, mouth_path, mouth_exchange) =
+            self.say(&response, &must_mention, &mut metrics).await;
         metrics.millis_mouth = mouth_started.elapsed().as_millis() as u64;
         metrics.millis_total = started.elapsed().as_millis() as u64;
+        emit(sink, TurnEvent::MouthResult {
+            path: mouth_path,
+            reply: reply.clone(),
+        });
 
+        let total_millis = metrics.millis_total;
         let episode = Episode {
             id: self.next_episode,
             at: Utc::now(),
@@ -350,6 +390,9 @@ impl Brain {
             mouth_path,
             metrics,
             correction: correction.as_ref().map(|_| text.to_string()),
+            ears_exchange: heard.exchange,
+            teacher_exchanges,
+            mouth_exchange,
         };
         // A reading the model produced that then answered the question is
         // worth remembering, so the same shape costs nothing next time. This
@@ -385,6 +428,10 @@ impl Brain {
         self.store
             .put_episode(&episode_json(&episode)?, episode.id)?;
         self.next_episode += 1;
+        emit(sink, TurnEvent::TurnFinished {
+            episode_id: episode.id,
+            millis_total: total_millis,
+        });
 
         Ok(TurnResult { reply, episode })
     }
@@ -924,10 +971,11 @@ impl Brain {
         heard: &Heard,
         gaps: &[Concept],
         metrics: &mut TurnMetrics,
-    ) -> Vec<String> {
+    ) -> (Vec<String>, Vec<spoon_seat::Exchange>) {
         let mut learning = Vec::new();
+        let mut teacher_exchanges = Vec::new();
         let Some(teacher) = &self.teacher else {
-            return learning;
+            return (learning, teacher_exchanges);
         };
         // The same ranked vocabulary the ears get. A Teacher that does not know
         // what Spoon already has will refuse work it could have done: asked to
@@ -1024,15 +1072,18 @@ impl Brain {
         // whether it can be carried out, and a wrong turn can be either.
         const MAX_ASKS: usize = 6;
         for ask in asks.into_iter().take(MAX_ASKS) {
-            let Ok(reply) = teacher.teach(&ask, &vocabulary).await else {
+            let Ok(taught) = teacher.teach(&ask, &vocabulary).await else {
                 continue;
             };
             metrics.teacher_calls += 1;
+            if let Some(ex) = taught.exchange {
+                teacher_exchanges.push(ex);
+            }
             if std::env::var("SPOON_DEBUG").is_ok() {
-                eprintln!("[teacher] {ask:?}\n      -> {reply:?}");
+                eprintln!("[teacher] {ask:?}\n      -> {:?}", taught.reply);
             }
             let subject = subject_of(&ask);
-            match reply {
+            match taught.reply {
                 TeacherReply::Composition { target, body } => {
                     proposal = Some((retarget(target, subject.as_ref()), body));
                 }
@@ -1111,7 +1162,7 @@ impl Brain {
             // Storing one unchecked is how a body that called itself got in.
             (Some(_), None) | (None, None) => {}
         }
-        learning
+        (learning, teacher_exchanges)
     }
 
     /// Take what the Teacher said and make it part of Spoon.
@@ -1327,17 +1378,18 @@ impl Brain {
         response: &Concept,
         must_mention: &[Concept],
         metrics: &mut TurnMetrics,
-    ) -> (String, MouthPath) {
+    ) -> (String, MouthPath, Option<spoon_seat::Exchange>) {
         match self.mouth.say(response, must_mention).await {
-            Ok(text) => {
+            Ok(mr) => {
                 metrics.mouth_model += 1;
-                (text, MouthPath::Model)
+                (mr.text, MouthPath::Model, mr.exchange)
             }
             Err(_) => {
                 metrics.mouth_template += 1;
                 (
                     self.mouth.say_native(response, must_mention),
                     MouthPath::Template,
+                    None,
                 )
             }
         }

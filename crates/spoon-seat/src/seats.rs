@@ -4,7 +4,17 @@ use std::sync::Arc;
 
 use spoon_concept::Concept;
 
-use crate::client::LlmError;
+use crate::client::{LlmError, Message};
+
+/// The prompt and raw response from one LLM call.
+///
+/// Stored in episodes so the inspector can show exactly what each seat saw
+/// and said. Native/template paths produce no exchange.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Exchange {
+    pub messages: Vec<Message>,
+    pub raw_response: String,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Seat {
@@ -55,6 +65,8 @@ pub struct Heard {
     /// prints `#8faadc4403462050` where it should print `owns`, and every reply
     /// about anything newly learned is unreadable.
     pub names: Vec<Arc<str>>,
+    /// The LLM exchange that produced this reading, if model-backed.
+    pub exchange: Option<Exchange>,
 }
 
 impl Heard {
@@ -65,6 +77,7 @@ impl Heard {
             confidence,
             used_model: false,
             names: Vec::new(),
+            exchange: None,
         }
     }
 
@@ -109,6 +122,19 @@ pub trait Ears: Send + Sync {
     fn hear_native(&self, text: &str) -> Option<Heard>;
 }
 
+/// What the mouth produced.
+#[derive(Debug, Clone)]
+pub struct MouthReply {
+    pub text: String,
+    pub exchange: Option<Exchange>,
+}
+
+impl MouthReply {
+    pub fn native(text: String) -> Self {
+        MouthReply { text, exchange: None }
+    }
+}
+
 /// Structured result out, prose back.
 #[async_trait::async_trait]
 pub trait Mouth: Send + Sync {
@@ -117,7 +143,11 @@ pub trait Mouth: Send + Sync {
     /// `must_mention` holds the values that have to survive into the output.
     /// The check is what stops the mouth quietly inventing or dropping a number
     /// on its way to sounding natural.
-    async fn say(&self, response: &Concept, must_mention: &[Concept]) -> Result<String, LlmError>;
+    async fn say(
+        &self,
+        response: &Concept,
+        must_mention: &[Concept],
+    ) -> Result<MouthReply, LlmError>;
 
     /// Deterministic rendering, used offline and whenever the model's output
     /// fails the faithfulness check.
@@ -213,6 +243,13 @@ pub enum TeacherReply {
     Unknown { why: Arc<str> },
 }
 
+/// What the teacher produced, with the exchange that led to it.
+#[derive(Debug, Clone)]
+pub struct Taught {
+    pub reply: TeacherReply,
+    pub exchange: Option<Exchange>,
+}
+
 /// Fills gaps, and never writes executable bodies by default.
 #[async_trait::async_trait]
 pub trait Teacher: Send + Sync {
@@ -226,5 +263,5 @@ pub trait Teacher: Send + Sync {
         &self,
         ask: &TeacherAsk,
         vocabulary: &[Arc<str>],
-    ) -> Result<TeacherReply, LlmError>;
+    ) -> Result<Taught, LlmError>;
 }

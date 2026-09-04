@@ -8,7 +8,7 @@
 use std::sync::Arc;
 
 use spoon_concept::{Concept, Ground, SymbolTable, render};
-use spoon_seat::{LlmClient, LlmError, Message, Mouth, Seat};
+use spoon_seat::{LlmClient, LlmError, Message, Mouth, MouthReply, Seat};
 
 /// Deterministic rendering. Offline mode, and the fallback whenever the model
 /// fails its check.
@@ -104,8 +104,12 @@ impl TemplateMouth {
 
 #[async_trait::async_trait]
 impl Mouth for TemplateMouth {
-    async fn say(&self, response: &Concept, must_mention: &[Concept]) -> Result<String, LlmError> {
-        Ok(self.say_native(response, must_mention))
+    async fn say(
+        &self,
+        response: &Concept,
+        must_mention: &[Concept],
+    ) -> Result<MouthReply, LlmError> {
+        Ok(MouthReply::native(self.say_native(response, must_mention)))
     }
 
     fn say_native(&self, response: &Concept, _must_mention: &[Concept]) -> String {
@@ -167,20 +171,15 @@ impl ModelMouth {
 
 #[async_trait::async_trait]
 impl Mouth for ModelMouth {
-    async fn say(&self, response: &Concept, must_mention: &[Concept]) -> Result<String, LlmError> {
+    async fn say(
+        &self,
+        response: &Concept,
+        must_mention: &[Concept],
+    ) -> Result<MouthReply, LlmError> {
         let baseline = self.template.say_native(response, must_mention);
 
-        // A bare value is left alone. The mouth exists to make a structured
-        // result readable, and "3" is already readable: there is nothing to
-        // improve and a great deal to get wrong. Asked to phrase the answer to
-        // "how many r's in Strawberry", the model returned "i'll be there at
-        // 3." It kept the number, so the faithfulness check passed, and the
-        // answer was still ruined.
-        //
-        // The length guard cannot catch this, because three characters of
-        // slack around a one-character answer is no slack at all.
         if is_bare_value(response) {
-            return Ok(baseline);
+            return Ok(MouthReply::native(baseline));
         }
         let prompt = r#"Rewrite the given line as one short, casual sentence a person would actually say.
 
@@ -196,24 +195,24 @@ Reply with the sentence only."#;
             Message::system(prompt),
             Message::user(format!("System message: {baseline}")),
         ];
-        let rendered = self.client.chat(Seat::Mouth, &messages).await?;
+        let (rendered, exchange) = self
+            .client
+            .chat_with_exchange(Seat::Mouth, &messages)
+            .await?;
         let rendered = rendered.trim().trim_matches('"').to_string();
 
-        // A reply that mentions the plumbing, or that balloons well past the
-        // template, is padding rather than phrasing. Both mean the model
-        // answered a different question than the one asked.
         let padded = rendered.len() > baseline.len() * 3 + 40
             || rendered.to_lowercase().contains("system message");
         if rendered.is_empty()
             || padded
             || !Self::faithful(&rendered, must_mention, &self.template.table)
         {
-            // The guard fires, so the template answer is used. Retrying rarely
-            // helps: a model that dropped a value once usually drops it again,
-            // and the user is waiting either way.
-            return Ok(baseline);
+            return Ok(MouthReply::native(baseline));
         }
-        Ok(rendered)
+        Ok(MouthReply {
+            text: rendered,
+            exchange: Some(exchange),
+        })
     }
 
     fn say_native(&self, response: &Concept, must_mention: &[Concept]) -> String {

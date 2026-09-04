@@ -12,7 +12,7 @@ use clap::{Parser, Subcommand};
 #[derive(Parser)]
 #[command(name = "spoon", about = "A persistent semantic cognitive system")]
 struct Cli {
-    /// Brain file. Defaults to ~/.spoon/spoon.db.
+    /// Brain file. Defaults to ~/.spoon/spoon-v2.db.
     #[arg(long, global = true)]
     db: Option<PathBuf>,
     /// Use a throwaway in-memory brain.

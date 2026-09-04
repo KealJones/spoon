@@ -8,10 +8,12 @@ mod brain;
 mod correct;
 mod credit;
 mod episode;
+pub mod event;
 mod reconcile;
 mod resolve;
 
 pub use brain::{Brain, BrainConfig, Seats, TurnResult, is_answer, is_unknown};
+pub use event::{EventSink, TurnEvent};
 pub use correct::{
     Correction, Repair, apply as apply_correction, is_correction, repaired, split_repair,
 };

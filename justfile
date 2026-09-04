@@ -24,6 +24,11 @@ fmt-check:
 # Everything CI would run.
 ci: fmt-check lint test
 
+# ---- run ----
+
+serve port="8787" host="127.0.0.1":
+    cargo run -p spoon -- serve --port {{port}} --host {{host}}
+
 # ---- v1 reference ----
 
 # The v1 tree lives in reference/ and is deliberately outside the workspace so

@@ -8,7 +8,9 @@
 use std::sync::Arc;
 
 use spoon_concept::{Concept, SymbolTable, parse, render};
-use spoon_seat::{LlmClient, LlmError, Message, Seat, Spec, Teacher, TeacherAsk, TeacherReply};
+use spoon_seat::{
+    LlmClient, LlmError, Message, Seat, Spec, Taught, Teacher, TeacherAsk, TeacherReply,
+};
 
 pub struct ModelTeacher {
     client: LlmClient,
@@ -283,12 +285,18 @@ impl Teacher for ModelTeacher {
         &self,
         ask: &TeacherAsk,
         vocabulary: &[Arc<str>],
-    ) -> Result<TeacherReply, LlmError> {
+    ) -> Result<Taught, LlmError> {
         let messages = [
             Message::system(Self::prompt(ask, vocabulary)),
             Message::user(self.describe(ask)),
         ];
-        let reply = self.client.chat(Seat::Teacher, &messages).await?;
-        Ok(self.parse_reply(&reply, ask))
+        let (raw, exchange) = self
+            .client
+            .chat_with_exchange(Seat::Teacher, &messages)
+            .await?;
+        Ok(Taught {
+            reply: self.parse_reply(&raw, ask),
+            exchange: Some(exchange),
+        })
     }
 }

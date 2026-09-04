@@ -16,7 +16,7 @@ pub enum Role {
     Assistant,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Message {
     pub role: Role,
     pub content: String,
@@ -210,6 +210,17 @@ impl LlmClient {
 
     /// Send a conversation and get the reply text.
     pub async fn chat(&self, seat: Seat, messages: &[Message]) -> Result<String, LlmError> {
+        self.chat_with_exchange(seat, messages)
+            .await
+            .map(|(text, _)| text)
+    }
+
+    /// Send a conversation and get both the reply text and the full exchange.
+    pub async fn chat_with_exchange(
+        &self,
+        seat: Seat,
+        messages: &[Message],
+    ) -> Result<(String, crate::seats::Exchange), LlmError> {
         self.counters.record(seat);
         let started = std::time::Instant::now();
         let result = match self.config.transport {
@@ -223,7 +234,14 @@ impl LlmClient {
                     millis: started.elapsed().as_millis(),
                 })
             }
-            other => other,
+            Ok(text) => Ok((
+                text.clone(),
+                crate::seats::Exchange {
+                    messages: messages.to_vec(),
+                    raw_response: text,
+                },
+            )),
+            Err(e) => Err(e),
         }
     }
 

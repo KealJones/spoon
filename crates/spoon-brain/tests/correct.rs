@@ -29,6 +29,9 @@ fn episode(id: u64, claim: Concept, realization: &str) -> Episode {
         mouth_path: MouthPath::Template,
         metrics: TurnMetrics::default(),
         correction: None,
+        ears_exchange: None,
+        teacher_exchanges: vec![],
+        mouth_exchange: None,
     }
 }
 

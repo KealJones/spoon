@@ -164,7 +164,10 @@ impl Ears for ModelEars {
             messages.push(Message::assistant(turn.understood.to_string()));
         }
         messages.push(Message::user(text.to_string()));
-        let reply = self.client.chat(Seat::Ears, &messages).await?;
+        let (reply, exchange) = self
+            .client
+            .chat_with_exchange(Seat::Ears, &messages)
+            .await?;
 
         let table = SymbolTable::new();
         let (steps, unknown) = Self::parse_steps(&reply, &table);
@@ -185,6 +188,7 @@ impl Ears for ModelEars {
             confidence,
             used_model: true,
             names,
+            exchange: Some(exchange),
         })
     }
 

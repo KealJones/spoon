@@ -14,4 +14,7 @@ mod client;
 mod seats;
 
 pub use client::{LlmClient, LlmConfig, LlmError, Message, Role, SeatCounters, Transport};
-pub use seats::{Ears, Heard, Mouth, Seat, Spec, Teacher, TeacherAsk, TeacherReply, Turn};
+pub use seats::{
+    Ears, Exchange, Heard, Mouth, MouthReply, Seat, Spec, Taught, Teacher, TeacherAsk,
+    TeacherReply, Turn,
+};
