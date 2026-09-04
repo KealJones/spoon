@@ -9,9 +9,7 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use chrono::{TimeZone, Utc};
-use spoon_concept::{
-    Activation, Concept, RuleDirection, Tier,
-};
+use spoon_concept::{Activation, Concept, RuleDirection, Tier};
 use spoon_infer::{DiscriminationTree, RuleIndex, ScanIndex, StoredRule, unify_terms};
 
 fn now() -> chrono::DateTime<Utc> {
@@ -67,7 +65,7 @@ fn the_tree_never_loses_a_rule_that_would_have_unified() {
     let scan = ScanIndex::new(rules.clone());
 
     let mut checked_nonempty = 0;
-    for i in 0..400 {
+    for _ in 0..400 {
         let goal = rng.term(3);
         let truth = truly_matching(&rules, &goal);
         let from_tree = names(&tree.candidates(&goal));
@@ -97,8 +95,14 @@ fn the_tree_never_loses_a_rule_that_would_have_unified() {
 fn the_tree_agrees_with_the_scan_on_hand_written_shapes() {
     let rules = vec![
         make_rule("plain", Concept::call("owns", [h(0), h(1)])),
-        make_rule("ground", Concept::call("owns", [Concept::named("greg"), Concept::named("dog")])),
-        make_rule("mixed", Concept::call("owns", [h(0), Concept::named("dog")])),
+        make_rule(
+            "ground",
+            Concept::call("owns", [Concept::named("greg"), Concept::named("dog")]),
+        ),
+        make_rule(
+            "mixed",
+            Concept::call("owns", [h(0), Concept::named("dog")]),
+        ),
         make_rule("other-head", Concept::call("friend-with", [h(0), h(1)])),
         make_rule("wrong-arity", Concept::call("owns", [h(0)])),
         make_rule("hole-head", Concept::apply(h(0), vec![h(1), h(2)])),
@@ -121,7 +125,10 @@ fn the_tree_agrees_with_the_scan_on_hand_written_shapes() {
         Concept::call("status", [h(0)]),
         Concept::call(
             "stated",
-            [Concept::named("keal"), Concept::call("is-sad", [Concept::named("greg")])],
+            [
+                Concept::named("keal"),
+                Concept::call("is-sad", [Concept::named("greg")]),
+            ],
         ),
         Concept::call("owns", [h(0), h(1)]),
     ];
@@ -155,7 +162,10 @@ fn a_hole_headed_conclusion_is_offered_for_every_goal() {
         Concept::call("owns", [Concept::named("a"), Concept::named("b")]),
     ] {
         let got = names(&tree.candidates(&goal));
-        assert!(got.contains("quantified"), "lost the quantified rule for {goal:?}");
+        assert!(
+            got.contains("quantified"),
+            "lost the quantified rule for {goal:?}"
+        );
     }
 }
 
@@ -170,17 +180,26 @@ fn ground_values_discriminate() {
     let tree = DiscriminationTree::new(rules);
     let got = names(&tree.candidates(&Concept::call("meaning", [Concept::int(500)])));
     assert!(got.contains("http-500"));
-    assert!(!got.contains("http-404"), "the index did not discriminate on value");
+    assert!(
+        !got.contains("http-404"),
+        "the index did not discriminate on value"
+    );
 }
 
 #[test]
 fn a_goal_with_holes_still_reaches_ground_conclusions() {
     // Asking "what does some status mean" has to find the rule about 404, or a
     // question with a variable in it can never be answered.
-    let rules = vec![make_rule("http-404", Concept::call("meaning", [Concept::int(404)]))];
+    let rules = vec![make_rule(
+        "http-404",
+        Concept::call("meaning", [Concept::int(404)]),
+    )];
     let tree = DiscriminationTree::new(rules);
     let got = names(&tree.candidates(&Concept::call("meaning", [h(0)])));
-    assert!(got.contains("http-404"), "a variable goal lost a ground rule");
+    assert!(
+        got.contains("http-404"),
+        "a variable goal lost a ground rule"
+    );
 }
 
 #[test]
@@ -193,23 +212,38 @@ fn head_and_arity_both_discriminate() {
     let tree = DiscriminationTree::new(rules);
     let got = names(&tree.candidates(&Concept::call("owns", [h(0), h(1)])));
     assert!(got.contains("binary"));
-    assert!(!got.contains("elsewhere"), "a different head was not excluded");
+    assert!(
+        !got.contains("elsewhere"),
+        "a different head was not excluded"
+    );
 }
 
 #[test]
 fn nesting_is_matched_through_depth() {
     let rules = vec![
-        make_rule("sad", Concept::call("stated", [h(0), Concept::call("is-sad", [h(1)])])),
-        make_rule("happy", Concept::call("stated", [h(0), Concept::call("is-happy", [h(1)])])),
+        make_rule(
+            "sad",
+            Concept::call("stated", [h(0), Concept::call("is-sad", [h(1)])]),
+        ),
+        make_rule(
+            "happy",
+            Concept::call("stated", [h(0), Concept::call("is-happy", [h(1)])]),
+        ),
     ];
     let tree = DiscriminationTree::new(rules);
     let goal = Concept::call(
         "stated",
-        [Concept::named("keal"), Concept::call("is-sad", [Concept::named("greg")])],
+        [
+            Concept::named("keal"),
+            Concept::call("is-sad", [Concept::named("greg")]),
+        ],
     );
     let got = names(&tree.candidates(&goal));
     assert!(got.contains("sad"));
-    assert!(!got.contains("happy"), "nested structure did not discriminate");
+    assert!(
+        !got.contains("happy"),
+        "nested structure did not discriminate"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -295,8 +329,16 @@ fn ordering_does_not_depend_on_insertion_order() {
     let backward = DiscriminationTree::new(rules);
 
     let goal = Concept::call("owns", [Concept::named("a"), Concept::named("b")]);
-    let a: Vec<String> = forward.candidates(&goal).iter().map(|r| r.name.to_string()).collect();
-    let b: Vec<String> = backward.candidates(&goal).iter().map(|r| r.name.to_string()).collect();
+    let a: Vec<String> = forward
+        .candidates(&goal)
+        .iter()
+        .map(|r| r.name.to_string())
+        .collect();
+    let b: Vec<String> = backward
+        .candidates(&goal)
+        .iter()
+        .map(|r| r.name.to_string())
+        .collect();
     assert_eq!(a, b, "candidate order followed insertion order");
     assert_eq!(forward.all().len(), backward.all().len());
 }
@@ -308,7 +350,10 @@ fn a_rule_inserted_later_is_retrievable() {
     assert!(tree.is_empty());
     let rule = make_rule("late", Concept::call("owns", [h(0), h(1)]));
     tree.insert(rule);
-    let got = names(&tree.candidates(&Concept::call("owns", [Concept::named("a"), Concept::named("b")])));
+    let got = names(&tree.candidates(&Concept::call(
+        "owns",
+        [Concept::named("a"), Concept::named("b")],
+    )));
     assert!(got.contains("late"));
     assert_eq!(tree.len(), 1);
 }
@@ -319,7 +364,12 @@ fn degenerate_rule_sets_behave() {
     assert!(empty.candidates(&Concept::call("owns", [h(0)])).is_empty());
 
     let single = DiscriminationTree::new(vec![make_rule("only", Concept::call("owns", [h(0)]))]);
-    assert_eq!(single.candidates(&Concept::call("owns", [Concept::named("x")])).len(), 1);
+    assert_eq!(
+        single
+            .candidates(&Concept::call("owns", [Concept::named("x")]))
+            .len(),
+        1
+    );
 
     // Every conclusion identical: the tree degenerates to a list, and must
     // still return all of them rather than collapsing duplicates.
@@ -327,7 +377,11 @@ fn degenerate_rule_sets_behave() {
         .map(|i| make_rule(&format!("dup{i:02}"), Concept::call("owns", [h(0)])))
         .collect();
     let tree = DiscriminationTree::new(identical);
-    assert_eq!(tree.candidates(&Concept::call("owns", [Concept::named("x")])).len(), 20);
+    assert_eq!(
+        tree.candidates(&Concept::call("owns", [Concept::named("x")]))
+            .len(),
+        20
+    );
 }
 
 /// Seeded generator, so a failure is reproducible.
@@ -346,7 +400,11 @@ impl Gen {
     }
 
     fn term(&mut self, depth: u32) -> Concept {
-        let choice = if depth == 0 { self.pick(4) } else { self.pick(6) };
+        let choice = if depth == 0 {
+            self.pick(4)
+        } else {
+            self.pick(6)
+        };
         match choice {
             0 => Concept::named(["greg", "keal", "dog", "cat"][self.pick(4)]),
             1 => Concept::int(self.pick(6) as i64),

@@ -1,10 +1,10 @@
 //! Backward chaining: answering a question from facts nobody wrote down in the
 //! shape it was asked.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 
-use spoon_concept::{Concept, ContentId, SymbolId, holes, rename_holes};
+use spoon_concept::{Concept, ContentId, HoleId, SymbolId, holes, rename_holes};
 use spoon_store::Store;
 
 use crate::error::{InferError, Result};
@@ -77,8 +77,17 @@ pub struct DeriveBudget {
     pub max_steps: u64,
     /// Chain depth.
     pub max_depth: u32,
-    /// Distinct answers to collect before stopping.
+    /// Distinct answers to hand back.
     pub max_results: usize,
+    /// Solutions to collect for an intermediate goal.
+    ///
+    /// Deliberately separate from `max_results`. A yes-or-no question wants one
+    /// answer, but capping subgoals at one is wrong: a conjunction joins on a
+    /// shared term, so the first conjunct has to offer every candidate the
+    /// second might match. Asking whether Rex is alive should not fail merely
+    /// because `Participates<Rex, ?>` stopped at `Dog` and never reached the
+    /// derived `Animal`.
+    pub max_subgoal_results: usize,
     /// Stored facts examined per goal when the goal has holes in it.
     pub max_scan: usize,
 }
@@ -86,9 +95,10 @@ pub struct DeriveBudget {
 impl Default for DeriveBudget {
     fn default() -> Self {
         DeriveBudget {
-            max_steps: 10_000,
+            max_steps: 50_000,
             max_depth: 32,
             max_results: 64,
+            max_subgoal_results: 256,
             max_scan: 10_000,
         }
     }
@@ -114,6 +124,9 @@ impl DeriveBudget {
 /// Concept name for negation as failure. See [`Engine::condition_holds`].
 const UNLESS: &str = "unless";
 
+/// Concept name for a conjunctive goal. See [`Engine::derive_conjunction`].
+const ALL_OF: &str = "all-of";
+
 /// Backward chaining over a rule index and a store.
 pub struct Engine<'a> {
     store: &'a Store,
@@ -128,6 +141,14 @@ pub struct Engine<'a> {
     /// Hole renaming offset, bumped per rule application so a rule's holes
     /// never collide with the goal's or with another instance of itself.
     next_offset: u32,
+    /// Goals already solved during this derivation, with their answers.
+    ///
+    /// Recursive rules ask the same subgoal over and over: establishing
+    /// `SubtypeOf<a, b>` asks about `SubtypeOf<a, ?x>`, and every branch below
+    /// asks it again. Without a memo the work is exponential in the chain
+    /// length, and no budget setting rescues it: narrow enough to terminate and
+    /// joins start failing, wide enough for joins and it explodes.
+    completed: HashMap<ContentId, Vec<Derivation>>,
 }
 
 impl<'a> Engine<'a> {
@@ -139,6 +160,7 @@ impl<'a> Engine<'a> {
             steps: 0,
             in_progress: Vec::new(),
             next_offset: 0,
+            completed: HashMap::new(),
         }
     }
 
@@ -163,12 +185,28 @@ impl<'a> Engine<'a> {
             return Err(InferError::Unanchored { goal: goal.clone() });
         }
         self.steps = 0;
-        self.derive_goal(goal, 0)
+        self.completed.clear();
+
+        // One pass. Recursion is handled by cutting a goal that re-enters
+        // itself, not by iterating to a fixpoint: a cut branch establishes
+        // nothing, so a second round would see exactly what the first did.
+        //
+        // The cost is completeness, not soundness. A rule whose recursive
+        // premise cannot be ordered after a premise that binds it will
+        // under-answer, and proper tabling is what would fix that. In practice
+        // ordering the selective premise first avoids the problem, which is why
+        // the meta-vocabulary rules are written the way they are.
+        let mut found = self.derive_goal(goal, 0)?;
+        found.truncate(self.budget.max_results);
+        Ok(found)
     }
 
     /// Whether the goal holds at all. Stops at the first derivation, since one
     /// is as good as many for a yes or no question.
     pub fn holds(&mut self, goal: &Concept) -> Result<bool> {
+        // Only the answer count narrows. Subgoal breadth is left alone, because
+        // a join needs its candidates whatever the caller intends to do with
+        // the result.
         let saved = self.budget.max_results;
         self.budget.max_results = 1;
         let result = self.derive(goal);
@@ -177,20 +215,54 @@ impl<'a> Engine<'a> {
     }
 
     fn derive_goal(&mut self, goal: &Concept, depth: u32) -> Result<Vec<Derivation>> {
+        // Depth is a per-branch limit, so running out of it cuts this branch
+        // rather than abandoning the question. A recursive rule like
+        // transitivity has no natural bottom: deriving `SubtypeOf<a, b>` asks
+        // about `SubtypeOf<a, ?x>`, which asks again, and exact-goal cycle
+        // detection cannot cut it because each goal genuinely differs. Treating
+        // that as total failure would mean one such rule in the brain makes
+        // every question unanswerable, when the honest answer is "here is what
+        // I could establish within the budget I had".
+        //
+        // Steps stay a hard error, because that budget is global: exceeding it
+        // means the whole derivation cost more than it was allowed, and
+        // returning partial answers would hide that.
         if depth > self.budget.max_depth {
-            return Err(InferError::Exhausted { limit: "depth" });
-        }
-
-        let goal_id = goal.content_id();
-        if self.in_progress.contains(&goal_id) {
-            // Re-entering a goal already being derived proves nothing: the
-            // chain would be assuming what it is trying to establish. Cutting
-            // the branch is not an error, it just yields no derivations here.
             return Ok(Vec::new());
         }
 
+        // A conjunction is not a fact anyone stores, so it is handled before
+        // anything looks for one.
+        if goal.head_symbol() == Some(SymbolId::of(ALL_OF)) {
+            return self.derive_conjunction(goal.args(), depth);
+        }
+
+        // Memo lookups go through a canonical form. Every rule application
+        // renames its holes to avoid capture, so the same question arrives
+        // spelled `part-of<?47, ?49>` one moment and `part-of<?12, ?14>` the
+        // next. Keyed on the raw term the memo would never hit, and a
+        // transitive chain would stay exponential in its length no matter how
+        // large the budget. Numbering holes by first appearance makes the two
+        // spellings one key.
+        let (canonical, hole_map) = canonical_form(goal);
+        let goal_id = canonical.content_id();
+        if self.in_progress.contains(&goal_id) {
+            // Re-entering a goal already being derived cannot establish
+            // anything new: the chain would be assuming what it is trying to
+            // prove. It can, however, use what an earlier round already
+            // established, which is what turns a cut branch into progress
+            // rather than a dead end.
+            return Ok(Vec::new());
+        }
+        if let Some(answers) = self.completed.get(&goal_id) {
+            let back = invert(&hole_map);
+            let restored = answers.iter().map(|d| restore(d, &back)).collect();
+            return Ok(restored);
+        }
+
+        let cap = self.budget.max_subgoal_results;
         let mut found = self.direct_support(goal, depth)?;
-        if found.len() >= self.budget.max_results {
+        if found.len() >= cap {
             return Ok(found);
         }
 
@@ -200,6 +272,14 @@ impl<'a> Engine<'a> {
         result?;
 
         dedupe(&mut found);
+        // Stored in canonical terms so any spelling of the goal can read it.
+        let inverse: BTreeMap<HoleId, HoleId> =
+            hole_map.iter().map(|(from, to)| (*to, *from)).collect();
+        let canonical_answers = found
+            .iter()
+            .map(|d| restore(d, &inverse))
+            .collect::<Vec<_>>();
+        self.completed.insert(goal_id, canonical_answers);
         Ok(found)
     }
 
@@ -222,7 +302,7 @@ impl<'a> Engine<'a> {
         // The goal has holes, so it is a question rather than a proposition.
         // Narrow with whatever index the goal's shape allows before unifying.
         for candidate in self.candidate_facts(goal)? {
-            if out.len() >= self.budget.max_results {
+            if out.len() >= self.budget.max_subgoal_results {
                 break;
             }
             let mut subst = Substitution::new();
@@ -261,7 +341,7 @@ impl<'a> Engine<'a> {
         found: &mut Vec<Derivation>,
     ) -> Result<()> {
         for rule in self.index.candidates(goal) {
-            if found.len() >= self.budget.max_results {
+            if found.len() >= self.budget.max_subgoal_results {
                 return Ok(());
             }
             self.steps += 1;
@@ -296,6 +376,36 @@ impl<'a> Engine<'a> {
             return Ok(());
         }
 
+        // Check the condition before touching the antecedent whenever the
+        // conclusion has already made it ground.
+        //
+        // This is not just an optimization. The meta-vocabulary rules quantify
+        // over relations with a hole in head position, so their conclusion
+        // unifies with essentially every goal. Deriving the antecedent first
+        // means every such rule explores a whole subtree before discovering it
+        // was never applicable, and with several of them present the work
+        // multiplies until the depth budget stops it. Unifying the conclusion
+        // binds the relation, which makes `Symmetric<?0>` ground, so the rule
+        // can be dismissed for the price of one lookup.
+        //
+        // A condition still carrying holes has to wait: it may only become
+        // answerable once the antecedent binds the rest.
+        // Negation as failure is deliberately excluded from the early check.
+        // `Unless<X>` costs a whole sub-derivation, and running it before the
+        // antecedent means paying that for every candidate the antecedent was
+        // about to reject. It is also the semantically right order: what is not
+        // derivable depends on what has been established, so NAF belongs last,
+        // when the bindings are as constrained as they are going to get.
+        let early_condition = condition
+            .as_ref()
+            .map(|c| subst.apply(c))
+            .filter(|c| holes(c).is_empty() && !is_negation(c));
+        if let Some(instantiated) = &early_condition
+            && !self.condition_holds(instantiated, depth + 1)?
+        {
+            return Ok(());
+        }
+
         let subgoal = subst.apply(&pattern);
         if subgoal.is_hole() {
             // The antecedent came out completely unconstrained, so establishing
@@ -304,7 +414,7 @@ impl<'a> Engine<'a> {
         }
 
         for premise in self.derive_goal(&subgoal, depth + 1)? {
-            if found.len() >= self.budget.max_results {
+            if found.len() >= self.budget.max_subgoal_results {
                 break;
             }
             let mut combined = subst.clone();
@@ -316,7 +426,11 @@ impl<'a> Engine<'a> {
                 }
             }
 
-            if let Some(condition) = &condition {
+            // Re-check only when the early check could not run, so a ground
+            // non-negated condition is not paid for twice.
+            if let Some(condition) = &condition
+                && early_condition.is_none()
+            {
                 let instantiated = combined.apply(condition);
                 if !self.condition_holds(&instantiated, depth + 1)? {
                     continue;
@@ -334,6 +448,81 @@ impl<'a> Engine<'a> {
             });
         }
         Ok(())
+    }
+
+    /// Establish every conjunct, threading bindings from each into the next.
+    ///
+    /// A rule holds one antecedent, which is enough for most of them and not
+    /// enough for transitivity: `R<x, y>` and `R<y, z>` give `R<x, z>` needs
+    /// both premises, and `y` has to be the same in both or the rule is
+    /// nonsense. Rather than growing the rule shape, a conjunction is spelled
+    /// as an ordinary compound, `AllOf<R<x, y>, R<y, z>>`, and the shared hole
+    /// does the joining.
+    ///
+    /// Conjuncts are solved left to right with each solution's bindings applied
+    /// to what remains, so the second premise is already constrained by the
+    /// first rather than being solved blind and filtered afterwards.
+    fn derive_conjunction(&mut self, conjuncts: &[Concept], depth: u32) -> Result<Vec<Derivation>> {
+        if depth > self.budget.max_depth {
+            return Ok(Vec::new());
+        }
+        // One partial solution that has established nothing yet.
+        let mut partials: Vec<(Substitution, Vec<Derivation>)> =
+            vec![(Substitution::new(), Vec::new())];
+
+        for conjunct in conjuncts {
+            let mut next = Vec::new();
+            for (subst, premises) in partials {
+                if next.len() >= self.budget.max_subgoal_results {
+                    break;
+                }
+                let instantiated = subst.apply(conjunct);
+                if instantiated.is_hole() {
+                    // Nothing has constrained this conjunct, so establishing it
+                    // would mean proving something about everything.
+                    continue;
+                }
+                for derivation in self.derive_goal(&instantiated, depth + 1)? {
+                    if next.len() >= self.budget.max_subgoal_results {
+                        break;
+                    }
+                    let mut combined = subst.clone();
+                    let mut ok = true;
+                    for (hole, term) in derivation.substitution.iter() {
+                        if !combined.bind(*hole, term.clone()) {
+                            ok = false;
+                            break;
+                        }
+                    }
+                    if !ok {
+                        continue;
+                    }
+                    let mut grown = premises.clone();
+                    grown.push(derivation);
+                    next.push((combined, grown));
+                }
+            }
+            partials = next;
+            if partials.is_empty() {
+                return Ok(Vec::new());
+            }
+        }
+
+        let goal = Concept::call(ALL_OF, conjuncts.iter().cloned());
+        let mut out: Vec<Derivation> = partials
+            .into_iter()
+            .map(|(subst, premises)| Derivation {
+                goal: subst.apply(&goal),
+                substitution: restrict_to(&subst, &goal),
+                support: Support::Rule {
+                    name: Arc::from(ALL_OF),
+                    premises,
+                },
+                depth,
+            })
+            .collect();
+        dedupe(&mut out);
+        Ok(out)
     }
 
     /// A rule's side condition.
@@ -385,6 +574,60 @@ fn restrict_to(subst: &Substitution, goal: &Concept) -> Substitution {
         }
     }
     out
+}
+
+/// Renumber a term's holes by first appearance, so two spellings of the same
+/// question become one key. Returns the renumbered term and the mapping from
+/// the original hole ids to the canonical ones.
+fn canonical_form(term: &Concept) -> (Concept, BTreeMap<HoleId, HoleId>) {
+    let mut map = BTreeMap::new();
+    let canonical = canonical_rec(term, &mut map);
+    (canonical, map)
+}
+
+fn canonical_rec(term: &Concept, map: &mut BTreeMap<HoleId, HoleId>) -> Concept {
+    match term {
+        Concept::Hole(hole) => {
+            let next = map.len() as u32;
+            let assigned = *map.entry(*hole).or_insert(HoleId(next));
+            Concept::Hole(assigned)
+        }
+        Concept::Compound { head, args } => {
+            let new_head = canonical_rec(head, map);
+            let new_args: Vec<Concept> = args.iter().map(|a| canonical_rec(a, map)).collect();
+            Concept::apply(new_head, new_args)
+        }
+        Concept::Atomic(_) => term.clone(),
+    }
+}
+
+/// Flip a hole mapping.
+fn invert(map: &BTreeMap<HoleId, HoleId>) -> BTreeMap<HoleId, HoleId> {
+    map.iter().map(|(from, to)| (*to, *from)).collect()
+}
+
+/// Translate a derivation's hole ids through a mapping.
+///
+/// A memoized answer is expressed in canonical holes, and the caller asked in
+/// its own. Without this the substitution comes back keyed on numbers the
+/// caller never used, so the answer looks empty.
+fn restore(derivation: &Derivation, map: &BTreeMap<HoleId, HoleId>) -> Derivation {
+    let mut substitution = Substitution::new();
+    for (hole, term) in derivation.substitution.iter() {
+        let target = map.get(hole).copied().unwrap_or(*hole);
+        substitution.bind(target, term.clone());
+    }
+    Derivation {
+        goal: derivation.goal.clone(),
+        substitution,
+        support: derivation.support.clone(),
+        depth: derivation.depth,
+    }
+}
+
+/// Is this condition negation as failure?
+fn is_negation(condition: &Concept) -> bool {
+    condition.head_symbol() == Some(SymbolId::of(UNLESS))
 }
 
 /// The first subterm that is not a hole, used to anchor a store query.
