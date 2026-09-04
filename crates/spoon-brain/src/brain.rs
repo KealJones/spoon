@@ -209,9 +209,11 @@ impl Brain {
         // correction is kept as a phrasing and the native path takes that shape
         // for free from then on.
         let worth_checking = ears_path == EarsPath::Model;
+        let mut learning = Vec::new();
         if self.config.teaching && (worth_checking || !gaps.is_empty() || !heard.unknown.is_empty())
         {
-            self.consult_teacher(text, &heard, &gaps, &mut metrics)
+            learning = self
+                .consult_teacher(text, &heard, &gaps, &mut metrics)
                 .await;
         }
 
@@ -237,6 +239,7 @@ impl Brain {
             realizations,
             trace: interior,
             rules,
+            learning,
             reply: reply.clone(),
             mouth_path,
             metrics,
@@ -706,8 +709,11 @@ impl Brain {
         heard: &Heard,
         gaps: &[Concept],
         metrics: &mut TurnMetrics,
-    ) {
-        let Some(teacher) = &self.teacher else { return };
+    ) -> Vec<String> {
+        let mut learning = Vec::new();
+        let Some(teacher) = &self.teacher else {
+            return learning;
+        };
         // The same ranked vocabulary the ears get. A Teacher that does not know
         // what Spoon already has will refuse work it could have done: asked to
         // build string reversal without being told `chars` exists, it correctly
@@ -826,6 +832,7 @@ impl Brain {
                 // here. The same shape will be said again, and the point is to
                 // stop paying a model for it.
                 TeacherReply::Reading { steps, lesson } => {
+                    learning.push("the Teacher corrected how this was read".to_string());
                     let _ = self.store.put_pair(text, &steps, PairSource::Confirmed);
                     self.phrasing.learn(text, &steps);
                     // A rule outlives the sentence that produced it, so it is
@@ -834,6 +841,7 @@ impl Brain {
                     // maintains and becomes something Spoon accumulates from
                     // its own mistakes.
                     if let Some(lesson) = lesson {
+                        learning.push(format!("new rule for reading: {lesson}"));
                         let rule = Concept::call("ears-rule", [Concept::text(&*lesson)]);
                         let _ = self.store.assert_concept(
                             &rule,
@@ -862,18 +870,33 @@ impl Brain {
                 // happens.
                 let taught = self.verify(&body, &spec);
                 if taught {
+                    learning.push(format!(
+                        "the Teacher wrote {} and it passed its examples",
+                        render(&target, &self.symbols)
+                    ));
                     self.store_composed(&target, &body);
+                } else {
+                    learning.push(
+                        "the Teacher proposed a body that failed its own examples".to_string(),
+                    );
                 }
                 // Searched anyway. It usually finds nothing for a body this
                 // size, and when it does the result is smaller than what the
                 // Teacher wrote and worth having beside it.
-                self.learn_from_spec(&spec);
+                if let Some(found) = self.learn_from_spec(&spec) {
+                    learning.push(found);
+                }
             }
-            (None, Some(spec)) => self.learn_from_spec(&spec),
+            (None, Some(spec)) => {
+                if let Some(found) = self.learn_from_spec(&spec) {
+                    learning.push(found);
+                }
+            }
             // A guess with nothing to check it against is not worth keeping.
             // Storing one unchecked is how a body that called itself got in.
             (Some(_), None) | (None, None) => {}
         }
+        learning
     }
 
     /// Take what the Teacher said and make it part of Spoon.
@@ -1008,9 +1031,9 @@ impl Brain {
     /// The Teacher proposes; the synthesizer verifies. That separation is why a
     /// model is allowed near this at all: nothing it says is trusted, only its
     /// examples are, and a body that fails one of them is discarded.
-    fn learn_from_spec(&self, spec: &Spec) {
+    fn learn_from_spec(&self, spec: &Spec) -> Option<String> {
         if spec.examples.is_empty() {
-            return;
+            return None;
         }
         // Larger than the default size cap, because the bodies worth learning
         // from a conversation are a little bigger than the ones worth testing.
@@ -1024,8 +1047,8 @@ impl Brain {
             ..SynthBudget::default()
         };
         let outcome = synthesize(spec, &self.store, &self.registry, budget);
-        let SynthOutcome::Found { body, .. } = outcome else {
-            return;
+        let SynthOutcome::Found { body, size, .. } = outcome else {
+            return None;
         };
         let now = Utc::now();
         let realization = spoon_concept::Realization {
@@ -1040,6 +1063,11 @@ impl Brain {
             tier: Tier::Provisional,
         };
         let _ = self.store.put_realization(&realization);
+        Some(format!(
+            "the synthesizer found {} in {size} nodes, verified on {} examples",
+            render(&spec.target, &self.symbols),
+            spec.examples.len()
+        ))
     }
 
     /// Is this something the store now actively asserts?

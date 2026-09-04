@@ -52,6 +52,11 @@ pub async fn run(cli: &Cli) -> Result<()> {
 
         let result = brain.turn("repl", text).await?;
         println!("{}", result.reply);
+        // Shown unprompted, because learning something is worth knowing about
+        // even when it did not change this answer.
+        for note in &result.episode.learning {
+            println!("  + {note}");
+        }
         if std::env::var("SPOON_DEBUG").is_ok() {
             let e = &result.episode;
             println!(
@@ -85,6 +90,7 @@ pub async fn stdio(cli: &Cli) -> Result<()> {
             "episode_id": result.episode.id,
             "ears_path": format!("{:?}", result.episode.ears_path),
             "gaps": result.episode.gaps.len(),
+            "learning": result.episode.learning,
             "metrics": result.episode.metrics,
         });
         println!("{out}");

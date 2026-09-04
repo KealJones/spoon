@@ -81,6 +81,10 @@ async fn chat(
                 "steps": result.episode.steps.iter().map(|s| guard.render(s)).collect::<Vec<_>>(),
                 "gaps": result.episode.gaps.iter().map(|g| guard.render(g)).collect::<Vec<_>>(),
                 "rules": result.episode.rules,
+                // What Spoon picked up this turn and from where. "3" and "3,
+                // and the Teacher had to correct how I read that" are different
+                // answers to a reader even when the number is the same.
+                "learning": result.episode.learning,
                 "metrics": result.episode.metrics,
             }
         }))

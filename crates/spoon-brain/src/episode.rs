@@ -93,6 +93,14 @@ pub struct Episode {
     /// Rules that fired, when the answer came from derivation rather than
     /// evaluation.
     pub rules: Vec<String>,
+    /// What Spoon learned this turn, and from where.
+    ///
+    /// Worth surfacing rather than leaving in the store, because "3" and "3,
+    /// and the Teacher had to correct how I read that" are different answers to
+    /// the reader even when the number is the same. It is also the only way to
+    /// see the Teacher earning its cost.
+    #[serde(default)]
+    pub learning: Vec<String>,
     pub reply: String,
     pub mouth_path: MouthPath,
     pub metrics: TurnMetrics,

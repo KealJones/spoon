@@ -23,6 +23,7 @@ fn episode(id: u64, claim: Concept, realization: &str) -> Episode {
         gaps: vec![],
         realizations: vec![(realization.to_string(), true)],
         trace: vec![],
+        learning: vec![],
         rules: vec![],
         reply: "noted: owns<john, dog>".into(),
         mouth_path: MouthPath::Template,

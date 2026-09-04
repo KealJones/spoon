@@ -27,6 +27,7 @@
   .turn { border-bottom: 1px solid var(--line); padding: .6rem 0; }
   .turn .you { opacity: .6; }
   .turn .meta { opacity: .5; font-size: .8rem; margin-top: .2rem; }
+  .turn .learned { font-size: .8rem; margin-top: .2rem; opacity: .85; }
   pre { margin: .2rem 0; white-space: pre-wrap; word-break: break-word; }
 </style>
 </head>
@@ -62,7 +63,7 @@ function table(cols, rows) {
 
 async function send(text) {
   if (!text.trim()) return;
-  history.push({ you: text, reply: '...', meta: '' });
+  history.push({ you: text, reply: '...', meta: '', learned: [] });
   render();
   const r = await fetch('/v1/chat/completions', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -75,13 +76,16 @@ async function send(text) {
     (s.steps?.length ? ` · ${s.steps.join('  ')}` : '') +
     (s.gaps?.length ? ` · gaps: ${s.gaps.join(', ')}` : '') +
     (s.rules?.length ? ` · rules: ${s.rules.join(', ')}` : '');
+  last.learned = s.learning || [];
   render();
 }
 
 async function render() {
   if (tab === 'chat') {
     view.innerHTML = `<div class="chat"><input id="msg" placeholder="say something" autofocus><button id="go">send</button></div>` +
-      history.map(h => `<div class="turn"><div class="you">&gt; ${esc(h.you)}</div><pre>${esc(h.reply)}</pre><div class="meta">${esc(h.meta)}</div></div>`).reverse().join('');
+      history.map(h => `<div class="turn"><div class="you">&gt; ${esc(h.you)}</div><pre>${esc(h.reply)}</pre><div class="meta">${esc(h.meta)}</div>${
+        (h.learned || []).map(l => `<div class="learned">+ ${esc(l)}</div>`).join('')
+      }</div>`).reverse().join('');
     const msg = document.getElementById('msg');
     const go = () => { const t = msg.value; msg.value = ''; send(t); };
     document.getElementById('go').onclick = go;
