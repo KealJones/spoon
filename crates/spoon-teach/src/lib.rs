@@ -63,8 +63,8 @@ COMPOSE <target> = <body>\n    \
 the body is a concept expression using ?0, ?1 for the arguments\n\n\
 Examples:\n\
 COMPOSE double = add<?0, ?0>\n\
-COMPOSE reverse-text = join<reverse<chars<?0>>, \"\">\n\
-COMPOSE average = div<sum<?0>, count<?0>>\n\n\
+COMPOSE average = div<sum<?0>, count<?0>>\n\
+COMPOSE longest = max-of<map<?0, text-length>>\n\n\
 Do NOT reply with a synonym. The word is not the problem; the system cannot \
 DO the thing. If you cannot express it with the concepts listed, say UNKNOWN.\n\n{common}{known}"
             ),
@@ -78,7 +78,7 @@ Multiple inputs to one example are separated by commas.\n\n\
 Examples:\n\
 EXAMPLES double : 3 -> 6 ; 5 -> 10 ; 0 -> 0\n\
 EXAMPLES add-two : 1, 2 -> 3 ; 10, 5 -> 15\n\
-EXAMPLES shout : \"ab\" -> \"AB\" ; \"hi\" -> \"HI\"\n\n\
+EXAMPLES count-of : [1, 2, 3] -> 3 ; [] -> 0\n\n\
 Give at least three examples. They must be literally correct: the synthesizer \
 verifies every one and discards anything that fails even a single case.\n\n{common}{known}"
             ),

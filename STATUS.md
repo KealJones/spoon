@@ -6,6 +6,50 @@ Decisions in PIVOT_PLAN.md; rules in AGENTS.md; design in docs/CONCEPT-IR-DESIGN
 
 ---
 
+## 2026-09-03  Correction: the Teacher result was the prompt talking to itself
+
+An earlier entry claimed the Teacher, once fixed, produced
+`join<reverse<chars<?0>>, "">` for reversing text. That was true and worthless.
+The prompt contained
+
+```
+COMPOSE reverse-text = join<reverse<chars<?0>>, "">
+```
+
+as a few-shot example, so the model was handing back the answer it had just been
+shown. Keal spotted it; the measurement was teaching to the test and should
+never have been reported as a capability.
+
+MEASURED PROPERLY
+The give-away was replaced with unrelated examples (`average`, `longest`) and
+the same question asked five times: **0 of 5 correct**. The format is fine, the
+reasoning is not. What it actually produces is
+`COMPOSE reverse = map<chars<?0>, upper>`: syntactically perfect and reverses
+nothing.
+
+So with a 4B model in the Teacher seat, string reversal is not learnable by
+either route. Search cannot reach eight nodes and the Teacher cannot write them.
+
+WHAT THIS DOES SAY
+Verification works, and is the reason a wrong answer costs nothing. Every one of
+those bodies fails the examples and is discarded, so the outcome is an honest
+"could not do it" rather than a stored realization that quietly returns
+nonsense. The pipeline is sound; the model in the seat is not good enough for
+this class of problem.
+
+The Teacher defaults to qwen3.5:4b, the same local model as the ears and the
+mouth. `SPOON_TEACHER_URL`, `SPOON_TEACHER_KEY` and `SPOON_TEACHER_MODEL` point
+it at a frontier model, and that is the experiment worth running before drawing
+any conclusion about what the architecture can learn.
+
+LESSON, worth keeping
+A few-shot example that contains the answer to the evaluation makes the
+evaluation meaningless. Anything measured against a prompt has to be measured
+against a prompt that does not contain the answer, and the check for that is
+mechanical: search the prompt for the expected output before trusting a result.
+
+---
+
 ## 2026-09-03  The Teacher was broken in three ways, and the learning loop is one fix short
 
 WHAT WAS WRONG WITH THE TEACHER
