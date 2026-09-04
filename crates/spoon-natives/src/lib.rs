@@ -10,6 +10,7 @@
 
 pub mod arith;
 pub mod collections;
+pub mod ctrl;
 pub mod data;
 pub mod io;
 pub mod map;
@@ -34,5 +35,6 @@ pub fn bootstrap() -> NativeRegistry {
     type_check::register(&mut registry);
     map::register(&mut registry);
     set::register(&mut registry);
+    ctrl::register(&mut registry);
     registry
 }
