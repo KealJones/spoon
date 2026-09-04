@@ -544,11 +544,20 @@ impl Brain {
         // has to be visible. Entities arrive in the sentence itself and can be
         // read straight off it, so a name absent from the prompt costs much
         // less than a verb absent from it.
-        let (capabilities, entities): (Vec<_>, Vec<_>) = live.into_iter().partition(|name| {
-            self.store
-                .realizations_for(&Concept::named(name))
-                .is_ok_and(|r| !r.is_empty())
-        });
+        // One query, not one per name. Asking the store about each candidate
+        // separately meant several hundred round trips per turn and took the
+        // bench from three seconds a case to forty.
+        let realized: std::collections::HashSet<_> = self
+            .store
+            .all_realizations()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|r| !matches!(r.spec, spoon_concept::RealizationSpec::Rule { .. }))
+            .map(|r| r.target.content_id())
+            .collect();
+        let (capabilities, entities): (Vec<_>, Vec<_>) = live
+            .into_iter()
+            .partition(|name| realized.contains(&Concept::named(name).content_id()));
         capabilities
             .into_iter()
             .chain(entities)
