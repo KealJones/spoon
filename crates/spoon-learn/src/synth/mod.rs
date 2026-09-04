@@ -281,6 +281,6 @@ fn search(
         });
     }
 
-    let operators = operators(store, registry, problem.target)?;
+    let operators = operators(store, registry)?;
     Ok(Search::new(store, registry, problem, budget).run(&operators))
 }

@@ -130,13 +130,22 @@ pub(super) struct Operator {
 /// declare a stronger effect than the realization claims, rules (their
 /// applicability depends on a pattern match rather than on a head and an
 /// arity), neural realizations (an LLM has no business inside the interior),
-/// and externals (they exist to touch the world). The target itself is
-/// excluded too: a body that calls the concept it defines is either circular or
-/// a copy of a realization that already exists.
+/// and externals (they exist to touch the world).
+///
+/// The target is NOT excluded, which is a deliberate reversal. Calling the
+/// concept being defined looks circular and usually is, but a concept can carry
+/// several realizations and extending one to a new kind of input is exactly the
+/// case that needs it: `reverse` reverses a list, and reversing text is
+/// `join<reverse<chars<?0>>, "">`, which uses the list realization to build the
+/// text one. Excluding the target makes that body unreachable, which is how a
+/// perfectly good spec came back with nothing found.
+///
+/// The circular case is not a danger here. A body that genuinely recurses
+/// without progress fails its examples, because the evaluator cuts a goal that
+/// re-enters itself and the candidate then produces no output to verify.
 pub(super) fn operators(
     store: &Store,
     registry: &NativeRegistry,
-    exclude: SymbolId,
 ) -> spoon_store::Result<Vec<Operator>> {
     let names: HashMap<SymbolId, String> = store.all_symbols()?.into_iter().collect();
 
@@ -150,9 +159,6 @@ pub(super) fn operators(
         let Some(sym) = realization.target.as_symbol() else {
             continue;
         };
-        if sym == exclude {
-            continue;
-        }
 
         let arities: Vec<usize> = match &realization.spec {
             RealizationSpec::Native { native } => match registry.get(native) {

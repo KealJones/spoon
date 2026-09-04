@@ -103,9 +103,18 @@ async function render() {
     view.innerHTML = filter + table(['concept'], d.concepts.map(c => [c]));
   } else if (tab === 'realizations') {
     const d = await get('/debug/realizations?limit=500&q=' + encodeURIComponent(q));
-    view.innerHTML = filter + table(
-      ['name', 'target', 'kind', 'effect', 'tier', 'uses', 'ok', 'fail'],
-      d.realizations.map(r => [r.name, r.target, r.kind, r.effect, r.tier, r.uses, r.successes, r.failures]));
+    const num = (v) => v == null ? '-' : (Math.round(v * 100) / 100).toFixed(2);
+    const summary = `<div class="stats">${
+      (d.by_source || []).map(s => `<div class="stat"><b>${s.count}</b><span>${esc(s.source)} &middot; ${
+        num(s.mean_success_rate)} rate &middot; ${s.uses} uses</span></div>`).join('')
+    }</div>`;
+    view.innerHTML = summary + filter + table(
+      ['name', 'target', 'source', 'kind', 'effect', 'tier', 'score', 'rate', 'uses', 'ok', 'fail'],
+      d.realizations
+        .slice()
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .map(r => [r.name, r.target, r.source, r.kind, r.effect, r.tier,
+                   num(r.score), num(r.success_rate), r.uses, r.successes, r.failures]));
   } else {
     const d = await get('/debug/episodes?limit=100');
     view.innerHTML = table(['#', 'said', 'replied', 'ears', 'gaps', 'ms'],

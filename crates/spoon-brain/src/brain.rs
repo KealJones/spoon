@@ -401,7 +401,14 @@ impl Brain {
                 // and was handed a string, which is a gap in what Spoon can do
                 // even though the concept is not unknown.
                 gaps.extend(trace.irreducible().into_iter().cloned());
+                // Deduplicated and capped. A realization that recurses fails
+                // once per level, and reporting five hundred copies of the same
+                // gap tells the Teacher nothing it does not learn from one.
+                const MAX_GAPS: usize = 8;
                 for (concept, _, _) in trace.failures() {
+                    if gaps.len() >= MAX_GAPS {
+                        break;
+                    }
                     if !gaps.contains(concept) {
                         gaps.push(concept.clone());
                     }
@@ -492,12 +499,72 @@ impl Brain {
             });
         }
 
+        // Both questions get asked, and they are not redundant. A composition
+        // is the Teacher writing the answer; examples are it saying what the
+        // answer must do. Search can VERIFY a body far larger than it can FIND:
+        // with a hundred operators an eight-node body is combinatorially out of
+        // reach, and `join<reverse<chars<?0>>, "">` is exactly eight. Four
+        // hundred thousand candidates over twenty-eight seconds did not reach
+        // it; checking the Teacher's guess against three examples takes
+        // microseconds.
+        //
+        // So the composition supplies the candidate and the examples supply the
+        // verdict. That keeps the rule that matters, which is that nothing the
+        // Teacher says is believed on its word, while dropping the assumption
+        // that the synthesizer has to be the one to find it.
+        let mut proposal: Option<(Concept, Concept)> = None;
+        let mut spec: Option<Spec> = None;
+
         for ask in asks.into_iter().take(4) {
             let Ok(reply) = teacher.teach(&ask, &vocabulary).await else {
                 continue;
             };
             metrics.teacher_calls += 1;
-            self.absorb(reply);
+            if std::env::var("SPOON_DEBUG").is_ok() {
+                eprintln!("[teacher] {ask:?}\n      -> {reply:?}");
+            }
+            let subject = subject_of(&ask);
+            match reply {
+                TeacherReply::Composition { target, body } => {
+                    proposal = Some((retarget(target, subject.as_ref()), body));
+                }
+                TeacherReply::Spec(s) => {
+                    spec = Some(Spec {
+                        target: retarget(s.target.clone(), subject.as_ref()),
+                        ..s
+                    });
+                }
+                // Vocabulary answers stand on their own and need no checking.
+                other => self.absorb(other, subject),
+            }
+        }
+
+        match (proposal, spec) {
+            (Some((target, body)), Some(spec)) => {
+                // Keep both, when both work. Realizations compete, so there is
+                // no reason to pick a winner here on a guess about which will
+                // turn out better: the taught body is available immediately and
+                // can be any size, the searched one is minimal and verified by
+                // construction, and which of those matters depends on inputs
+                // neither of them has seen yet.
+                //
+                // Selection scores them on evidence as they get used, which is
+                // a better judge than this function could be. Storing one and
+                // discarding the other throws away the comparison before it
+                // happens.
+                let taught = self.verify(&body, &spec);
+                if taught {
+                    self.store_composed(&target, &body);
+                }
+                // Searched anyway. It usually finds nothing for a body this
+                // size, and when it does the result is smaller than what the
+                // Teacher wrote and worth having beside it.
+                self.learn_from_spec(&spec);
+            }
+            (None, Some(spec)) => self.learn_from_spec(&spec),
+            // A guess with nothing to check it against is not worth keeping.
+            // Storing one unchecked is how a body that called itself got in.
+            (Some(_), None) | (None, None) => {}
         }
     }
 
@@ -506,7 +573,16 @@ impl Brain {
     /// Everything lands as an ordinary stored concept, at provisional tier: the
     /// Teacher proposes, experience decides. Nothing it says is trusted enough
     /// to arrive as kernel.
-    fn absorb(&self, reply: TeacherReply) {
+    /// Take what the Teacher said and make it part of Spoon.
+    ///
+    /// `subject` is the concept the question was about, when there was one. The
+    /// Teacher names its own answers, and asked how to reverse a string it will
+    /// propose `reverse-text` while the concept that actually failed was
+    /// `reverse`. Storing it under the invented name produces a correct
+    /// realization that nothing ever calls, because no utterance will ever
+    /// mention it. Binding the answer to the concept that failed is what closes
+    /// the loop.
+    fn absorb(&self, reply: TeacherReply, subject: Option<Concept>) {
         let now = Utc::now();
         match reply {
             TeacherReply::Synonym { word, concept, .. } => {
@@ -541,6 +617,22 @@ impl Brain {
                 }
             }
             TeacherReply::Composition { target, body } => {
+                let target = retarget(target, subject.as_ref());
+                // The Teacher proposes; something has to verify. A composition
+                // arrives unchecked, and one that calls its own target without
+                // a base case recurses until a budget stops it, turning a
+                // single request into hundreds of failed steps. The Teacher
+                // offered exactly that here: `reverse` defined as
+                // `reverse<chars<?0>>`.
+                //
+                // A body may legitimately use other realizations of its own
+                // target, which is how reversing text builds on reversing a
+                // list, but only with something between the two calls. A body
+                // whose outermost application is its own target has nothing in
+                // between and cannot terminate.
+                if body.head_symbol() == target.as_symbol() {
+                    return;
+                }
                 let realization = spoon_concept::Realization {
                     target,
                     name: format!("taught-{}", now.timestamp_millis()).into(),
@@ -554,11 +646,49 @@ impl Brain {
             }
             // A spec is examples, and examples are searchable. This is the
             // path that turns "I cannot do that" into something Spoon can do.
-            TeacherReply::Spec(spec) => self.learn_from_spec(&spec),
+            TeacherReply::Spec(spec) => {
+                let spec = Spec {
+                    target: retarget(spec.target, subject.as_ref()),
+                    ..spec
+                };
+                self.learn_from_spec(&spec);
+            }
             // An admitted blank is a real answer. Nothing to store yet, but it
             // is worth not treating as a failure.
             TeacherReply::Unknown { .. } => {}
         }
+    }
+
+    /// Does this body actually do what the examples say?
+    ///
+    /// The same check synthesis applies to every candidate it considers, run
+    /// once against the Teacher's guess. Verification is cheap where search is
+    /// not, which is what makes accepting a body too large to find safe.
+    fn verify(&self, body: &Concept, spec: &Spec) -> bool {
+        if spec.examples.len() < 3 {
+            return false;
+        }
+        spec.examples.iter().all(|(inputs, expected)| {
+            let term = spoon_concept::substitute_positional(body, inputs);
+            let mut evaluator = Evaluator::new(&self.store, &self.registry)
+                .with_budget(self.config.eval_budget)
+                .with_permission(PermissionMode::AlwaysAsk);
+            matches!(evaluator.evaluate(&term), Outcome::Value(v) if v == *expected)
+        })
+    }
+
+    /// Store a verified body as a realization of the concept that failed.
+    fn store_composed(&self, target: &Concept, body: &Concept) {
+        let now = Utc::now();
+        let _ = self.store.put_realization(&spoon_concept::Realization {
+            target: target.clone(),
+            name: format!("taught-{}", now.timestamp_millis()).into(),
+            spec: spoon_concept::RealizationSpec::Composed { body: body.clone() },
+            effect: spoon_concept::Effect::Pure,
+            activation: spoon_concept::Activation::new(now),
+            provenance: Provenance::Teacher { episode: None },
+            tier: Tier::Provisional,
+        });
     }
 
     /// Search for a body satisfying the Teacher's examples, and keep it if one
@@ -571,7 +701,18 @@ impl Brain {
         if spec.examples.is_empty() {
             return;
         }
-        let outcome = synthesize(spec, &self.store, &self.registry, SynthBudget::default());
+        // Larger than the default size cap, because the bodies worth learning
+        // from a conversation are a little bigger than the ones worth testing.
+        // Reversing text is `join<reverse<chars<?0>>, "">`, which is eight
+        // nodes, and a cap of seven puts it permanently out of reach while
+        // reporting an honest "searched everything, found nothing". The time
+        // budget is what actually bounds the cost.
+        let budget = SynthBudget {
+            max_size: 9,
+            max_millis: 8_000,
+            ..SynthBudget::default()
+        };
+        let outcome = synthesize(spec, &self.store, &self.registry, budget);
         let SynthOutcome::Found { body, .. } = outcome else {
             return;
         };
@@ -648,6 +789,30 @@ impl Brain {
 
     pub fn seat_calls(&self, seat: Seat) -> u64 {
         self.counters.get(seat)
+    }
+}
+
+/// The concept a Teacher question was about, when it had one.
+fn subject_of(ask: &TeacherAsk) -> Option<Concept> {
+    match ask {
+        TeacherAsk::Capability { concept, .. } | TeacherAsk::Examples { concept, .. } => {
+            // The head, not the whole call: the gap was `reverse<"hello">` and
+            // the capability being taught is `reverse`.
+            concept.head().cloned().or_else(|| Some(concept.clone()))
+        }
+        TeacherAsk::Vocabulary { .. } | TeacherAsk::Concept { .. } => None,
+    }
+}
+
+/// Prefer the concept that actually failed over the name the Teacher chose.
+///
+/// Its own name is kept only when there is nothing to bind to, which happens
+/// for vocabulary questions where the Teacher is naming something genuinely
+/// new rather than explaining something Spoon already tried and could not do.
+fn retarget(proposed: Concept, subject: Option<&Concept>) -> Concept {
+    match subject {
+        Some(actual) if actual.is_named() => actual.clone(),
+        _ => proposed,
     }
 }
 

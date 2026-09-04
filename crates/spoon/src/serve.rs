@@ -188,7 +188,35 @@ async fn concepts(State(brain): State<Shared>, Query(f): Query<Filter>) -> impl 
 
 async fn realizations(State(brain): State<Shared>, Query(f): Query<Filter>) -> impl IntoResponse {
     let guard = brain.lock().await;
+    let now = chrono::Utc::now();
     let all = guard.store().all_realizations().unwrap_or_default();
+
+    // Grouped by where it came from, because the interesting question is
+    // whether what the Teacher wrote holds up against what search found, and
+    // that is invisible in a flat list.
+    let mut by_source: std::collections::BTreeMap<&str, (usize, u64, u64, f64)> =
+        Default::default();
+    for r in &all {
+        let entry = by_source
+            .entry(provenance_label(&r.provenance))
+            .or_default();
+        entry.0 += 1;
+        entry.1 += r.activation.uses;
+        entry.2 += r.activation.failures;
+        entry.3 += r.activation.success_rate();
+    }
+    let summary: Vec<serde_json::Value> = by_source
+        .into_iter()
+        .map(|(source, (count, uses, failures, rate_sum))| {
+            json!({
+                "source": source,
+                "count": count,
+                "uses": uses,
+                "failures": failures,
+                "mean_success_rate": rate_sum / count as f64,
+            })
+        })
+        .collect();
     let rows: Vec<serde_json::Value> = all
         .iter()
         .filter(|r| {
@@ -201,15 +229,27 @@ async fn realizations(State(brain): State<Shared>, Query(f): Query<Filter>) -> i
                 "name": r.name,
                 "target": guard.render(&r.target),
                 "kind": r.spec.kind().as_str(),
+                // Where it came from. Two realizations of one concept are
+                // routinely a Teacher's guess sitting beside a synthesized
+                // body, and which is which is the first thing anyone asks.
+                "source": provenance_label(&r.provenance),
                 "effect": r.effect.as_str(),
                 "tier": format!("{:?}", r.tier),
                 "uses": r.activation.uses,
                 "successes": r.activation.successes,
                 "failures": r.activation.failures,
+                // The numbers selection actually runs on, computed the same
+                // way here as there. Reading a rank off raw counts is
+                // misleading: a realization used twice today outranks one used
+                // twenty times last month, and only the activation shows that.
+                "success_rate": r.activation.success_rate(),
+                "activation": r.activation.base_level(now),
+                "score": spoon_eval::score(std::sync::Arc::new(r.clone()), 0.5, now).score,
+                "last_used": r.activation.last_used_at,
             })
         })
         .collect();
-    Json(json!({ "count": rows.len(), "realizations": rows }))
+    Json(json!({ "count": rows.len(), "by_source": summary, "realizations": rows }))
 }
 
 async fn episodes(State(brain): State<Shared>, Query(f): Query<Filter>) -> impl IntoResponse {
@@ -223,6 +263,20 @@ async fn episodes(State(brain): State<Shared>, Query(f): Query<Filter>) -> impl 
         .filter_map(|r| serde_json::from_str(r).ok())
         .collect();
     Json(json!({ "count": parsed.len(), "episodes": parsed }))
+}
+
+/// A short, readable name for where something came from.
+fn provenance_label(p: &spoon_concept::Provenance) -> &'static str {
+    match p {
+        spoon_concept::Provenance::Bootstrap => "bootstrap",
+        spoon_concept::Provenance::User { .. } => "user",
+        spoon_concept::Provenance::Teacher { .. } => "taught",
+        spoon_concept::Provenance::Synthesized { .. } => "synthesized",
+        spoon_concept::Provenance::Consolidated => "consolidated",
+        spoon_concept::Provenance::Inferred => "inferred",
+        spoon_concept::Provenance::Imported { .. } => "imported",
+        spoon_concept::Provenance::External { .. } => "external",
+    }
 }
 
 /// The inspector, served from the binary so there is nothing to build or host.
