@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use chrono::Utc;
 use spoon_concept::{Concept, ConceptMeta, Provenance, SymbolTable, Tier, holes, render};
-use spoon_ears::PhrasingIndex;
+use spoon_ears::{NativeEars, PhrasingIndex};
 use spoon_eval::{Budget, Evaluator, NativeRegistry, Outcome, PermissionMode};
 use spoon_infer::{DeriveBudget, DiscriminationTree, Engine};
 use spoon_learn::{SynthBudget, SynthOutcome, synthesize};
@@ -424,6 +424,20 @@ impl Brain {
         let recent = self.recent_turns(session);
         let rules = self.ears_rules();
         match self.ears.hear(text, &vocabulary, &recent, &rules).await {
+            Ok(heard) if only_pleasantries(&heard.steps) && !NativeEars::is_social_only(text) => {
+                // The model saw a greeting and dropped the request. "hey
+                // reverse spoon lol" is a request with a polite opener, and
+                // replying hello to it is worse than saying it was not
+                // understood: a greeting looks like success, so nothing is
+                // recorded, the Teacher is never asked, and the same sentence
+                // fails the same way forever.
+                //
+                // Whether the sentence is only pleasantries is something the
+                // native path already decides without a model, so there is
+                // something solid to check the model against.
+                metrics.ears_failed += 1;
+                (Heard::native(Vec::new(), 0.0), EarsPath::Failed)
+            }
             Ok(heard) => {
                 metrics.ears_model += 1;
                 (heard, EarsPath::Model)
@@ -1454,6 +1468,15 @@ fn mentions_any(text: &str, names: &[String]) -> bool {
             before && after
         })
     })
+}
+
+/// Is this reading nothing but small talk?
+fn only_pleasantries(steps: &[Concept]) -> bool {
+    !steps.is_empty()
+        && steps.iter().all(|s| {
+            s.head_symbol()
+                .is_some_and(|h| h == spoon_concept::SymbolId::of("chat"))
+        })
 }
 
 pub fn is_unknown(value: &Concept) -> bool {

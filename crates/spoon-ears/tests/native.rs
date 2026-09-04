@@ -36,3 +36,25 @@ fn a_bare_greeting_is_still_a_greeting() {
     }
 }
 
+
+#[test]
+fn only_pleasantries_is_decided_without_a_model() {
+    // The model is checked against this. A 4b model shown "hey reverse spoon
+    // lol" often returns a greeting and drops the request, and answering
+    // hello to a question is worse than admitting confusion: a greeting looks
+    // like success, so nothing is recorded and the Teacher is never asked.
+    for say in ["hey", "hey there", "yo yo yo", "hi how are you", "thanks", "bye"] {
+        assert!(NativeEars::is_social_only(say), "{say:?} is small talk");
+    }
+    for say in [
+        "hey reverse spoon lol",
+        "hey quick one, 356 minus 43",
+        "yo whats 12 times 5",
+        "thanks can you also reverse banana",
+    ] {
+        assert!(
+            !NativeEars::is_social_only(say),
+            "{say:?} carries a request"
+        );
+    }
+}

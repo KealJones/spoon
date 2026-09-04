@@ -137,6 +137,15 @@ impl NativeEars {
             .find(|m| lowered.contains(m))
     }
 
+    /// Is this utterance nothing but pleasantries?
+    ///
+    /// Exposed because the model needs checking against it. A 4b model shown
+    /// "hey reverse spoon lol" often returns a greeting and drops the request,
+    /// and answering hello to a question is worse than admitting confusion.
+    pub fn is_social_only(text: &str) -> bool {
+        Self::social(text).is_some()
+    }
+
     fn social(text: &str) -> Option<Concept> {
         let n = Self::normalize(text);
         fn word(w: &str) -> &str {
