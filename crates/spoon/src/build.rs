@@ -35,6 +35,12 @@ pub fn open_store(cli: &Cli) -> Result<Store> {
     if cli.ephemeral {
         return Ok(Store::open_in_memory()?);
     }
+    // A throwaway brain for anyone testing, so nobody reaches for the real one
+    // and deletes it. SPOON_SCRATCH is set by the test scripts; it is not a
+    // thing a user ever needs to know about.
+    if let Ok(path) = std::env::var("SPOON_SCRATCH") {
+        return Ok(Store::open(std::path::Path::new(&path))?);
+    }
     let path = brain_path(cli)?;
     Ok(Store::open(&path)?)
 }

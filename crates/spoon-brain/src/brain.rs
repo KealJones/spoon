@@ -328,6 +328,33 @@ impl Brain {
                 for d in &derived {
                     rules.extend(d.rules_used().iter().map(|r| r.to_string()));
                 }
+                if derived.is_empty() {
+                    // A question can go unanswered for two very different
+                    // reasons: the fact is genuinely not known, or the goal
+                    // mentions something Spoon cannot compute. "is science a
+                    // palindrome" is the second, and it looked identical to the
+                    // first, so the Teacher was never told and the capability
+                    // was never learned.
+                    //
+                    // Probing the goal separates them. Anything inside it that
+                    // no realization can reduce is a gap, and a gap is what the
+                    // Teacher acts on.
+                    let mut probe = Evaluator::new(&self.store, &self.registry)
+                        .with_budget(self.config.eval_budget)
+                        .with_permission(PermissionMode::AlwaysAsk);
+                    probe.evaluate(goal);
+                    let trace = probe.trace();
+                    for concept in trace.irreducible() {
+                        if !gaps.contains(concept) {
+                            gaps.push(concept.clone());
+                        }
+                    }
+                    for (concept, _, _) in trace.failures() {
+                        if !gaps.contains(concept) {
+                            gaps.push(concept.clone());
+                        }
+                    }
+                }
                 Ok(Some(match derived.len() {
                     0 => Concept::call("unknown", [goal.clone()]),
                     _ if holes(goal).is_empty() => Concept::bool(true),
