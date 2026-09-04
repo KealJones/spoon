@@ -6,6 +6,78 @@ Decisions in PIVOT_PLAN.md; rules in AGENTS.md; design in docs/CONCEPT-IR-DESIGN
 
 ---
 
+## 2026-09-03  Stages 4-7: it holds a conversation (437 tests, 0 warnings)
+
+DONE, verified against a real brain with a real local model (qwen3.5:4b)
+- `spoon-seat`: one HTTP client, three seats, separate counters.
+- `spoon-ears`: native path first, model on a miss. Model gets an
+  activation-ranked vocabulary, not the whole store.
+- `spoon-mouth`: template is the reference, model makes it human, output is
+  checked against the values it was told to keep.
+- `spoon-teach`: proposes synonyms, concepts, and compositions. Never code.
+- `spoon-brain`: the turn loop, episodes, and the resolver that turns a flat
+  heard sequence into moves.
+- `spoon`: repl, stdio, serve (OpenAI-compatible + inspector with a live chat
+  tab), bench, doctor, export, import, status.
+
+THE THESIS, DEMONSTRATED END TO END
+```
+> greg is friends with keal      noted: friends<greg, keal>
+> friends is symmetric           noted: symmetric<friends>
+> is keal friends with greg?     yes
+```
+Nobody stored that answer. It was derived from one fact and one declared
+property, through the general meta-rule, from messy typed English.
+
+Also working, model on, against ~/.spoon/spoon-v2.db:
+- `whats 2 plus 3` -> 5, `calculate 12 times 4` -> 48
+- `can u double 21 for me` -> 42
+- `john has a dog` -> `noted: owns<john, dog>`, then `who owns a dog?` ->
+  `list<owns<john, dog>>`, and still answered after a restart.
+- 36-utterance bench of real messages from the design conversation: 34 of 36
+  produced a sensible reading, 2 outright failures, `interior_model_calls` 0.
+
+BUGS THE FIRST REAL RUN FOUND (all fixed)
+1. Chat went through evaluation, so `greet<>` found no realization, logged a
+   capability gap, and turned a hello into a report about what Spoon cannot do.
+2. Names printed as hex. Ids are derived from names, so parsing teaches the
+   store nothing about spelling, and the ears were throwing away the table they
+   had just filled.
+3. The mouth held a symbol table snapshot from startup, so anything learned
+   mid-conversation was unreadable exactly when Spoon had just learned it.
+4. The mouth padded replies with invented trivia that passed the value check
+   because the value was still in there somewhere.
+
+KNOWN LIMITATIONS, stated plainly
+- **The ears invent vocabulary.** "friendship is symmetric" and "greg is
+  friends with keal" produced `symmetric<friendship>` and `friends<greg, keal>`,
+  which do not connect. The meta-rule is fine; the names disagree. This is
+  exactly what `Synonym` and the Teacher are for and neither is wired into the
+  ears' naming yet. It is the single biggest gap.
+- **No synthesis.** Stage 5's learn-from-examples is not built. The Teacher can
+  hand back a composition and it is stored, but Spoon cannot yet infer a
+  capability from worked examples.
+- **No consolidation.** Repeated structure is never promoted to a named
+  abstraction, so the library does not compress.
+- **No credit assignment.** Episodes record what happened, including which
+  realization failed, but nothing reads them to apportion blame yet.
+- **Corrections are not wired.** `Episode::correction` exists and is always
+  None; saying "no, wrong" does not yet retract anything.
+- **The native ears are thin.** Social and arithmetic only, so the weaning
+  number sits at 14 percent and will not move until phrasing induction exists.
+- **Left-recursive rules under-answer.** Sound, not complete. See the Stage 3
+  entry.
+
+NEXT, in the order that would matter most
+1. Wire `Synonym` into the ears so an invented name resolves to an existing
+   concept instead of forking the vocabulary.
+2. Corrections: retract, re-store, and update realization evidence.
+3. Synthesis from examples, which is what makes the Teacher's specs useful.
+4. Phrasing induction, so accepted model readings become native ones.
+5. Consolidation.
+
+---
+
 ## 2026-09-03  Stage 2 complete: evaluator and 98 bootstrap natives (380 tests, 0 warnings)
 
 DONE
