@@ -42,7 +42,7 @@ fn int(v: i64) -> Concept {
 
 /// `Add<Mul<k, 2>, 1>`: the running example, one constant apart each time.
 fn affine(k: i64) -> Concept {
-    Concept::call("add", [Concept::call("mul", [int(k), int(2)]), int(1)])
+    Concept::call("math-add", [Concept::call("math-mul", [int(k), int(2)]), int(1)])
 }
 
 fn brain() -> (Store, NativeRegistry) {
@@ -97,15 +97,15 @@ fn call(name: &str) -> Concept {
 #[test]
 fn three_bodies_sharing_a_shape_yield_one_abstraction() {
     let bodies = vec![affine(3), affine(5), affine(7)];
-    let found = consolidate(&bodies, config(&["add", "mul"]));
+    let found = consolidate(&bodies, config(&["math-add", "math-mul"]));
 
     assert_eq!(found.len(), 1, "got {found:#?}");
     let abstraction = &found[0];
     assert_eq!(
         abstraction.body,
         Concept::call(
-            "add",
-            [Concept::call("mul", [Concept::hole(0), int(2)]), int(1)]
+            "math-add",
+            [Concept::call("math-mul", [Concept::hole(0), int(2)]), int(1)]
         )
     );
     assert_eq!(abstraction.arity, 1);
@@ -116,20 +116,20 @@ fn three_bodies_sharing_a_shape_yield_one_abstraction() {
     // saves one node per use and costs four to define, and it overlaps the
     // winner anyway.
     for other in &found {
-        assert_ne!(other.body, Concept::call("mul", [Concept::hole(0), int(2)]));
+        assert_ne!(other.body, Concept::call("math-mul", [Concept::hole(0), int(2)]));
     }
 }
 
 #[test]
 fn a_shape_seen_twice_is_not_a_pattern() {
     let bodies = vec![affine(3), affine(5)];
-    assert!(consolidate(&bodies, config(&["add", "mul"])).is_empty());
+    assert!(consolidate(&bodies, config(&["math-add", "math-mul"])).is_empty());
 
     // The same corpus with the bar lowered does produce it, so the emptiness
     // above is the recurrence floor and not some other filter.
     let lenient = ConsolidateConfig {
         min_count: 2,
-        ..config(&["add", "mul"])
+        ..config(&["math-add", "math-mul"])
     };
     assert_eq!(consolidate(&bodies, lenient).len(), 1);
 }
@@ -249,17 +249,17 @@ fn an_abstraction_that_saves_nothing_is_rejected() {
     // loses: it saves one node per use and costs four nodes to define.
     let bodies: Vec<Concept> = [1, 3, 5]
         .iter()
-        .map(|k| Concept::call("mul", [int(*k), int(2)]))
+        .map(|k| Concept::call("math-mul", [int(*k), int(2)]))
         .collect();
-    assert!(consolidate(&bodies, config(&["mul"])).is_empty());
+    assert!(consolidate(&bodies, config(&["math-mul"])).is_empty());
 
     // Five uses does pay for the same definition, so the emptiness above is
     // arithmetic and not a structural refusal.
     let more: Vec<Concept> = [1, 3, 5, 7, 9]
         .iter()
-        .map(|k| Concept::call("mul", [int(*k), int(2)]))
+        .map(|k| Concept::call("math-mul", [int(*k), int(2)]))
         .collect();
-    let found = consolidate(&more, config(&["mul"]));
+    let found = consolidate(&more, config(&["math-mul"]));
     assert_eq!(found.len(), 1, "got {found:#?}");
     assert!(found[0].utility > 0.0);
 }
@@ -300,18 +300,18 @@ fn selection_never_returns_overlapping_abstractions() {
 #[test]
 fn names_are_readable_and_deterministic() {
     let bodies = vec![affine(3), affine(5), affine(7)];
-    let first = consolidate(&bodies, config(&["add", "mul"]));
-    let second = consolidate(&bodies, config(&["add", "mul"]));
+    let first = consolidate(&bodies, config(&["math-add", "math-mul"]));
+    let second = consolidate(&bodies, config(&["math-add", "math-mul"]));
 
-    assert_eq!(first[0].name, "add-of-mul");
+    assert_eq!(first[0].name, "math-add-of-math-mul");
     assert_eq!(first[0].name, second[0].name);
 }
 
 #[test]
 fn colliding_names_get_a_numeric_suffix() {
     let bodies = vec![affine(3), affine(5), affine(7)];
-    let found = consolidate(&bodies, config(&["add", "mul", "add-of-mul"]));
-    assert_eq!(found[0].name, "add-of-mul-2");
+    let found = consolidate(&bodies, config(&["math-add", "math-mul", "math-add-of-math-mul"]));
+    assert_eq!(found[0].name, "math-add-of-math-mul-2");
 
     // Camel case in the store is a word boundary, not a spelling, so the name
     // reads the way the concepts were written rather than running together.
@@ -340,7 +340,7 @@ fn a_corpus_with_no_names_still_gets_stable_ones() {
 fn a_rewritten_body_evaluates_to_the_same_answer() {
     let (store, registry) = brain();
     let bodies = vec![affine(3), affine(5), affine(7)];
-    let found = consolidate(&bodies, config(&["add", "mul"]));
+    let found = consolidate(&bodies, config(&["math-add", "math-mul"]));
     let abstraction = &found[0];
 
     put_composed(&store, &abstraction.name, abstraction.body.clone());
@@ -362,8 +362,8 @@ fn a_rewritten_body_evaluates_to_the_same_answer() {
 #[test]
 fn applying_an_abstraction_that_is_absent_says_so() {
     let bodies = vec![affine(3), affine(5), affine(7)];
-    let found = consolidate(&bodies, config(&["add", "mul"]));
-    let elsewhere = Concept::call("sub", [int(1), int(2)]);
+    let found = consolidate(&bodies, config(&["math-add", "math-mul"]));
+    let elsewhere = Concept::call("math-sub", [int(1), int(2)]);
     assert_eq!(apply_abstraction(&elsewhere, &found[0]), None);
 }
 
@@ -398,15 +398,15 @@ fn consolidate_store_names_the_shape_and_rewrites_its_users() {
 
     let found = consolidate_store(&store, ConsolidateConfig::default()).unwrap();
     assert_eq!(found.len(), 1, "got {found:#?}");
-    assert_eq!(found[0].name, "add-of-mul");
+    assert_eq!(found[0].name, "math-add-of-math-mul");
 
     assert_eq!(
         stored_body(&store, "job-a"),
-        Concept::call("add-of-mul", [int(3)])
+        Concept::call("math-add-of-math-mul", [int(3)])
     );
     assert_eq!(
         stored_body(&store, "job-c"),
-        Concept::call("add-of-mul", [int(7)])
+        Concept::call("math-add-of-math-mul", [int(7)])
     );
 
     let after = evaluate(&store, &registry, &call("job-a"));
@@ -437,16 +437,16 @@ fn consolidate_store_survives_a_restart() {
     let registry = spoon_natives::bootstrap();
 
     let abstraction = store
-        .realization_by_name("consolidated-add-of-mul")
+        .realization_by_name("consolidated-math-add-of-math-mul")
         .unwrap()
         .expect("the abstraction outlived the restart");
     assert_eq!(abstraction.tier, Tier::Consolidated);
     assert_eq!(abstraction.provenance, Provenance::Consolidated);
-    assert_eq!(abstraction.target, Concept::named("add-of-mul"));
+    assert_eq!(abstraction.target, Concept::named("math-add-of-math-mul"));
 
     assert_eq!(
         stored_body(&store, "job-b"),
-        Concept::call("add-of-mul", [int(5)])
+        Concept::call("math-add-of-math-mul", [int(5)])
     );
     let out = evaluate(&store, &registry, &call("job-b"));
     assert_eq!(out.value(), Some(&int(11)));
@@ -485,7 +485,7 @@ fn eviction_deprecates_rather_than_deletes() {
     assert_eq!(evicted, 1);
 
     let kept = store
-        .realization_by_name("consolidated-add-of-mul")
+        .realization_by_name("consolidated-math-add-of-math-mul")
         .unwrap()
         .expect("the row is retained, because the provenance is worth keeping");
     assert_eq!(kept.tier, Tier::Deprecated);
@@ -494,7 +494,7 @@ fn eviction_deprecates_rather_than_deletes() {
     // Deprecated is never selected, so the call no longer reduces. The body
     // that used it is left as it is: nothing is silently un-rewritten.
     let out = evaluate(&store, &registry, &call("job-a"));
-    assert_eq!(out.value(), Some(&Concept::call("add-of-mul", [int(3)])));
+    assert_eq!(out.value(), Some(&Concept::call("math-add-of-math-mul", [int(3)])));
 }
 
 #[test]
@@ -505,7 +505,7 @@ fn eviction_spares_an_abstraction_that_is_being_used() {
     }
     consolidate_store(&store, ConsolidateConfig::default()).unwrap();
     store
-        .record_realization_use("consolidated-add-of-mul", true, Utc::now())
+        .record_realization_use("consolidated-math-add-of-math-mul", true, Utc::now())
         .unwrap();
 
     assert_eq!(evict_unused(&store, 1, Duration::zero()).unwrap(), 0);
@@ -532,7 +532,7 @@ fn eviction_waits_out_the_minimum_age() {
     assert_eq!(evict_unused(&store, 1, Duration::days(7)).unwrap(), 0);
     assert_eq!(
         store
-            .realization_by_name("consolidated-add-of-mul")
+            .realization_by_name("consolidated-math-add-of-math-mul")
             .unwrap()
             .unwrap()
             .tier,
@@ -563,7 +563,7 @@ fn the_same_corpus_yields_the_same_library_every_run() {
             [affine(17), Concept::call("pair", [int(3), int(3)])],
         ),
     ];
-    let names = ["add", "mul", "wrap", "pair"];
+    let names = ["math-add", "math-mul", "wrap", "pair"];
 
     let first = consolidate(&bodies, config(&names));
     assert!(!first.is_empty());
@@ -588,9 +588,9 @@ fn a_pathologically_deep_body_is_left_alone_rather_than_crashing() {
     ];
 
     // The deep body contributes nothing, the shallow ones still consolidate.
-    let found = consolidate(&bodies, config(&["nest", "seed", "add", "mul"]));
+    let found = consolidate(&bodies, config(&["nest", "seed", "math-add", "math-mul"]));
     assert_eq!(found.len(), 1);
-    assert_eq!(found[0].name, "add-of-mul");
+    assert_eq!(found[0].name, "math-add-of-math-mul");
 }
 
 #[test]

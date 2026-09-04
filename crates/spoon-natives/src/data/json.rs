@@ -15,7 +15,7 @@
 //! | null            | stays `Json`                       |
 //!
 //! Without the conversion every extracted number would arrive as an opaque
-//! blob and `Add<Field<doc, "count">, 1>` would be a type error, which defeats
+//! blob and `Add<Field<doc, "list-count">, 1>` would be a type error, which defeats
 //! the point of reading a document at all.
 //!
 //! Objects and arrays stay JSON because there is nothing better to become:
@@ -45,9 +45,9 @@ const MAX_DEPTH: usize = 64;
 /// because "invalid JSON" without a position is useless to whoever has to fix
 /// the document.
 fn parse_json(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let text = want_text("parse-json", &args[0])?;
+    let text = want_text("json-parse", &args[0])?;
     let value: Value = serde_json::from_str(text)
-        .map_err(|err| native_error("parse-json", format!("not valid JSON: {err}")))?;
+        .map_err(|err| native_error("json-parse", format!("not valid JSON: {err}")))?;
     Ok(Concept::json(value))
 }
 
@@ -59,9 +59,9 @@ fn parse_json(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// spelling, so writing one out as a bare string would produce a document that
 /// cannot be read back into the same concept.
 fn to_json(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let value = to_value("to-json", &args[0], 0)?;
+    let value = to_value("json-to-json", &args[0], 0)?;
     let text = serde_json::to_string(&value)
-        .map_err(|err| native_error("to-json", format!("could not serialize: {err}")))?;
+        .map_err(|err| native_error("json-to-json", format!("could not serialize: {err}")))?;
     Ok(Concept::text(text))
 }
 
@@ -71,9 +71,9 @@ fn to_json(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// Returning null instead would let a typo travel silently through the rest of
 /// a computation and surface as nonsense somewhere unrelated.
 fn field(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let object = want_object("field", &args[0])?;
-    let name = want_text("field", &args[1])?;
-    Ok(from_json(get_field("field", object, name)?))
+    let object = want_object("json-field", &args[0])?;
+    let name = want_text("json-field", &args[1])?;
+    Ok(from_json(get_field("json-field", object, name)?))
 }
 
 /// The same field from every object in a JSON array. "Get me all the titles."
@@ -82,21 +82,21 @@ fn field(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// is strict for the same reason [`field`] is: one record missing the field is
 /// a broken assumption about the document, not a hole to paper over.
 fn pluck(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let value = want_json("pluck", &args[0])?;
-    let name = want_text("pluck", &args[1])?;
+    let value = want_json("json-pluck", &args[0])?;
+    let name = want_text("json-pluck", &args[1])?;
     let items = value
         .as_array()
-        .ok_or_else(|| type_error("pluck", "a JSON array", &args[0]))?;
+        .ok_or_else(|| type_error("json-pluck", "a JSON array", &args[0]))?;
     let mut out = Vec::with_capacity(items.len());
     for item in items {
         let object = item.as_object().ok_or_else(|| {
             type_error(
-                "pluck",
+                "json-pluck",
                 "a JSON array of objects",
                 &Concept::json(item.clone()),
             )
         })?;
-        out.push(from_json(get_field("pluck", object, name)?));
+        out.push(from_json(get_field("json-pluck", object, name)?));
     }
     Ok(list_of(out))
 }
@@ -107,8 +107,8 @@ fn pluck(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// is a mistake in the caller, and answering `false` would hide it behind a
 /// plausible-looking answer.
 fn has_field(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let object = want_object("has-field", &args[0])?;
-    let name = want_text("has-field", &args[1])?;
+    let object = want_object("json-has-field", &args[0])?;
+    let name = want_text("json-has-field", &args[1])?;
     Ok(Concept::bool(object.contains_key(name)))
 }
 
@@ -211,7 +211,7 @@ fn to_value(native: &str, c: &Concept, depth: usize) -> Result<Value, EvalError>
             )),
         };
     }
-    if c.head_symbol() == Some(SymbolId::of("list")) {
+    if c.head_symbol() == Some(SymbolId::of("list-list")) {
         let mut out = Vec::with_capacity(c.arity());
         for item in c.args() {
             out.push(to_value(native, item, depth + 1)?);
@@ -255,31 +255,31 @@ fn get_field<'a>(
 
 pub fn register(registry: &mut NativeRegistry) {
     registry.pure(
-        "parse-json",
+        "json-parse",
         parse_json,
         Arity::Exact(1),
         "parse text into a JSON value",
     );
     registry.pure(
-        "to-json",
+        "json-to-json",
         to_json,
         Arity::Exact(1),
         "render a ground value or a list as JSON text",
     );
     registry.pure(
-        "field",
+        "json-field",
         field,
         Arity::Exact(2),
         "one field of a JSON object, as a native concept",
     );
     registry.pure(
-        "pluck",
+        "json-pluck",
         pluck,
         Arity::Exact(2),
         "the same field from every object in a JSON array",
     );
     registry.pure(
-        "has-field",
+        "json-has-field",
         has_field,
         Arity::Exact(2),
         "whether a JSON object carries a field",

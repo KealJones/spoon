@@ -242,7 +242,7 @@ fn zero_arity_compound_keeps_its_brackets() {
 fn curried_heads_round_trip_at_every_depth() {
     let table = SymbolTable::new();
     table.intern("Sort");
-    let mut c = Concept::named("sort");
+    let mut c = Concept::named("list-sort");
     for i in 0..5 {
         c = Concept::apply(c, vec![Concept::int(i)]);
         round_trip_named(&c, &table);

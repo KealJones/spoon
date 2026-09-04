@@ -37,11 +37,11 @@ fn a_stalled_capability_is_not_an_answer() {
     // The strawberry bug. `chars` reduced, so the term changed, but the head
     // nothing realizes is still sitting there holding the result hostage.
     let store = store();
-    realize(&store, "chars");
+    realize(&store, "text-chars");
     let stalled = Concept::call(
         "count-matching",
         [
-            Concept::call("list", [Concept::text("f"), Concept::text("o")]),
+            Concept::call("list-list", [Concept::text("f"), Concept::text("o")]),
             Concept::text("r"),
         ],
     );
@@ -56,7 +56,7 @@ fn an_asserted_fact_is_an_answer() {
     let fact = Concept::call("friend-with", [Concept::named("greg"), Concept::named("keal")]);
     store
         .assert_concept(&fact, Provenance::User { episode: None }, None, None)
-        .expect("assert");
+        .expect("store-assert");
     assert!(is_answer(&store, &fact));
 }
 
@@ -70,17 +70,17 @@ fn an_unasserted_made_up_head_is_not_an_answer() {
 #[test]
 fn a_realized_head_is_an_answer_even_unasserted() {
     let store = store();
-    realize(&store, "list");
+    realize(&store, "list-list");
     assert!(is_answer(
         &store,
-        &Concept::call("list", [Concept::int(1), Concept::int(2)])
+        &Concept::call("list-list", [Concept::int(1), Concept::int(2)])
     ));
 }
 
 #[test]
 fn a_stall_nested_inside_a_realized_head_is_caught() {
     let store = store();
-    realize(&store, "list");
-    let nested = Concept::call("list", [Concept::call("mystery", [Concept::int(1)])]);
+    realize(&store, "list-list");
+    let nested = Concept::call("list-list", [Concept::call("mystery", [Concept::int(1)])]);
     assert!(!is_answer(&store, &nested));
 }

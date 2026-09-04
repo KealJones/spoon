@@ -40,7 +40,7 @@ const RESPONSE_HEADS: &[&str] = &[
     "acknowledge-thanks",
     "farewell",
     "chat",
-    "list",
+    "list-list",
     "assert-that",
     "ask",
     "do",

@@ -30,7 +30,7 @@ fn every_spec() -> Vec<(&'static str, RealizationSpec)> {
         (
             "double/composed",
             RealizationSpec::Composed {
-                body: Concept::call("add", [Concept::hole(0), Concept::hole(0)]),
+                body: Concept::call("math-add", [Concept::hole(0), Concept::hole(0)]),
             },
         ),
         (
@@ -61,7 +61,7 @@ fn every_spec() -> Vec<(&'static str, RealizationSpec)> {
 #[test]
 fn every_realization_shape_round_trips() {
     let store = Store::open_in_memory().unwrap();
-    let target = Concept::named("add");
+    let target = Concept::named("math-add");
     let written: Vec<Realization> = every_spec()
         .into_iter()
         .map(|(name, spec)| realization(name, target.clone(), spec))
@@ -128,7 +128,7 @@ fn recording_a_use_updates_activation_and_the_change_survives_a_reopen() {
 #[test]
 fn recording_a_use_of_an_undescribed_concept_starts_tracking_it() {
     let store = Store::open_in_memory().unwrap();
-    let c = Concept::named("sort");
+    let c = Concept::named("list-sort");
     store.record_use(&c, true, Utc::now()).unwrap();
 
     let meta = store.get_meta(&c).unwrap().unwrap();
@@ -224,7 +224,7 @@ fn a_whole_brain_survives_a_restart() {
     .with_note("materialized because something was said about it");
     let realization = realization(
         "add/native",
-        Concept::named("add"),
+        Concept::named("math-add"),
         RealizationSpec::Native {
             native: NativeId::new("arith.add"),
         },

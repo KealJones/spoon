@@ -39,8 +39,8 @@ fn now(ctx: &mut dyn Ctx, _args: &[Concept]) -> EvalResult {
 /// Division floors rather than truncating toward zero, so a pre-epoch instant
 /// lands on the second that contains it instead of the one after it.
 fn timestamp(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let at = want_time("timestamp", &args[0])?;
-    let unit = want_unit("timestamp", args.get(1))?;
+    let at = want_time("time-timestamp", &args[0])?;
+    let unit = want_unit("time-timestamp", args.get(1))?;
     Ok(Concept::int(at.timestamp_millis().div_euclid(unit)))
 }
 
@@ -51,20 +51,20 @@ fn timestamp(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// `to_string` panics. Checking the items first and writing through
 /// `fmt::Write` keeps a malformed pattern an ordinary error.
 fn format_time(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let at = want_time("format-time", &args[0])?;
+    let at = want_time("time-format", &args[0])?;
     let Some(pattern_arg) = args.get(1) else {
         return Ok(Concept::text(at.to_rfc3339()));
     };
-    let pattern = want_text("format-time", pattern_arg)?;
+    let pattern = want_text("time-format", pattern_arg)?;
     if StrftimeItems::new(pattern).any(|item| matches!(item, Item::Error)) {
         return Err(native_error(
-            "format-time",
+            "time-format",
             format!("{pattern:?} is not a valid strftime pattern"),
         ));
     }
     let mut out = String::new();
     write!(out, "{}", at.format_with_items(StrftimeItems::new(pattern)))
-        .map_err(|_| native_error("format-time", format!("could not format with {pattern:?}")))?;
+        .map_err(|_| native_error("time-format", format!("could not format with {pattern:?}")))?;
     Ok(Concept::text(out))
 }
 
@@ -74,13 +74,13 @@ fn format_time(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// read as UTC. Assuming local time instead would make the same document parse
 /// differently on two machines.
 fn parse_time(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let text = want_text("parse-time", &args[0])?;
+    let text = want_text("time-parse", &args[0])?;
     let Some(pattern_arg) = args.get(1) else {
         return DateTime::parse_from_rfc3339(text)
             .map(|dt| Concept::datetime(dt.with_timezone(&Utc)))
-            .map_err(|err| native_error("parse-time", format!("{text:?} is not RFC 3339: {err}")));
+            .map_err(|err| native_error("time-parse", format!("{text:?} is not RFC 3339: {err}")));
     };
-    let pattern = want_text("parse-time", pattern_arg)?;
+    let pattern = want_text("time-parse", pattern_arg)?;
     if let Ok(dt) = DateTime::parse_from_str(text, pattern) {
         return Ok(Concept::datetime(dt.with_timezone(&Utc)));
     }
@@ -88,7 +88,7 @@ fn parse_time(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
         .map(|naive| Concept::datetime(naive.and_utc()))
         .map_err(|err| {
             native_error(
-                "parse-time",
+                "time-parse",
                 format!("{text:?} does not match {pattern:?}: {err}"),
             )
         })
@@ -99,10 +99,10 @@ fn parse_time(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// Every step is checked. A duration that overflows is an error rather than a
 /// wrapped date decades from where the caller meant.
 fn add_duration(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let at = want_time("add-duration", &args[0])?;
-    let amount = want_int("add-duration", &args[1])?;
-    let unit = want_unit("add-duration", args.get(2))?;
-    let overflow = || native_error("add-duration", "the resulting time is out of range");
+    let at = want_time("time-add-duration", &args[0])?;
+    let amount = want_int("time-add-duration", &args[1])?;
+    let unit = want_unit("time-add-duration", args.get(2))?;
+    let overflow = || native_error("time-add-duration", "the resulting time is out of range");
     let millis = amount.checked_mul(unit).ok_or_else(overflow)?;
     let delta = TimeDelta::try_milliseconds(millis).ok_or_else(overflow)?;
     at.checked_add_signed(delta)
@@ -123,14 +123,14 @@ fn time_diff(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// Whether the first time is strictly earlier than the second.
 fn before(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     Ok(Concept::bool(
-        want_time("before", &args[0])? < want_time("before", &args[1])?,
+        want_time("time-before", &args[0])? < want_time("time-before", &args[1])?,
     ))
 }
 
 /// Whether the first time is strictly later than the second.
 fn after(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     Ok(Concept::bool(
-        want_time("after", &args[0])? > want_time("after", &args[1])?,
+        want_time("time-after", &args[0])? > want_time("time-after", &args[1])?,
     ))
 }
 
@@ -152,7 +152,7 @@ fn want_unit(native: &str, arg: Option<&Concept>) -> Result<i64, EvalError> {
     match name.trim().to_lowercase().as_str() {
         "millisecond" | "milliseconds" | "ms" => Ok(1),
         "second" | "seconds" | "s" => Ok(MILLIS_PER_SECOND),
-        "minute" | "minutes" | "min" => Ok(60 * MILLIS_PER_SECOND),
+        "minute" | "minutes" | "math-min" => Ok(60 * MILLIS_PER_SECOND),
         "hour" | "hours" | "h" => Ok(3_600 * MILLIS_PER_SECOND),
         "day" | "days" | "d" => Ok(86_400 * MILLIS_PER_SECOND),
         "week" | "weeks" | "w" => Ok(604_800 * MILLIS_PER_SECOND),
@@ -167,7 +167,7 @@ fn want_unit(native: &str, arg: Option<&Concept>) -> Result<i64, EvalError> {
 
 pub fn register(registry: &mut NativeRegistry) {
     registry.register(
-        "now",
+        "time-now",
         now,
         Arity::Exact(0),
         ArgStrategy::Eager,
@@ -175,25 +175,25 @@ pub fn register(registry: &mut NativeRegistry) {
         "the current time, from the context clock",
     );
     registry.pure(
-        "timestamp",
+        "time-timestamp",
         timestamp,
         Arity::Between(1, 2),
         "a time as a count since the Unix epoch, in seconds unless a unit is given",
     );
     registry.pure(
-        "format-time",
+        "time-format",
         format_time,
         Arity::Between(1, 2),
         "a time as text, RFC 3339 unless given a strftime pattern",
     );
     registry.pure(
-        "parse-time",
+        "time-parse",
         parse_time,
         Arity::Between(1, 2),
         "text to a time, RFC 3339 unless given a strftime pattern",
     );
     registry.pure(
-        "add-duration",
+        "time-add-duration",
         add_duration,
         Arity::Between(2, 3),
         "move a time by an amount, in seconds unless a unit is given",
@@ -205,13 +205,13 @@ pub fn register(registry: &mut NativeRegistry) {
         "how long from the second time to the first, in seconds unless a unit is given",
     );
     registry.pure(
-        "before",
+        "time-before",
         before,
         Arity::Exact(2),
         "whether one time is earlier than another",
     );
     registry.pure(
-        "after",
+        "time-after",
         after,
         Arity::Exact(2),
         "whether one time is later than another",

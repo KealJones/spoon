@@ -388,9 +388,9 @@ fn corpus() -> Vec<String> {
     ))
     .expect("bench corpus");
     let parsed: serde_json::Value = serde_json::from_str(&raw).expect("bench corpus is json");
-    parsed["lines"]
+    parsed["text-lines"]
         .as_array()
-        .expect("lines")
+        .expect("text-lines")
         .iter()
         .filter_map(|v| v.as_str().map(str::to_string))
         .collect()
@@ -574,7 +574,7 @@ fn a_word_argument_becomes_a_slot() {
 
 #[test]
 fn a_word_the_reading_does_not_quote_stays_literal() {
-    // "reverse" must not become a slot, or the template matches every
+    // "list-reverse" must not become a slot, or the template matches every
     // three-word sentence. The reading holds it as a head, not as text, so
     // the steps-linkage check throws it out.
     let table = SymbolTable::new();

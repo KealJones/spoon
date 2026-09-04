@@ -23,7 +23,7 @@ use spoon_store::Store;
 use strsim::normalized_levenshtein;
 
 /// Shortest shared opening that counts as evidence. Below this, agreement is
-/// coincidence: "add" and "ask" share two letters and mean nothing alike.
+/// coincidence: "math-add" and "ask" share two letters and mean nothing alike.
 const MIN_COMMON_PREFIX: usize = 4;
 
 /// How close two stems must be.

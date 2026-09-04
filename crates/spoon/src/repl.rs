@@ -159,7 +159,7 @@ pub async fn bench(cli: &Cli, suite: &str) -> Result<()> {
     // suite can say whether Spoon was right. Ungraded suites were the reason
     // "it cannot answer anything" stayed invisible for so long: every number
     // the bench printed was about paths taken, not answers given.
-    let lines: Vec<&str> = corpus["lines"]
+    let lines: Vec<&str> = corpus["text-lines"]
         .as_array()
         .map(|a| a.iter().filter_map(|v| v.as_str()).collect())
         .unwrap_or_default();

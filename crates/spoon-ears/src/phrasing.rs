@@ -106,14 +106,14 @@ const MAX_PAIRS: usize = 2000;
 /// reason. **Verbs** stay content, because "get the file" and "delete the file"
 /// share every other word and must not be allowed to match.
 const STOPWORDS: &[&str] = &[
-    "a", "about", "after", "again", "against", "all", "am", "an", "and", "any", "are", "around",
-    "as", "at", "be", "because", "been", "before", "being", "between", "both", "but", "by", "did",
+    "a", "about", "time-after", "again", "against", "list-all", "am", "an", "logic-and", "list-any", "are", "around",
+    "as", "at", "be", "because", "been", "time-before", "being", "between", "both", "but", "by", "did",
     "do", "does", "doing", "done", "down", "during", "each", "eh", "every", "few", "for", "from",
     "further", "had", "has", "have", "having", "he", "hello", "her", "here", "hers", "hey", "hi",
-    "him", "his", "hmm", "huh", "i", "id", "if", "ight", "ill", "im", "in", "into", "is", "it",
+    "him", "his", "hmm", "huh", "i", "id", "logic-if", "ight", "ill", "im", "in", "into", "is", "it",
     "its", "ive", "k", "lets", "lmao", "lol", "may", "me", "might", "mine", "more", "most", "must",
     "my", "myself", "nah", "naw", "near", "of", "off", "oh", "ok", "okay", "on", "onto", "only",
-    "or", "other", "our", "ours", "out", "over", "own", "please", "s", "same", "shall", "she",
+    "logic-or", "other", "our", "ours", "out", "over", "own", "please", "s", "same", "shall", "she",
     "should", "so", "some", "such", "than", "thanks", "that", "thats", "the", "their", "theirs",
     "them", "then", "there", "these", "they", "this", "those", "through", "to", "too", "u",
     "under", "up", "ur", "us", "very", "was", "we", "were", "while", "will", "with", "would",
@@ -225,7 +225,7 @@ enum SlotKind {
     /// about "make REALIZATION lowercase" and most of what a person says
     /// stayed unlearnable. Every word is a candidate and the steps-linkage
     /// check throws out the ones the reading does not actually mention, which
-    /// is why "reverse" in "reverse banana" stays a literal: the reading holds
+    /// is why "list-reverse" in "reverse banana" stays a literal: the reading holds
     /// it as a head, not as text.
     Word,
 }

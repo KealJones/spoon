@@ -56,7 +56,7 @@ fn a_write_is_suspended_under_the_default_mode_and_nothing_is_written() {
     // having it.
     let (store, reg) = env();
     let claim = Concept::call("owns", [Concept::named("greg"), Concept::named("dog")]);
-    let expr = Concept::call("assert", [claim.clone()]);
+    let expr = Concept::call("store-assert", [claim.clone()]);
 
     let out = eval_with(&store, &reg, PermissionMode::AskWrites, &expr);
     assert!(
@@ -79,10 +79,10 @@ fn retraction_is_gated_the_same_way_as_assertion() {
     // the other would be a hole.
     let (store, reg) = env();
     let claim = Concept::call("owns", [Concept::named("greg"), Concept::named("dog")]);
-    eval(&store, &reg, &Concept::call("assert", [claim.clone()]));
+    eval(&store, &reg, &Concept::call("store-assert", [claim.clone()]));
     assert!(store.holds(&claim).unwrap());
 
-    let retract = Concept::call("retract-claim", [claim.clone()]);
+    let retract = Concept::call("store-retract-claim", [claim.clone()]);
     let out = eval_with(&store, &reg, PermissionMode::AskWrites, &retract);
     assert!(
         matches!(out, Outcome::NeedsPermission { .. }),
@@ -97,7 +97,7 @@ fn retraction_is_gated_the_same_way_as_assertion() {
 #[test]
 fn reads_run_unattended_but_stop_under_always_ask() {
     let (store, reg) = env();
-    let expr = Concept::call("exists", [Concept::named("anything")]);
+    let expr = Concept::call("store-exists", [Concept::named("anything")]);
     assert!(eval_with(&store, &reg, PermissionMode::AskWrites, &expr).is_value());
     assert!(matches!(
         eval_with(&store, &reg, PermissionMode::AlwaysAsk, &expr),
@@ -112,10 +112,10 @@ fn a_write_buried_inside_a_pure_looking_call_is_still_gated() {
     let (store, reg) = env();
     let claim = Concept::call("owns", [Concept::named("greg"), Concept::named("dog")]);
     let expr = Concept::call(
-        "map",
+        "list-map",
         [
-            Concept::call("list", [claim.clone()]),
-            Concept::named("assert"),
+            Concept::call("list-list", [claim.clone()]),
+            Concept::named("store-assert"),
         ],
     );
     let out = eval_with(&store, &reg, PermissionMode::AskWrites, &expr);
@@ -146,7 +146,7 @@ fn now_reports_the_context_clock_not_the_system_clock() {
             .with_budget(Budget::deterministic())
             .with_permission(PermissionMode::Bypass)
             .with_now(pinned)
-            .evaluate(&Concept::call("now", []));
+            .evaluate(&Concept::call("time-now", []));
         assert_eq!(
             out.value().and_then(|c| c.as_ground()).cloned(),
             Some(Ground::DateTime(pinned)),
@@ -162,13 +162,13 @@ fn time_comparison_and_arithmetic_agree() {
     let later = value(
         &store,
         &reg,
-        &Concept::call("add-duration", [base.clone(), Concept::int(3600)]),
+        &Concept::call("time-add-duration", [base.clone(), Concept::int(3600)]),
     );
     assert_eq!(
         value(
             &store,
             &reg,
-            &Concept::call("before", [base.clone(), later.clone()])
+            &Concept::call("time-before", [base.clone(), later.clone()])
         ),
         Concept::bool(true)
     );
@@ -176,7 +176,7 @@ fn time_comparison_and_arithmetic_agree() {
         value(
             &store,
             &reg,
-            &Concept::call("after", [base.clone(), later.clone()])
+            &Concept::call("time-after", [base.clone(), later.clone()])
         ),
         Concept::bool(false)
     );
@@ -198,11 +198,11 @@ fn a_plucked_number_is_a_number_arithmetic_can_use() {
     let (store, reg) = env();
     let payload = serde_json::json!({"probes": [{"score": 20}, {"score": 22}]});
     let expr = Concept::call(
-        "sum",
+        "math-sum",
         [Concept::call(
-            "pluck",
+            "json-pluck",
             [
-                Concept::call("field", [Concept::json(payload), Concept::text("probes")]),
+                Concept::call("json-field", [Concept::json(payload), Concept::text("probes")]),
                 Concept::text("score"),
             ],
         )],
@@ -219,7 +219,7 @@ fn a_missing_field_is_named_rather_than_guessed_as_null() {
     let out = eval(
         &store,
         &reg,
-        &Concept::call("field", [payload, Concept::text("scoer")]),
+        &Concept::call("json-field", [payload, Concept::text("scoer")]),
     );
     assert!(is_error(&out), "a missing field returned {out:?}");
 }
@@ -231,7 +231,7 @@ fn malformed_json_errors_rather_than_producing_an_empty_document() {
         let out = eval(
             &store,
             &reg,
-            &Concept::call("parse-json", [Concept::text(bad)]),
+            &Concept::call("json-parse", [Concept::text(bad)]),
         );
         assert!(is_error(&out), "parse-json({bad:?}) gave {out:?}");
     }
@@ -253,7 +253,7 @@ fn json_scalars_become_concepts_but_structure_stays_json() {
         let got = value(
             &store,
             &reg,
-            &Concept::call("field", [payload.clone(), Concept::text(key)]),
+            &Concept::call("json-field", [payload.clone(), Concept::text(key)]),
         );
         assert_eq!(got.as_ground(), Some(&want), "field {key}");
     }
@@ -261,7 +261,7 @@ fn json_scalars_become_concepts_but_structure_stays_json() {
         let got = value(
             &store,
             &reg,
-            &Concept::call("field", [payload.clone(), Concept::text(key)]),
+            &Concept::call("json-field", [payload.clone(), Concept::text(key)]),
         );
         assert!(
             matches!(got.as_ground(), Some(Ground::Json(_))),
@@ -300,7 +300,7 @@ fn recall_finds_the_matches_and_nothing_else() {
         &store,
         &reg,
         &Concept::call(
-            "recall",
+            "store-recall",
             [Concept::call(
                 "owns",
                 [Concept::hole(0), Concept::named("dog")],
@@ -341,7 +341,7 @@ fn recall_order_does_not_depend_on_insertion_order() {
         answers.push(value(
             &store,
             &reg,
-            &Concept::call("recall", [pattern.clone()]),
+            &Concept::call("store-recall", [pattern.clone()]),
         ));
     }
     assert_eq!(
@@ -368,11 +368,11 @@ fn describe_keeps_the_preference_order_it_was_given() {
         )
         .unwrap();
 
-    let out = value(&store, &reg, &Concept::call("describe", [greg]));
+    let out = value(&store, &reg, &Concept::call("store-describe", [greg]));
     assert_eq!(
         out,
         Concept::call(
-            "list",
+            "list-list",
             [
                 Concept::text("Greg"),
                 Concept::text("Greg Littlefield"),
@@ -386,7 +386,7 @@ fn describe_keeps_the_preference_order_it_was_given() {
 #[test]
 fn an_all_hole_pattern_is_refused_rather_than_reading_the_whole_brain() {
     let (store, reg) = env();
-    let out = eval(&store, &reg, &Concept::call("recall", [Concept::hole(0)]));
+    let out = eval(&store, &reg, &Concept::call("store-recall", [Concept::hole(0)]));
     assert!(is_error(&out), "an unanchored recall was allowed: {out:?}");
 }
 
@@ -403,7 +403,7 @@ fn no_native_panics_on_nonsense_arguments() {
         Concept::int(-1),
         Concept::json(serde_json::json!(null)),
         Concept::hole(0),
-        Concept::call("list", [Concept::bool(true)]),
+        Concept::call("list-list", [Concept::bool(true)]),
     ];
     for name in reg.names() {
         for arity in 0..4usize {

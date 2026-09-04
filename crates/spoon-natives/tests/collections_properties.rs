@@ -53,7 +53,7 @@ fn is_error(out: &Outcome) -> bool {
 }
 
 fn list(items: impl IntoIterator<Item = Concept>) -> Concept {
-    Concept::call("list", items)
+    Concept::call("list-list", items)
 }
 
 // ---------------------------------------------------------------------------
@@ -70,14 +70,14 @@ fn a_learned_capability_works_as_a_mapper() {
     learn(
         &store,
         "double",
-        Concept::call("add", [Concept::hole(0), Concept::hole(0)]),
+        Concept::call("math-add", [Concept::hole(0), Concept::hole(0)]),
     );
 
     let out = value(
         &store,
         &reg,
         &Concept::call(
-            "map",
+            "list-map",
             [
                 list([Concept::int(1), Concept::int(2), Concept::int(3)]),
                 Concept::named("double"),
@@ -98,13 +98,13 @@ fn a_capability_learned_on_top_of_another_also_maps() {
     learn(
         &store,
         "double",
-        Concept::call("add", [Concept::hole(0), Concept::hole(0)]),
+        Concept::call("math-add", [Concept::hole(0), Concept::hole(0)]),
     );
     learn(
         &store,
         "triple",
         Concept::call(
-            "add",
+            "math-add",
             [
                 Concept::hole(0),
                 Concept::call("double", [Concept::hole(0)]),
@@ -115,7 +115,7 @@ fn a_capability_learned_on_top_of_another_also_maps() {
         &store,
         &reg,
         &Concept::call(
-            "map",
+            "list-map",
             [
                 list([Concept::int(1), Concept::int(5)]),
                 Concept::named("triple"),
@@ -132,8 +132,8 @@ fn natives_and_learned_capabilities_are_interchangeable_as_arguments() {
         &store,
         &reg,
         &Concept::call(
-            "map",
-            [list([Concept::text("ab")]), Concept::named("upper")],
+            "list-map",
+            [list([Concept::text("ab")]), Concept::named("text-upper")],
         ),
     );
     assert_eq!(native_mapped, list([Concept::text("AB")]));
@@ -145,15 +145,15 @@ fn higher_order_results_compose_with_ordinary_ones() {
     learn(
         &store,
         "double",
-        Concept::call("add", [Concept::hole(0), Concept::hole(0)]),
+        Concept::call("math-add", [Concept::hole(0), Concept::hole(0)]),
     );
     let out = value(
         &store,
         &reg,
         &Concept::call(
-            "sum",
+            "math-sum",
             [Concept::call(
-                "map",
+                "list-map",
                 [
                     list([Concept::int(1), Concept::int(2), Concept::int(3)]),
                     Concept::named("double"),
@@ -170,13 +170,13 @@ fn filter_runs_a_learned_predicate() {
     learn(
         &store,
         "big",
-        Concept::call("gt", [Concept::hole(0), Concept::int(2)]),
+        Concept::call("logic-gt", [Concept::hole(0), Concept::int(2)]),
     );
     let out = value(
         &store,
         &reg,
         &Concept::call(
-            "filter",
+            "list-filter",
             [
                 list([
                     Concept::int(1),
@@ -199,19 +199,19 @@ fn filter_runs_a_learned_predicate() {
 fn empty_list_answers_are_the_identity_of_the_operation() {
     let (store, reg) = env();
     assert_eq!(
-        value(&store, &reg, &Concept::call("sum", [list([])])),
+        value(&store, &reg, &Concept::call("math-sum", [list([])])),
         Concept::int(0)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("product", [list([])])),
+        value(&store, &reg, &Concept::call("math-product", [list([])])),
         Concept::int(1)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("count", [list([])])),
+        value(&store, &reg, &Concept::call("list-count", [list([])])),
         Concept::int(0)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("is-empty", [list([])])),
+        value(&store, &reg, &Concept::call("list-is-empty", [list([])])),
         Concept::bool(true)
     );
     // Vacuous truth for all, vacuous falsehood for any.
@@ -219,7 +219,7 @@ fn empty_list_answers_are_the_identity_of_the_operation() {
         value(
             &store,
             &reg,
-            &Concept::call("all", [list([]), Concept::named("is-even")])
+            &Concept::call("list-all", [list([]), Concept::named("math-is-even")])
         ),
         Concept::bool(true)
     );
@@ -227,7 +227,7 @@ fn empty_list_answers_are_the_identity_of_the_operation() {
         value(
             &store,
             &reg,
-            &Concept::call("any", [list([]), Concept::named("is-even")])
+            &Concept::call("list-any", [list([]), Concept::named("math-is-even")])
         ),
         Concept::bool(false)
     );
@@ -238,7 +238,7 @@ fn operations_with_no_defensible_empty_answer_error() {
     // There is no smallest element of nothing. Returning zero would be a lie
     // that propagates.
     let (store, reg) = env();
-    for op in ["first", "last", "min-of", "max-of"] {
+    for op in ["list-first", "list-last", "list-min-of", "list-max-of"] {
         let out = eval(&store, &reg, &Concept::call(op, [list([])]));
         assert!(is_error(&out), "{op} on an empty list gave {out:?}");
     }
@@ -252,7 +252,7 @@ fn out_of_range_access_is_refused_rather_than_guessed() {
         let out = eval(
             &store,
             &reg,
-            &Concept::call("nth", [three.clone(), Concept::int(index)]),
+            &Concept::call("list-nth", [three.clone(), Concept::int(index)]),
         );
         assert!(is_error(&out), "nth {index} gave {out:?}");
     }
@@ -273,7 +273,7 @@ fn sorting_is_stable_and_reproducible() {
             .map(|i| Concept::int((i * 7) % 11))
             .collect::<Vec<_>>(),
     );
-    let expr = Concept::call("sort-by", [input, Concept::named("self")]);
+    let expr = Concept::call("list-sort-by", [input, Concept::named("self")]);
     let first = value(&store, &reg, &expr);
     for _ in 0..10 {
         assert_eq!(value(&store, &reg, &expr), first);
@@ -294,13 +294,13 @@ fn mapping_preserves_order() {
     learn(
         &store,
         "double",
-        Concept::call("add", [Concept::hole(0), Concept::hole(0)]),
+        Concept::call("math-add", [Concept::hole(0), Concept::hole(0)]),
     );
     let input = list((1..=20).map(Concept::int).collect::<Vec<_>>());
     let out = value(
         &store,
         &reg,
-        &Concept::call("map", [input, Concept::named("double")]),
+        &Concept::call("list-map", [input, Concept::named("double")]),
     );
     let got: Vec<i64> = out
         .args()
@@ -345,7 +345,7 @@ fn substring_never_splits_a_character_and_never_panics() {
                 &store,
                 &reg,
                 &Concept::call(
-                    "substring",
+                    "text-substring",
                     [Concept::text(text), Concept::int(start), Concept::int(end)],
                 ),
             );
@@ -372,13 +372,13 @@ fn char_at_addresses_characters() {
     let out = value(
         &store,
         &reg,
-        &Concept::call("char-at", [Concept::text(text), Concept::int(1)]),
+        &Concept::call("text-char-at", [Concept::text(text), Concept::int(1)]),
     );
     assert_eq!(out, Concept::text("\u{4E2D}"));
     assert!(is_error(&eval(
         &store,
         &reg,
-        &Concept::call("char-at", [Concept::text(text), Concept::int(9)])
+        &Concept::call("text-char-at", [Concept::text(text), Concept::int(9)])
     )));
 }
 
@@ -389,7 +389,7 @@ fn case_conversion_handles_non_ascii() {
         value(
             &store,
             &reg,
-            &Concept::call("upper", [Concept::text("caf\u{e9}")])
+            &Concept::call("text-upper", [Concept::text("caf\u{e9}")])
         ),
         Concept::text("CAF\u{c9}")
     );
@@ -397,7 +397,7 @@ fn case_conversion_handles_non_ascii() {
         value(
             &store,
             &reg,
-            &Concept::call("lower", [Concept::text("STRA\u{df}E")])
+            &Concept::call("text-lower", [Concept::text("STRA\u{df}E")])
         ),
         Concept::text("stra\u{df}e")
     );
@@ -409,13 +409,13 @@ fn split_and_join_round_trip() {
     let parts = value(
         &store,
         &reg,
-        &Concept::call("split", [Concept::text("a,b,c"), Concept::text(",")]),
+        &Concept::call("text-split", [Concept::text("a,b,c"), Concept::text(",")]),
     );
     assert_eq!(parts.arity(), 3);
     let rejoined = value(
         &store,
         &reg,
-        &Concept::call("join", [parts, Concept::text(",")]),
+        &Concept::call("text-join", [parts, Concept::text(",")]),
     );
     assert_eq!(rejoined, Concept::text("a,b,c"));
 }
@@ -428,7 +428,7 @@ fn a_huge_repeat_is_refused_instead_of_allocated() {
     let out = eval(
         &store,
         &reg,
-        &Concept::call("repeat", [Concept::text("xy"), Concept::int(i64::MAX)]),
+        &Concept::call("text-repeat", [Concept::text("xy"), Concept::int(i64::MAX)]),
     );
     assert!(is_error(&out), "an unbounded repeat was allowed: {out:?}");
 }
@@ -440,7 +440,7 @@ fn parsing_refuses_garbage_rather_than_defaulting() {
         value(
             &store,
             &reg,
-            &Concept::call("parse-int", [Concept::text("42")])
+            &Concept::call("text-parse-int", [Concept::text("42")])
         ),
         Concept::int(42)
     );
@@ -448,7 +448,7 @@ fn parsing_refuses_garbage_rather_than_defaulting() {
         let out = eval(
             &store,
             &reg,
-            &Concept::call("parse-int", [Concept::text(bad)]),
+            &Concept::call("text-parse-int", [Concept::text(bad)]),
         );
         assert!(is_error(&out), "parse-int({bad:?}) gave {out:?}");
     }

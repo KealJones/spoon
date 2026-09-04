@@ -33,7 +33,7 @@ fn value(store: &Store, reg: &NativeRegistry, c: &Concept) -> Concept {
 }
 
 fn list(items: impl IntoIterator<Item = Concept>) -> Concept {
-    Concept::call("list", items)
+    Concept::call("list-list", items)
 }
 
 #[test]
@@ -43,12 +43,12 @@ fn counting_occurrences_of_a_character() {
     // inline predicate says it exactly.
     let (store, reg) = env();
     let expr = Concept::call(
-        "count",
+        "list-count",
         [Concept::call(
-            "filter",
+            "list-filter",
             [
-                Concept::call("chars", [Concept::text("Strawberry")]),
-                Concept::call("eq", [Concept::hole(0), Concept::text("r")]),
+                Concept::call("text-chars", [Concept::text("Strawberry")]),
+                Concept::call("logic-eq", [Concept::hole(0), Concept::text("r")]),
             ],
         )],
     );
@@ -59,10 +59,10 @@ fn counting_occurrences_of_a_character() {
 fn mapping_with_an_inline_function() {
     let (store, reg) = env();
     let expr = Concept::call(
-        "map",
+        "list-map",
         [
             list([Concept::int(1), Concept::int(2), Concept::int(3)]),
-            Concept::call("mul", [Concept::hole(0), Concept::int(10)]),
+            Concept::call("math-mul", [Concept::hole(0), Concept::int(10)]),
         ],
     );
     assert_eq!(
@@ -77,9 +77,9 @@ fn a_hole_used_twice_binds_to_the_same_element() {
     // it is the same rule that makes `double` work as `add<?0, ?0>`.
     let (store, reg) = env();
     let expr = Concept::call(
-        "sum",
+        "math-sum",
         [Concept::call(
-            "map",
+            "list-map",
             [
                 list([
                     Concept::int(1),
@@ -87,7 +87,7 @@ fn a_hole_used_twice_binds_to_the_same_element() {
                     Concept::int(3),
                     Concept::int(4),
                 ]),
-                Concept::call("mul", [Concept::hole(0), Concept::hole(0)]),
+                Concept::call("math-mul", [Concept::hole(0), Concept::hole(0)]),
             ],
         )],
     );
@@ -98,7 +98,7 @@ fn a_hole_used_twice_binds_to_the_same_element() {
 fn filtering_with_a_comparison_against_a_value() {
     let (store, reg) = env();
     let expr = Concept::call(
-        "filter",
+        "list-filter",
         [
             list([
                 Concept::int(1),
@@ -106,7 +106,7 @@ fn filtering_with_a_comparison_against_a_value() {
                 Concept::int(3),
                 Concept::int(9),
             ]),
-            Concept::call("gt", [Concept::hole(0), Concept::int(4)]),
+            Concept::call("logic-gt", [Concept::hole(0), Concept::int(4)]),
         ],
     );
     assert_eq!(
@@ -121,8 +121,8 @@ fn a_named_function_still_works() {
     // is still applied rather than substituted.
     let (store, reg) = env();
     let expr = Concept::call(
-        "map",
-        [list([Concept::text("ab")]), Concept::named("upper")],
+        "list-map",
+        [list([Concept::text("ab")]), Concept::named("text-upper")],
     );
     assert_eq!(value(&store, &reg, &expr), list([Concept::text("AB")]));
 }
@@ -136,7 +136,7 @@ fn the_function_argument_is_not_evaluated_before_it_is_used() {
     // Inline functions stayed broken even after substitution was written, for
     // precisely this reason.
     let (store, reg) = env();
-    let alone = Concept::call("eq", [Concept::hole(0), Concept::text("r")]);
+    let alone = Concept::call("logic-eq", [Concept::hole(0), Concept::text("r")]);
     assert_eq!(
         value(&store, &reg, &alone),
         Concept::bool(false),
@@ -144,7 +144,7 @@ fn the_function_argument_is_not_evaluated_before_it_is_used() {
     );
     // And yet it works as an argument.
     let used = Concept::call(
-        "filter",
+        "list-filter",
         [list([Concept::text("r"), Concept::text("s")]), alone],
     );
     assert_eq!(value(&store, &reg, &used), list([Concept::text("r")]));
@@ -154,11 +154,11 @@ fn the_function_argument_is_not_evaluated_before_it_is_used() {
 fn reduce_evaluates_its_initial_value_but_not_its_function() {
     let (store, reg) = env();
     let expr = Concept::call(
-        "reduce",
+        "list-reduce",
         [
             list([Concept::int(1), Concept::int(2), Concept::int(3)]),
-            Concept::call("add", [Concept::hole(0), Concept::hole(1)]),
-            Concept::call("add", [Concept::int(5), Concept::int(5)]),
+            Concept::call("math-add", [Concept::hole(0), Concept::hole(1)]),
+            Concept::call("math-add", [Concept::int(5), Concept::int(5)]),
         ],
     );
     assert_eq!(value(&store, &reg, &expr), Concept::int(16));

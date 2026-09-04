@@ -42,7 +42,7 @@ fn a_native_that_no_longer_exists_is_retired() {
     // Live natives are untouched.
     assert!(
         !store
-            .realizations_for(&Concept::named("count"))
+            .realizations_for(&Concept::named("list-count"))
             .expect("lookup")
             .is_empty()
     );
@@ -57,7 +57,7 @@ fn a_learned_body_survives_seeding() {
         target: Concept::named("reverse-text"),
         name: "composed-reverse-text".into(),
         spec: RealizationSpec::Composed {
-            body: Concept::call("join", [Concept::hole(0), Concept::text("")]),
+            body: Concept::call("text-join", [Concept::hole(0), Concept::text("")]),
         },
         effect: Effect::Pure,
         activation: Activation::new(Utc::now()),
@@ -112,7 +112,7 @@ fn a_phrasing_pointing_at_a_retired_head_is_forgotten() {
     let keep = store
         .put_pair(
             "how many things are in this",
-            &[Concept::call("count", [Concept::hole(0)])],
+            &[Concept::call("list-count", [Concept::hole(0)])],
             spoon_store::pairs::PairSource::Confirmed,
         )
         .expect("live pair");

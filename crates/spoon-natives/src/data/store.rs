@@ -72,8 +72,8 @@ fn retract_claim(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// pattern is matched with [`generalizes`], so a hole stands for anything and
 /// everything else has to line up exactly.
 fn recall(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let limit = want_limit("recall", args.get(1))?;
-    Ok(list_of(search(ctx, "recall", &args[0], limit)?))
+    let limit = want_limit("store-recall", args.get(1))?;
+    Ok(list_of(search(ctx, "store-recall", &args[0], limit)?))
 }
 
 /// How many stored concepts match a pattern.
@@ -83,7 +83,7 @@ fn recall(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// many". Reporting a number the scan cannot stand behind would be worse than
 /// reporting a bounded one.
 fn count_recalled(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let found = search(ctx, "count-recalled", &args[0], SCAN_LIMIT)?;
+    let found = search(ctx, "store-count-recalled", &args[0], SCAN_LIMIT)?;
     Ok(Concept::int(found.len() as i64))
 }
 
@@ -93,7 +93,7 @@ fn count_recalled(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// IsSad<Greg>>` is found by asking about Greg, not only by asking about
 /// `IsSad<Greg>`.
 fn recall_about(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let limit = want_limit("recall-about", args.get(1))?;
+    let limit = want_limit("store-recall-about", args.get(1))?;
     let found = ctx
         .store()
         .concepts_containing(args[0].content_id(), SCAN_LIMIT)?;
@@ -106,8 +106,8 @@ fn recall_about(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// spellings turn into the same symbol and refusing one of them would only
 /// make the caller convert.
 fn recall_by_head(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let head = want_symbol("recall-by-head", &args[0])?;
-    let limit = want_limit("recall-by-head", args.get(1))?;
+    let head = want_symbol("store-recall-by-head", &args[0])?;
+    let limit = want_limit("store-recall-by-head", args.get(1))?;
     let found = ctx.store().concepts_by_head(head, SCAN_LIMIT)?;
     Ok(list_of(order_and_trim(found, limit)))
 }
@@ -132,8 +132,8 @@ fn describe(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// two concepts. The list comes back whole so the caller can resolve it with
 /// context instead of the store guessing.
 fn surface_of(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let form = want_text("surface-of", &args[0])?;
-    let limit = want_limit("surface-of", args.get(1))?;
+    let form = want_text("store-surface-of", &args[0])?;
+    let limit = want_limit("store-surface-of", args.get(1))?;
     let found = ctx.store().surface_lookup(form)?;
     Ok(list_of(order_and_trim(found, limit)))
 }
@@ -234,7 +234,7 @@ fn want_symbol(native: &str, c: &Concept) -> Result<SymbolId, EvalError> {
 
 pub fn register(registry: &mut NativeRegistry) {
     registry.register(
-        "exists",
+        "store-exists",
         exists,
         Arity::Exact(1),
         ArgStrategy::Eager,
@@ -242,7 +242,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "whether the store actively asserts a concept",
     );
     registry.register(
-        "assert",
+        "store-assert",
         assert_it,
         Arity::Exact(1),
         ArgStrategy::Eager,
@@ -250,7 +250,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "assert a concept into the store",
     );
     registry.register(
-        "retract-claim",
+        "store-retract-claim",
         retract_claim,
         Arity::Exact(1),
         ArgStrategy::Eager,
@@ -258,7 +258,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "stop believing a concept, returning how many assertions were withdrawn",
     );
     registry.register(
-        "recall",
+        "store-recall",
         recall,
         Arity::Between(1, 2),
         ArgStrategy::Eager,
@@ -266,7 +266,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "stored concepts matching a pattern, whose holes match anything",
     );
     registry.register(
-        "recall-about",
+        "store-recall-about",
         recall_about,
         Arity::Between(1, 2),
         ArgStrategy::Eager,
@@ -274,7 +274,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "stored concepts that mention this one anywhere inside them",
     );
     registry.register(
-        "recall-by-head",
+        "store-recall-by-head",
         recall_by_head,
         Arity::Between(1, 2),
         ArgStrategy::Eager,
@@ -282,7 +282,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "stored compounds filed under a head name",
     );
     registry.register(
-        "describe",
+        "store-describe",
         describe,
         Arity::Exact(1),
         ArgStrategy::Eager,
@@ -290,7 +290,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "the surface forms a concept is stored under, preferred first",
     );
     registry.register(
-        "surface-of",
+        "store-surface-of",
         surface_of,
         Arity::Between(1, 2),
         ArgStrategy::Eager,
@@ -298,7 +298,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "the concepts that go by a surface form",
     );
     registry.register(
-        "count-recalled",
+        "store-count-recalled",
         count_recalled,
         Arity::Exact(1),
         ArgStrategy::Eager,

@@ -36,9 +36,9 @@ fn the_answer_exists_and_is_correct() {
     // is what makes it the right measuring stick.
     let (store, registry) = env();
     let body = Concept::call(
-        "join",
+        "text-join",
         [
-            Concept::call("reverse", [Concept::call("chars", [Concept::hole(0)])]),
+            Concept::call("list-reverse", [Concept::call("text-chars", [Concept::hole(0)])]),
             Concept::text(""),
         ],
     );
@@ -96,15 +96,15 @@ fn verification_is_cheap_where_search_is_not() {
     let spec = reversal_spec("reverse-text");
 
     let correct = Concept::call(
-        "join",
+        "text-join",
         [
-            Concept::call("reverse", [Concept::call("chars", [Concept::hole(0)])]),
+            Concept::call("list-reverse", [Concept::call("text-chars", [Concept::hole(0)])]),
             Concept::text(""),
         ],
     );
     // What the local model actually proposed: self-referential, and missing the
     // step that turns the reversed characters back into text.
-    let wrong = Concept::call("reverse", [Concept::call("chars", [Concept::hole(0)])]);
+    let wrong = Concept::call("list-reverse", [Concept::call("text-chars", [Concept::hole(0)])]);
 
     let verifies = |body: &Concept| {
         spec.examples.iter().all(|(inputs, expected)| {

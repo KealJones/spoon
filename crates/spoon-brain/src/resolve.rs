@@ -93,7 +93,7 @@ pub fn resolve(steps: &[Concept], question: bool) -> Vec<Move> {
             (Some(h), Some(c)) if h == do_ => Move::Do(c),
             (Some(h), Some(c)) if h == chat => Move::Chat(c),
             // An utterance the ears did not wrap is treated as something to
-            // reduce. Guessing "assert" instead would let a misread question
+            // reduce. Guessing "store-assert" instead would let a misread question
             // silently write to the store, which is the more expensive mistake.
             _ if question => Move::Ask(step.clone()),
             _ => Move::Do(step.clone()),

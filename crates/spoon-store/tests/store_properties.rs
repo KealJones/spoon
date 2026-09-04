@@ -30,7 +30,7 @@ fn arithmetic_over_ground_values_writes_no_rows_for_them() {
     // earned a database row, a few minutes of arithmetic would bury the store
     // in integers. Ground identity is self-describing precisely so this is free.
     let store = Store::open_in_memory().unwrap();
-    let expr = Concept::call("add", [Concept::int(42), Concept::int(1)]);
+    let expr = Concept::call("math-add", [Concept::int(42), Concept::int(1)]);
     store.put_concept(&expr).unwrap();
 
     // The compound and its named head are worth storing. The two integers are
@@ -260,7 +260,7 @@ fn every_artifact_kind_survives_a_restart() {
         [Concept::named("greg"), Concept::named("keal")],
     );
     let realization = Realization {
-        target: Concept::named("sort"),
+        target: Concept::named("list-sort"),
         name: "native-quicksort".into(),
         spec: RealizationSpec::Native {
             native: NativeId::new("sort.quick"),
@@ -297,7 +297,7 @@ fn every_artifact_kind_survives_a_restart() {
     );
     assert!(store.holds(&concept).unwrap());
 
-    let reloaded = store.realizations_for(&Concept::named("sort")).unwrap();
+    let reloaded = store.realizations_for(&Concept::named("list-sort")).unwrap();
     assert_eq!(reloaded.len(), 1);
     assert_eq!(reloaded[0].spec, realization.spec);
     assert_eq!(reloaded[0].effect, Effect::Pure);
@@ -323,7 +323,7 @@ fn every_artifact_kind_survives_a_restart() {
 
 fn populated_store() -> Store {
     let store = Store::open_in_memory().unwrap();
-    for name in ["friend-with", "Greg", "Keal", "sort"] {
+    for name in ["friend-with", "Greg", "Keal", "list-sort"] {
         store.register_symbol(name).unwrap();
     }
     for (a, b) in [("greg", "keal"), ("keal", "syd")] {
@@ -344,7 +344,7 @@ fn populated_store() -> Store {
         .unwrap();
     store
         .put_realization(&Realization {
-            target: Concept::named("sort"),
+            target: Concept::named("list-sort"),
             name: "native-mergesort".into(),
             spec: RealizationSpec::Composed {
                 body: Concept::call("merge", [Concept::hole(0)]),
@@ -399,7 +399,7 @@ fn importing_twice_does_not_duplicate() {
     );
     assert_eq!(
         store
-            .realizations_for(&Concept::named("sort"))
+            .realizations_for(&Concept::named("list-sort"))
             .unwrap()
             .len(),
         1
@@ -445,8 +445,8 @@ fn a_seed_carries_surface_forms_and_evidence_across() {
 #[test]
 fn recording_uses_accumulates_rather_than_overwriting() {
     let store = Store::open_in_memory().unwrap();
-    let c = Concept::named("sort");
-    store.put_meta(&meta_for(&c, &["sort"])).unwrap();
+    let c = Concept::named("list-sort");
+    store.put_meta(&meta_for(&c, &["list-sort"])).unwrap();
 
     for i in 0..5 {
         store

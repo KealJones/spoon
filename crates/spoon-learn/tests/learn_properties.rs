@@ -177,7 +177,7 @@ fn synthesis_builds_on_what_spoon_already_learned() {
     learned(
         &store,
         "double",
-        Concept::call("add", [Concept::hole(0), Concept::hole(0)]),
+        Concept::call("math-add", [Concept::hole(0), Concept::hole(0)]),
     );
 
     let s = spec(
@@ -233,9 +233,9 @@ fn rewriting_a_body_preserves_exactly_what_it_computes() {
     let bodies: Vec<Concept> = (1..=4)
         .map(|k| {
             Concept::call(
-                "add",
+                "math-add",
                 [
-                    Concept::call("mul", [Concept::hole(0), Concept::int(2)]),
+                    Concept::call("math-mul", [Concept::hole(0), Concept::int(2)]),
                     Concept::int(k),
                 ],
             )
@@ -281,10 +281,10 @@ fn nothing_meaningful_in_common_yields_no_abstraction() {
     // almost nothing covers everything and means nothing, and Spoon would then
     // treat unrelated procedures as the same thing.
     let unrelated = vec![
-        Concept::call("upper", [Concept::hole(0)]),
-        Concept::call("count", [Concept::hole(0)]),
-        Concept::call("neg", [Concept::hole(0)]),
-        Concept::call("trim", [Concept::hole(0)]),
+        Concept::call("text-upper", [Concept::hole(0)]),
+        Concept::call("list-count", [Concept::hole(0)]),
+        Concept::call("math-neg", [Concept::hole(0)]),
+        Concept::call("text-trim", [Concept::hole(0)]),
     ];
     let found = consolidate(&unrelated, ConsolidateConfig::default());
     assert!(
@@ -298,16 +298,16 @@ fn nothing_meaningful_in_common_yields_no_abstraction() {
 fn a_shape_seen_twice_is_not_yet_a_pattern() {
     let twice = vec![
         Concept::call(
-            "add",
+            "math-add",
             [
-                Concept::call("mul", [Concept::hole(0), Concept::int(2)]),
+                Concept::call("math-mul", [Concept::hole(0), Concept::int(2)]),
                 Concept::int(1),
             ],
         ),
         Concept::call(
-            "add",
+            "math-add",
             [
-                Concept::call("mul", [Concept::hole(0), Concept::int(2)]),
+                Concept::call("math-mul", [Concept::hole(0), Concept::int(2)]),
                 Concept::int(9),
             ],
         ),
@@ -326,9 +326,9 @@ fn consolidation_is_deterministic() {
     let bodies: Vec<Concept> = (1..=5)
         .map(|k| {
             Concept::call(
-                "add",
+                "math-add",
                 [
-                    Concept::call("mul", [Concept::hole(0), Concept::int(3)]),
+                    Concept::call("math-mul", [Concept::hole(0), Concept::int(3)]),
                     Concept::int(k),
                 ],
             )
@@ -350,10 +350,10 @@ fn selected_abstractions_do_not_overlap() {
     let bodies: Vec<Concept> = (1..=6)
         .map(|k| {
             Concept::call(
-                "add",
+                "math-add",
                 [
-                    Concept::call("mul", [Concept::hole(0), Concept::int(2)]),
-                    Concept::call("sub", [Concept::int(k), Concept::int(1)]),
+                    Concept::call("math-mul", [Concept::hole(0), Concept::int(2)]),
+                    Concept::call("math-sub", [Concept::int(k), Concept::int(1)]),
                 ],
             )
         })
@@ -375,15 +375,15 @@ fn selected_abstractions_do_not_overlap() {
 #[test]
 fn names_are_readable_and_stable() {
     let table = SymbolTable::new();
-    for n in ["add", "mul", "hole"] {
+    for n in ["math-add", "math-mul", "hole"] {
         table.intern(n);
     }
     let bodies: Vec<Concept> = (1..=4)
         .map(|k| {
             Concept::call(
-                "add",
+                "math-add",
                 [
-                    Concept::call("mul", [Concept::hole(0), Concept::int(2)]),
+                    Concept::call("math-mul", [Concept::hole(0), Concept::int(2)]),
                     Concept::int(k),
                 ],
             )
@@ -408,15 +408,15 @@ fn pathological_bodies_do_not_take_the_process_down() {
     // synthesizer produced.
     let mut deep = Concept::hole(0);
     for _ in 0..2000 {
-        deep = Concept::call("add", [deep, Concept::int(1)]);
+        deep = Concept::call("math-add", [deep, Concept::int(1)]);
     }
-    let wide = Concept::call("list", (0..5000).map(Concept::int).collect::<Vec<_>>());
+    let wide = Concept::call("list-list", (0..5000).map(Concept::int).collect::<Vec<_>>());
     let shallow: Vec<Concept> = (1..=3)
         .map(|k| {
             Concept::call(
-                "add",
+                "math-add",
                 [
-                    Concept::call("mul", [Concept::hole(0), Concept::int(2)]),
+                    Concept::call("math-mul", [Concept::hole(0), Concept::int(2)]),
                     Concept::int(k),
                 ],
             )

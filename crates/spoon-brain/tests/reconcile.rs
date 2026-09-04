@@ -108,8 +108,8 @@ fn unrelated_names_are_not_merged() {
 #[test]
 fn short_names_are_never_fuzzily_matched() {
     // In a short word every edit is a large fraction of it, so similarity stops
-    // being informative: "add" and "ask" are one edit apart and unrelated.
-    let (store, table) = brain_with(&["add", "ask", "and"]);
+    // being informative: "math-add" and "ask" are one edit apart and unrelated.
+    let (store, table) = brain_with(&["math-add", "ask", "logic-and"]);
     table.intern("aid");
     let steps = vec![Concept::call("do", [Concept::named("aid")])];
     let out = reconcile(&steps, &store, &table);
@@ -162,12 +162,12 @@ fn a_bare_word_given_to_a_native_becomes_text() {
     let symbols = SymbolTable::new();
     let word = symbols.intern("kubernetes");
 
-    let step = Concept::call("reverse", [Concept::symbol(word)]);
+    let step = Concept::call("list-reverse", [Concept::symbol(word)]);
     let out = reconcile(std::slice::from_ref(&step), &store, &symbols);
 
     assert_eq!(
         out.steps[0],
-        Concept::call("reverse", [Concept::text("kubernetes")])
+        Concept::call("list-reverse", [Concept::text("kubernetes")])
     );
 }
 
@@ -200,7 +200,7 @@ fn a_name_the_store_knows_survives_a_native() {
     let greg = symbols.intern("greg");
     store.register_symbol("greg").expect("register");
 
-    let step = Concept::call("reverse", [Concept::symbol(greg)]);
+    let step = Concept::call("list-reverse", [Concept::symbol(greg)]);
     let out = reconcile(std::slice::from_ref(&step), &store, &symbols);
 
     assert_eq!(out.steps[0], step);

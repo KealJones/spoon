@@ -14,7 +14,7 @@ fn f(args: impl IntoIterator<Item = Concept>) -> Concept {
 }
 
 fn add(args: impl IntoIterator<Item = Concept>) -> Concept {
-    Concept::call("add", args)
+    Concept::call("math-add", args)
 }
 
 /// `add<f<1>, 2>`
@@ -30,7 +30,7 @@ fn pre_order_visits_node_then_head_then_args() {
     let seen: Vec<&Concept> = pre_order(&term).collect();
     let expect = [
         term.clone(),
-        Concept::named("add"),
+        Concept::named("math-add"),
         f([Concept::int(1)]),
         Concept::named("f"),
         Concept::int(1),
@@ -49,7 +49,7 @@ fn post_order_visits_children_before_parents() {
     assert_eq!(
         seen,
         vec![
-            Concept::named("add"),
+            Concept::named("math-add"),
             Concept::named("f"),
             Concept::int(1),
             f([Concept::int(1)]),
@@ -80,7 +80,7 @@ fn subterms_drops_structural_duplicates() {
     let distinct: Vec<&Concept> = subterms(&term);
     assert_eq!(distinct.len(), 3); // the compound, add, x
     assert!(distinct.contains(&&Concept::named("x")));
-    assert!(distinct.contains(&&Concept::named("add")));
+    assert!(distinct.contains(&&Concept::named("math-add")));
 }
 
 #[test]
@@ -92,7 +92,7 @@ fn walk_reports_depth_and_can_prune() {
         true
     });
     assert_eq!(depths[0].1, 0);
-    assert_eq!(depths[1], (Concept::named("add"), 1));
+    assert_eq!(depths[1], (Concept::named("math-add"), 1));
     assert_eq!(depths[2].1, 1); // f<1>
     assert_eq!(depths[3].1, 2); // f
 
@@ -637,7 +637,7 @@ fn flatten_spine_normalizes_partial_application() {
 fn flatten_spine_on_flat_and_atomic_terms() {
     let flat = add([Concept::int(1), Concept::int(2)]);
     let (head, args) = flatten_spine(&flat);
-    assert_eq!(*head, Concept::named("add"));
+    assert_eq!(*head, Concept::named("math-add"));
     assert_eq!(args.len(), 2);
 
     let greg = Concept::named("greg");

@@ -95,28 +95,28 @@ fn assert_errors(concept: Concept) {
 
 #[test]
 fn the_arithmetic_natives_compute() {
-    assert_eq!(value(Concept::call("add", [int(1), int(2)])), int(3));
+    assert_eq!(value(Concept::call("math-add", [int(1), int(2)])), int(3));
     assert_eq!(
-        value(Concept::call("add", [int(1), int(2), int(3), int(4)])),
+        value(Concept::call("math-add", [int(1), int(2), int(3), int(4)])),
         int(10),
         "add is variadic"
     );
-    assert_eq!(value(Concept::call("sub", [int(10), int(3)])), int(7));
+    assert_eq!(value(Concept::call("math-sub", [int(10), int(3)])), int(7));
     assert_eq!(
-        value(Concept::call("mul", [int(2), int(3), int(4)])),
+        value(Concept::call("math-mul", [int(2), int(3), int(4)])),
         int(24)
     );
-    assert_eq!(value(Concept::call("div", [int(9), int(3)])), int(3));
-    assert_eq!(value(Concept::call("modulo", [int(7), int(3)])), int(1));
-    assert_eq!(value(Concept::call("neg", [int(5)])), int(-5));
-    assert_eq!(value(Concept::call("abs", [int(-5)])), int(5));
-    assert_eq!(value(Concept::call("pow", [int(2), int(10)])), int(1024));
+    assert_eq!(value(Concept::call("math-div", [int(9), int(3)])), int(3));
+    assert_eq!(value(Concept::call("math-modulo", [int(7), int(3)])), int(1));
+    assert_eq!(value(Concept::call("math-neg", [int(5)])), int(-5));
+    assert_eq!(value(Concept::call("math-abs", [int(-5)])), int(5));
+    assert_eq!(value(Concept::call("math-pow", [int(2), int(10)])), int(1024));
     assert_eq!(
-        value(Concept::call("min", [int(3), int(1), int(2)])),
+        value(Concept::call("math-min", [int(3), int(1), int(2)])),
         int(1)
     );
     assert_eq!(
-        value(Concept::call("max", [int(3), int(1), int(2)])),
+        value(Concept::call("math-max", [int(3), int(1), int(2)])),
         int(3)
     );
 }
@@ -124,37 +124,37 @@ fn the_arithmetic_natives_compute() {
 #[test]
 fn the_float_paths_compute() {
     assert_eq!(
-        value(Concept::call("add", [float(0.5), float(0.25)])),
+        value(Concept::call("math-add", [float(0.5), float(0.25)])),
         float(0.75)
     );
     assert_eq!(
-        value(Concept::call("sub", [float(1.5), float(0.5)])),
+        value(Concept::call("math-sub", [float(1.5), float(0.5)])),
         float(1.0)
     );
     assert_eq!(
-        value(Concept::call("mul", [float(1.5), float(2.0)])),
+        value(Concept::call("math-mul", [float(1.5), float(2.0)])),
         float(3.0)
     );
     assert_eq!(
-        value(Concept::call("div", [float(7.0), float(2.0)])),
+        value(Concept::call("math-div", [float(7.0), float(2.0)])),
         float(3.5)
     );
     assert_eq!(
-        value(Concept::call("modulo", [float(7.5), float(2.0)])),
+        value(Concept::call("math-modulo", [float(7.5), float(2.0)])),
         float(1.5)
     );
-    assert_eq!(value(Concept::call("neg", [float(2.5)])), float(-2.5));
-    assert_eq!(value(Concept::call("abs", [float(-2.5)])), float(2.5));
+    assert_eq!(value(Concept::call("math-neg", [float(2.5)])), float(-2.5));
+    assert_eq!(value(Concept::call("math-abs", [float(-2.5)])), float(2.5));
     assert_eq!(
-        value(Concept::call("pow", [float(2.0), float(0.5)])),
+        value(Concept::call("math-pow", [float(2.0), float(0.5)])),
         float(2.0f64.powf(0.5))
     );
     assert_eq!(
-        value(Concept::call("min", [float(3.5), float(1.5)])),
+        value(Concept::call("math-min", [float(3.5), float(1.5)])),
         float(1.5)
     );
     assert_eq!(
-        value(Concept::call("max", [float(3.5), float(1.5)])),
+        value(Concept::call("math-max", [float(3.5), float(1.5)])),
         float(3.5)
     );
 }
@@ -163,18 +163,18 @@ fn the_float_paths_compute() {
 fn division_truncates_toward_zero_between_integers() {
     // Two integers produce an integer, so there is nowhere for the fraction to
     // go. Ask for a float operand when you want the fraction back.
-    assert_eq!(value(Concept::call("div", [int(7), int(2)])), int(3));
-    assert_eq!(value(Concept::call("div", [int(-7), int(2)])), int(-3));
+    assert_eq!(value(Concept::call("math-div", [int(7), int(2)])), int(3));
+    assert_eq!(value(Concept::call("math-div", [int(-7), int(2)])), int(-3));
     assert_eq!(
-        value(Concept::call("div", [float(7.0), int(2)])),
+        value(Concept::call("math-div", [float(7.0), int(2)])),
         float(3.5)
     );
 }
 
 #[test]
 fn modulo_takes_its_sign_from_the_dividend() {
-    assert_eq!(value(Concept::call("modulo", [int(-7), int(3)])), int(-1));
-    assert_eq!(value(Concept::call("modulo", [int(7), int(-3)])), int(1));
+    assert_eq!(value(Concept::call("math-modulo", [int(-7), int(3)])), int(-1));
+    assert_eq!(value(Concept::call("math-modulo", [int(7), int(-3)])), int(1));
 }
 
 // ---------------------------------------------------------------------------
@@ -183,7 +183,7 @@ fn modulo_takes_its_sign_from_the_dividend() {
 
 #[test]
 fn an_all_integer_call_stays_an_integer() {
-    let out = value(Concept::call("add", [int(1), int(2)]));
+    let out = value(Concept::call("math-add", [int(1), int(2)]));
     assert_eq!(out, int(3));
     assert_ne!(
         out,
@@ -196,9 +196,9 @@ fn an_all_integer_call_stays_an_integer() {
 #[test]
 fn any_float_widens_the_result() {
     for expr in [
-        Concept::call("add", [int(1), float(2.0)]),
-        Concept::call("add", [float(1.0), int(2)]),
-        Concept::call("add", [int(1), int(2), float(0.0)]),
+        Concept::call("math-add", [int(1), float(2.0)]),
+        Concept::call("math-add", [float(1.0), int(2)]),
+        Concept::call("math-add", [int(1), int(2), float(0.0)]),
     ] {
         let out = value(expr.clone());
         assert_eq!(out, float(3.0), "{expr:?}");
@@ -210,19 +210,19 @@ fn any_float_widens_the_result() {
     // The widening survives an integer winning the comparison: Min<2.5, 1> is
     // 1.0, not 1.
     assert_eq!(
-        value(Concept::call("min", [float(2.5), int(1)])),
+        value(Concept::call("math-min", [float(2.5), int(1)])),
         float(1.0)
     );
     assert_eq!(
-        value(Concept::call("max", [int(1), float(2.5)])),
+        value(Concept::call("math-max", [int(1), float(2.5)])),
         float(2.5)
     );
     assert_eq!(
-        value(Concept::call("mul", [int(2), float(3.0)])),
+        value(Concept::call("math-mul", [int(2), float(3.0)])),
         float(6.0)
     );
     assert_eq!(
-        value(Concept::call("pow", [int(2), float(3.0)])),
+        value(Concept::call("math-pow", [int(2), float(3.0)])),
         float(8.0)
     );
 }
@@ -235,7 +235,7 @@ fn any_float_widens_the_result() {
 fn integer_overflow_is_a_clean_error_rather_than_a_wrap() {
     let (store, registry) = setup();
     let mut ev = Evaluator::new(&store, &registry).with_budget(Budget::deterministic());
-    let out = ev.evaluate(&Concept::call("add", [int(i64::MAX), int(1)]));
+    let out = ev.evaluate(&Concept::call("math-add", [int(i64::MAX), int(1)]));
 
     assert!(out.value().is_none(), "overflow produced a value: {out:?}");
     assert_ne!(
@@ -252,26 +252,26 @@ fn integer_overflow_is_a_clean_error_rather_than_a_wrap() {
 
 #[test]
 fn every_integer_operation_that_can_overflow_says_so() {
-    assert_errors(Concept::call("add", [int(i64::MAX), int(1)]));
-    assert_errors(Concept::call("sub", [int(i64::MIN), int(1)]));
-    assert_errors(Concept::call("mul", [int(i64::MAX), int(2)]));
-    assert_errors(Concept::call("neg", [int(i64::MIN)]));
-    assert_errors(Concept::call("abs", [int(i64::MIN)]));
-    assert_errors(Concept::call("pow", [int(i64::MAX), int(2)]));
+    assert_errors(Concept::call("math-add", [int(i64::MAX), int(1)]));
+    assert_errors(Concept::call("math-sub", [int(i64::MIN), int(1)]));
+    assert_errors(Concept::call("math-mul", [int(i64::MAX), int(2)]));
+    assert_errors(Concept::call("math-neg", [int(i64::MIN)]));
+    assert_errors(Concept::call("math-abs", [int(i64::MIN)]));
+    assert_errors(Concept::call("math-pow", [int(i64::MAX), int(2)]));
     // i64::MIN / -1 has no i64 answer either.
-    assert_errors(Concept::call("div", [int(i64::MIN), int(-1)]));
+    assert_errors(Concept::call("math-div", [int(i64::MIN), int(-1)]));
 }
 
 #[test]
 fn integer_division_by_zero_is_an_error() {
-    assert_errors(Concept::call("div", [int(1), int(0)]));
-    assert_errors(Concept::call("modulo", [int(1), int(0)]));
+    assert_errors(Concept::call("math-div", [int(1), int(0)]));
+    assert_errors(Concept::call("math-modulo", [int(1), int(0)]));
 }
 
 #[test]
 fn float_division_by_zero_gives_infinity_and_round_trips() {
     // IEEE already defines the answer, so there is nothing for Spoon to refuse.
-    let out = value(Concept::call("div", [float(1.0), float(0.0)]));
+    let out = value(Concept::call("math-div", [float(1.0), float(0.0)]));
     assert_eq!(out, float(f64::INFINITY));
 
     let encoded = serde_json::to_string(&out).unwrap();
@@ -283,12 +283,12 @@ fn float_division_by_zero_gives_infinity_and_round_trips() {
     assert_eq!(decoded.content_id(), out.content_id());
 
     assert_eq!(
-        value(Concept::call("div", [float(-1.0), float(0.0)])),
+        value(Concept::call("math-div", [float(-1.0), float(0.0)])),
         float(f64::NEG_INFINITY)
     );
 
     // 0.0 / 0.0 is NaN, which Ground collapses to a single self-equal concept.
-    let nan = value(Concept::call("div", [float(0.0), float(0.0)]));
+    let nan = value(Concept::call("math-div", [float(0.0), float(0.0)]));
     assert!(nan.as_ground().and_then(Ground::as_f64).unwrap().is_nan());
     assert_eq!(nan, float(f64::NAN));
 }
@@ -297,18 +297,18 @@ fn float_division_by_zero_gives_infinity_and_round_trips() {
 fn a_negative_integer_exponent_is_refused_rather_than_silently_widened() {
     // Pow<2, -1> is 0.5, and the widening rule promises an all-integer call an
     // integer. Saying so beats breaking the promise quietly.
-    assert_errors(Concept::call("pow", [int(2), int(-1)]));
+    assert_errors(Concept::call("math-pow", [int(2), int(-1)]));
     assert_eq!(
-        value(Concept::call("pow", [float(2.0), int(-1)])),
+        value(Concept::call("math-pow", [float(2.0), int(-1)])),
         float(0.5)
     );
 }
 
 #[test]
 fn nan_has_no_smallest_or_largest() {
-    let out = value(Concept::call("min", [float(f64::NAN), int(1)]));
+    let out = value(Concept::call("math-min", [float(f64::NAN), int(1)]));
     assert!(out.as_ground().and_then(Ground::as_f64).unwrap().is_nan());
-    let out = value(Concept::call("max", [int(1), float(f64::NAN)]));
+    let out = value(Concept::call("math-max", [int(1), float(f64::NAN)]));
     assert!(out.as_ground().and_then(Ground::as_f64).unwrap().is_nan());
 }
 
@@ -318,22 +318,22 @@ fn nan_has_no_smallest_or_largest() {
 
 #[test]
 fn equality_is_concept_identity() {
-    assert_eq!(value(Concept::call("eq", [int(42), int(42)])), yes());
+    assert_eq!(value(Concept::call("logic-eq", [int(42), int(42)])), yes());
     assert_eq!(
-        value(Concept::call("eq", [int(42), float(42.0)])),
+        value(Concept::call("logic-eq", [int(42), float(42.0)])),
         no(),
         "42 and 42.0 are different concepts"
     );
     assert_eq!(
         value(Concept::call(
-            "eq",
+            "logic-eq",
             [Concept::named("greg"), Concept::named("greg")]
         )),
         yes()
     );
     assert_eq!(
         value(Concept::call(
-            "eq",
+            "logic-eq",
             [Concept::named("greg"), Concept::named("keal")]
         )),
         no()
@@ -341,7 +341,7 @@ fn equality_is_concept_identity() {
     // Compounds too: identity is structural, not reference.
     assert_eq!(
         value(Concept::call(
-            "eq",
+            "logic-eq",
             [
                 Concept::call("friend-with", [Concept::named("greg")]),
                 Concept::call("friend-with", [Concept::named("greg")])
@@ -349,8 +349,8 @@ fn equality_is_concept_identity() {
         )),
         yes()
     );
-    assert_eq!(value(Concept::call("ne", [int(42), float(42.0)])), yes());
-    assert_eq!(value(Concept::call("ne", [int(42), int(42)])), no());
+    assert_eq!(value(Concept::call("logic-ne", [int(42), float(42.0)])), yes());
+    assert_eq!(value(Concept::call("logic-ne", [int(42), int(42)])), no());
 }
 
 #[test]
@@ -358,8 +358,8 @@ fn equality_compares_the_reduced_arguments() {
     // Eq is eager, so Add<1, 2> has already become 3 by the time it is compared.
     assert_eq!(
         value(Concept::call(
-            "eq",
-            [Concept::call("add", [int(1), int(2)]), int(3)]
+            "logic-eq",
+            [Concept::call("math-add", [int(1), int(2)]), int(3)]
         )),
         yes()
     );
@@ -367,18 +367,18 @@ fn equality_compares_the_reduced_arguments() {
 
 #[test]
 fn ordering_compares_numbers_across_int_and_float() {
-    assert_eq!(value(Concept::call("lt", [int(1), int(2)])), yes());
-    assert_eq!(value(Concept::call("lt", [int(2), int(1)])), no());
-    assert_eq!(value(Concept::call("gt", [float(2.5), int(2)])), yes());
-    assert_eq!(value(Concept::call("lte", [int(2), float(2.0)])), yes());
-    assert_eq!(value(Concept::call("gte", [int(2), float(2.0)])), yes());
-    assert_eq!(value(Concept::call("lte", [int(3), float(2.0)])), no());
-    assert_eq!(value(Concept::call("gte", [float(1.5), int(2)])), no());
+    assert_eq!(value(Concept::call("logic-lt", [int(1), int(2)])), yes());
+    assert_eq!(value(Concept::call("logic-lt", [int(2), int(1)])), no());
+    assert_eq!(value(Concept::call("logic-gt", [float(2.5), int(2)])), yes());
+    assert_eq!(value(Concept::call("logic-lte", [int(2), float(2.0)])), yes());
+    assert_eq!(value(Concept::call("logic-gte", [int(2), float(2.0)])), yes());
+    assert_eq!(value(Concept::call("logic-lte", [int(3), float(2.0)])), no());
+    assert_eq!(value(Concept::call("logic-gte", [float(1.5), int(2)])), no());
 }
 
 #[test]
 fn nan_is_unordered() {
-    for native in ["lt", "gt", "lte", "gte"] {
+    for native in ["logic-lt", "logic-gt", "logic-lte", "logic-gte"] {
         assert_eq!(
             value(Concept::call(native, [float(f64::NAN), float(f64::NAN)])),
             no(),
@@ -389,7 +389,7 @@ fn nan_is_unordered() {
 
 #[test]
 fn ordering_refuses_non_numbers_instead_of_guessing() {
-    for native in ["lt", "gt", "lte", "gte"] {
+    for native in ["logic-lt", "logic-gt", "logic-lte", "logic-gte"] {
         assert_errors(Concept::call(native, [nonsense(), nonsense()]));
         assert_errors(Concept::call(native, [int(1), Concept::text("two")]));
         assert_errors(Concept::call(native, [yes(), no()]));
@@ -402,24 +402,24 @@ fn ordering_refuses_non_numbers_instead_of_guessing() {
 
 #[test]
 fn the_logic_natives_compute() {
-    assert_eq!(value(Concept::call("and", [yes(), yes()])), yes());
-    assert_eq!(value(Concept::call("and", [yes(), yes(), no()])), no());
-    assert_eq!(value(Concept::call("or", [no(), no()])), no());
-    assert_eq!(value(Concept::call("or", [no(), no(), yes()])), yes());
-    assert_eq!(value(Concept::call("not", [yes()])), no());
-    assert_eq!(value(Concept::call("not", [no()])), yes());
-    assert_eq!(value(Concept::call("xor", [yes(), no()])), yes());
-    assert_eq!(value(Concept::call("xor", [yes(), yes()])), no());
-    assert_eq!(value(Concept::call("xor", [no(), no()])), no());
-    assert_eq!(value(Concept::call("if", [yes(), int(1), int(2)])), int(1));
-    assert_eq!(value(Concept::call("if", [no(), int(1), int(2)])), int(2));
+    assert_eq!(value(Concept::call("logic-and", [yes(), yes()])), yes());
+    assert_eq!(value(Concept::call("logic-and", [yes(), yes(), no()])), no());
+    assert_eq!(value(Concept::call("logic-or", [no(), no()])), no());
+    assert_eq!(value(Concept::call("logic-or", [no(), no(), yes()])), yes());
+    assert_eq!(value(Concept::call("logic-not", [yes()])), no());
+    assert_eq!(value(Concept::call("logic-not", [no()])), yes());
+    assert_eq!(value(Concept::call("logic-xor", [yes(), no()])), yes());
+    assert_eq!(value(Concept::call("logic-xor", [yes(), yes()])), no());
+    assert_eq!(value(Concept::call("logic-xor", [no(), no()])), no());
+    assert_eq!(value(Concept::call("logic-if", [yes(), int(1), int(2)])), int(1));
+    assert_eq!(value(Concept::call("logic-if", [no(), int(1), int(2)])), int(2));
 }
 
 #[test]
 fn if_does_not_evaluate_the_branch_it_did_not_take() {
     let (store, registry) = setup();
     let mut ev = Evaluator::new(&store, &registry).with_budget(Budget::deterministic());
-    let out = ev.evaluate(&Concept::call("if", [yes(), int(7), boom()]));
+    let out = ev.evaluate(&Concept::call("logic-if", [yes(), int(7), boom()]));
     assert_eq!(out.value(), Some(&int(7)));
     assert!(
         ev.trace().failures().is_empty(),
@@ -428,7 +428,7 @@ fn if_does_not_evaluate_the_branch_it_did_not_take() {
     );
 
     let mut ev = Evaluator::new(&store, &registry).with_budget(Budget::deterministic());
-    let out = ev.evaluate(&Concept::call("if", [no(), boom(), int(7)]));
+    let out = ev.evaluate(&Concept::call("logic-if", [no(), boom(), int(7)]));
     assert_eq!(out.value(), Some(&int(7)));
     assert!(ev.trace().failures().is_empty());
 }
@@ -440,7 +440,7 @@ fn the_untaken_branch_leaves_no_trace_at_all() {
     let (store, registry) = setup();
     let mut ev = Evaluator::new(&store, &registry).with_budget(Budget::deterministic());
     let out = ev.evaluate(&Concept::call(
-        "if",
+        "logic-if",
         [yes(), int(7), Concept::call("spy", [])],
     ));
     assert_eq!(out.value(), Some(&int(7)));
@@ -455,7 +455,7 @@ fn and_and_or_short_circuit() {
     let (store, registry) = setup();
 
     let mut ev = Evaluator::new(&store, &registry).with_budget(Budget::deterministic());
-    let out = ev.evaluate(&Concept::call("and", [no(), boom()]));
+    let out = ev.evaluate(&Concept::call("logic-and", [no(), boom()]));
     assert_eq!(out.value(), Some(&no()));
     assert!(
         ev.trace().failures().is_empty(),
@@ -463,7 +463,7 @@ fn and_and_or_short_circuit() {
     );
 
     let mut ev = Evaluator::new(&store, &registry).with_budget(Budget::deterministic());
-    let out = ev.evaluate(&Concept::call("or", [yes(), boom()]));
+    let out = ev.evaluate(&Concept::call("logic-or", [yes(), boom()]));
     assert_eq!(out.value(), Some(&yes()));
     assert!(
         ev.trace().failures().is_empty(),
@@ -472,7 +472,7 @@ fn and_and_or_short_circuit() {
 
     // The stopping point is the first decisive argument, not the whole list.
     let mut ev = Evaluator::new(&store, &registry).with_budget(Budget::deterministic());
-    let out = ev.evaluate(&Concept::call("and", [yes(), no(), boom(), boom()]));
+    let out = ev.evaluate(&Concept::call("logic-and", [yes(), no(), boom(), boom()]));
     assert_eq!(out.value(), Some(&no()));
     assert!(ev.trace().failures().is_empty());
 }
@@ -481,19 +481,19 @@ fn and_and_or_short_circuit() {
 fn a_non_boolean_after_the_short_circuit_is_never_looked_at() {
     // An argument that did not run has no type, so this is short-circuiting
     // rather than a hole in the type check.
-    assert_eq!(value(Concept::call("and", [no(), nonsense()])), no());
-    assert_eq!(value(Concept::call("or", [yes(), nonsense()])), yes());
+    assert_eq!(value(Concept::call("logic-and", [no(), nonsense()])), no());
+    assert_eq!(value(Concept::call("logic-or", [yes(), nonsense()])), yes());
 }
 
 #[test]
 fn a_non_boolean_condition_is_a_type_error_not_a_truthiness_guess() {
     for condition in [int(0), int(1), Concept::text(""), nonsense()] {
-        assert_errors(Concept::call("if", [condition, int(1), int(2)]));
+        assert_errors(Concept::call("logic-if", [condition, int(1), int(2)]));
     }
-    assert_errors(Concept::call("and", [int(1), yes()]));
-    assert_errors(Concept::call("or", [int(0), no()]));
-    assert_errors(Concept::call("not", [int(1)]));
-    assert_errors(Concept::call("xor", [int(1), yes()]));
+    assert_errors(Concept::call("logic-and", [int(1), yes()]));
+    assert_errors(Concept::call("logic-or", [int(0), no()]));
+    assert_errors(Concept::call("logic-not", [int(1)]));
+    assert_errors(Concept::call("logic-xor", [int(1), yes()]));
 }
 
 // ---------------------------------------------------------------------------
@@ -502,33 +502,33 @@ fn a_non_boolean_condition_is_a_type_error_not_a_truthiness_guess() {
 
 #[test]
 fn the_numeric_predicates_compute() {
-    assert_eq!(value(Concept::call("is-zero", [int(0)])), yes());
-    assert_eq!(value(Concept::call("is-zero", [float(0.0)])), yes());
-    assert_eq!(value(Concept::call("is-zero", [int(1)])), no());
+    assert_eq!(value(Concept::call("math-is-zero", [int(0)])), yes());
+    assert_eq!(value(Concept::call("math-is-zero", [float(0.0)])), yes());
+    assert_eq!(value(Concept::call("math-is-zero", [int(1)])), no());
 
-    assert_eq!(value(Concept::call("is-positive", [int(1)])), yes());
-    assert_eq!(value(Concept::call("is-positive", [float(0.5)])), yes());
+    assert_eq!(value(Concept::call("math-is-positive", [int(1)])), yes());
+    assert_eq!(value(Concept::call("math-is-positive", [float(0.5)])), yes());
     assert_eq!(
-        value(Concept::call("is-positive", [int(0)])),
+        value(Concept::call("math-is-positive", [int(0)])),
         no(),
         "zero is neither positive nor negative"
     );
 
-    assert_eq!(value(Concept::call("is-negative", [int(-1)])), yes());
-    assert_eq!(value(Concept::call("is-negative", [float(-0.5)])), yes());
-    assert_eq!(value(Concept::call("is-negative", [int(0)])), no());
+    assert_eq!(value(Concept::call("math-is-negative", [int(-1)])), yes());
+    assert_eq!(value(Concept::call("math-is-negative", [float(-0.5)])), yes());
+    assert_eq!(value(Concept::call("math-is-negative", [int(0)])), no());
 
-    assert_eq!(value(Concept::call("is-even", [int(4)])), yes());
-    assert_eq!(value(Concept::call("is-even", [int(-4)])), yes());
-    assert_eq!(value(Concept::call("is-even", [int(3)])), no());
-    assert_eq!(value(Concept::call("is-odd", [int(3)])), yes());
-    assert_eq!(value(Concept::call("is-odd", [int(-3)])), yes());
-    assert_eq!(value(Concept::call("is-odd", [int(4)])), no());
+    assert_eq!(value(Concept::call("math-is-even", [int(4)])), yes());
+    assert_eq!(value(Concept::call("math-is-even", [int(-4)])), yes());
+    assert_eq!(value(Concept::call("math-is-even", [int(3)])), no());
+    assert_eq!(value(Concept::call("math-is-odd", [int(3)])), yes());
+    assert_eq!(value(Concept::call("math-is-odd", [int(-3)])), yes());
+    assert_eq!(value(Concept::call("math-is-odd", [int(4)])), no());
 }
 
 #[test]
 fn nan_is_neither_positive_nor_negative_nor_zero() {
-    for native in ["is-zero", "is-positive", "is-negative"] {
+    for native in ["math-is-zero", "math-is-positive", "math-is-negative"] {
         assert_eq!(
             value(Concept::call(native, [float(f64::NAN)])),
             no(),
@@ -539,8 +539,8 @@ fn nan_is_neither_positive_nor_negative_nor_zero() {
 
 #[test]
 fn parity_is_an_integer_question() {
-    assert_errors(Concept::call("is-even", [float(2.0)]));
-    assert_errors(Concept::call("is-odd", [float(3.0)]));
+    assert_errors(Concept::call("math-is-even", [float(2.0)]));
+    assert_errors(Concept::call("math-is-odd", [float(3.0)]));
 }
 
 // ---------------------------------------------------------------------------
@@ -551,25 +551,25 @@ fn parity_is_an_integer_question() {
 fn nested_arithmetic_reduces_innermost_first() {
     assert_eq!(
         value(Concept::call(
-            "add",
-            [Concept::call("mul", [int(2), int(3)]), int(4)]
+            "math-add",
+            [Concept::call("math-mul", [int(2), int(3)]), int(4)]
         )),
         int(10)
     );
     // Deeper, and across the widening rule and a comparison.
     assert_eq!(
         value(Concept::call(
-            "if",
+            "logic-if",
             [
                 Concept::call(
-                    "gt",
+                    "logic-gt",
                     [
                         // Add<7, 3> is 10, Div<10, 4> truncates to 2, and 2 > 1.
-                        Concept::call("div", [Concept::call("add", [int(7), int(3)]), int(4)]),
+                        Concept::call("math-div", [Concept::call("math-add", [int(7), int(3)]), int(4)]),
                         int(1)
                     ]
                 ),
-                Concept::call("abs", [Concept::call("neg", [float(1.5)])]),
+                Concept::call("math-abs", [Concept::call("math-neg", [float(1.5)])]),
                 boom(),
             ]
         )),
@@ -615,7 +615,7 @@ fn no_native_panics_on_a_nonsense_argument() {
 
             // Eq and Ne are identity comparisons and accept any two concepts,
             // so Eq<nonsense, nonsense> is a legitimate `true`.
-            if (name == "eq" || name == "ne") && arity == 2 {
+            if (name == "logic-eq" || name == "logic-ne") && arity == 2 {
                 assert!(out.is_value(), "{name}/{arity} should compare: {out:?}");
                 continue;
             }

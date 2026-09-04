@@ -41,7 +41,7 @@ fn a_realization(store: &Store, name: &str) {
             target: Concept::named("owns"),
             name: name.into(),
             spec: RealizationSpec::Native {
-                native: NativeId::new("add"),
+                native: NativeId::new("math-add"),
             },
             effect: Effect::Pure,
             activation: Activation::new(Utc::now()),

@@ -42,7 +42,7 @@ pub async fn run(cli: &Cli, host: &str, port: u16) -> Result<()> {
 
 async fn models() -> impl IntoResponse {
     Json(json!({
-        "object": "list",
+        "object": "list-list",
         "data": [{ "id": "spoon", "object": "model", "owned_by": "spoon" }]
     }))
 }
@@ -203,7 +203,7 @@ async fn concepts(State(brain): State<Shared>, Query(f): Query<Filter>) -> impl 
     names.dedup();
     names.truncate(f.limit);
 
-    Json(json!({ "count": rendered.len(), "concepts": rendered, "names": names }))
+    Json(json!({ "list-count": rendered.len(), "concepts": rendered, "names": names }))
 }
 
 #[derive(serde::Deserialize)]
@@ -356,7 +356,7 @@ async fn realizations(State(brain): State<Shared>, Query(f): Query<Filter>) -> i
         .map(|(source, (count, uses, failures, rate_sum))| {
             json!({
                 "source": source,
-                "count": count,
+                "list-count": count,
                 "uses": uses,
                 "failures": failures,
                 "mean_success_rate": rate_sum / count as f64,
@@ -397,7 +397,7 @@ async fn realizations(State(brain): State<Shared>, Query(f): Query<Filter>) -> i
             })
         })
         .collect();
-    Json(json!({ "count": rows.len(), "by_source": summary, "realizations": rows }))
+    Json(json!({ "list-count": rows.len(), "by_source": summary, "realizations": rows }))
 }
 
 async fn episodes(State(brain): State<Shared>, Query(f): Query<Filter>) -> impl IntoResponse {
@@ -410,7 +410,7 @@ async fn episodes(State(brain): State<Shared>, Query(f): Query<Filter>) -> impl 
         .iter()
         .filter_map(|r| serde_json::from_str(r).ok())
         .collect();
-    Json(json!({ "count": parsed.len(), "episodes": parsed }))
+    Json(json!({ "list-count": parsed.len(), "episodes": parsed }))
 }
 
 /// A short, readable name for where something came from.

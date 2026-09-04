@@ -31,7 +31,7 @@ use spoon_eval::{
 /// Read the elements of a list concept.
 pub(crate) fn want_list(native: &str, c: &Concept) -> Result<Vec<Concept>, spoon_eval::EvalError> {
     if let Some(head) = c.head_symbol()
-        && head == SymbolId::of("list")
+        && head == SymbolId::of("list-list")
     {
         return Ok(c.args().to_vec());
     }
@@ -49,7 +49,7 @@ pub(crate) fn want_list(native: &str, c: &Concept) -> Result<Vec<Concept>, spoon
 
 /// Build a list concept from elements.
 pub(crate) fn make_list(items: Vec<Concept>) -> Concept {
-    Concept::call("list", items)
+    Concept::call("list-list", items)
 }
 
 /// A non-negative index. Negative indices are rejected rather than wrapped
@@ -112,40 +112,40 @@ fn list(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 }
 
 fn first(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let items = want_list("first", &args[0])?;
+    let items = want_list("list-first", &args[0])?;
     items
         .first()
         .cloned()
-        .ok_or_else(|| out_of_range("first", 0, 0))
+        .ok_or_else(|| out_of_range("list-first", 0, 0))
 }
 
 fn last(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let items = want_list("last", &args[0])?;
+    let items = want_list("list-last", &args[0])?;
     items
         .last()
         .cloned()
-        .ok_or_else(|| out_of_range("last", 0, 0))
+        .ok_or_else(|| out_of_range("list-last", 0, 0))
 }
 
 fn nth(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let items = want_list("nth", &args[0])?;
-    let index = want_index("nth", &args[1])?;
+    let items = want_list("list-nth", &args[0])?;
+    let index = want_index("list-nth", &args[1])?;
     items
         .get(index)
         .cloned()
-        .ok_or_else(|| out_of_range("nth", index, items.len()))
+        .ok_or_else(|| out_of_range("list-nth", index, items.len()))
 }
 
 fn count(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    Ok(Concept::int(want_list("count", &args[0])?.len() as i64))
+    Ok(Concept::int(want_list("list-count", &args[0])?.len() as i64))
 }
 
 fn is_empty(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    Ok(Concept::bool(want_list("is-empty", &args[0])?.is_empty()))
+    Ok(Concept::bool(want_list("list-is-empty", &args[0])?.is_empty()))
 }
 
 fn append(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let mut items = want_list("append", &args[0])?.to_vec();
+    let mut items = want_list("list-append", &args[0])?.to_vec();
     items.extend(args[1..].iter().cloned());
     Ok(make_list(items))
 }
@@ -155,14 +155,14 @@ fn append(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// push-one-at-a-time loop would give.
 fn prepend(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     let mut items: Vec<Concept> = args[1..].to_vec();
-    items.extend(want_list("prepend", &args[0])?.iter().cloned());
+    items.extend(want_list("list-prepend", &args[0])?.iter().cloned());
     Ok(make_list(items))
 }
 
 fn concat_lists(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     let mut items = Vec::new();
     for a in args {
-        items.extend(want_list("concat-lists", a)?.iter().cloned());
+        items.extend(want_list("list-concat", a)?.iter().cloned());
     }
     Ok(make_list(items))
 }
@@ -184,7 +184,7 @@ fn reverse(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     if let Some(text) = args[0].as_ground().and_then(|g| g.as_str()) {
         return Ok(Concept::text(text.chars().rev().collect::<String>()));
     }
-    let mut items = want_list("reverse", &args[0])?.to_vec();
+    let mut items = want_list("list-reverse", &args[0])?.to_vec();
     items.reverse();
     Ok(make_list(items))
 }
@@ -193,18 +193,18 @@ fn reverse(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// hands back a shorter list than the caller asked for and says nothing, which
 /// is how an off-by-one survives to production.
 fn slice(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let items = want_list("slice", &args[0])?;
-    let start = want_index("slice", &args[1])?;
-    let end = want_index("slice", &args[2])?;
+    let items = want_list("list-slice", &args[0])?;
+    let start = want_index("list-slice", &args[1])?;
+    let end = want_index("list-slice", &args[2])?;
     if start > items.len() {
-        return Err(out_of_range("slice", start, items.len()));
+        return Err(out_of_range("list-slice", start, items.len()));
     }
     if end > items.len() {
-        return Err(out_of_range("slice", end, items.len()));
+        return Err(out_of_range("list-slice", end, items.len()));
     }
     if start > end {
         return Err(native_error(
-            "slice",
+            "list-slice",
             format!("start {start} is past end {end}"),
         ));
     }
@@ -212,7 +212,7 @@ fn slice(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 }
 
 fn contains(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let items = want_list("contains", &args[0])?;
+    let items = want_list("list-contains", &args[0])?;
     Ok(Concept::bool(items.contains(&args[1])))
 }
 
@@ -220,11 +220,11 @@ fn contains(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// forget to check and then use, and `Contains` already answers the question
 /// "is it in there" without needing one.
 fn index_of(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let items = want_list("index-of", &args[0])?;
+    let items = want_list("list-index-of", &args[0])?;
     match items.iter().position(|item| item == &args[1]) {
         Some(index) => Ok(Concept::int(index as i64)),
         None => Err(native_error(
-            "index-of",
+            "list-index-of",
             format!("no matching element in a list of length {}", items.len()),
         )),
     }
@@ -232,7 +232,7 @@ fn index_of(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 
 fn unique(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     let mut seen: Vec<Concept> = Vec::new();
-    for item in &want_list("unique", &args[0])? {
+    for item in &want_list("list-unique", &args[0])? {
         if !seen.contains(item) {
             seen.push(item.clone());
         }
@@ -244,8 +244,8 @@ fn unique(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// asked for partially, whereas one level composes: apply it twice for two.
 fn flatten(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     let mut items = Vec::new();
-    for item in &want_list("flatten", &args[0])? {
-        match want_list("flatten", item) {
+    for item in &want_list("list-flatten", &args[0])? {
+        match want_list("list-flatten", item) {
             Ok(inner) => items.extend(inner.iter().cloned()),
             Err(_) => items.push(item.clone()),
         }
@@ -258,7 +258,7 @@ fn flatten(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 // ---------------------------------------------------------------------------
 
 fn map(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let items = want_list("map", &args[0])?.to_vec();
+    let items = want_list("list-map", &args[0])?.to_vec();
     let mut out = Vec::with_capacity(items.len());
     for item in items {
         out.push(call(ctx, &args[1], vec![item])?);
@@ -267,11 +267,11 @@ fn map(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 }
 
 fn filter(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let items = want_list("filter", &args[0])?.to_vec();
+    let items = want_list("list-filter", &args[0])?.to_vec();
     let mut out = Vec::new();
     for item in items {
         let verdict = call(ctx, &args[1], vec![item.clone()])?;
-        if want_bool("filter", &verdict)? {
+        if want_bool("list-filter", &verdict)? {
             out.push(item);
         }
     }
@@ -282,7 +282,7 @@ fn filter(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// rather than defaulting to the first element, because a fold with no seed has
 /// no answer for an empty list and would have to invent one.
 fn reduce(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let items = want_list("reduce", &args[0])?.to_vec();
+    let items = want_list("list-reduce", &args[0])?.to_vec();
     let mut acc = args[2].clone();
     for item in items {
         acc = call(ctx, &args[1], vec![acc, item])?;
@@ -291,16 +291,16 @@ fn reduce(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 }
 
 fn find(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let items = want_list("find", &args[0])?.to_vec();
+    let items = want_list("list-find", &args[0])?.to_vec();
     let len = items.len();
     for item in items {
         let verdict = call(ctx, &args[1], vec![item.clone()])?;
-        if want_bool("find", &verdict)? {
+        if want_bool("list-find", &verdict)? {
             return Ok(item);
         }
     }
     Err(native_error(
-        "find",
+        "list-find",
         format!("no element satisfied the predicate in a list of length {len}"),
     ))
 }
@@ -308,10 +308,10 @@ fn find(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// Vacuously true on an empty list. "Every element satisfies it" is a claim
 /// about elements, and there are none to violate it.
 fn all(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let items = want_list("all", &args[0])?.to_vec();
+    let items = want_list("list-all", &args[0])?.to_vec();
     for item in items {
         let verdict = call(ctx, &args[1], vec![item])?;
-        if !want_bool("all", &verdict)? {
+        if !want_bool("list-all", &verdict)? {
             return Ok(Concept::bool(false));
         }
     }
@@ -319,10 +319,10 @@ fn all(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 }
 
 fn any(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let items = want_list("any", &args[0])?.to_vec();
+    let items = want_list("list-any", &args[0])?.to_vec();
     for item in items {
         let verdict = call(ctx, &args[1], vec![item])?;
-        if want_bool("any", &verdict)? {
+        if want_bool("list-any", &verdict)? {
             return Ok(Concept::bool(true));
         }
     }
@@ -397,16 +397,16 @@ fn sort_key(native: &str, c: &Concept) -> Result<SortKey, EvalError> {
 /// anybody would reach for, found nothing, and produced a `sort-by` whose key
 /// function was wrong. A name people actually use is worth a native.
 fn sort(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let items = want_list("sort", &args[0])?.to_vec();
+    let items = want_list("list-sort", &args[0])?.to_vec();
     let mut keyed: Vec<(SortKey, Concept)> = Vec::with_capacity(items.len());
     for item in items {
-        keyed.push((sort_key("sort", &item)?, item));
+        keyed.push((sort_key("list-sort", &item)?, item));
     }
     if let Some((first, _)) = keyed.first() {
         let kind = first.kind();
         if let Some((odd, _)) = keyed.iter().find(|(k, _)| k.kind() != kind) {
             return Err(native_error(
-                "sort",
+                "list-sort",
                 format!(
                     "values mix {kind} and {}, which have no shared order",
                     odd.kind()
@@ -422,17 +422,17 @@ fn sort(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// the comparator, so a key function with a trace or a store read runs exactly
 /// once per element and the sort cannot depend on comparison order.
 fn sort_by(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let items = want_list("sort-by", &args[0])?.to_vec();
+    let items = want_list("list-sort-by", &args[0])?.to_vec();
     let mut keyed: Vec<(SortKey, Concept)> = Vec::with_capacity(items.len());
     for item in items {
         let key = call(ctx, &args[1], vec![item.clone()])?;
-        keyed.push((sort_key("sort-by", &key)?, item));
+        keyed.push((sort_key("list-sort-by", &key)?, item));
     }
     if let Some((first, _)) = keyed.first() {
         let kind = first.kind();
         if let Some((odd, _)) = keyed.iter().find(|(k, _)| k.kind() != kind) {
             return Err(native_error(
-                "sort-by",
+                "list-sort-by",
                 format!(
                     "keys mix {kind} and {}, which have no shared order",
                     odd.kind()
@@ -448,7 +448,7 @@ fn sort_by(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// The shape is `List<Group<key, List<..>>, ..>`: a group is a compound like
 /// anything else, so it can be mapped over and taken apart with `Nth`.
 fn group_by(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let items = want_list("group-by", &args[0])?.to_vec();
+    let items = want_list("list-group-by", &args[0])?.to_vec();
     let mut groups: Vec<(Concept, Vec<Concept>)> = Vec::new();
     for item in items {
         let key = call(ctx, &args[1], vec![item.clone()])?;
@@ -502,7 +502,7 @@ fn want_numbers(native: &str, c: &Concept) -> Result<Numbers, EvalError> {
 /// Empty sums to `0`, the additive identity, because that is the only value
 /// that leaves every other sum unchanged when the empty list is concatenated in.
 fn sum(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let (floats, ints) = want_numbers("sum", &args[0])?;
+    let (floats, ints) = want_numbers("math-sum", &args[0])?;
     let Some(ints) = ints else {
         return Ok(Concept::float(floats.iter().sum()));
     };
@@ -510,14 +510,14 @@ fn sum(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     for v in ints {
         total = total
             .checked_add(v)
-            .ok_or_else(|| native_error("sum", "integer overflow"))?;
+            .ok_or_else(|| native_error("math-sum", "integer overflow"))?;
     }
     Ok(Concept::int(total))
 }
 
 /// Empty multiplies to `1`, for the same reason `Sum<List<>>` is `0`.
 fn product(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let (floats, ints) = want_numbers("product", &args[0])?;
+    let (floats, ints) = want_numbers("math-product", &args[0])?;
     let Some(ints) = ints else {
         return Ok(Concept::float(floats.iter().product()));
     };
@@ -525,7 +525,7 @@ fn product(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     for v in ints {
         total = total
             .checked_mul(v)
-            .ok_or_else(|| native_error("product", "integer overflow"))?;
+            .ok_or_else(|| native_error("math-product", "integer overflow"))?;
     }
     Ok(Concept::int(total))
 }
@@ -561,11 +561,11 @@ fn extremum(native: &str, args: &[Concept], want_greater: bool) -> EvalResult {
 }
 
 fn min_of(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    extremum("min-of", args, false)
+    extremum("list-min-of", args, false)
 }
 
 fn max_of(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    extremum("max-of", args, true)
+    extremum("list-max-of", args, true)
 }
 
 // ---------------------------------------------------------------------------
@@ -584,10 +584,10 @@ fn max_of(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// every use.
 fn range(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     let (from, to) = match args.len() {
-        1 => (1i64, want_int_arg("range", &args[0])?),
+        1 => (1i64, want_int_arg("list-range", &args[0])?),
         _ => (
-            want_int_arg("range", &args[0])?,
-            want_int_arg("range", &args[1])?,
+            want_int_arg("list-range", &args[0])?,
+            want_int_arg("list-range", &args[1])?,
         ),
     };
     if to < from {
@@ -599,7 +599,7 @@ fn range(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     const MAX: i64 = 1_000_000;
     if to - from >= MAX {
         return Err(spoon_eval::native_error(
-            "range",
+            "list-range",
             format!("{} values is over the {MAX} cap", to - from + 1),
         ));
     }
@@ -614,105 +614,105 @@ fn want_int_arg(native: &str, c: &Concept) -> Result<i64, spoon_eval::EvalError>
 
 pub fn register(registry: &mut NativeRegistry) {
     registry.pure(
-        "range",
+        "list-range",
         range,
         Arity::Between(1, 2),
         "the integers between two bounds, both included",
     );
     registry.pure(
-        "list",
+        "list-list",
         list,
         Arity::Any,
         "build a list from the given elements",
     );
     registry.pure(
-        "first",
+        "list-first",
         first,
         Arity::Exact(1),
         "the first element of a list; for the first letters of a word use substring",
     );
-    registry.pure("last", last, Arity::Exact(1), "the last element of a list");
+    registry.pure("list-last", last, Arity::Exact(1), "the last element of a list");
     registry.pure(
-        "nth",
+        "list-nth",
         nth,
         Arity::Exact(2),
         "the element of a list at a zero-based index",
     );
     registry.pure(
-        "count",
+        "list-count",
         count,
         Arity::Exact(1),
         "number of elements in a list",
     );
     registry.pure(
-        "is-empty",
+        "list-is-empty",
         is_empty,
         Arity::Exact(1),
         "whether a list has no elements",
     );
     registry.pure(
-        "append",
+        "list-append",
         append,
         Arity::AtLeast(1),
         "a list with elements added at the end",
     );
     registry.pure(
-        "prepend",
+        "list-prepend",
         prepend,
         Arity::AtLeast(1),
         "a list with elements added at the front, in the order given",
     );
     registry.pure(
-        "concat-lists",
+        "list-concat",
         concat_lists,
         Arity::Any,
         "several lists joined into one",
     );
     registry.pure(
-        "reverse",
+        "list-reverse",
         reverse,
         Arity::Exact(1),
         "a list, or a piece of text, in the opposite order; text gives back text",
     );
     registry.pure(
-        "sort",
+        "list-sort",
         sort,
         Arity::Exact(1),
         "a list in ascending order",
     );
     registry.pure(
-        "slice",
+        "list-slice",
         slice,
         Arity::Exact(3),
         "part of a list, from a start index up to but not including an end index; gives back a list",
     );
     registry.pure(
-        "contains",
+        "list-contains",
         contains,
         Arity::Exact(2),
         "whether a list holds a given element",
     );
     registry.pure(
-        "index-of",
+        "list-index-of",
         index_of,
         Arity::Exact(2),
         "the position of an element in a list, or an error when it is absent",
     );
     registry.pure(
-        "unique",
+        "list-unique",
         unique,
         Arity::Exact(1),
         "a list with duplicates removed, keeping first appearances",
     );
     registry.pure(
-        "flatten",
+        "list-flatten",
         flatten,
         Arity::Exact(1),
         "a list with any inner lists spliced in, one level deep",
     );
 
     registry.register(
-        "map",
+        "list-map",
         map,
         Arity::Exact(2),
         ArgStrategy::Selective(0b001),
@@ -720,7 +720,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "apply a function to every element of a list",
     );
     registry.register(
-        "filter",
+        "list-filter",
         filter,
         Arity::Exact(2),
         ArgStrategy::Selective(0b001),
@@ -728,7 +728,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "the elements of a list for which a predicate holds",
     );
     registry.register(
-        "reduce",
+        "list-reduce",
         reduce,
         Arity::Exact(3),
         ArgStrategy::Selective(0b101),
@@ -736,7 +736,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "fold a list into one value with a function and an initial value",
     );
     registry.register(
-        "sort-by",
+        "list-sort-by",
         sort_by,
         Arity::Exact(2),
         ArgStrategy::Selective(0b001),
@@ -744,7 +744,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "a list ordered by a key function, stably and deterministically",
     );
     registry.register(
-        "find",
+        "list-find",
         find,
         Arity::Exact(2),
         ArgStrategy::Selective(0b001),
@@ -752,7 +752,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "the first element of a list satisfying a predicate",
     );
     registry.register(
-        "all",
+        "list-all",
         all,
         Arity::Exact(2),
         ArgStrategy::Selective(0b001),
@@ -760,7 +760,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "whether every element satisfies a predicate",
     );
     registry.register(
-        "any",
+        "list-any",
         any,
         Arity::Exact(2),
         ArgStrategy::Selective(0b001),
@@ -768,31 +768,31 @@ pub fn register(registry: &mut NativeRegistry) {
         "whether some element satisfies a predicate",
     );
     registry.pure(
-        "sum",
+        "math-sum",
         sum,
         Arity::Exact(1),
         "the total of a list of numbers",
     );
     registry.pure(
-        "product",
+        "math-product",
         product,
         Arity::Exact(1),
         "the product of a list of numbers",
     );
     registry.pure(
-        "min-of",
+        "list-min-of",
         min_of,
         Arity::Exact(1),
         "the smallest of a list of numbers",
     );
     registry.pure(
-        "max-of",
+        "list-max-of",
         max_of,
         Arity::Exact(1),
         "the largest of a list of numbers",
     );
     registry.register(
-        "group-by",
+        "list-group-by",
         group_by,
         Arity::Exact(2),
         ArgStrategy::Selective(0b001),

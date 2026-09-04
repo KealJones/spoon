@@ -79,7 +79,7 @@ fn owns(who: &str, what: &str) -> Concept {
 fn items(c: &Concept) -> Vec<Concept> {
     assert_eq!(
         c.head_symbol(),
-        Some(spoon_concept::SymbolId::of("list")),
+        Some(spoon_concept::SymbolId::of("list-list")),
         "expected a list, got {c:?}"
     );
     c.args().to_vec()
@@ -99,17 +99,17 @@ fn asserting_makes_a_concept_exist() {
     let fact = owns("greg", "dog");
 
     assert_eq!(
-        value(&store, &reg, &Concept::call("exists", [fact.clone()])),
+        value(&store, &reg, &Concept::call("store-exists", [fact.clone()])),
         Concept::bool(false)
     );
 
     // Assert echoes the concept back, so it composes inside a larger term.
     assert_eq!(
-        value(&store, &reg, &Concept::call("assert", [fact.clone()])),
+        value(&store, &reg, &Concept::call("store-assert", [fact.clone()])),
         fact
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("exists", [fact.clone()])),
+        value(&store, &reg, &Concept::call("store-exists", [fact.clone()])),
         Concept::bool(true)
     );
 }
@@ -118,7 +118,7 @@ fn asserting_makes_a_concept_exist() {
 fn retracting_ends_the_belief_without_erasing_the_history() {
     let (store, reg) = brain();
     let fact = owns("greg", "dog");
-    value(&store, &reg, &Concept::call("assert", [fact.clone()]));
+    value(&store, &reg, &Concept::call("store-assert", [fact.clone()]));
 
     // A moment strictly inside the window the belief was held, so the history
     // check below cannot land on the boundary.
@@ -132,11 +132,11 @@ fn retracting_ends_the_belief_without_erasing_the_history() {
     let withdrawn = Evaluator::new(&store, &reg)
         .with_budget(Budget::deterministic())
         .with_permission(PermissionMode::Bypass)
-        .evaluate(&Concept::call("retract-claim", [fact.clone()]));
+        .evaluate(&Concept::call("store-retract-claim", [fact.clone()]));
     assert_eq!(withdrawn.value(), Some(&Concept::int(1)));
 
     assert_eq!(
-        value(&store, &reg, &Concept::call("exists", [fact.clone()])),
+        value(&store, &reg, &Concept::call("store-exists", [fact.clone()])),
         Concept::bool(false)
     );
 
@@ -153,7 +153,7 @@ fn retracting_something_never_believed_withdraws_nothing() {
         value(
             &store,
             &reg,
-            &Concept::call("retract-claim", [owns("greg", "dog")])
+            &Concept::call("store-retract-claim", [owns("greg", "dog")])
         ),
         Concept::int(0)
     );
@@ -170,7 +170,7 @@ fn writes_are_refused_under_the_default_permission_mode() {
 
     let outcome = Evaluator::new(&store, &reg)
         .with_budget(Budget::deterministic())
-        .evaluate(&Concept::call("assert", [fact.clone()]));
+        .evaluate(&Concept::call("store-assert", [fact.clone()]));
 
     match outcome {
         Outcome::NeedsPermission { effect, .. } => assert_eq!(effect, Effect::Write),
@@ -183,7 +183,7 @@ fn writes_are_refused_under_the_default_permission_mode() {
 
     // And it succeeds once permission is granted, so the gate is the only
     // thing that stopped it.
-    value(&store, &reg, &Concept::call("assert", [fact.clone()]));
+    value(&store, &reg, &Concept::call("store-assert", [fact.clone()]));
     assert!(store.holds(&fact).unwrap());
 }
 
@@ -191,11 +191,11 @@ fn writes_are_refused_under_the_default_permission_mode() {
 fn retracting_is_gated_the_same_way_asserting_is() {
     let (store, reg) = brain();
     let fact = owns("greg", "dog");
-    value(&store, &reg, &Concept::call("assert", [fact.clone()]));
+    value(&store, &reg, &Concept::call("store-assert", [fact.clone()]));
 
     let outcome = Evaluator::new(&store, &reg)
         .with_budget(Budget::deterministic())
-        .evaluate(&Concept::call("retract-claim", [fact.clone()]));
+        .evaluate(&Concept::call("store-retract-claim", [fact.clone()]));
 
     match outcome {
         Outcome::NeedsPermission { effect, .. } => assert_eq!(effect, Effect::Write),
@@ -211,11 +211,11 @@ fn retracting_is_gated_the_same_way_asserting_is() {
 fn reads_run_unattended_under_the_default_permission_mode() {
     let (store, reg) = brain();
     let fact = owns("greg", "dog");
-    value(&store, &reg, &Concept::call("assert", [fact.clone()]));
+    value(&store, &reg, &Concept::call("store-assert", [fact.clone()]));
 
     let outcome = Evaluator::new(&store, &reg)
         .with_budget(Budget::deterministic())
-        .evaluate(&Concept::call("exists", [fact]));
+        .evaluate(&Concept::call("store-exists", [fact]));
     assert_eq!(outcome.value(), Some(&Concept::bool(true)));
 }
 
@@ -230,13 +230,13 @@ fn seed_facts(store: &Store, reg: &NativeRegistry) {
         ("greg", "cat"),
         ("mira", "boat"),
     ] {
-        value(store, reg, &Concept::call("assert", [owns(who, what)]));
+        value(store, reg, &Concept::call("store-assert", [owns(who, what)]));
     }
     value(
         store,
         reg,
         &Concept::call(
-            "assert",
+            "store-assert",
             [Concept::call(
                 "friend-with",
                 [Concept::named("greg"), Concept::named("keal")],
@@ -254,7 +254,7 @@ fn recall_with_a_hole_finds_the_matches_and_nothing_else() {
         &store,
         &reg,
         &Concept::call(
-            "recall",
+            "store-recall",
             [Concept::call(
                 "owns",
                 [Concept::hole(0), Concept::named("dog")],
@@ -277,14 +277,14 @@ fn recall_of_a_pattern_with_no_holes_asks_about_that_exact_concept() {
     let found = value(
         &store,
         &reg,
-        &Concept::call("recall", [owns("greg", "dog")]),
+        &Concept::call("store-recall", [owns("greg", "dog")]),
     );
     assert_eq!(items(&found), vec![owns("greg", "dog")]);
 
     let missing = value(
         &store,
         &reg,
-        &Concept::call("recall", [owns("nobody", "dragon")]),
+        &Concept::call("store-recall", [owns("nobody", "dragon")]),
     );
     assert!(items(&missing).is_empty());
 }
@@ -298,7 +298,7 @@ fn recall_can_anchor_on_a_concrete_argument_when_the_head_is_a_hole() {
         Concept::hole(0),
         vec![Concept::named("greg"), Concept::named("dog")],
     );
-    let found = value(&store, &reg, &Concept::call("recall", [pattern]));
+    let found = value(&store, &reg, &Concept::call("store-recall", [pattern]));
     assert_eq!(items(&found), vec![owns("greg", "dog")]);
 }
 
@@ -306,7 +306,7 @@ fn recall_can_anchor_on_a_concrete_argument_when_the_head_is_a_hole() {
 fn recall_refuses_a_pattern_that_would_match_the_whole_brain() {
     let (store, reg) = brain();
     seed_facts(&store, &reg);
-    let message = failure(&store, &reg, &Concept::call("recall", [Concept::hole(0)]));
+    let message = failure(&store, &reg, &Concept::call("store-recall", [Concept::hole(0)]));
     assert!(
         message.contains("all holes"),
         "unhelpful message: {message}"
@@ -323,20 +323,20 @@ fn recall_ordering_does_not_depend_on_insertion_order() {
         value(
             &store_a,
             &reg_a,
-            &Concept::call("assert", [owns("greg", what)]),
+            &Concept::call("store-assert", [owns("greg", what)]),
         );
     }
     let first = items(&value(
         &store_a,
         &reg_a,
-        &Concept::call("recall", [pattern.clone()]),
+        &Concept::call("store-recall", [pattern.clone()]),
     ));
 
     // Same query again, same answer.
     let again = items(&value(
         &store_a,
         &reg_a,
-        &Concept::call("recall", [pattern.clone()]),
+        &Concept::call("store-recall", [pattern.clone()]),
     ));
     assert_eq!(first, again);
 
@@ -346,13 +346,13 @@ fn recall_ordering_does_not_depend_on_insertion_order() {
         value(
             &store_b,
             &reg_b,
-            &Concept::call("assert", [owns("greg", what)]),
+            &Concept::call("store-assert", [owns("greg", what)]),
         );
     }
     let reversed = items(&value(
         &store_b,
         &reg_b,
-        &Concept::call("recall", [pattern]),
+        &Concept::call("store-recall", [pattern]),
     ));
 
     assert_eq!(first.len(), 4);
@@ -368,13 +368,13 @@ fn recall_honours_an_explicit_limit() {
     let capped = value(
         &store,
         &reg,
-        &Concept::call("recall", [pattern.clone(), Concept::int(2)]),
+        &Concept::call("store-recall", [pattern.clone(), Concept::int(2)]),
     );
     assert_eq!(items(&capped).len(), 2);
 
     // The capped result is the prefix of the uncapped one, so a limit narrows
     // the answer rather than changing it.
-    let full = items(&value(&store, &reg, &Concept::call("recall", [pattern])));
+    let full = items(&value(&store, &reg, &Concept::call("store-recall", [pattern])));
     assert_eq!(items(&capped), full[..2].to_vec());
 }
 
@@ -386,7 +386,7 @@ fn a_limit_of_zero_is_an_error_rather_than_an_empty_answer() {
         &store,
         &reg,
         &Concept::call(
-            "recall",
+            "store-recall",
             [
                 Concept::call("owns", [Concept::hole(0), Concept::hole(1)]),
                 Concept::int(0),
@@ -403,14 +403,14 @@ fn count_matching_counts_what_recall_returns() {
     let pattern = Concept::call("owns", [Concept::hole(0), Concept::named("dog")]);
 
     assert_eq!(
-        value(&store, &reg, &Concept::call("count-recalled", [pattern])),
+        value(&store, &reg, &Concept::call("store-count-recalled", [pattern])),
         Concept::int(2)
     );
     assert_eq!(
         value(
             &store,
             &reg,
-            &Concept::call("count-recalled", [owns("nobody", "dragon")])
+            &Concept::call("store-count-recalled", [owns("nobody", "dragon")])
         ),
         Concept::int(0)
     );
@@ -424,7 +424,7 @@ fn recall_about_finds_every_mention_of_a_concept() {
     let found = value(
         &store,
         &reg,
-        &Concept::call("recall-about", [Concept::named("greg")]),
+        &Concept::call("store-recall-about", [Concept::named("greg")]),
     );
     let got = items(&found);
     assert!(got.contains(&owns("greg", "dog")));
@@ -438,7 +438,7 @@ fn recall_about_finds_every_mention_of_a_concept() {
     let capped = items(&value(
         &store,
         &reg,
-        &Concept::call("recall-about", [Concept::named("greg"), Concept::int(1)]),
+        &Concept::call("store-recall-about", [Concept::named("greg"), Concept::int(1)]),
     ));
     assert_eq!(capped.len(), 1);
 }
@@ -451,12 +451,12 @@ fn recall_by_head_takes_the_name_as_text_or_as_the_concept() {
     let by_text = items(&value(
         &store,
         &reg,
-        &Concept::call("recall-by-head", [text("owns")]),
+        &Concept::call("store-recall-by-head", [text("owns")]),
     ));
     let by_concept = items(&value(
         &store,
         &reg,
-        &Concept::call("recall-by-head", [Concept::named("owns")]),
+        &Concept::call("store-recall-by-head", [Concept::named("owns")]),
     ));
 
     assert_eq!(by_text.len(), 4);
@@ -490,7 +490,7 @@ fn describe_gives_the_stored_surface_forms() {
     let found = value(
         &store,
         &reg,
-        &Concept::call("describe", [Concept::named("greg")]),
+        &Concept::call("store-describe", [Concept::named("greg")]),
     );
     assert_eq!(items(&found), vec![text("Greg"), text("Gregory")]);
 }
@@ -501,7 +501,7 @@ fn describing_an_unknown_concept_gives_an_empty_list_rather_than_an_error() {
     let found = value(
         &store,
         &reg,
-        &Concept::call("describe", [Concept::named("nobody-has-mentioned-this")]),
+        &Concept::call("store-describe", [Concept::named("nobody-has-mentioned-this")]),
     );
     assert!(items(&found).is_empty());
 }
@@ -523,13 +523,13 @@ fn surface_of_finds_the_concepts_that_go_by_a_form() {
 
     // Case folded, because a surface form is how something is said and not how
     // it happens to be capitalized.
-    let found = value(&store, &reg, &Concept::call("surface-of", [text("greg")]));
+    let found = value(&store, &reg, &Concept::call("store-surface-of", [text("greg")]));
     assert_eq!(items(&found), vec![Concept::named("greg")]);
 
     let nothing = value(
         &store,
         &reg,
-        &Concept::call("surface-of", [text("nobody says this")]),
+        &Concept::call("store-surface-of", [text("nobody says this")]),
     );
     assert!(items(&nothing).is_empty());
 }
@@ -543,17 +543,17 @@ fn the_bootstrap_natives_describe_themselves() {
         items(&value(
             &store,
             &reg,
-            &Concept::call("describe", [Concept::named("parse-json")])
+            &Concept::call("store-describe", [Concept::named("json-parse")])
         )),
-        vec![text("parse-json")]
+        vec![text("json-parse")]
     );
     assert_eq!(
         items(&value(
             &store,
             &reg,
-            &Concept::call("surface-of", [text("parse-json")])
+            &Concept::call("store-surface-of", [text("json-parse")])
         )),
-        vec![Concept::named("parse-json")]
+        vec![Concept::named("json-parse")]
     );
 }
 
@@ -567,7 +567,7 @@ fn parse_json_produces_a_json_concept() {
     let parsed = value(
         &store,
         &reg,
-        &Concept::call("parse-json", [text(r#"{"title":"Spoon","stars":3}"#)]),
+        &Concept::call("json-parse", [text(r#"{"title":"Spoon","stars":3}"#)]),
     );
     assert_eq!(parsed, json(r#"{"title":"Spoon","stars":3}"#));
 }
@@ -578,7 +578,7 @@ fn malformed_json_fails_with_the_parse_error() {
     let message = failure(
         &store,
         &reg,
-        &Concept::call("parse-json", [text("{ not json")]),
+        &Concept::call("json-parse", [text("{ not json")]),
     );
     assert!(message.contains("not valid JSON"), "unhelpful: {message}");
     assert!(message.contains("column"), "no position given: {message}");
@@ -594,7 +594,7 @@ fn field_converts_json_scalars_to_native_concepts() {
         value(
             &store,
             &reg,
-            &Concept::call("field", [doc.clone(), text(name)]),
+            &Concept::call("json-field", [doc.clone(), text(name)]),
         )
     };
 
@@ -614,7 +614,7 @@ fn field_converts_json_scalars_to_native_concepts() {
 fn a_missing_field_names_the_field_and_the_keys_that_are_there() {
     let (store, reg) = brain();
     let doc = json(r#"{"title":"Spoon","stars":3}"#);
-    let message = failure(&store, &reg, &Concept::call("field", [doc, text("titel")]));
+    let message = failure(&store, &reg, &Concept::call("json-field", [doc, text("titel")]));
     assert!(message.contains("titel"), "field not named: {message}");
     assert!(message.contains("stars"), "keys not listed: {message}");
     assert!(message.contains("title"), "keys not listed: {message}");
@@ -627,12 +627,12 @@ fn pluck_maps_a_field_across_an_array() {
     let titles = value(
         &store,
         &reg,
-        &Concept::call("pluck", [docs.clone(), text("title")]),
+        &Concept::call("json-pluck", [docs.clone(), text("title")]),
     );
     assert_eq!(items(&titles), vec![text("a"), text("b"), text("c")]);
 
     // Order follows the document, not the sort the store queries use.
-    let ns = value(&store, &reg, &Concept::call("pluck", [docs, text("n")]));
+    let ns = value(&store, &reg, &Concept::call("json-pluck", [docs, text("n")]));
     assert_eq!(
         items(&ns),
         vec![Concept::int(1), Concept::int(2), Concept::int(3)]
@@ -648,12 +648,12 @@ fn a_plucked_number_is_a_real_integer_that_arithmetic_accepts() {
         &store,
         &reg,
         &Concept::call(
-            "add",
+            "math-add",
             [
                 Concept::call(
-                    "field",
+                    "json-field",
                     [
-                        Concept::call("parse-json", [text(r#"{"n":41}"#)]),
+                        Concept::call("json-parse", [text(r#"{"n":41}"#)]),
                         text("n"),
                     ],
                 ),
@@ -663,7 +663,7 @@ fn a_plucked_number_is_a_real_integer_that_arithmetic_accepts() {
     );
     assert_eq!(sum, Concept::int(42));
 
-    let plucked = value(&store, &reg, &Concept::call("pluck", [docs, text("n")]));
+    let plucked = value(&store, &reg, &Concept::call("json-pluck", [docs, text("n")]));
     assert_eq!(items(&plucked), vec![Concept::int(41)]);
 }
 
@@ -673,7 +673,7 @@ fn pluck_refuses_an_array_of_things_that_are_not_objects() {
     let message = failure(
         &store,
         &reg,
-        &Concept::call("pluck", [json("[1, 2, 3]"), text("n")]),
+        &Concept::call("json-pluck", [json("[1, 2, 3]"), text("n")]),
     );
     assert!(message.contains("objects"), "unhelpful: {message}");
 }
@@ -687,7 +687,7 @@ fn has_field_json_keys_length_and_type() {
         value(
             &store,
             &reg,
-            &Concept::call("has-field", [doc.clone(), text("title")])
+            &Concept::call("json-has-field", [doc.clone(), text("title")])
         ),
         Concept::bool(true)
     );
@@ -695,7 +695,7 @@ fn has_field_json_keys_length_and_type() {
         value(
             &store,
             &reg,
-            &Concept::call("has-field", [doc.clone(), text("nope")])
+            &Concept::call("json-has-field", [doc.clone(), text("nope")])
         ),
         Concept::bool(false)
     );
@@ -735,7 +735,7 @@ fn has_field_json_keys_length_and_type() {
 #[test]
 fn to_json_renders_ground_values_and_lists() {
     let (store, reg) = brain();
-    let render = |c: Concept| value(&store, &reg, &Concept::call("to-json", [c]));
+    let render = |c: Concept| value(&store, &reg, &Concept::call("json-to-json", [c]));
 
     assert_eq!(render(Concept::int(42)), text("42"));
     assert_eq!(render(text("hi")), text(r#""hi""#));
@@ -746,7 +746,7 @@ fn to_json_renders_ground_values_and_lists() {
     );
     assert_eq!(
         render(Concept::call(
-            "list",
+            "list-list",
             [Concept::int(1), text("two"), Concept::bool(false)]
         )),
         text(r#"[1,"two",false]"#)
@@ -758,7 +758,7 @@ fn to_json_renders_ground_values_and_lists() {
         value(
             &store,
             &reg,
-            &Concept::call("to-json", [Concept::call("parse-json", [text(doc)])])
+            &Concept::call("json-to-json", [Concept::call("json-parse", [text(doc)])])
         ),
         text(doc)
     );
@@ -772,7 +772,7 @@ fn to_json_refuses_a_named_concept() {
     let message = failure(
         &store,
         &reg,
-        &Concept::call("to-json", [Concept::named("greg")]),
+        &Concept::call("json-to-json", [Concept::named("greg")]),
     );
     assert!(message.contains("ground value"), "unhelpful: {message}");
 }
@@ -784,7 +784,7 @@ fn to_json_refuses_a_named_concept() {
 #[test]
 fn now_reads_the_injected_clock_and_not_the_system_one() {
     let (store, reg) = brain();
-    let observed = value(&store, &reg, &Concept::call("now", []));
+    let observed = value(&store, &reg, &Concept::call("time-now", []));
     assert_eq!(observed, Concept::datetime(pinned()));
 
     // A second evaluator on a different pinned clock sees that one, which no
@@ -793,7 +793,7 @@ fn now_reads_the_injected_clock_and_not_the_system_one() {
     let outcome = Evaluator::new(&store, &reg)
         .with_budget(Budget::deterministic())
         .with_now(other)
-        .evaluate(&Concept::call("now", []));
+        .evaluate(&Concept::call("time-now", []));
     assert_eq!(outcome.value(), Some(&Concept::datetime(other)));
 }
 
@@ -803,14 +803,14 @@ fn timestamp_counts_from_the_epoch_in_the_unit_asked_for() {
     let at = Concept::datetime(pinned());
 
     assert_eq!(
-        value(&store, &reg, &Concept::call("timestamp", [at.clone()])),
+        value(&store, &reg, &Concept::call("time-timestamp", [at.clone()])),
         Concept::int(PINNED_EPOCH_SECONDS)
     );
     assert_eq!(
         value(
             &store,
             &reg,
-            &Concept::call("timestamp", [at.clone(), text("milliseconds")])
+            &Concept::call("time-timestamp", [at.clone(), text("milliseconds")])
         ),
         Concept::int(PINNED_EPOCH_SECONDS * 1_000)
     );
@@ -818,7 +818,7 @@ fn timestamp_counts_from_the_epoch_in_the_unit_asked_for() {
         value(
             &store,
             &reg,
-            &Concept::call("timestamp", [at, text("days")])
+            &Concept::call("time-timestamp", [at, text("days")])
         ),
         Concept::int(PINNED_EPOCH_SECONDS / 86_400)
     );
@@ -829,10 +829,10 @@ fn format_and_parse_round_trip() {
     let (store, reg) = brain();
     let at = Concept::datetime(pinned());
 
-    let rfc = value(&store, &reg, &Concept::call("format-time", [at.clone()]));
+    let rfc = value(&store, &reg, &Concept::call("time-format", [at.clone()]));
     assert_eq!(rfc, text("2026-09-03T12:00:00+00:00"));
     assert_eq!(
-        value(&store, &reg, &Concept::call("parse-time", [rfc])),
+        value(&store, &reg, &Concept::call("time-parse", [rfc])),
         at.clone()
     );
 
@@ -840,14 +840,14 @@ fn format_and_parse_round_trip() {
     let formatted = value(
         &store,
         &reg,
-        &Concept::call("format-time", [at.clone(), pattern.clone()]),
+        &Concept::call("time-format", [at.clone(), pattern.clone()]),
     );
     assert_eq!(formatted, text("2026-09-03 12:00:00"));
     assert_eq!(
         value(
             &store,
             &reg,
-            &Concept::call("parse-time", [formatted, pattern])
+            &Concept::call("time-parse", [formatted, pattern])
         ),
         at
     );
@@ -860,7 +860,7 @@ fn a_pattern_with_an_offset_is_honoured_when_parsing() {
         &store,
         &reg,
         &Concept::call(
-            "parse-time",
+            "time-parse",
             [
                 text("2026-09-03 07:00:00 -0500"),
                 text("%Y-%m-%d %H:%M:%S %z"),
@@ -876,14 +876,14 @@ fn unparseable_time_text_fails_cleanly() {
     let message = failure(
         &store,
         &reg,
-        &Concept::call("parse-time", [text("last tuesday")]),
+        &Concept::call("time-parse", [text("last tuesday")]),
     );
     assert!(message.contains("RFC 3339"), "unhelpful: {message}");
 
     let bad_pattern = failure(
         &store,
         &reg,
-        &Concept::call("format-time", [Concept::datetime(pinned()), text("%Q")]),
+        &Concept::call("time-format", [Concept::datetime(pinned()), text("%Q")]),
     );
     assert!(bad_pattern.contains("strftime"), "unhelpful: {bad_pattern}");
 }
@@ -896,7 +896,7 @@ fn duration_arithmetic_and_comparison_round_trip() {
     let later = value(
         &store,
         &reg,
-        &Concept::call("add-duration", [at.clone(), Concept::int(3), text("days")]),
+        &Concept::call("time-add-duration", [at.clone(), Concept::int(3), text("days")]),
     );
     assert_eq!(
         later,
@@ -909,7 +909,7 @@ fn duration_arithmetic_and_comparison_round_trip() {
             &store,
             &reg,
             &Concept::call(
-                "add-duration",
+                "time-add-duration",
                 [later.clone(), Concept::int(-3), text("days")]
             )
         ),
@@ -921,7 +921,7 @@ fn duration_arithmetic_and_comparison_round_trip() {
         value(
             &store,
             &reg,
-            &Concept::call("add-duration", [at.clone(), Concept::int(90)])
+            &Concept::call("time-add-duration", [at.clone(), Concept::int(90)])
         ),
         Concept::datetime(Utc.with_ymd_and_hms(2026, 9, 3, 12, 1, 30).unwrap())
     );
@@ -947,7 +947,7 @@ fn duration_arithmetic_and_comparison_round_trip() {
         value(
             &store,
             &reg,
-            &Concept::call("before", [at.clone(), later.clone()])
+            &Concept::call("time-before", [at.clone(), later.clone()])
         ),
         Concept::bool(true)
     );
@@ -955,7 +955,7 @@ fn duration_arithmetic_and_comparison_round_trip() {
         value(
             &store,
             &reg,
-            &Concept::call("after", [at.clone(), later.clone()])
+            &Concept::call("time-after", [at.clone(), later.clone()])
         ),
         Concept::bool(false)
     );
@@ -963,13 +963,13 @@ fn duration_arithmetic_and_comparison_round_trip() {
         value(
             &store,
             &reg,
-            &Concept::call("before", [at.clone(), at.clone()])
+            &Concept::call("time-before", [at.clone(), at.clone()])
         ),
         Concept::bool(false),
         "an instant is not before itself"
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("after", [at.clone(), at])),
+        value(&store, &reg, &Concept::call("time-after", [at.clone(), at])),
         Concept::bool(false),
         "an instant is not after itself"
     );
@@ -982,7 +982,7 @@ fn a_duration_that_runs_off_the_calendar_is_an_error() {
         &store,
         &reg,
         &Concept::call(
-            "add-duration",
+            "time-add-duration",
             [
                 Concept::datetime(pinned()),
                 Concept::int(i64::MAX),
@@ -1000,7 +1000,7 @@ fn an_unknown_unit_lists_the_ones_that_work() {
         &store,
         &reg,
         &Concept::call(
-            "add-duration",
+            "time-add-duration",
             [
                 Concept::datetime(pinned()),
                 Concept::int(1),
@@ -1031,38 +1031,38 @@ fn every_native_refuses_a_wrong_typed_argument_instead_of_panicking() {
         // wrong type shows up in the limit and the head name.
         // exists answers for any concept, a hole included, so the only way to
         // misuse it is arity.
-        Concept::call("exists", [Concept::hole(0), Concept::hole(1)]),
-        Concept::call("assert", [Concept::hole(0)]),
-        Concept::call("retract-claim", [Concept::hole(0), Concept::hole(1)]),
-        Concept::call("recall", [Concept::hole(0)]),
-        Concept::call("recall", [owns("greg", "dog"), text("lots")]),
-        Concept::call("recall-about", [Concept::named("greg"), text("lots")]),
-        Concept::call("recall-by-head", [Concept::int(7)]),
-        Concept::call("surface-of", [Concept::int(7)]),
-        Concept::call("count-recalled", [Concept::hole(0)]),
+        Concept::call("store-exists", [Concept::hole(0), Concept::hole(1)]),
+        Concept::call("store-assert", [Concept::hole(0)]),
+        Concept::call("store-retract-claim", [Concept::hole(0), Concept::hole(1)]),
+        Concept::call("store-recall", [Concept::hole(0)]),
+        Concept::call("store-recall", [owns("greg", "dog"), text("lots")]),
+        Concept::call("store-recall-about", [Concept::named("greg"), text("lots")]),
+        Concept::call("store-recall-by-head", [Concept::int(7)]),
+        Concept::call("store-surface-of", [Concept::int(7)]),
+        Concept::call("store-count-recalled", [Concept::hole(0)]),
         // describe takes any concept and answers for all of them, so the only
         // way to misuse it is arity, which the evaluator checks.
-        Concept::call("describe", [Concept::named("greg"), Concept::named("greg")]),
+        Concept::call("store-describe", [Concept::named("greg"), Concept::named("greg")]),
         // JSON
-        Concept::call("parse-json", [Concept::int(1)]),
-        Concept::call("to-json", [wrong.clone()]),
-        Concept::call("field", [Concept::int(1), text("a")]),
-        Concept::call("field", [doc.clone(), Concept::int(1)]),
-        Concept::call("pluck", [doc.clone(), text("a")]),
-        Concept::call("has-field", [Concept::int(1), text("a")]),
+        Concept::call("json-parse", [Concept::int(1)]),
+        Concept::call("json-to-json", [wrong.clone()]),
+        Concept::call("json-field", [Concept::int(1), text("a")]),
+        Concept::call("json-field", [doc.clone(), Concept::int(1)]),
+        Concept::call("json-pluck", [doc.clone(), text("a")]),
+        Concept::call("json-has-field", [Concept::int(1), text("a")]),
         Concept::call("json-keys", [json("[1]")]),
         Concept::call("json-length", [json("3")]),
         Concept::call("json-type", [text("not json")]),
         // Time
-        Concept::call("timestamp", [wrong.clone()]),
-        Concept::call("timestamp", [at.clone(), Concept::int(1)]),
-        Concept::call("format-time", [wrong.clone()]),
-        Concept::call("parse-time", [Concept::int(1)]),
-        Concept::call("add-duration", [at.clone(), text("three")]),
-        Concept::call("add-duration", [wrong.clone(), Concept::int(1)]),
+        Concept::call("time-timestamp", [wrong.clone()]),
+        Concept::call("time-timestamp", [at.clone(), Concept::int(1)]),
+        Concept::call("time-format", [wrong.clone()]),
+        Concept::call("time-parse", [Concept::int(1)]),
+        Concept::call("time-add-duration", [at.clone(), text("three")]),
+        Concept::call("time-add-duration", [wrong.clone(), Concept::int(1)]),
         Concept::call("time-diff", [at.clone(), wrong.clone()]),
-        Concept::call("before", [at.clone(), wrong.clone()]),
-        Concept::call("after", [at, wrong]),
+        Concept::call("time-before", [at.clone(), wrong.clone()]),
+        Concept::call("time-after", [at, wrong]),
     ];
 
     for case in cases {
@@ -1077,7 +1077,7 @@ fn every_native_refuses_a_wrong_typed_argument_instead_of_panicking() {
 #[test]
 fn now_takes_no_arguments() {
     let (store, reg) = brain();
-    let outcome = run(&store, &reg, &Concept::call("now", [Concept::int(1)]));
+    let outcome = run(&store, &reg, &Concept::call("time-now", [Concept::int(1)]));
     assert!(!outcome.is_value(), "now accepted an argument: {outcome:?}");
 }
 
@@ -1088,6 +1088,6 @@ fn ground_text_still_reaches_the_natives_that_want_it() {
     let (store, reg) = brain();
     let ground = Concept::ground(Ground::text("owns"));
     seed_facts(&store, &reg);
-    let found = value(&store, &reg, &Concept::call("recall-by-head", [ground]));
+    let found = value(&store, &reg, &Concept::call("store-recall-by-head", [ground]));
     assert_eq!(items(&found).len(), 4);
 }

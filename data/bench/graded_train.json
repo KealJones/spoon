@@ -15,7 +15,7 @@
   {
    "say": "does kubernetes begin with ku",
    "expect": "true",
-   "category": "starts-with"
+   "category": "text-starts-with"
   },
   {
    "say": "one more whats 119 times 67",
@@ -25,12 +25,12 @@
   {
    "say": "make realization uppercase",
    "expect": "\"REALIZATION\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "what is the minimum of 52, 24, 35",
    "expect": "24",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "how long is the word science",
@@ -40,7 +40,7 @@
   {
    "say": "make COMMITTEE lowercase",
    "expect": "\"committee\"",
-   "category": "lower"
+   "category": "text-lower"
   },
   {
    "say": "what is the remainder of 64 divided by 7",
@@ -60,7 +60,7 @@
   {
    "say": "make CONCEPT lowercase",
    "expect": "\"concept\"",
-   "category": "lower"
+   "category": "text-lower"
   },
   {
    "say": "um how many o characters in possession real quick",
@@ -70,17 +70,17 @@
   {
    "say": "how many numbers are in 58, 53, 9, 55, 7, 34",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "total of 13, 21, 8",
    "expect": "42",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "max of 11, 42, 12, 47, 41",
    "expect": "47",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "can you work out 45 minus 172 for me",
@@ -90,7 +90,7 @@
   {
    "say": "what are the unique values in 7, 3, 5, 9, 1, 2",
    "expect": "list<7, 3, 5, 9, 1, 2>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "is 16 negative",
@@ -105,12 +105,12 @@
   {
    "say": "strip the whitespace from \"  science  \"",
    "expect": "\"science\"",
-   "category": "trim"
+   "category": "text-trim"
   },
   {
    "say": "sort these numbers: 16, 33, 35, 25",
    "expect": "list<16, 25, 33, 35>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "is -34 zero",
@@ -130,7 +130,7 @@
   {
    "say": "what is the biggest of 10, 30, 2",
    "expect": "30",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "lol ok how many o characters in keyboard",
@@ -145,7 +145,7 @@
   {
    "say": "first 4 characters of committee",
    "expect": "\"comm\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "is 60 even?",
@@ -155,7 +155,7 @@
   {
    "say": "break realization,banana,recommend apart at the commas",
    "expect": "list<\"realization\", \"banana\", \"recommend\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "lol ok reverse science real quick",
@@ -180,12 +180,12 @@
   {
    "say": "remove the duplicates from 6, 2, 8, 8, 1, 4",
    "expect": "list<6, 2, 8, 1, 4>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "replace \"c\" with \"z\" in coffee",
    "expect": "\"zoffee\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "whats 34 minus 30?",
@@ -200,7 +200,7 @@
   {
    "say": "lowercase KUBERNETES",
    "expect": "\"kubernetes\"",
-   "category": "lower"
+   "category": "text-lower"
   },
   {
    "say": "so like how many u characters in kubernetes real quick",
@@ -215,7 +215,7 @@
   {
    "say": "add up 45, 12, 18, 20, 58",
    "expect": "153",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "is 6 zero",
@@ -250,7 +250,7 @@
   {
    "say": "sort 39, 6, 33, 30, 8",
    "expect": "list<6, 8, 30, 33, 39>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "sorry whats 4 times 24",
@@ -275,7 +275,7 @@
   {
    "say": "add up 24, 50, 57, 31",
    "expect": "162",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "is 27 bigger than 3",
@@ -290,7 +290,7 @@
   {
    "say": "what is the minimum of 37, 9, 28, 30, 44, 57",
    "expect": "9",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "hmm whats 49 minus 86",
@@ -330,12 +330,12 @@
   {
    "say": "what is the product of 30, 35, 24, 9",
    "expect": "226800",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "reverse concept",
    "expect": "\"tpecnoc\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "ok wait reverse kubernetes",
@@ -370,12 +370,12 @@
   {
    "say": "remove the duplicates from 6, 7, 1, 5, 5, 3",
    "expect": "list<6, 7, 1, 5, 3>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "what is the biggest of 47, 38, 35, 25",
    "expect": "47",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "ok so whats 44 times 21",
@@ -390,7 +390,7 @@
   {
    "say": "how many numbers are in 53, 35, 39, 54",
    "expect": "4",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "18 to the power of 2",
@@ -415,7 +415,7 @@
   {
    "say": "replace \"s\" with \"z\" in spoon",
    "expect": "\"zpoon\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "how many times does the letter e appear in possession",
@@ -430,7 +430,7 @@
   {
    "say": "what are the unique values in 7, 4, 5, 6, 1, 9",
    "expect": "list<7, 4, 5, 6, 1, 9>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "whats 89 plus 72. scratch that, 89 plus 24",
@@ -440,12 +440,12 @@
   {
    "say": "what is the sum of 50, 32, 43, 39",
    "expect": "164",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "break recommend,kubernetes,science apart at the commas",
    "expect": "list<\"recommend\", \"kubernetes\", \"science\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "one more whats 174 plus 10 thanks",
@@ -455,22 +455,22 @@
   {
    "say": "count of 12, 40, 19",
    "expect": "3",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "what are the unique values in 6, 2, 6, 9, 9, 5",
    "expect": "list<6, 2, 9, 5>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "list the numbers 1 through 4",
    "expect": "list<1, 2, 3, 4>",
-   "category": "range"
+   "category": "list-range"
   },
   {
    "say": "what is the first of 27, 23, 37, 27",
    "expect": "27",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "reverse the list 17, 24, 2, 18, 36",
@@ -490,12 +490,12 @@
   {
    "say": "spell possession backwards",
    "expect": "\"noissessop\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "count of 49, 12, 56, 9, 27",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "is 3 bigger than 8",
@@ -505,7 +505,7 @@
   {
    "say": "what is the first of 31, 32, 22, 9",
    "expect": "31",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "reverse science sorry i meant realization",
@@ -520,12 +520,12 @@
   {
    "say": "how many numbers are in 44, 13, 43, 27, 4",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "what is the minimum of 51, 6, 35, 11, 7",
    "expect": "6",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "quick one how many o characters in bookkeeper lol",
@@ -535,7 +535,7 @@
   {
    "say": "does kubernetes start with k",
    "expect": "true",
-   "category": "starts-with"
+   "category": "text-starts-with"
   },
   {
    "say": "ok so reverse spoon",
@@ -555,7 +555,7 @@
   {
    "say": "sort these numbers: 28, 16, 22",
    "expect": "list<16, 22, 28>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "how many times does \"c\" appear in committee",
@@ -575,27 +575,27 @@
   {
    "say": "what is the minimum of 20, 52, 31, 25, 20, 41",
    "expect": "20",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "strip the whitespace from \"  realization  \"",
    "expect": "\"realization\"",
-   "category": "trim"
+   "category": "text-trim"
   },
   {
    "say": "what is the product of 13, 6, 6, 15",
    "expect": "7020",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "what is the product of 19, 21, 29, 30",
    "expect": "347130",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "how many numbers are in 50, 32, 43, 39",
    "expect": "4",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "hey whats 168 times 99 if you can",
@@ -625,7 +625,7 @@
   {
    "say": "max of 37, 9, 28, 30, 44, 57",
    "expect": "57",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "alright how many r characters in kubernetes if you can",
@@ -650,7 +650,7 @@
   {
    "say": "the first 3 letters of kubernetes",
    "expect": "\"kub\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "33 + 189",
@@ -670,17 +670,17 @@
   {
    "say": "count of 39, 60, 36, 52",
    "expect": "4",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "max of 46, 27, 50, 46, 24, 35",
    "expect": "50",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "the first 5 letters of committee",
    "expect": "\"commi\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "is 6 bigger than 17",
@@ -695,12 +695,12 @@
   {
    "say": "what is the biggest of 18, 40, 1, 55, 13",
    "expect": "55",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "what is the product of 33, 28, 13, 1",
    "expect": "12012",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "ok so whats 184 minus 16",
@@ -715,7 +715,7 @@
   {
    "say": "add up 42, 46, 57, 46",
    "expect": "191",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "hey quick one, 276 minus 25",
@@ -730,12 +730,12 @@
   {
    "say": "first item in 29, 8, 2, 26",
    "expect": "29",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "what are the unique values in 1, 7, 4, 7, 8, 1",
    "expect": "list<1, 7, 4, 8>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "is 4 bigger than 22",
@@ -745,7 +745,7 @@
   {
    "say": "uppercase kubernetes",
    "expect": "\"KUBERNETES\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "is 97 even?",
@@ -765,7 +765,7 @@
   {
    "say": "is eal in realization?",
    "expect": "true",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "quick one reverse possession",
@@ -780,12 +780,12 @@
   {
    "say": "swap every s in spoon for z",
    "expect": "\"zpoon\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "split hello,kubernetes,keyboard on commas",
    "expect": "list<\"hello\", \"kubernetes\", \"keyboard\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "whats 30 times 7?",
@@ -795,17 +795,17 @@
   {
    "say": "what is the minimum of 10, 18, 49",
    "expect": "10",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "shout banana",
    "expect": "\"BANANA\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "smallest of 36, 36, 46, 25, 9, 17",
    "expect": "9",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "what is 69 plus 50, no wait, 69 plus 35",
@@ -820,7 +820,7 @@
   {
    "say": "trim the spaces off \"  strawberry  \"",
    "expect": "\"strawberry\"",
-   "category": "trim"
+   "category": "text-trim"
   },
   {
    "say": "divide 45 by 3",
@@ -840,7 +840,7 @@
   {
    "say": "what is the minimum of 9, 16, 35, 46, 22",
    "expect": "9",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "how many b characters are in bookkeeper",
@@ -875,12 +875,12 @@
   {
    "say": "what is the sum of 41, 49, 9, 29, 18, 33",
    "expect": "179",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "first 5 characters of keyboard",
    "expect": "\"keybo\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "one more whats 182 minus 68 thanks",
@@ -890,7 +890,7 @@
   {
    "say": "what is the biggest of 32, 50, 41, 58, 14, 1",
    "expect": "58",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "can you work out 67 times 10 for me",
@@ -905,7 +905,7 @@
   {
    "say": "make banana uppercase",
    "expect": "\"BANANA\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "reverse bookkeeper sorry i meant realization",
@@ -915,12 +915,12 @@
   {
    "say": "sort 38, 31, 9",
    "expect": "list<9, 31, 38>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "sort 25, 11, 24, 24, 36",
    "expect": "list<11, 24, 24, 25, 36>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "alright reverse possession lol",
@@ -930,7 +930,7 @@
   {
    "say": "make SCIENCE lowercase",
    "expect": "\"science\"",
-   "category": "lower"
+   "category": "text-lower"
   },
   {
    "say": "hey whats 179 plus 59 lol",
@@ -950,7 +950,7 @@
   {
    "say": "does banana contain zqx",
    "expect": "false",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "can you work out 376 times 107 for me",
@@ -960,12 +960,12 @@
   {
    "say": "does recommend contain eco",
    "expect": "true",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "what is the sum of 39, 3, 58, 3, 21",
    "expect": "124",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "hey quick one, 290 plus 17",
@@ -980,7 +980,7 @@
   {
    "say": "total of 33, 31, 53, 45, 10",
    "expect": "172",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "one more whats 58 times 7",
@@ -1000,7 +1000,7 @@
   {
    "say": "what is the sum of 44, 21, 52, 59",
    "expect": "176",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "is 98 even",
@@ -1020,12 +1020,12 @@
   {
    "say": "smallest of 8, 31, 15, 19, 41, 60",
    "expect": "8",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "lowercase MISSISSIPPI",
    "expect": "\"mississippi\"",
-   "category": "lower"
+   "category": "text-lower"
   },
   {
    "say": "is 23 bigger than 24",
@@ -1035,12 +1035,12 @@
   {
    "say": "what is the biggest of 5, 23, 14",
    "expect": "23",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "what is the sum of 36, 36, 46, 25, 9, 17",
    "expect": "169",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "whats 16 plus 66?",
@@ -1050,7 +1050,7 @@
   {
    "say": "sort these numbers: 25, 30, 15",
    "expect": "list<15, 25, 30>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "is 13 bigger than 22",
@@ -1060,7 +1060,7 @@
   {
    "say": "add up 52, 57, 15, 1",
    "expect": "125",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "sorry reverse concept",
@@ -1090,27 +1090,27 @@
   {
    "say": "smallest of 5, 52, 1",
    "expect": "1",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "count of 32, 50, 41, 58, 14, 1",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "does banana end with qz",
    "expect": "false",
-   "category": "ends-with"
+   "category": "text-ends-with"
   },
   {
    "say": "count of 36, 36, 46, 25, 9, 17",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "sort 24, 8, 24, 35, 21",
    "expect": "list<8, 21, 24, 24, 35>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "one more how many i characters in science",
@@ -1130,17 +1130,17 @@
   {
    "say": "break assessment,banana,realization apart at the commas",
    "expect": "list<\"assessment\", \"banana\", \"realization\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "split banana,parallel,realization on commas",
    "expect": "list<\"banana\", \"parallel\", \"realization\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "does realization start with r",
    "expect": "true",
-   "category": "starts-with"
+   "category": "text-starts-with"
   },
   {
    "say": "sorry whats 68 times 77 if you can",
@@ -1150,12 +1150,12 @@
   {
    "say": "uppercase coffee",
    "expect": "\"COFFEE\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "smallest of 5, 7, 8, 21",
    "expect": "5",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "quick one whats 136 times 11 ?",
@@ -1170,12 +1170,12 @@
   {
    "say": "what is the minimum of 33, 8, 58, 19",
    "expect": "8",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "first item in 37, 29, 28, 17",
    "expect": "37",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "one more reverse hello lol",
@@ -1185,17 +1185,17 @@
   {
    "say": "what is the product of 3, 5, 12, 14",
    "expect": "2520",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "remove the duplicates from 5, 7, 8, 5, 4, 6",
    "expect": "list<5, 7, 8, 4, 6>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "is false or true",
    "expect": "true",
-   "category": "or"
+   "category": "logic-or"
   },
   {
    "say": "is 99 even?",
@@ -1210,7 +1210,7 @@
   {
    "say": "what is the first of 32, 10, 33, 34",
    "expect": "32",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "another one whats 60 plus 66",
@@ -1240,7 +1240,7 @@
   {
    "say": "smallest of 24, 50, 55, 20",
    "expect": "20",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "what is 48 minus 69",
@@ -1250,7 +1250,7 @@
   {
    "say": "what is the product of 12, 17, 33, 2",
    "expect": "13464",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "reverse the list 12, 32, 7, 24, 13",
@@ -1260,12 +1260,12 @@
   {
    "say": "what are the unique values in 1, 2, 4, 2, 9, 3",
    "expect": "list<1, 2, 4, 9, 3>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "sort these numbers: 4, 2, 25, 15, 21",
    "expect": "list<2, 4, 15, 21, 25>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "is -22 zero",
@@ -1275,7 +1275,7 @@
   {
    "say": "smallest of 26, 24, 46, 59, 26",
    "expect": "24",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "quick one whats 132 times 44",
@@ -1295,7 +1295,7 @@
   {
    "say": "what is the minimum of 50, 32, 43, 39",
    "expect": "32",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "ok so whats 60 minus 47 ?",
@@ -1335,12 +1335,12 @@
   {
    "say": "does recommend end with qz",
    "expect": "false",
-   "category": "ends-with"
+   "category": "text-ends-with"
   },
   {
    "say": "what is the sum of 7, 38, 57",
    "expect": "102",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "one more reverse assessment if you can",
@@ -1350,17 +1350,17 @@
   {
    "say": "remove the duplicates from 9, 8, 2, 1, 4, 8",
    "expect": "list<9, 8, 2, 1, 4>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "remove the duplicates from 9, 8, 5, 3, 7, 7",
    "expect": "list<9, 8, 5, 3, 7>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "total of 52, 34, 11, 40",
    "expect": "137",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "is 121 an even number",
@@ -1390,7 +1390,7 @@
   {
    "say": "shout parallel",
    "expect": "\"PARALLEL\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "ok wait whats 186 minus 7",
@@ -1400,7 +1400,7 @@
   {
    "say": "does science start with s",
    "expect": "true",
-   "category": "starts-with"
+   "category": "text-starts-with"
   },
   {
    "say": "whats 343 minus 59?",
@@ -1425,7 +1425,7 @@
   {
    "say": "split realization,bookkeeper,possession on commas",
    "expect": "list<\"realization\", \"bookkeeper\", \"possession\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "is 17 bigger than 27",
@@ -1435,17 +1435,17 @@
   {
    "say": "the first 2 letters of science",
    "expect": "\"sc\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "total of 26, 24, 46, 59, 26",
    "expect": "181",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "how many numbers are in 8, 40, 6, 35, 34, 23",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "is 23 bigger than 3",
@@ -1470,7 +1470,7 @@
   {
    "say": "what is the minimum of 55, 23, 2, 21, 25",
    "expect": "2",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "reverse the list 25, 23, 22",
@@ -1480,7 +1480,7 @@
   {
    "say": "total of 17, 48, 58",
    "expect": "123",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "hey quick one, 386 minus 41",
@@ -1500,7 +1500,7 @@
   {
    "say": "count of 59, 50, 43, 9, 34",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "sorry reverse science",
@@ -1515,17 +1515,17 @@
   {
    "say": "make KEYBOARD lowercase",
    "expect": "\"keyboard\"",
-   "category": "lower"
+   "category": "text-lower"
   },
   {
    "say": "what is the product of 19, 8, 24, 38",
    "expect": "138624",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "what is the sum of 60, 59, 34, 45, 50, 41",
    "expect": "289",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "ok so whats 22 plus 55",
@@ -1575,7 +1575,7 @@
   {
    "say": "count of 44, 21, 52, 59",
    "expect": "4",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "lol ok reverse banana ?",
@@ -1585,7 +1585,7 @@
   {
    "say": "count of 55, 43, 57, 50, 38, 3",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "whats 67 plus 38. scratch that, 67 plus 67",
@@ -1610,7 +1610,7 @@
   {
    "say": "what is the biggest of 15, 12, 17, 58",
    "expect": "58",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "how many o characters in kebyoard",
@@ -1640,7 +1640,7 @@
   {
    "say": "how many numbers are in 17, 12, 33, 1, 41, 42",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "another one how many e characters in recommend real quick",
@@ -1655,12 +1655,12 @@
   {
    "say": "what is the product of 20, 25, 30, 31",
    "expect": "465000",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "what is the product of 39, 26, 36, 5",
    "expect": "182520",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "what is the remainder of 84 divided by 5",
@@ -1670,7 +1670,7 @@
   {
    "say": "does kubernetes contain ube",
    "expect": "true",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "um reverse concept",
@@ -1680,7 +1680,7 @@
   {
    "say": "does possession contain oss",
    "expect": "true",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "hey whats 64 minus 25 thanks",
@@ -1700,7 +1700,7 @@
   {
    "say": "split recommend,strawberry,mississippi on commas",
    "expect": "list<\"recommend\", \"strawberry\", \"mississippi\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "hey how many n characters in spoon lol",
@@ -1735,17 +1735,17 @@
   {
    "say": "break committee,strawberry,hello apart at the commas",
    "expect": "list<\"committee\", \"strawberry\", \"hello\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "remove the duplicates from 2, 3, 2, 4, 3, 4",
    "expect": "list<2, 3, 4>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "does parallel contain ara",
    "expect": "true",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "reverse the list 2, 27, 28, 39, 12",
@@ -1815,7 +1815,7 @@
   {
    "say": "whats the largest number in 6, 24, 18",
    "expect": "24",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "hmm whats 58 plus 21 thanks",
@@ -1835,17 +1835,17 @@
   {
    "say": "put 11, 15, 14, 28 in order",
    "expect": "list<11, 14, 15, 28>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "what is the product of 13, 16, 38, 28",
    "expect": "221312",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "what is the minimum of 24, 50, 57, 31",
    "expect": "24",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "whats 205 minus 126?",
@@ -1855,7 +1855,7 @@
   {
    "say": "what are the unique values in 7, 5, 6, 3, 9, 3",
    "expect": "list<7, 5, 6, 3, 9>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "count the letter a in strawberry",
@@ -1865,7 +1865,7 @@
   {
    "say": "remove the duplicates from 7, 8, 4, 4, 5, 5",
    "expect": "list<7, 8, 4, 5>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "what is the length of concept",
@@ -1885,7 +1885,7 @@
   {
    "say": "what is the biggest of 4, 28, 34",
    "expect": "34",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "276 + 26",
@@ -1895,7 +1895,7 @@
   {
    "say": "what are the unique values in 1, 6, 7, 4, 3, 6",
    "expect": "list<1, 6, 7, 4, 3>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "how many times does \"r\" appear in keyboard",
@@ -1905,7 +1905,7 @@
   {
    "say": "split banana,recommend,mississippi on commas",
    "expect": "list<\"banana\", \"recommend\", \"mississippi\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "quick one whats 179 times 6",
@@ -1930,7 +1930,7 @@
   {
    "say": "spell hello backwards",
    "expect": "\"olleh\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "one more how many r characters in realization",
@@ -1950,7 +1950,7 @@
   {
    "say": "what is the sum of 16, 57, 5, 57, 36",
    "expect": "171",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "is -24 zero",
@@ -1970,7 +1970,7 @@
   {
    "say": "add up 7, 6, 31, 17",
    "expect": "61",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "one more whats 173 plus 2",
@@ -1980,7 +1980,7 @@
   {
    "say": "strip the whitespace from \"  concept  \"",
    "expect": "\"concept\"",
-   "category": "trim"
+   "category": "text-trim"
   },
   {
    "say": "reverse hello, no wait, reverse recommend",
@@ -1990,7 +1990,7 @@
   {
    "say": "what is parallel backwards",
    "expect": "\"lellarap\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "468 / 12",
@@ -2015,7 +2015,7 @@
   {
    "say": "whats the largest number in 58, 53, 9, 55, 7, 34",
    "expect": "58",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "reverse concept sorry i meant spoon",
@@ -2035,7 +2035,7 @@
   {
    "say": "remove the duplicates from 6, 4, 7, 2, 4, 1",
    "expect": "list<6, 4, 7, 2, 1>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "whats 241 times 116?",
@@ -2045,12 +2045,12 @@
   {
    "say": "what is the product of 9, 16, 30, 4",
    "expect": "17280",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "total of 50, 30, 6",
    "expect": "86",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "ok wait how many s characters in kubernetes lol",
@@ -2060,12 +2060,12 @@
   {
    "say": "how many numbers are in 37, 41, 21, 23",
    "expect": "4",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "first 4 characters of keyboard",
    "expect": "\"keyb\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "ok wait how many n characters in possession real quick",
@@ -2080,7 +2080,7 @@
   {
    "say": "sort 24, 17, 35, 10",
    "expect": "list<10, 17, 24, 35>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "another one whats 163 minus 71",
@@ -2100,7 +2100,7 @@
   {
    "say": "the first 3 letters of hello",
    "expect": "\"hel\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "ok so whats 30 times 86",
@@ -2125,22 +2125,22 @@
   {
    "say": "does mississippi begin with mi",
    "expect": "true",
-   "category": "starts-with"
+   "category": "text-starts-with"
   },
   {
    "say": "count of 42, 33, 45, 57, 18, 59",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "add up 52, 24, 35",
    "expect": "111",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "sort 38, 37, 40",
    "expect": "list<37, 38, 40>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "hey reverse science ?",
@@ -2155,17 +2155,17 @@
   {
    "say": "trim the spaces off \"  keyboard  \"",
    "expect": "\"keyboard\"",
-   "category": "trim"
+   "category": "text-trim"
   },
   {
    "say": "count of 30, 50, 22, 53",
    "expect": "4",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "whats the largest number in 34, 47, 20, 4, 50",
    "expect": "50",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "how many e characters in coffee",
@@ -2175,22 +2175,22 @@
   {
    "say": "put 38, 21, 36, 38 in order",
    "expect": "list<21, 36, 38, 38>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "first item in 6, 14, 16, 32",
    "expect": "6",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "count of 48, 34, 11, 44, 20",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "reverse the word bookkeeper",
    "expect": "\"repeekkoob\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "whats 272 times 163?",
@@ -2200,7 +2200,7 @@
   {
    "say": "what is the first of 7, 36, 22, 25",
    "expect": "7",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "another one whats 51 plus 71 please",
@@ -2220,7 +2220,7 @@
   {
    "say": "what are the unique values in 1, 8, 9, 3, 7, 3",
    "expect": "list<1, 8, 9, 3, 7>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "whats 48 times 83?",
@@ -2240,7 +2240,7 @@
   {
    "say": "first item in 15, 8, 3, 6",
    "expect": "15",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "alright reverse mississippi lol",
@@ -2250,22 +2250,22 @@
   {
    "say": "what is the product of 2, 8, 13, 20",
    "expect": "4160",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "swap every p in parallel for z",
    "expect": "\"zarallel\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "add up 14, 22, 44, 5",
    "expect": "85",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "count of 5, 30, 44, 40",
    "expect": "4",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "quick one whats 121 plus 81",
@@ -2280,17 +2280,17 @@
   {
    "say": "total of 17, 52, 43",
    "expect": "112",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "add up 39, 5, 45",
    "expect": "89",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "does realization end with on",
    "expect": "true",
-   "category": "ends-with"
+   "category": "text-ends-with"
   },
   {
    "say": "lol ok whats 69 plus 62",
@@ -2300,17 +2300,17 @@
   {
    "say": "count of 40, 5, 32",
    "expect": "3",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "smallest of 15, 12, 17, 58",
    "expect": "12",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "what is the biggest of 4, 60, 6, 17, 11",
    "expect": "60",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "ok wait reverse keyboard",
@@ -2330,7 +2330,7 @@
   {
    "say": "smallest of 54, 4, 46",
    "expect": "4",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "is -14 zero",
@@ -2345,17 +2345,17 @@
   {
    "say": "smallest of 26, 8, 32",
    "expect": "8",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "count of 50, 1, 3, 35, 53, 45",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "what is the product of 14, 23, 2, 32",
    "expect": "20608",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "is 41 an even number",
@@ -2380,7 +2380,7 @@
   {
    "say": "add up 40, 44, 11, 45, 48, 19",
    "expect": "207",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "alright how many l characters in hello if you can",
@@ -2400,27 +2400,27 @@
   {
    "say": "make BANANA lowercase",
    "expect": "\"banana\"",
-   "category": "lower"
+   "category": "text-lower"
   },
   {
    "say": "sort these numbers: 36, 37, 18, 19, 6",
    "expect": "list<6, 18, 19, 36, 37>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "whats the largest number in 24, 50, 55, 20",
    "expect": "55",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "add up 12, 40, 19",
    "expect": "71",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "reverse committee",
    "expect": "\"eettimmoc\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "what is 45 times 143",
@@ -2440,7 +2440,7 @@
   {
    "say": "whats the largest number in 33, 31, 53, 45, 10",
    "expect": "53",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "whats 259 minus 169?",
@@ -2460,7 +2460,7 @@
   {
    "say": "how many numbers are in 10, 59, 9, 34, 9, 38",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "ok so reverse spoon real quick",
@@ -2485,7 +2485,7 @@
   {
    "say": "does recommend begin with re",
    "expect": "true",
-   "category": "starts-with"
+   "category": "text-starts-with"
   },
   {
    "say": "reverse the list 6, 40, 40",
@@ -2500,17 +2500,17 @@
   {
    "say": "what is the biggest of 21, 33, 16",
    "expect": "33",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "first item in 19, 13, 31, 20",
    "expect": "19",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "what is the first of 20, 24, 18, 35",
    "expect": "20",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "reverse the list 12, 39, 31, 36, 25",
@@ -2520,7 +2520,7 @@
   {
    "say": "what is the minimum of 9, 1, 13, 60, 38, 14",
    "expect": "1",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "is 166 even",
@@ -2545,7 +2545,7 @@
   {
    "say": "what is the product of 17, 39, 7, 16",
    "expect": "74256",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "so like whats 18 times 32 real quick",
@@ -2560,7 +2560,7 @@
   {
    "say": "smallest of 26, 27, 45, 45, 12",
    "expect": "12",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "reverse recommend sorry i meant keyboard",
@@ -2570,7 +2570,7 @@
   {
    "say": "replace \"k\" with \"z\" in keyboard",
    "expect": "\"zeyboard\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "reverse recommend sorry i meant banana",
@@ -2580,12 +2580,12 @@
   {
    "say": "split recommend,concept,realization on commas",
    "expect": "list<\"recommend\", \"concept\", \"realization\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "whats the largest number in 39, 52, 19, 49",
    "expect": "52",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "can you work out 105 times 7 for me",
@@ -2605,7 +2605,7 @@
   {
    "say": "first item in 40, 21, 1, 1",
    "expect": "40",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "lol ok reverse recommend real quick",
@@ -2615,7 +2615,7 @@
   {
    "say": "trim the spaces off \"  assessment  \"",
    "expect": "\"assessment\"",
-   "category": "trim"
+   "category": "text-trim"
   },
   {
    "say": "how many times does \"a\" appear in banana",
@@ -2655,7 +2655,7 @@
   {
    "say": "break bookkeeper,science,parallel apart at the commas",
    "expect": "list<\"bookkeeper\", \"science\", \"parallel\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "whats 80 plus 57. scratch that, 80 plus 53",
@@ -2670,7 +2670,7 @@
   {
    "say": "what are the unique values in 3, 7, 1, 5, 1, 7",
    "expect": "list<3, 7, 1, 5>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "is 17 bigger than 14",
@@ -2685,12 +2685,12 @@
   {
    "say": "sort 6, 35, 28",
    "expect": "list<6, 28, 35>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "count of 45, 12, 18, 20, 58",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "what is 16 plus 43, no wait, 16 plus 13",
@@ -2705,12 +2705,12 @@
   {
    "say": "remove the duplicates from 2, 2, 9, 4, 9, 2",
    "expect": "list<2, 9, 4>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "smallest of 52, 57, 15, 1",
    "expect": "1",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "can you work out 175 minus 143 for me",
@@ -2730,7 +2730,7 @@
   {
    "say": "what is the biggest of 40, 5, 32",
    "expect": "40",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "what is 227 plus 43",
@@ -2745,17 +2745,17 @@
   {
    "say": "split committee,strawberry,concept on commas",
    "expect": "list<\"committee\", \"strawberry\", \"concept\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "is onc in concept?",
    "expect": "true",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "what is the biggest of 17, 52, 43",
    "expect": "52",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "ok wait reverse parallel please",
@@ -2775,12 +2775,12 @@
   {
    "say": "does hello begin with he",
    "expect": "true",
-   "category": "starts-with"
+   "category": "text-starts-with"
   },
   {
    "say": "what are the unique values in 7, 9, 8, 8, 8, 8",
    "expect": "list<7, 9, 8>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "so like reverse mississippi thanks",
@@ -2795,17 +2795,17 @@
   {
    "say": "spell coffee backwards",
    "expect": "\"eeffoc\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "how many numbers are in 52, 57, 21, 48, 3, 55",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "whats the largest number in 42, 13, 57, 15",
    "expect": "57",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "number of n letters in recommend",
@@ -2830,7 +2830,7 @@
   {
    "say": "whats the largest number in 9, 24, 51, 48",
    "expect": "51",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "is 12 bigger than 15",
@@ -2840,7 +2840,7 @@
   {
    "say": "add up 39, 52, 19, 49",
    "expect": "159",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "is 186 even",
@@ -2855,7 +2855,7 @@
   {
    "say": "does concept contain zqx",
    "expect": "false",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "what is 244 plus 33",
@@ -2865,12 +2865,12 @@
   {
    "say": "sort 5, 27, 1, 14, 36",
    "expect": "list<1, 5, 14, 27, 36>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "what is the minimum of 39, 60, 36, 52",
    "expect": "36",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "is 13 bigger than 28",
@@ -2880,17 +2880,17 @@
   {
    "say": "the numbers from 1 to 9",
    "expect": "list<1, 2, 3, 4, 5, 6, 7, 8, 9>",
-   "category": "range"
+   "category": "list-range"
   },
   {
    "say": "is ara in parallel?",
    "expect": "true",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "sort 38, 22, 11, 22",
    "expect": "list<11, 22, 22, 38>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "can you work out 246 plus 47 for me",
@@ -2900,7 +2900,7 @@
   {
    "say": "what is strawberry backwards",
    "expect": "\"yrrebwarts\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "reverse the list 2, 12, 38, 3, 5",
@@ -2915,12 +2915,12 @@
   {
    "say": "whats the largest number in 5, 30, 44, 40",
    "expect": "44",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "whats the largest number in 50, 30, 6",
    "expect": "50",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "another one whats 9 minus 30 please",
@@ -2945,7 +2945,7 @@
   {
    "say": "does spoon start with s",
    "expect": "true",
-   "category": "starts-with"
+   "category": "text-starts-with"
   },
   {
    "say": "is -24 negative",
@@ -2955,7 +2955,7 @@
   {
    "say": "does hello contain ell",
    "expect": "true",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "75 mod 3",
@@ -2965,7 +2965,7 @@
   {
    "say": "put 35, 29, 24 in order",
    "expect": "list<24, 29, 35>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "hmm whats 185 times 45 lol",
@@ -2980,12 +2980,12 @@
   {
    "say": "what is the product of 26, 10, 20, 27",
    "expect": "140400",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "what is the minimum of 44, 21, 52, 59",
    "expect": "21",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "how many letters in assessment",
@@ -3005,7 +3005,7 @@
   {
    "say": "whats the largest number in 50, 1, 3, 35, 53, 45",
    "expect": "53",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "so like whats 134 plus 3 ?",
@@ -3030,7 +3030,7 @@
   {
    "say": "count of 52, 34, 11, 40",
    "expect": "4",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "what is 67 plus 42, no wait, 67 plus 66",
@@ -3045,7 +3045,7 @@
   {
    "say": "what is the first of 3, 5, 12, 14",
    "expect": "3",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "whats 151 plus 130?",
@@ -3060,12 +3060,12 @@
   {
    "say": "what is the product of 29, 8, 2, 26",
    "expect": "12064",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "count of 24, 50, 57, 31",
    "expect": "4",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "what is 313 plus 20",
@@ -3100,12 +3100,12 @@
   {
    "say": "put 37, 1, 33, 27 in order",
    "expect": "list<1, 27, 33, 37>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "total of 20, 52, 31, 25, 20, 41",
    "expect": "189",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "whats 58 plus 86. scratch that, 58 plus 11",
@@ -3130,7 +3130,7 @@
   {
    "say": "what is the minimum of 9, 24, 51, 48",
    "expect": "9",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "quick one reverse spoon ?",
@@ -3205,12 +3205,12 @@
   {
    "say": "max of 21, 12, 52, 31, 45, 2",
    "expect": "52",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "whats the largest number in 2, 52, 33, 18",
    "expect": "52",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "what is the remainder of 68 divided by 4",
@@ -3220,12 +3220,12 @@
   {
    "say": "what is the minimum of 40, 44, 11, 45, 48, 19",
    "expect": "11",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "what is the product of 32, 3, 31, 14",
    "expect": "41664",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "reverse the list 19, 18, 20, 6, 14",
@@ -3245,12 +3245,12 @@
   {
    "say": "smallest of 30, 21, 51, 15",
    "expect": "15",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "lowercase CONCEPT",
    "expect": "\"concept\"",
-   "category": "lower"
+   "category": "text-lower"
   },
   {
    "say": "whats 113 minus 93?",
@@ -3260,22 +3260,22 @@
   {
    "say": "what is the minimum of 45, 57, 31, 39, 10, 8",
    "expect": "8",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "break parallel,strawberry,possession apart at the commas",
    "expect": "list<\"parallel\", \"strawberry\", \"possession\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "what are the unique values in 4, 8, 6, 4, 6, 8",
    "expect": "list<4, 8, 6>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "spell strawberry backwards",
    "expect": "\"yrrebwarts\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "um whats 7 plus 13",
@@ -3285,7 +3285,7 @@
   {
    "say": "first 4 characters of hello",
    "expect": "\"hell\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "40 to the power of 2",
@@ -3295,7 +3295,7 @@
   {
    "say": "spell keyboard backwards",
    "expect": "\"draobyek\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "what is 48 divided by 6",
@@ -3305,7 +3305,7 @@
   {
    "say": "split keyboard,assessment,possession on commas",
    "expect": "list<\"keyboard\", \"assessment\", \"possession\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "what is 330 divided by 10",
@@ -3330,12 +3330,12 @@
   {
    "say": "remove the duplicates from 3, 8, 3, 9, 5, 6",
    "expect": "list<3, 8, 9, 5, 6>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "the first 4 letters of strawberry",
    "expect": "\"stra\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "number of c letters in science",
@@ -3360,7 +3360,7 @@
   {
    "say": "break banana,science,assessment apart at the commas",
    "expect": "list<\"banana\", \"science\", \"assessment\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "lol ok whats 24 minus 48 lol",
@@ -3370,12 +3370,12 @@
   {
    "say": "what is the product of 31, 32, 22, 9",
    "expect": "196416",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "does assessment end with nt",
    "expect": "true",
-   "category": "ends-with"
+   "category": "text-ends-with"
   },
   {
    "say": "reverse strawberry sorry i meant recommend",
@@ -3395,12 +3395,12 @@
   {
    "say": "total of 59, 32, 7, 56",
    "expect": "154",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "break assessment,possession,mississippi apart at the commas",
    "expect": "list<\"assessment\", \"possession\", \"mississippi\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "is -33 negative",
@@ -3420,22 +3420,22 @@
   {
    "say": "shout strawberry",
    "expect": "\"STRAWBERRY\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "break realization,committee,bookkeeper apart at the commas",
    "expect": "list<\"realization\", \"committee\", \"bookkeeper\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "what is the sum of 26, 2, 44",
    "expect": "72",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "smallest of 39, 5, 45",
    "expect": "5",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "quick one reverse possession ?",
@@ -3445,7 +3445,7 @@
   {
    "say": "swap every b in banana for z",
    "expect": "\"zanana\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "one more whats 108 times 86 real quick",
@@ -3455,7 +3455,7 @@
   {
    "say": "add up 9, 51, 56, 47, 22",
    "expect": "185",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "is 22 bigger than 2",
@@ -3470,7 +3470,7 @@
   {
    "say": "count of 2, 52, 33, 18",
    "expect": "4",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "what is 27 to the power of 2",
@@ -3480,7 +3480,7 @@
   {
    "say": "first 2 characters of mississippi",
    "expect": "\"mi\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "hmm reverse possession",
@@ -3505,7 +3505,7 @@
   {
    "say": "does recommend start with r",
    "expect": "true",
-   "category": "starts-with"
+   "category": "text-starts-with"
   },
   {
    "say": "can you work out 64 minus 102 for me",
@@ -3520,7 +3520,7 @@
   {
    "say": "is ube in kubernetes?",
    "expect": "true",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "what is 40 plus 39, no wait, 40 plus 50",
@@ -3540,17 +3540,17 @@
   {
    "say": "what is the first of 17, 1, 15, 22",
    "expect": "17",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "uppercase strawberry",
    "expect": "\"STRAWBERRY\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "how many numbers are in 43, 35, 40",
    "expect": "3",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "the even numbers from 1 to 10",
@@ -3565,7 +3565,7 @@
   {
    "say": "max of 16, 57, 5, 57, 36",
    "expect": "57",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "what is 61 plus 28, no wait, 61 plus 38",
@@ -3585,22 +3585,22 @@
   {
    "say": "count of 26, 27, 45, 45, 12",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "what is the minimum of 19, 29, 9",
    "expect": "9",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "sort 20, 15, 22, 22, 31",
    "expect": "list<15, 20, 22, 22, 31>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "give me 1 to 7",
    "expect": "list<1, 2, 3, 4, 5, 6, 7>",
-   "category": "range"
+   "category": "list-range"
   },
   {
    "say": "another one whats 95 plus 30 ?",
@@ -3615,17 +3615,17 @@
   {
    "say": "shout spoon",
    "expect": "\"SPOON\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "first 4 characters of banana",
    "expect": "\"bana\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "is true and true",
    "expect": "true",
-   "category": "and"
+   "category": "logic-and"
   },
   {
    "say": "how many times does the letter e appear in strawberry",
@@ -3645,12 +3645,12 @@
   {
    "say": "remove the duplicates from 7, 2, 4, 5, 8, 5",
    "expect": "list<7, 2, 4, 5, 8>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "how many numbers are in 37, 9, 28, 30, 44, 57",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "177 * 74",
@@ -3670,12 +3670,12 @@
   {
    "say": "what is the minimum of 38, 8, 26",
    "expect": "8",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "what is the product of 19, 13, 31, 20",
    "expect": "153140",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "reverse the list 24, 1, 28",
@@ -3685,12 +3685,12 @@
   {
    "say": "sort these numbers: 8, 19, 7, 13, 38",
    "expect": "list<7, 8, 13, 19, 38>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "first item in 22, 17, 25, 21",
    "expect": "22",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "hey whats 193 plus 97 please",
@@ -3710,7 +3710,7 @@
   {
    "say": "what is committee backwards",
    "expect": "\"eettimmoc\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "reverse bookkeeper sorry i meant assessment",
@@ -3730,7 +3730,7 @@
   {
    "say": "replace every c in coffee with z",
    "expect": "\"zoffee\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "what is the remainder of 40 divided by 7",
@@ -3740,7 +3740,7 @@
   {
    "say": "does science end with qz",
    "expect": "false",
-   "category": "ends-with"
+   "category": "text-ends-with"
   },
   {
    "say": "another one whats 172 minus 19",
@@ -3780,17 +3780,17 @@
   {
    "say": "sort 11, 23, 18",
    "expect": "list<11, 18, 23>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "break realization,recommend,banana apart at the commas",
    "expect": "list<\"realization\", \"recommend\", \"banana\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "put 17, 29, 6 in order",
    "expect": "list<6, 17, 29>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "180 / 10",
@@ -3810,12 +3810,12 @@
   {
    "say": "total of 53, 20, 17, 33",
    "expect": "123",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "the first 5 letters of banana",
    "expect": "\"banan\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "22 to the power of 3",
@@ -3830,7 +3830,7 @@
   {
    "say": "total of 37, 9, 28, 30, 44, 57",
    "expect": "205",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "how many e characters are in science",
@@ -3845,7 +3845,7 @@
   {
    "say": "what is the product of 35, 11, 29, 7",
    "expect": "78155",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "reverse mississippi. actually no, spoon",
@@ -3865,17 +3865,17 @@
   {
    "say": "what is the biggest of 49, 52, 28, 46, 22, 24",
    "expect": "52",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "first item in 10, 7, 13, 36",
    "expect": "10",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "sort 38, 35, 12, 1, 37",
    "expect": "list<1, 12, 35, 37, 38>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "reverse the list 7, 33, 34",
@@ -3900,17 +3900,17 @@
   {
    "say": "split realization,keyboard,bookkeeper on commas",
    "expect": "list<\"realization\", \"keyboard\", \"bookkeeper\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "count of 47, 38, 35, 25",
    "expect": "4",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "put 18, 29, 33 in order",
    "expect": "list<18, 29, 33>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "another one whats 148 minus 29 ?",
@@ -3925,7 +3925,7 @@
   {
    "say": "total of 50, 5, 7, 43, 5",
    "expect": "110",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "reverse science, no wait, reverse hello",
@@ -3940,7 +3940,7 @@
   {
    "say": "split mississippi,coffee,science on commas",
    "expect": "list<\"mississippi\", \"coffee\", \"science\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "quick one reverse spoon",
@@ -3955,17 +3955,17 @@
   {
    "say": "make mississippi uppercase",
    "expect": "\"MISSISSIPPI\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "sort 21, 22, 39",
    "expect": "list<21, 22, 39>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "replace every k in keyboard with z",
    "expect": "\"zeyboard\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "ok wait how many m characters in mississippi if you can",
@@ -3980,7 +3980,7 @@
   {
    "say": "what is the minimum of 49, 5, 37, 47, 47, 4",
    "expect": "4",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "is 24 bigger than 24",
@@ -3995,7 +3995,7 @@
   {
    "say": "replace \"h\" with \"z\" in hello",
    "expect": "\"zello\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "what is 21 divided by 7",
@@ -4030,17 +4030,17 @@
   {
    "say": "how many numbers are in 24, 50, 55, 20",
    "expect": "4",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "put 32, 37, 29 in order",
    "expect": "list<29, 32, 37>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "sort these numbers: 25, 3, 34",
    "expect": "list<3, 25, 34>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "can you work out 3 times 127 for me",
@@ -4060,7 +4060,7 @@
   {
    "say": "sort these numbers: 10, 10, 8",
    "expect": "list<8, 10, 10>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "45 mod 4",
@@ -4075,7 +4075,7 @@
   {
    "say": "split keyboard,parallel,committee on commas",
    "expect": "list<\"keyboard\", \"parallel\", \"committee\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "how many d characters in recmomend",
@@ -4085,7 +4085,7 @@
   {
    "say": "split mississippi,possession,science on commas",
    "expect": "list<\"mississippi\", \"possession\", \"science\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "hey quick one, 45 minus 151",
@@ -4095,12 +4095,12 @@
   {
    "say": "total of 29, 16, 32",
    "expect": "77",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "max of 15, 33, 19",
    "expect": "33",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "28 mod 5",
@@ -4115,7 +4115,7 @@
   {
    "say": "what is the minimum of 46, 27, 7, 4, 28",
    "expect": "4",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "another one reverse concept real quick",
@@ -4135,12 +4135,12 @@
   {
    "say": "sort 27, 28, 5, 10",
    "expect": "list<5, 10, 27, 28>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "add up 40, 27, 42, 5, 31, 38",
    "expect": "183",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "171 * 67",
@@ -4150,7 +4150,7 @@
   {
    "say": "split bookkeeper,strawberry,mississippi on commas",
    "expect": "list<\"bookkeeper\", \"strawberry\", \"mississippi\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "lol ok how many e characters in science lol",
@@ -4165,7 +4165,7 @@
   {
    "say": "first item in 20, 21, 7, 19",
    "expect": "20",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "can you work out 256 plus 150 for me",
@@ -4185,7 +4185,7 @@
   {
    "say": "count of 4, 5, 19, 1",
    "expect": "4",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "reverse possession, no wait, reverse science",
@@ -4195,7 +4195,7 @@
   {
    "say": "replace \"k\" with \"z\" in kubernetes",
    "expect": "\"zubernetes\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "what is 40 plus 57, no wait, 40 plus 68",
@@ -4205,7 +4205,7 @@
   {
    "say": "first 2 characters of strawberry",
    "expect": "\"st\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "hey whats 109 times 91 if you can",
@@ -4230,17 +4230,17 @@
   {
    "say": "sort these numbers: 7, 33, 28, 11",
    "expect": "list<7, 11, 28, 33>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "uppercase mississippi",
    "expect": "\"MISSISSIPPI\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "what is the first of 33, 10, 32, 8",
    "expect": "33",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "81 mod 3",
@@ -4270,7 +4270,7 @@
   {
    "say": "break spoon,committee,recommend apart at the commas",
    "expect": "list<\"spoon\", \"committee\", \"recommend\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "is 24 zero",
@@ -4285,7 +4285,7 @@
   {
    "say": "what is the minimum of 16, 57, 5, 57, 36",
    "expect": "5",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "alright how many b characters in banana please",
@@ -4295,7 +4295,7 @@
   {
    "say": "what is the biggest of 40, 44, 11, 45, 48, 19",
    "expect": "48",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "what is 111 plus 11",
@@ -4315,7 +4315,7 @@
   {
    "say": "replace \"p\" with \"z\" in possession",
    "expect": "\"zossession\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "how many times does the letter o appear in coffee",
@@ -4335,12 +4335,12 @@
   {
    "say": "add up 56, 1, 4, 7, 43",
    "expect": "111",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "sort these numbers: 13, 17, 11, 34, 8",
    "expect": "list<8, 11, 13, 17, 34>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "count the letter l in parallel",
@@ -4350,12 +4350,12 @@
   {
    "say": "how many numbers are in 60, 59, 34, 45, 50, 41",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "the first 2 letters of realization",
    "expect": "\"re\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "one more how many p characters in possession",
@@ -4370,12 +4370,12 @@
   {
    "say": "what is the product of 5, 19, 27, 19",
    "expect": "48735",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "does keyboard contain zqx",
    "expect": "false",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "how long is the word hello",
@@ -4395,7 +4395,7 @@
   {
    "say": "does concept end with pt",
    "expect": "true",
-   "category": "ends-with"
+   "category": "text-ends-with"
   },
   {
    "say": "how many times does the letter c appear in concept",
@@ -4410,22 +4410,22 @@
   {
    "say": "what is the product of 40, 21, 1, 1",
    "expect": "840",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "whats the largest number in 49, 59, 57, 1, 46",
    "expect": "59",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "trim the spaces off \"  concept  \"",
    "expect": "\"concept\"",
-   "category": "trim"
+   "category": "text-trim"
   },
   {
    "say": "break spoon,committee,kubernetes apart at the commas",
    "expect": "list<\"spoon\", \"committee\", \"kubernetes\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "another one whats 113 minus 34 ?",
@@ -4440,7 +4440,7 @@
   {
    "say": "first 3 characters of keyboard",
    "expect": "\"key\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "how many p characters in possesison",
@@ -4485,12 +4485,12 @@
   {
    "say": "whats the largest number in 10, 18, 49",
    "expect": "49",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "how many numbers are in 55, 23, 2, 21, 25",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "whats 150 plus 109?",
@@ -4500,7 +4500,7 @@
   {
    "say": "sort these numbers: 15, 26, 1, 11",
    "expect": "list<1, 11, 15, 26>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "hey quick one, 198 times 107",
@@ -4515,7 +4515,7 @@
   {
    "say": "sort 2, 27, 28, 39, 12",
    "expect": "list<2, 12, 27, 28, 39>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "hmm whats 84 times 71",
@@ -4525,7 +4525,7 @@
   {
    "say": "split committee,parallel,mississippi on commas",
    "expect": "list<\"committee\", \"parallel\", \"mississippi\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "189 / 7",
@@ -4540,7 +4540,7 @@
   {
    "say": "what is the minimum of 44, 13, 43, 27, 4",
    "expect": "4",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "whats 24 minus 136?",
@@ -4555,7 +4555,7 @@
   {
    "say": "does banana start with b",
    "expect": "true",
-   "category": "starts-with"
+   "category": "text-starts-with"
   },
   {
    "say": "ok so whats 183 minus 76 thanks",
@@ -4580,7 +4580,7 @@
   {
    "say": "first 3 characters of kubernetes",
    "expect": "\"kub\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "33 mod 9",
@@ -4615,7 +4615,7 @@
   {
    "say": "add up 49, 59, 57, 1, 46",
    "expect": "212",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "what is 359 times 197",
@@ -4635,17 +4635,17 @@
   {
    "say": "replace every s in spoon with z",
    "expect": "\"zpoon\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "shout coffee",
    "expect": "\"COFFEE\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "swap every r in recommend for z",
    "expect": "\"zecommend\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "raise 28 to the 2",
@@ -4660,7 +4660,7 @@
   {
    "say": "how many numbers are in 11, 6, 38, 53, 29, 51",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "what is 270 minus 132",
@@ -4675,22 +4675,22 @@
   {
    "say": "sort these numbers: 18, 37, 24, 7",
    "expect": "list<7, 18, 24, 37>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "add up 8, 31, 15, 19, 41, 60",
    "expect": "174",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "what is the sum of 19, 29, 9",
    "expect": "57",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "is ell in hello?",
    "expect": "true",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "another one how many c characters in committee",
@@ -4710,7 +4710,7 @@
   {
    "say": "sort 1, 16, 23",
    "expect": "list<1, 16, 23>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "one more whats 109 plus 53 ?",
@@ -4725,17 +4725,17 @@
   {
    "say": "how many numbers are in 49, 52, 28, 46, 22, 24",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "strip the whitespace from \"  keyboard  \"",
    "expect": "\"keyboard\"",
-   "category": "trim"
+   "category": "text-trim"
   },
   {
    "say": "what are the unique values in 3, 5, 4, 2, 9, 1",
    "expect": "list<3, 5, 4, 2, 9, 1>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "number of o letters in hello",
@@ -4755,12 +4755,12 @@
   {
    "say": "count of 34, 47, 20, 4, 50",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "what is the sum of 15, 33, 19",
    "expect": "67",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "is 167 an even number",
@@ -4800,7 +4800,7 @@
   {
    "say": "sort these numbers: 24, 27, 3, 28",
    "expect": "list<3, 24, 27, 28>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "count the letter c in cfofee",
@@ -4810,7 +4810,7 @@
   {
    "say": "what are the unique values in 8, 6, 8, 9, 6, 9",
    "expect": "list<8, 6, 9>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "whats 68 plus 42. scratch that, 68 plus 31",
@@ -4825,12 +4825,12 @@
   {
    "say": "add up 30, 21, 51, 15",
    "expect": "117",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "what is the sum of 9, 1, 13, 60, 38, 14",
    "expect": "135",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "179 - 6",
@@ -4845,17 +4845,17 @@
   {
    "say": "what is the first of 3, 6, 18, 23",
    "expect": "3",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "what is the product of 34, 31, 13, 3",
    "expect": "41106",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "what is the minimum of 6, 45, 56",
    "expect": "6",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "how many a characters are in keyboard",
@@ -4880,7 +4880,7 @@
   {
    "say": "is poo in spoon?",
    "expect": "true",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "whats 33 plus 33. scratch that, 33 plus 10",
@@ -4890,7 +4890,7 @@
   {
    "say": "the first 3 letters of possession",
    "expect": "\"pos\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "um how many e characters in concept lol",
@@ -4900,22 +4900,22 @@
   {
    "say": "what is the minimum of 9, 51, 56, 47, 22",
    "expect": "9",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "how many numbers are in 5, 52, 1",
    "expect": "3",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "add up 26, 27, 45, 45, 12",
    "expect": "155",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "reverse possession",
    "expect": "\"noissessop\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "219 - 20",
@@ -4930,7 +4930,7 @@
   {
    "say": "sort 30, 35, 16",
    "expect": "list<16, 30, 35>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "what is the length of keyboard",
@@ -4955,7 +4955,7 @@
   {
    "say": "does spoon end with on",
    "expect": "true",
-   "category": "ends-with"
+   "category": "text-ends-with"
   },
   {
    "say": "how many times does the letter a appear in assessment",
@@ -4965,7 +4965,7 @@
   {
    "say": "what are the unique values in 9, 7, 1, 4, 7, 7",
    "expect": "list<9, 7, 1, 4>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "is 14 bigger than 21",
@@ -4975,7 +4975,7 @@
   {
    "say": "break kubernetes,strawberry,hello apart at the commas",
    "expect": "list<\"kubernetes\", \"strawberry\", \"hello\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "reverse kubernetes sorry i meant parallel",
@@ -4985,7 +4985,7 @@
   {
    "say": "is ana in banana?",
    "expect": "true",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "ok wait how many m characters in assessment if you can",
@@ -5030,7 +5030,7 @@
   {
    "say": "what is the minimum of 48, 34, 11, 44, 20",
    "expect": "11",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "what is the remainder of 24 divided by 7",
@@ -5040,7 +5040,7 @@
   {
    "say": "sort these numbers: 32, 8, 11",
    "expect": "list<8, 11, 32>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "another one reverse keyboard",
@@ -5070,17 +5070,17 @@
   {
    "say": "does hello start with h",
    "expect": "true",
-   "category": "starts-with"
+   "category": "text-starts-with"
   },
   {
    "say": "count of 27, 12, 22",
    "expect": "3",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "first item in 37, 15, 20, 14",
    "expect": "37",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "ok so whats 118 minus 23",
@@ -5100,12 +5100,12 @@
   {
    "say": "first 5 characters of science",
    "expect": "\"scien\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "break science,hello,strawberry apart at the commas",
    "expect": "list<\"science\", \"hello\", \"strawberry\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "can you work out 134 plus 141 for me",
@@ -5130,7 +5130,7 @@
   {
    "say": "what is the biggest of 9, 15, 41, 14, 57",
    "expect": "57",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "is 187 even?",
@@ -5145,7 +5145,7 @@
   {
    "say": "split recommend,strawberry,assessment on commas",
    "expect": "list<\"recommend\", \"strawberry\", \"assessment\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "27 to the power of 2",
@@ -5155,22 +5155,22 @@
   {
    "say": "what is the product of 4, 11, 4, 23",
    "expect": "4048",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "what is the product of 13, 37, 10, 12",
    "expect": "57720",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "whats the largest number in 56, 16, 59",
    "expect": "59",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "count of 57, 50, 9, 55, 48",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "49 - 186",
@@ -5200,27 +5200,27 @@
   {
    "say": "does mississippi end with pi",
    "expect": "true",
-   "category": "ends-with"
+   "category": "text-ends-with"
   },
   {
    "say": "remove the duplicates from 5, 8, 8, 7, 2, 7",
    "expect": "list<5, 8, 7, 2>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "remove the duplicates from 3, 8, 2, 1, 1, 3",
    "expect": "list<3, 8, 2, 1>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "does coffee end with ee",
    "expect": "true",
-   "category": "ends-with"
+   "category": "text-ends-with"
   },
   {
    "say": "smallest of 19, 54, 52, 37",
    "expect": "19",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "77 mod 3",
@@ -5230,12 +5230,12 @@
   {
    "say": "spell committee backwards",
    "expect": "\"eettimmoc\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "add up 37, 41, 21, 23",
    "expect": "122",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "55 - 23",
@@ -5245,7 +5245,7 @@
   {
    "say": "how many numbers are in 49, 41, 50, 57, 37, 49",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "how many c characters in conecpt",
@@ -5255,17 +5255,17 @@
   {
    "say": "first item in 30, 15, 39, 7",
    "expect": "30",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "add up 4, 5, 19, 1",
    "expect": "29",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "smallest of 49, 41, 50, 57, 37, 49",
    "expect": "37",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "hey quick one, 13 plus 54",
@@ -5295,7 +5295,7 @@
   {
    "say": "smallest of 42, 13, 57, 15",
    "expect": "13",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "whats 322 minus 138?",
@@ -5305,7 +5305,7 @@
   {
    "say": "count of 17, 43, 2, 59, 13",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "alright whats 12 minus 29 please",
@@ -5315,12 +5315,12 @@
   {
    "say": "strip the whitespace from \"  hello  \"",
    "expect": "\"hello\"",
-   "category": "trim"
+   "category": "text-trim"
   },
   {
    "say": "what is the minimum of 34, 23, 21",
    "expect": "21",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "whats 205 plus 14?",
@@ -5330,7 +5330,7 @@
   {
    "say": "smallest of 59, 50, 43, 9, 34",
    "expect": "9",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "divide 100 by 5",
@@ -5370,7 +5370,7 @@
   {
    "say": "the first 5 letters of science",
    "expect": "\"scien\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "another one whats 197 times 67",
@@ -5385,7 +5385,7 @@
   {
    "say": "first 3 characters of banana",
    "expect": "\"ban\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "reverse the list 23, 11, 24, 27",
@@ -5400,12 +5400,12 @@
   {
    "say": "what is the sum of 18, 40, 1, 55, 13",
    "expect": "127",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "replace every k in kubernetes with z",
    "expect": "\"zubernetes\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "308 / 11",
@@ -5450,7 +5450,7 @@
   {
    "say": "what is the first of 29, 3, 32, 37",
    "expect": "29",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "alright reverse hello",
@@ -5480,7 +5480,7 @@
   {
    "say": "first 4 characters of recommend",
    "expect": "\"reco\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "what is 16 plus 41, no wait, 16 plus 51",
@@ -5490,12 +5490,12 @@
   {
    "say": "what is assessment backwards",
    "expect": "\"tnemssessa\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "count of 24, 34, 17, 44, 53, 5",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "hey how many k characters in bookkeeper if you can",
@@ -5510,7 +5510,7 @@
   {
    "say": "is cie in science?",
    "expect": "true",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "reverse committee. actually no, keyboard",
@@ -5520,7 +5520,7 @@
   {
    "say": "smallest of 27, 12, 22",
    "expect": "12",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "reverse the list 7, 36, 32, 27, 30",
@@ -5530,7 +5530,7 @@
   {
    "say": "first item in 18, 30, 19, 36",
    "expect": "18",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "is 29 bigger than 6",
@@ -5540,7 +5540,7 @@
   {
    "say": "break kubernetes,keyboard,parallel apart at the commas",
    "expect": "list<\"kubernetes\", \"keyboard\", \"parallel\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "is 25 negative",
@@ -5570,22 +5570,22 @@
   {
    "say": "does spoon contain zqx",
    "expect": "false",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "what is the product of 7, 36, 22, 25",
    "expect": "138600",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "what is the biggest of 46, 27, 7, 4, 28",
    "expect": "46",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "add up 9, 15, 41, 14, 57",
    "expect": "136",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "divide 165 by 5",
@@ -5595,7 +5595,7 @@
   {
    "say": "what are the unique values in 2, 7, 6, 1, 7, 5",
    "expect": "list<2, 7, 6, 1, 5>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "another one how many m characters in mississippi thanks",
@@ -5605,7 +5605,7 @@
   {
    "say": "what is the product of 22, 2, 7, 19",
    "expect": "5852",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "what is 23 plus 5, no wait, 23 plus 12",
@@ -5615,7 +5615,7 @@
   {
    "say": "the first 4 letters of coffee",
    "expect": "\"coff\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "whats 83 plus 89. scratch that, 83 plus 58",
@@ -5625,7 +5625,7 @@
   {
    "say": "how many numbers are in 9, 1, 13, 60, 38, 14",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "ok so whats 84 plus 69 real quick",
@@ -5650,17 +5650,17 @@
   {
    "say": "does banana end with na",
    "expect": "true",
-   "category": "ends-with"
+   "category": "text-ends-with"
   },
   {
    "say": "what is the minimum of 56, 16, 59",
    "expect": "16",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "what is the biggest of 39, 30, 58",
    "expect": "58",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "another one whats 153 minus 78 real quick",
@@ -5675,17 +5675,17 @@
   {
    "say": "smallest of 52, 34, 11, 40",
    "expect": "11",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "total of 54, 4, 46",
    "expect": "104",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "how many numbers are in 4, 60, 6, 17, 11",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "whats 144 minus 16?",
@@ -5695,17 +5695,17 @@
   {
    "say": "what is the product of 21, 13, 28, 17",
    "expect": "129948",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "how many numbers are in 9, 16, 35, 46, 22",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "lowercase STRAWBERRY",
    "expect": "\"strawberry\"",
-   "category": "lower"
+   "category": "text-lower"
   },
   {
    "say": "whats 304 plus 121?",
@@ -5715,12 +5715,12 @@
   {
    "say": "smallest of 40, 13, 8, 26, 11",
    "expect": "8",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "does strawberry end with qz",
    "expect": "false",
-   "category": "ends-with"
+   "category": "text-ends-with"
   },
   {
    "say": "whats 163 minus 20?",
@@ -5755,7 +5755,7 @@
   {
    "say": "add up 5, 23, 14",
    "expect": "42",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "whats 33 plus 18. scratch that, 33 plus 88",
@@ -5785,7 +5785,7 @@
   {
    "say": "add up 34, 23, 21",
    "expect": "78",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "reverse mississippi sorry i meant recommend",
@@ -5810,7 +5810,7 @@
   {
    "say": "whats the largest number in 7, 44, 17, 24, 26, 21",
    "expect": "44",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "reverse coffee. actually no, hello",
@@ -5835,7 +5835,7 @@
   {
    "say": "remove the duplicates from 9, 5, 8, 1, 2, 3",
    "expect": "list<9, 5, 8, 1, 2, 3>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "quick one whats 155 plus 44",
@@ -5855,7 +5855,7 @@
   {
    "say": "what is the first of 17, 39, 7, 16",
    "expect": "17",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "how many times does \"b\" appear in strawberry",
@@ -5865,7 +5865,7 @@
   {
    "say": "add up 52, 57, 21, 48, 3, 55",
    "expect": "236",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "what is 290 divided by 10",
@@ -5875,17 +5875,17 @@
   {
    "say": "smallest of 51, 35, 23",
    "expect": "23",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "how many numbers are in 5, 35, 8, 30, 11",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "reverse the word science",
    "expect": "\"ecneics\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "count the letter o in sopon",
@@ -5895,7 +5895,7 @@
   {
    "say": "add up 14, 20, 43, 58",
    "expect": "135",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "sorry whats 147 plus 46",
@@ -5920,7 +5920,7 @@
   {
    "say": "count of 21, 12, 52, 31, 45, 2",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "reverse keyboard sorry i meant bookkeeper",
@@ -5930,12 +5930,12 @@
   {
    "say": "total of 60, 59, 40, 29",
    "expect": "188",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "swap every k in keyboard for z",
    "expect": "\"zeyboard\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "what is 46 plus 45, no wait, 46 plus 45",
@@ -5945,7 +5945,7 @@
   {
    "say": "max of 60, 59, 34, 45, 50, 41",
    "expect": "60",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "whats 17 plus 51. scratch that, 17 plus 13",
@@ -5955,12 +5955,12 @@
   {
    "say": "remove the duplicates from 1, 6, 5, 9, 4, 7",
    "expect": "list<1, 6, 5, 9, 4, 7>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "what is the minimum of 39, 3, 58, 3, 21",
    "expect": "3",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "ok wait whats 56 plus 60 real quick",
@@ -5970,7 +5970,7 @@
   {
    "say": "make KUBERNETES lowercase",
    "expect": "\"kubernetes\"",
-   "category": "lower"
+   "category": "text-lower"
   },
   {
    "say": "what is 86 plus 41, no wait, 86 plus 32",
@@ -5980,7 +5980,7 @@
   {
    "say": "how many numbers are in 16, 57, 5, 57, 36",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "so like reverse banana",
@@ -6000,7 +6000,7 @@
   {
    "say": "first item in 19, 21, 29, 30",
    "expect": "19",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "is 22 an even number",
@@ -6010,12 +6010,12 @@
   {
    "say": "what is the first of 37, 29, 18, 17",
    "expect": "37",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "whats the largest number in 9, 58, 48, 15, 24, 48",
    "expect": "58",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "what is the length of realization",
@@ -6050,12 +6050,12 @@
   {
    "say": "total of 17, 43, 2, 59, 13",
    "expect": "134",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "smallest of 2, 52, 33, 18",
    "expect": "2",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "is 86 an even number",
@@ -6065,12 +6065,12 @@
   {
    "say": "smallest of 56, 1, 4, 7, 43",
    "expect": "1",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "total of 34, 25, 30, 27",
    "expect": "116",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "um reverse science ?",
@@ -6080,7 +6080,7 @@
   {
    "say": "trim the spaces off \"  recommend  \"",
    "expect": "\"recommend\"",
-   "category": "trim"
+   "category": "text-trim"
   },
   {
    "say": "what is 2 plus 50, no wait, 2 plus 83",
@@ -6090,7 +6090,7 @@
   {
    "say": "sort 17, 24, 2, 18, 36",
    "expect": "list<2, 17, 18, 24, 36>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "um how many n characters in possession",
@@ -6100,7 +6100,7 @@
   {
    "say": "what are the unique values in 6, 6, 2, 8, 2, 3",
    "expect": "list<6, 2, 8, 3>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "lol ok how many b characters in kubernetes real quick",
@@ -6110,7 +6110,7 @@
   {
    "say": "what is the biggest of 39, 60, 36, 52",
    "expect": "60",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "hey whats 159 minus 85 lol",
@@ -6125,7 +6125,7 @@
   {
    "say": "the numbers from 1 to 8",
    "expect": "list<1, 2, 3, 4, 5, 6, 7, 8>",
-   "category": "range"
+   "category": "list-range"
   },
   {
    "say": "reverse the list 29, 36, 11, 4",
@@ -6140,7 +6140,7 @@
   {
    "say": "split committee,bookkeeper,possession on commas",
    "expect": "list<\"committee\", \"bookkeeper\", \"possession\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "hmm how many n characters in concept if you can",
@@ -6160,12 +6160,12 @@
   {
    "say": "first 4 characters of mississippi",
    "expect": "\"miss\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "make BOOKKEEPER lowercase",
    "expect": "\"bookkeeper\"",
-   "category": "lower"
+   "category": "text-lower"
   },
   {
    "say": "another one reverse science lol",
@@ -6180,7 +6180,7 @@
   {
    "say": "what is the product of 29, 40, 14, 19",
    "expect": "308560",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "hey quick one, 107 plus 129",
@@ -6220,7 +6220,7 @@
   {
    "say": "smallest of 50, 30, 6",
    "expect": "6",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "raise 17 to the 4",
@@ -6235,7 +6235,7 @@
   {
    "say": "what is the first of 38, 31, 40, 40",
    "expect": "38",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "whats 40 plus 80. scratch that, 40 plus 38",
@@ -6245,12 +6245,12 @@
   {
    "say": "what is the biggest of 40, 13, 8, 26, 11",
    "expect": "40",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "max of 19, 54, 52, 37",
    "expect": "54",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "12 mod 7",
@@ -6275,7 +6275,7 @@
   {
    "say": "what are the unique values in 3, 5, 4, 7, 4, 9",
    "expect": "list<3, 5, 4, 7, 9>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "hmm whats 85 minus 10 lol",
@@ -6290,17 +6290,17 @@
   {
    "say": "trim the spaces off \"  possession  \"",
    "expect": "\"possession\"",
-   "category": "trim"
+   "category": "text-trim"
   },
   {
    "say": "the first 3 letters of coffee",
    "expect": "\"cof\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "break possession,hello,bookkeeper apart at the commas",
    "expect": "list<\"possession\", \"hello\", \"bookkeeper\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "is 24 bigger than 11",
@@ -6315,7 +6315,7 @@
   {
    "say": "what is the minimum of 46, 27, 50, 46, 24, 35",
    "expect": "24",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "is 34 zero",
@@ -6340,7 +6340,7 @@
   {
    "say": "how many numbers are in 14, 22, 44, 5",
    "expect": "4",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "count the letter e in bookkeeper",
@@ -6350,27 +6350,27 @@
   {
    "say": "what is the sum of 5, 38, 58, 17, 37, 25",
    "expect": "180",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "max of 49, 41, 50, 57, 37, 49",
    "expect": "57",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "spell kubernetes backwards",
    "expect": "\"setenrebuk\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "what is the minimum of 30, 50, 22, 53",
    "expect": "22",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "replace \"c\" with \"z\" in concept",
    "expect": "\"zonzept\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "how many n characters are in possession",
@@ -6405,7 +6405,7 @@
   {
    "say": "smallest of 35, 2, 22, 15, 35, 57",
    "expect": "2",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "reverse the list 8, 19, 7, 13, 38",
@@ -6425,7 +6425,7 @@
   {
    "say": "how many numbers are in 52, 58, 54, 28",
    "expect": "4",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "279 + 130",
@@ -6440,7 +6440,7 @@
   {
    "say": "does possession end with qz",
    "expect": "false",
-   "category": "ends-with"
+   "category": "text-ends-with"
   },
   {
    "say": "reverse possession, no wait, reverse strawberry",
@@ -6455,7 +6455,7 @@
   {
    "say": "total of 11, 42, 12, 47, 41",
    "expect": "153",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "ok wait how many m characters in assessment lol",
@@ -6465,12 +6465,12 @@
   {
    "say": "make RECOMMEND lowercase",
    "expect": "\"recommend\"",
-   "category": "lower"
+   "category": "text-lower"
   },
   {
    "say": "put 6, 24, 14, 15 in order",
    "expect": "list<6, 14, 15, 24>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "count the letter h in hello",
@@ -6490,7 +6490,7 @@
   {
    "say": "max of 34, 6, 10, 26, 45, 7",
    "expect": "45",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "reverse mississippi sorry i meant bookkeeper",
@@ -6530,7 +6530,7 @@
   {
    "say": "lowercase ASSESSMENT",
    "expect": "\"assessment\"",
-   "category": "lower"
+   "category": "text-lower"
   },
   {
    "say": "how many times does \"t\" appear in strawberry",
@@ -6540,17 +6540,17 @@
   {
    "say": "first 5 characters of recommend",
    "expect": "\"recom\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "smallest of 34, 6, 10, 26, 45, 7",
    "expect": "6",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "count of 50, 5, 7, 43, 5",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "one more whats 47 minus 87",
@@ -6565,7 +6565,7 @@
   {
    "say": "first item in 29, 40, 14, 19",
    "expect": "29",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "alright how many e characters in possession real quick",
@@ -6580,17 +6580,17 @@
   {
    "say": "what is the biggest of 31, 29, 32",
    "expect": "32",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "whats the largest number in 4, 8, 13, 5, 18, 24",
    "expect": "24",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "the first 4 letters of hello",
    "expect": "\"hell\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "whats 90 plus 68. scratch that, 90 plus 61",
@@ -6615,12 +6615,12 @@
   {
    "say": "sort these numbers: 16, 4, 15, 38",
    "expect": "list<4, 15, 16, 38>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "put 17, 2, 26, 25, 12 in order",
    "expect": "list<2, 12, 17, 25, 26>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "count the letter s in sopon",
@@ -6630,12 +6630,12 @@
   {
    "say": "whats the largest number in 40, 27, 42, 5, 31, 38",
    "expect": "42",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "lowercase BOOKKEEPER",
    "expect": "\"bookkeeper\"",
-   "category": "lower"
+   "category": "text-lower"
   },
   {
    "say": "228 / 12",
@@ -6645,22 +6645,22 @@
   {
    "say": "shout realization",
    "expect": "\"REALIZATION\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "split coffee,science,committee on commas",
    "expect": "list<\"coffee\", \"science\", \"committee\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "what is the sum of 56, 16, 59",
    "expect": "131",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "whats the largest number in 46, 2, 15, 20, 52",
    "expect": "52",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "what is 344 times 102",
@@ -6685,7 +6685,7 @@
   {
    "say": "total of 8, 40, 6, 35, 34, 23",
    "expect": "146",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "whats 250 plus 152?",
@@ -6715,12 +6715,12 @@
   {
    "say": "remove the duplicates from 3, 4, 8, 3, 5, 7",
    "expect": "list<3, 4, 8, 5, 7>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "does coffee contain zqx",
    "expect": "false",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "reverse the list 38, 33, 21, 25",
@@ -6735,17 +6735,17 @@
   {
    "say": "put 7, 13, 16, 15 in order",
    "expect": "list<7, 13, 15, 16>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "what is the biggest of 35, 1, 5",
    "expect": "35",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "first item in 36, 31, 37, 23",
    "expect": "36",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "reverse the list 14, 29, 23, 20",
@@ -6765,12 +6765,12 @@
   {
    "say": "what is the product of 20, 24, 34, 34",
    "expect": "554880",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "count of 4, 8, 13, 5, 18, 24",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "what is 51 plus 40, no wait, 51 plus 87",
@@ -6795,7 +6795,7 @@
   {
    "say": "first 4 characters of kubernetes",
    "expect": "\"kube\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "number of e letters in bookkeeper",
@@ -6805,7 +6805,7 @@
   {
    "say": "list the numbers 1 through 6",
    "expect": "list<1, 2, 3, 4, 5, 6>",
-   "category": "range"
+   "category": "list-range"
   },
   {
    "say": "what is the length of science",
@@ -6820,7 +6820,7 @@
   {
    "say": "what is the biggest of 33, 28, 34, 35, 22",
    "expect": "35",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "hey quick one, 15 plus 196",
@@ -6840,12 +6840,12 @@
   {
    "say": "count of 5, 33, 15",
    "expect": "3",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "what is the biggest of 26, 14, 37, 47, 18, 51",
    "expect": "51",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "what is 79 plus 139",
@@ -6890,7 +6890,7 @@
   {
    "say": "how many numbers are in 45, 34, 5",
    "expect": "3",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "reverse the list 39, 6, 33, 30, 8",
@@ -6905,7 +6905,7 @@
   {
    "say": "does committee begin with co",
    "expect": "true",
-   "category": "starts-with"
+   "category": "text-starts-with"
   },
   {
    "say": "one more how many r characters in bookkeeper lol",
@@ -6920,17 +6920,17 @@
   {
    "say": "what is the product of 29, 3, 32, 37",
    "expect": "103008",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "how many numbers are in 26, 14, 37, 47, 18, 51",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "what is the first of 2, 8, 13, 20",
    "expect": "2",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "whats 120 times 121?",
@@ -6940,7 +6940,7 @@
   {
    "say": "how many numbers are in 51, 35, 23",
    "expect": "3",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "what is 44 plus 50, no wait, 44 plus 80",
@@ -6955,12 +6955,12 @@
   {
    "say": "swap every c in concept for z",
    "expect": "\"zonzept\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "what are the unique values in 4, 4, 2, 5, 5, 2",
    "expect": "list<4, 2, 5>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "what is 50 divided by 2",
@@ -6970,12 +6970,12 @@
   {
    "say": "whats the largest number in 44, 21, 52, 59",
    "expect": "59",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "first item in 21, 13, 28, 17",
    "expect": "21",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "reverse parallel, no wait, reverse bookkeeper",
@@ -6985,17 +6985,17 @@
   {
    "say": "reverse spoon",
    "expect": "\"noops\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "make hello uppercase",
    "expect": "\"HELLO\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "reverse the word concept",
    "expect": "\"tpecnoc\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "count the letter a in parallel",
@@ -7015,7 +7015,7 @@
   {
    "say": "max of 26, 27, 45, 45, 12",
    "expect": "45",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "is 142 even?",
@@ -7030,7 +7030,7 @@
   {
    "say": "spell bookkeeper backwards",
    "expect": "\"repeekkoob\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "another one whats 101 plus 59 if you can",
@@ -7045,7 +7045,7 @@
   {
    "say": "sort these numbers: 25, 23, 22",
    "expect": "list<22, 23, 25>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "um whats 3 plus 9 lol",
@@ -7060,12 +7060,12 @@
   {
    "say": "what is the biggest of 55, 23, 2, 21, 25",
    "expect": "55",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "what is the biggest of 49, 5, 37, 47, 47, 4",
    "expect": "49",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "number of c letters in committee",
@@ -7075,7 +7075,7 @@
   {
    "say": "max of 5, 55, 2",
    "expect": "55",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "ok wait how many s characters in spoon if you can",
@@ -7090,7 +7090,7 @@
   {
    "say": "smallest of 33, 28, 34, 35, 22",
    "expect": "22",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "is 27 bigger than 18",
@@ -7110,12 +7110,12 @@
   {
    "say": "what is the sum of 6, 60, 6",
    "expect": "72",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "what is the product of 27, 23, 37, 27",
    "expect": "620379",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "275 / 11",
@@ -7125,12 +7125,12 @@
   {
    "say": "how many numbers are in 8, 31, 15, 19, 41, 60",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "remove the duplicates from 8, 5, 4, 3, 9, 3",
    "expect": "list<8, 5, 4, 3, 9>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "79 mod 4",
@@ -7150,12 +7150,12 @@
   {
    "say": "what is the biggest of 24, 50, 57, 31",
    "expect": "57",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "how many numbers are in 39, 37, 22, 50, 13, 1",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "how many o characters in bookekeper",
@@ -7175,17 +7175,17 @@
   {
    "say": "what are the unique values in 1, 2, 1, 7, 8, 8",
    "expect": "list<1, 2, 7, 8>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "is false and true",
    "expect": "false",
-   "category": "and"
+   "category": "logic-and"
   },
   {
    "say": "does mississippi contain zqx",
    "expect": "false",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "what is 56 plus 25, no wait, 56 plus 70",
@@ -7195,7 +7195,7 @@
   {
    "say": "sort these numbers: 33, 10, 28, 24",
    "expect": "list<10, 24, 28, 33>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "um reverse coffee thanks",
@@ -7205,7 +7205,7 @@
   {
    "say": "what is the product of 20, 21, 7, 19",
    "expect": "55860",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "how many c characters are in science",
@@ -7235,7 +7235,7 @@
   {
    "say": "total of 40, 5, 32",
    "expect": "77",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "how many times does \"s\" appear in strawberry",
@@ -7245,12 +7245,12 @@
   {
    "say": "what is the product of 5, 10, 36, 21",
    "expect": "37800",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "what is the biggest of 7, 38, 57",
    "expect": "57",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "ok so whats 56 plus 26",
@@ -7270,17 +7270,17 @@
   {
    "say": "what are the unique values in 9, 4, 4, 4, 6, 2",
    "expect": "list<9, 4, 6, 2>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "remove the duplicates from 7, 9, 2, 6, 6, 2",
    "expect": "list<7, 9, 2, 6>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "smallest of 8, 40, 6, 35, 34, 23",
    "expect": "6",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "quick one reverse bookkeeper ?",
@@ -7300,12 +7300,12 @@
   {
    "say": "put 1, 18, 4, 28, 6 in order",
    "expect": "list<1, 4, 6, 18, 28>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "what is the product of 39, 12, 13, 20",
    "expect": "121680",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "what is the remainder of 42 divided by 7",
@@ -7315,12 +7315,12 @@
   {
    "say": "what is the sum of 21, 33, 16",
    "expect": "70",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "first item in 21, 3, 26, 18",
    "expect": "21",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "whats 68 plus 191?",
@@ -7330,7 +7330,7 @@
   {
    "say": "what is the minimum of 46, 56, 10, 35",
    "expect": "10",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "what is 24 to the power of 2",
@@ -7345,12 +7345,12 @@
   {
    "say": "the first 3 letters of assessment",
    "expect": "\"ass\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "max of 29, 16, 32",
    "expect": "32",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "count the letter c in committee",
@@ -7360,7 +7360,7 @@
   {
    "say": "trim the spaces off \"  science  \"",
    "expect": "\"science\"",
-   "category": "trim"
+   "category": "text-trim"
   },
   {
    "say": "is 6 negative",
@@ -7370,12 +7370,12 @@
   {
    "say": "split mississippi,coffee,strawberry on commas",
    "expect": "list<\"mississippi\", \"coffee\", \"strawberry\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "put 9, 40, 11, 33, 21 in order",
    "expect": "list<9, 11, 21, 33, 40>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "reverse realization. actually no, science",
@@ -7385,12 +7385,12 @@
   {
    "say": "smallest of 5, 35, 8, 30, 11",
    "expect": "5",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "what is the product of 29, 15, 18, 12",
    "expect": "93960",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "one more whats 10 plus 3",
@@ -7405,12 +7405,12 @@
   {
    "say": "put 24, 1, 28 in order",
    "expect": "list<1, 24, 28>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "add up 41, 21, 7, 14, 18, 43",
    "expect": "144",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "quick one reverse concept please",
@@ -7420,7 +7420,7 @@
   {
    "say": "first item in 25, 13, 27, 24",
    "expect": "25",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "ok so whats 6 plus 20 please",
@@ -7430,7 +7430,7 @@
   {
    "say": "smallest of 24, 40, 23, 26, 25",
    "expect": "23",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "is 8 bigger than 22",
@@ -7440,12 +7440,12 @@
   {
    "say": "trim the spaces off \"  kubernetes  \"",
    "expect": "\"kubernetes\"",
-   "category": "trim"
+   "category": "text-trim"
   },
   {
    "say": "uppercase parallel",
    "expect": "\"PARALLEL\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "whats 43 times 67?",
@@ -7465,17 +7465,17 @@
   {
    "say": "what is the product of 7, 20, 17, 33",
    "expect": "78540",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "smallest of 41, 49, 9, 29, 18, 33",
    "expect": "9",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "split recommend,parallel,concept on commas",
    "expect": "list<\"recommend\", \"parallel\", \"concept\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "how many times does \"o\" appear in coffee",
@@ -7485,7 +7485,7 @@
   {
    "say": "put 2, 40, 15 in order",
    "expect": "list<2, 15, 40>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "184 / 8",
@@ -7495,22 +7495,22 @@
   {
    "say": "what is realization backwards",
    "expect": "\"noitazilaer\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "spell spoon backwards",
    "expect": "\"noops\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "count of 30, 21, 51, 15",
    "expect": "4",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "what is recommend backwards",
    "expect": "\"dnemmocer\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "what is 176 plus 155",
@@ -7525,12 +7525,12 @@
   {
    "say": "what is the sum of 5, 7, 8, 21",
    "expect": "41",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "does assessment end with qz",
    "expect": "false",
-   "category": "ends-with"
+   "category": "text-ends-with"
   },
   {
    "say": "can you work out 233 times 87 for me",
@@ -7550,7 +7550,7 @@
   {
    "say": "total of 50, 1, 3, 35, 53, 45",
    "expect": "187",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "is -20 zero",
@@ -7560,7 +7560,7 @@
   {
    "say": "smallest of 21, 33, 16",
    "expect": "16",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "can you work out 185 plus 176 for me",
@@ -7590,7 +7590,7 @@
   {
    "say": "swap every a in assessment for z",
    "expect": "\"zssessment\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "divide 22 by 11",
@@ -7600,12 +7600,12 @@
   {
    "say": "reverse the word coffee",
    "expect": "\"eeffoc\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "what is the sum of 4, 28, 34",
    "expect": "66",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "hmm reverse science if you can",
@@ -7620,7 +7620,7 @@
   {
    "say": "what is the product of 23, 26, 12, 11",
    "expect": "78936",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "how many times does the letter a appear in strawberry",
@@ -7630,12 +7630,12 @@
   {
    "say": "what is the biggest of 24, 40, 23, 26, 25",
    "expect": "40",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "what is the product of 28, 24, 20, 32",
    "expect": "430080",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "how many times does \"m\" appear in mississippi",
@@ -7645,17 +7645,17 @@
   {
    "say": "put 12, 32, 7, 24, 13 in order",
    "expect": "list<7, 12, 13, 24, 32>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "what is the first of 31, 1, 17, 19",
    "expect": "31",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "count of 18, 40, 1, 55, 13",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "hey whats 113 minus 41",
@@ -7665,7 +7665,7 @@
   {
    "say": "what are the unique values in 6, 4, 7, 9, 5, 4",
    "expect": "list<6, 4, 7, 9, 5>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "alright reverse spoon real quick",
@@ -7685,7 +7685,7 @@
   {
    "say": "first item in 20, 25, 30, 31",
    "expect": "20",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "what is 180 divided by 9",
@@ -7715,7 +7715,7 @@
   {
    "say": "does bookkeeper begin with bo",
    "expect": "true",
-   "category": "starts-with"
+   "category": "text-starts-with"
   },
   {
    "say": "how many times does the letter h appear in hello",
@@ -7725,7 +7725,7 @@
   {
    "say": "what is the first of 40, 6, 8, 29",
    "expect": "40",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "reverse realization, no wait, reverse possession",
@@ -7735,7 +7735,7 @@
   {
    "say": "what is the product of 37, 29, 28, 17",
    "expect": "510748",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "2 to the power of 4",
@@ -7745,7 +7745,7 @@
   {
    "say": "what is the product of 9, 12, 21, 26",
    "expect": "58968",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "number of p letters in mississippi",
@@ -7760,7 +7760,7 @@
   {
    "say": "what is the product of 20, 24, 18, 35",
    "expect": "302400",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "ok wait whats 144 minus 25",
@@ -7770,7 +7770,7 @@
   {
    "say": "what is the biggest of 50, 13, 51, 46, 48, 13",
    "expect": "51",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "what is 370 times 22",
@@ -7790,7 +7790,7 @@
   {
    "say": "remove the duplicates from 9, 3, 3, 2, 3, 9",
    "expect": "list<9, 3, 2>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "number of p letters in spoon",
@@ -7810,12 +7810,12 @@
   {
    "say": "sort 33, 33, 8",
    "expect": "list<8, 33, 33>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "what is the minimum of 39, 30, 58",
    "expect": "30",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "can you work out 251 plus 121 for me",
@@ -7840,12 +7840,12 @@
   {
    "say": "smallest of 11, 42, 12, 47, 41",
    "expect": "11",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "does hello end with qz",
    "expect": "false",
-   "category": "ends-with"
+   "category": "text-ends-with"
   },
   {
    "say": "is 147 even",
@@ -7885,22 +7885,22 @@
   {
    "say": "what is the sum of 55, 43, 57, 50, 38, 3",
    "expect": "246",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "break assessment,kubernetes,coffee apart at the commas",
    "expect": "list<\"assessment\", \"kubernetes\", \"coffee\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "add up 9, 24, 51, 48",
    "expect": "132",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "whats the largest number in 52, 34, 11, 40",
    "expect": "52",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "can you work out 43 plus 44 for me",
@@ -7910,7 +7910,7 @@
   {
    "say": "how many numbers are in 33, 28, 34, 35, 22",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "count the letter p in possession",
@@ -7920,7 +7920,7 @@
   {
    "say": "trim the spaces off \"  parallel  \"",
    "expect": "\"parallel\"",
-   "category": "trim"
+   "category": "text-trim"
   },
   {
    "say": "is 110 even",
@@ -7930,12 +7930,12 @@
   {
    "say": "make HELLO lowercase",
    "expect": "\"hello\"",
-   "category": "lower"
+   "category": "text-lower"
   },
   {
    "say": "add up 38, 8, 26",
    "expect": "72",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "how many k characters in bookkeeepr",
@@ -7950,7 +7950,7 @@
   {
    "say": "does realization end with qz",
    "expect": "false",
-   "category": "ends-with"
+   "category": "text-ends-with"
   },
   {
    "say": "one more whats 41 minus 6 thanks",
@@ -7965,12 +7965,12 @@
   {
    "say": "first 5 characters of parallel",
    "expect": "\"paral\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "how many numbers are in 10, 18, 49",
    "expect": "3",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "hey whats 25 minus 28",
@@ -7980,7 +7980,7 @@
   {
    "say": "what is the minimum of 50, 13, 51, 46, 48, 13",
    "expect": "13",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "hmm reverse parallel thanks",
@@ -8025,12 +8025,12 @@
   {
    "say": "total of 33, 28, 34, 35, 22",
    "expect": "152",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "whats the largest number in 43, 35, 40",
    "expect": "43",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "reverse the list 25, 3, 34",
@@ -8065,7 +8065,7 @@
   {
    "say": "list the numbers 1 through 9",
    "expect": "list<1, 2, 3, 4, 5, 6, 7, 8, 9>",
-   "category": "range"
+   "category": "list-range"
   },
   {
    "say": "ok wait how many e characters in science thanks",
@@ -8080,7 +8080,7 @@
   {
    "say": "smallest of 13, 51, 46, 29",
    "expect": "13",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "how many n characters in kuberntees",
@@ -8095,7 +8095,7 @@
   {
    "say": "swap every s in science for z",
    "expect": "\"zcience\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "count the letter l in hello",
@@ -8110,12 +8110,12 @@
   {
    "say": "put 24, 8, 21 in order",
    "expect": "list<8, 21, 24>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "total of 46, 56, 10, 35",
    "expect": "147",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "ok so how many t characters in committee",
@@ -8145,7 +8145,7 @@
   {
    "say": "add up 7, 44, 17, 24, 26, 21",
    "expect": "139",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "reverse the list 18, 37, 24, 7",
@@ -8155,12 +8155,12 @@
   {
    "say": "count of 16, 60, 15, 50, 44, 3",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "what is the sum of 21, 54, 14, 2, 25",
    "expect": "116",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "number of o letters in bookkeeper",
@@ -8180,7 +8180,7 @@
   {
    "say": "whats the largest number in 12, 3, 10, 31, 7",
    "expect": "31",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "194 + 40",
@@ -8225,12 +8225,12 @@
   {
    "say": "put 35, 19, 24 in order",
    "expect": "list<19, 24, 35>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "max of 42, 46, 57, 46",
    "expect": "57",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "how many times does \"o\" appear in committee",
@@ -8250,7 +8250,7 @@
   {
    "say": "split coffee,science,realization on commas",
    "expect": "list<\"coffee\", \"science\", \"realization\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "69 mod 4",
@@ -8260,7 +8260,7 @@
   {
    "say": "does hello end with lo",
    "expect": "true",
-   "category": "ends-with"
+   "category": "text-ends-with"
   },
   {
    "say": "what is 57 plus 30, no wait, 57 plus 8",
@@ -8275,12 +8275,12 @@
   {
    "say": "make bookkeeper uppercase",
    "expect": "\"BOOKKEEPER\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "total of 24, 50, 55, 20",
    "expect": "149",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "um whats 150 minus 78 lol",
@@ -8295,12 +8295,12 @@
   {
    "say": "sort 22, 25, 37, 36",
    "expect": "list<22, 25, 36, 37>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "the first 4 letters of kubernetes",
    "expect": "\"kube\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "ok wait how many e characters in science lol",
@@ -8310,17 +8310,17 @@
   {
    "say": "the numbers from 1 to 6",
    "expect": "list<1, 2, 3, 4, 5, 6>",
-   "category": "range"
+   "category": "list-range"
   },
   {
    "say": "what is the minimum of 50, 1, 3, 35, 53, 45",
    "expect": "1",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "is omm in committee?",
    "expect": "true",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "is 6 bigger than 20",
@@ -8340,12 +8340,12 @@
   {
    "say": "does banana begin with ba",
    "expect": "true",
-   "category": "starts-with"
+   "category": "text-starts-with"
   },
   {
    "say": "whats the largest number in 59, 32, 7, 56",
    "expect": "59",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "so like whats 16 plus 69",
@@ -8365,12 +8365,12 @@
   {
    "say": "what is the product of 16, 38, 33, 35",
    "expect": "702240",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "how many numbers are in 41, 49, 9, 29, 18, 33",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "what is 344 minus 79",
@@ -8395,7 +8395,7 @@
   {
    "say": "how many numbers are in 50, 13, 51, 46, 48, 13",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "reverse assessment sorry i meant kubernetes",
@@ -8410,7 +8410,7 @@
   {
    "say": "reverse the word banana",
    "expect": "\"ananab\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "whats 4 plus 37. scratch that, 4 plus 14",
@@ -8430,12 +8430,12 @@
   {
    "say": "what is the sum of 46, 2, 15, 20, 52",
    "expect": "135",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "reverse the word recommend",
    "expect": "\"dnemmocer\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "is 10 bigger than 19",
@@ -8460,7 +8460,7 @@
   {
    "say": "count of 26, 2, 44",
    "expect": "3",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "what is 75 plus 69, no wait, 75 plus 53",
@@ -8475,7 +8475,7 @@
   {
    "say": "smallest of 45, 34, 5",
    "expect": "5",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "can you work out 381 plus 69 for me",
@@ -8485,12 +8485,12 @@
   {
    "say": "count of 20, 52, 31, 25, 20, 41",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "swap every r in realization for z",
    "expect": "\"zealization\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "hey how many r characters in keyboard if you can",
@@ -8515,7 +8515,7 @@
   {
    "say": "put 30, 24, 37, 24 in order",
    "expect": "list<24, 24, 30, 37>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "whats 24 plus 41. scratch that, 24 plus 32",
@@ -8525,7 +8525,7 @@
   {
    "say": "first item in 9, 14, 24, 8",
    "expect": "9",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "is 21 zero",
@@ -8535,17 +8535,17 @@
   {
    "say": "shout concept",
    "expect": "\"CONCEPT\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "the numbers from 1 to 4",
    "expect": "list<1, 2, 3, 4>",
-   "category": "range"
+   "category": "list-range"
   },
   {
    "say": "split science,parallel,assessment on commas",
    "expect": "list<\"science\", \"parallel\", \"assessment\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "77 / 7",
@@ -8570,17 +8570,17 @@
   {
    "say": "does realization contain eal",
    "expect": "true",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "first item in 33, 28, 13, 1",
    "expect": "33",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "sort 16, 3, 39, 12, 13",
    "expect": "list<3, 12, 13, 16, 39>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "how many b characters are in banana",
@@ -8615,7 +8615,7 @@
   {
    "say": "what is the biggest of 13, 51, 46, 29",
    "expect": "51",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "raise 7 to the 4",
@@ -8640,7 +8640,7 @@
   {
    "say": "how many numbers are in 52, 57, 15, 1",
    "expect": "4",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "alright whats 144 plus 43",
@@ -8660,7 +8660,7 @@
   {
    "say": "what is the minimum of 53, 20, 17, 33",
    "expect": "17",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "sorry how many r characters in realization real quick",
@@ -8675,7 +8675,7 @@
   {
    "say": "swap every p in possession for z",
    "expect": "\"zossession\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "how many t characters in kubenretes",
@@ -8705,12 +8705,12 @@
   {
    "say": "what is the sum of 6, 45, 56",
    "expect": "107",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "split spoon,mississippi,kubernetes on commas",
    "expect": "list<\"spoon\", \"mississippi\", \"kubernetes\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "whats 67 plus 9?",
@@ -8730,17 +8730,17 @@
   {
    "say": "total of 24, 34, 17, 44, 53, 5",
    "expect": "177",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "what is the product of 9, 14, 24, 8",
    "expect": "24192",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "what is the minimum of 15, 33, 19",
    "expect": "15",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "is -16 zero",
@@ -8750,7 +8750,7 @@
   {
    "say": "what is the product of 36, 31, 37, 23",
    "expect": "949716",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "whats 45 plus 17. scratch that, 45 plus 85",
@@ -8775,12 +8775,12 @@
   {
    "say": "sort these numbers: 13, 35, 12, 24, 13",
    "expect": "list<12, 13, 13, 24, 35>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "split recommend,possession,bookkeeper on commas",
    "expect": "list<\"recommend\", \"possession\", \"bookkeeper\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "what is the remainder of 79 divided by 4",
@@ -8800,12 +8800,12 @@
   {
    "say": "reverse keyboard",
    "expect": "\"draobyek\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "how many numbers are in 17, 48, 58",
    "expect": "3",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "is 28 negative",
@@ -8825,7 +8825,7 @@
   {
    "say": "break committee,realization,concept apart at the commas",
    "expect": "list<\"committee\", \"realization\", \"concept\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "what is the remainder of 51 divided by 9",
@@ -8835,7 +8835,7 @@
   {
    "say": "remove the duplicates from 2, 5, 1, 5, 5, 9",
    "expect": "list<2, 5, 1, 9>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "hmm how many o characters in spoon",
@@ -8845,22 +8845,22 @@
   {
    "say": "what is the biggest of 45, 12, 18, 20, 58",
    "expect": "58",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "the numbers from 1 to 7",
    "expect": "list<1, 2, 3, 4, 5, 6, 7>",
-   "category": "range"
+   "category": "list-range"
   },
   {
    "say": "reverse the word keyboard",
    "expect": "\"draobyek\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "whats the largest number in 60, 59, 40, 29",
    "expect": "60",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "another one whats 93 times 81 real quick",
@@ -8875,7 +8875,7 @@
   {
    "say": "reverse the word assessment",
    "expect": "\"tnemssessa\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "another one whats 194 plus 35",
@@ -8895,12 +8895,12 @@
   {
    "say": "remove the duplicates from 4, 2, 3, 7, 3, 9",
    "expect": "list<4, 2, 3, 7, 9>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "the first 3 letters of keyboard",
    "expect": "\"key\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "is 26 bigger than 27",
@@ -8930,7 +8930,7 @@
   {
    "say": "reverse the word possession",
    "expect": "\"noissessop\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "reverse banana. actually no, coffee",
@@ -8950,7 +8950,7 @@
   {
    "say": "how many numbers are in 49, 40, 54, 49, 49, 49",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "what is 6 to the power of 3",
@@ -8970,7 +8970,7 @@
   {
    "say": "does assessment contain sse",
    "expect": "true",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "reverse the list 6, 22, 6, 22",
@@ -8980,7 +8980,7 @@
   {
    "say": "replace every m in mississippi with z",
    "expect": "\"zississippi\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "how many p characters in parallel",
@@ -9000,7 +9000,7 @@
   {
    "say": "does committee start with c",
    "expect": "true",
-   "category": "starts-with"
+   "category": "text-starts-with"
   },
   {
    "say": "lol ok reverse concept",
@@ -9040,7 +9040,7 @@
   {
    "say": "what is the first of 29, 35, 27, 35",
    "expect": "29",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "reverse concept, no wait, reverse realization",
@@ -9050,7 +9050,7 @@
   {
    "say": "how many numbers are in 19, 29, 9",
    "expect": "3",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "179 + 156",
@@ -9060,12 +9060,12 @@
   {
    "say": "remove the duplicates from 1, 3, 1, 3, 8, 2",
    "expect": "list<1, 3, 8, 2>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "strip the whitespace from \"  recommend  \"",
    "expect": "\"recommend\"",
-   "category": "trim"
+   "category": "text-trim"
   },
   {
    "say": "whats 389 plus 89?",
@@ -9085,7 +9085,7 @@
   {
    "say": "smallest of 12, 40, 19",
    "expect": "12",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "whats 155 minus 79?",
@@ -9105,12 +9105,12 @@
   {
    "say": "split recommend,spoon,banana on commas",
    "expect": "list<\"recommend\", \"spoon\", \"banana\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "total of 10, 18, 49",
    "expect": "77",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "reverse the list 30, 19, 23, 34, 24",
@@ -9125,7 +9125,7 @@
   {
    "say": "max of 5, 33, 15",
    "expect": "33",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "whats 340 times 75?",
@@ -9155,17 +9155,17 @@
   {
    "say": "break concept,spoon,coffee apart at the commas",
    "expect": "list<\"concept\", \"spoon\", \"coffee\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "whats the largest number in 54, 31, 13, 20",
    "expect": "54",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "count of 51, 6, 35, 11, 7",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "what is 18 divided by 2",
@@ -9180,12 +9180,12 @@
   {
    "say": "lowercase REALIZATION",
    "expect": "\"realization\"",
-   "category": "lower"
+   "category": "text-lower"
   },
   {
    "say": "what is the minimum of 50, 5, 7, 43, 5",
    "expect": "5",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "is -5 negative",
@@ -9195,12 +9195,12 @@
   {
    "say": "first 2 characters of bookkeeper",
    "expect": "\"bo\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "what is the first of 26, 10, 20, 27",
    "expect": "26",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "39 to the power of 2",
@@ -9230,7 +9230,7 @@
   {
    "say": "max of 20, 52, 31, 25, 20, 41",
    "expect": "52",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "another one reverse mississippi",
@@ -9250,12 +9250,12 @@
   {
    "say": "whats the largest number in 39, 3, 58, 3, 21",
    "expect": "58",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "first item in 29, 15, 18, 12",
    "expect": "29",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "count the letter r in paarllel",
@@ -9270,7 +9270,7 @@
   {
    "say": "smallest of 42, 33, 45, 57, 18, 59",
    "expect": "18",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "what is 339 plus 61",
@@ -9295,17 +9295,17 @@
   {
    "say": "add up 54, 51, 48, 54, 22, 26",
    "expect": "255",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "add up 49, 5, 37, 47, 47, 4",
    "expect": "189",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "first item in 14, 23, 2, 32",
    "expect": "14",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "another one whats 107 times 25",
@@ -9315,7 +9315,7 @@
   {
    "say": "whats the largest number in 54, 51, 48, 54, 22, 26",
    "expect": "54",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "number of e letters in realization",
@@ -9345,7 +9345,7 @@
   {
    "say": "what are the unique values in 7, 4, 3, 1, 7, 4",
    "expect": "list<7, 4, 3, 1>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "hmm whats 48 times 89 real quick",
@@ -9395,22 +9395,22 @@
   {
    "say": "max of 13, 21, 8",
    "expect": "21",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "whats the largest number in 26, 24, 46, 59, 26",
    "expect": "59",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "first 4 characters of strawberry",
    "expect": "\"stra\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "sort 4, 16, 28",
    "expect": "list<4, 16, 28>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "raise 2 to the 4",
@@ -9425,7 +9425,7 @@
   {
    "say": "add up 2, 12, 54, 33",
    "expect": "101",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "what is the remainder of 35 divided by 3",
@@ -9440,12 +9440,12 @@
   {
    "say": "lowercase POSSESSION",
    "expect": "\"possession\"",
-   "category": "lower"
+   "category": "text-lower"
   },
   {
    "say": "what is the product of 32, 10, 33, 34",
    "expect": "359040",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "4 to the power of 4",
@@ -9455,27 +9455,27 @@
   {
    "say": "what is the product of 15, 8, 3, 6",
    "expect": "2160",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "remove the duplicates from 2, 1, 8, 5, 8, 2",
    "expect": "list<2, 1, 8, 5>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "total of 39, 30, 58",
    "expect": "127",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "what is the product of 8, 14, 28, 21",
    "expect": "65856",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "what is the product of 10, 20, 15, 1",
    "expect": "3000",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "hey quick one, 190 times 68",
@@ -9485,22 +9485,22 @@
   {
    "say": "what is the minimum of 58, 53, 9, 55, 7, 34",
    "expect": "7",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "count of 34, 23, 21",
    "expect": "3",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "what is the sum of 5, 35, 8, 30, 11",
    "expect": "89",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "reverse strawberry",
    "expect": "\"yrrebwarts\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "what is the remainder of 59 divided by 3",
@@ -9525,7 +9525,7 @@
   {
    "say": "is true or false",
    "expect": "true",
-   "category": "or"
+   "category": "logic-or"
   },
   {
    "say": "number of b letters in strawberry",
@@ -9545,7 +9545,7 @@
   {
    "say": "the first 2 letters of concept",
    "expect": "\"co\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "is 67 an even number",
@@ -9565,7 +9565,7 @@
   {
    "say": "count of 39, 14, 58, 15, 20",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "one more whats 127 minus 60 please",
@@ -9605,22 +9605,22 @@
   {
    "say": "add up 35, 1, 5",
    "expect": "41",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "break parallel,kubernetes,mississippi apart at the commas",
    "expect": "list<\"parallel\", \"kubernetes\", \"mississippi\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "what is the sum of 55, 23, 2, 21, 25",
    "expect": "126",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "max of 16, 60, 15, 50, 44, 3",
    "expect": "60",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "whats 207 plus 191?",
@@ -9635,7 +9635,7 @@
   {
    "say": "put 4, 35, 13 in order",
    "expect": "list<4, 13, 35>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "is -22 negative",
@@ -9655,12 +9655,12 @@
   {
    "say": "replace \"b\" with \"z\" in banana",
    "expect": "\"zanana\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "how many numbers are in 35, 2, 22, 15, 35, 57",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "um how many e characters in possession please",
@@ -9670,7 +9670,7 @@
   {
    "say": "does parallel end with qz",
    "expect": "false",
-   "category": "ends-with"
+   "category": "text-ends-with"
   },
   {
    "say": "how many times does \"l\" appear in hello",
@@ -9680,17 +9680,17 @@
   {
    "say": "spell science backwards",
    "expect": "\"ecneics\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "remove the duplicates from 8, 3, 5, 1, 5, 8",
    "expect": "list<8, 3, 5, 1>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "sort 3, 40, 13",
    "expect": "list<3, 13, 40>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "count the letter s in scinece",
@@ -9705,7 +9705,7 @@
   {
    "say": "what is the product of 9, 40, 24, 10",
    "expect": "86400",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "sorry how many s characters in strawberry if you can",
@@ -9715,7 +9715,7 @@
   {
    "say": "smallest of 9, 15, 41, 14, 57",
    "expect": "9",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "how many times does \"b\" appear in banana",
@@ -9735,7 +9735,7 @@
   {
    "say": "spell realization backwards",
    "expect": "\"noitazilaer\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "um reverse hello lol",
@@ -9750,17 +9750,17 @@
   {
    "say": "max of 9, 51, 56, 47, 22",
    "expect": "56",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "does strawberry begin with st",
    "expect": "true",
-   "category": "starts-with"
+   "category": "text-starts-with"
   },
   {
    "say": "remove the duplicates from 6, 9, 4, 6, 2, 3",
    "expect": "list<6, 9, 4, 2, 3>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "what is 145 times 28",
@@ -9770,7 +9770,7 @@
   {
    "say": "what is the minimum of 26, 2, 44",
    "expect": "2",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "how many times does \"e\" appear in recommend",
@@ -9790,12 +9790,12 @@
   {
    "say": "reverse the word hello",
    "expect": "\"olleh\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "smallest of 10, 30, 2",
    "expect": "2",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "another one whats 58 plus 55 lol",
@@ -9805,7 +9805,7 @@
   {
    "say": "what are the unique values in 5, 6, 7, 3, 4, 2",
    "expect": "list<5, 6, 7, 3, 4, 2>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "reverse concept. actually no, assessment",
@@ -9825,7 +9825,7 @@
   {
    "say": "trim the spaces off \"  realization  \"",
    "expect": "\"realization\"",
-   "category": "trim"
+   "category": "text-trim"
   },
   {
    "say": "can you work out 57 times 161 for me",
@@ -9855,7 +9855,7 @@
   {
    "say": "the first 4 letters of spoon",
    "expect": "\"spoo\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "is -3 zero",
@@ -9885,7 +9885,7 @@
   {
    "say": "max of 8, 41, 50, 19, 54",
    "expect": "54",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "whats 288 minus 16?",
@@ -9895,17 +9895,17 @@
   {
    "say": "give me 1 to 9",
    "expect": "list<1, 2, 3, 4, 5, 6, 7, 8, 9>",
-   "category": "range"
+   "category": "list-range"
   },
   {
    "say": "give me 1 to 8",
    "expect": "list<1, 2, 3, 4, 5, 6, 7, 8>",
-   "category": "range"
+   "category": "list-range"
   },
   {
    "say": "remove the duplicates from 2, 9, 7, 5, 1, 2",
    "expect": "list<2, 9, 7, 5, 1>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "can you work out 333 plus 149 for me",
@@ -9915,7 +9915,7 @@
   {
    "say": "smallest of 53, 35, 39, 54",
    "expect": "35",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "2 * 85",
@@ -9925,12 +9925,12 @@
   {
    "say": "what is the minimum of 9, 58, 48, 15, 24, 48",
    "expect": "9",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "the first 4 letters of science",
    "expect": "\"scie\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "so like how many n characters in spoon",
@@ -9945,12 +9945,12 @@
   {
    "say": "first item in 30, 35, 24, 9",
    "expect": "30",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "what is the product of 21, 32, 14, 28",
    "expect": "263424",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "is 17 bigger than 26",
@@ -9965,7 +9965,7 @@
   {
    "say": "smallest of 46, 2, 15, 20, 52",
    "expect": "2",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "308 - 64",
@@ -9980,7 +9980,7 @@
   {
    "say": "what is the product of 25, 22, 25, 8",
    "expect": "110000",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "375 + 116",
@@ -9995,22 +9995,22 @@
   {
    "say": "total of 14, 57, 37",
    "expect": "108",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "reverse mississippi",
    "expect": "\"ippississim\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "break parallel,coffee,committee apart at the commas",
    "expect": "list<\"parallel\", \"coffee\", \"committee\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "does hello contain zqx",
    "expect": "false",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "110 / 5",
@@ -10020,12 +10020,12 @@
   {
    "say": "what is the minimum of 13, 21, 8",
    "expect": "8",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "first item in 31, 6, 31, 22",
    "expect": "31",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "is 3 negative",
@@ -10035,7 +10035,7 @@
   {
    "say": "does concept end with qz",
    "expect": "false",
-   "category": "ends-with"
+   "category": "text-ends-with"
   },
   {
    "say": "reverse the list 15, 8, 22",
@@ -10045,7 +10045,7 @@
   {
    "say": "first item in 13, 37, 10, 12",
    "expect": "13",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "what is 25 plus 68, no wait, 25 plus 26",
@@ -10055,7 +10055,7 @@
   {
    "say": "first item in 22, 8, 33, 12",
    "expect": "22",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "what is 129 minus 131",
@@ -10090,7 +10090,7 @@
   {
    "say": "split realization,kubernetes,possession on commas",
    "expect": "list<\"realization\", \"kubernetes\", \"possession\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "what is the remainder of 58 divided by 8",
@@ -10100,7 +10100,7 @@
   {
    "say": "does parallel contain zqx",
    "expect": "false",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "reverse assessment. actually no, mississippi",
@@ -10115,12 +10115,12 @@
   {
    "say": "break mississippi,committee,realization apart at the commas",
    "expect": "list<\"mississippi\", \"committee\", \"realization\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "what is the product of 2, 18, 35, 32",
    "expect": "40320",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "what is 204 divided by 6",
@@ -10130,7 +10130,7 @@
   {
    "say": "first 2 characters of kubernetes",
    "expect": "\"ku\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "raise 9 to the 3",
@@ -10140,7 +10140,7 @@
   {
    "say": "split assessment,parallel,bookkeeper on commas",
    "expect": "list<\"assessment\", \"parallel\", \"bookkeeper\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "how many i characters are in committee",
@@ -10165,7 +10165,7 @@
   {
    "say": "shout kubernetes",
    "expect": "\"KUBERNETES\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "8 / 4",
@@ -10180,7 +10180,7 @@
   {
    "say": "uppercase possession",
    "expect": "\"POSSESSION\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "um reverse banana",
@@ -10200,7 +10200,7 @@
   {
    "say": "split parallel,strawberry,keyboard on commas",
    "expect": "list<\"parallel\", \"strawberry\", \"keyboard\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "so like whats 132 plus 43 thanks",
@@ -10210,12 +10210,12 @@
   {
    "say": "sort 18, 36, 1, 4, 19",
    "expect": "list<1, 4, 18, 19, 36>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "lowercase COMMITTEE",
    "expect": "\"committee\"",
-   "category": "lower"
+   "category": "text-lower"
   },
   {
    "say": "how many times does the letter u appear in kubernetes",
@@ -10225,7 +10225,7 @@
   {
    "say": "remove the duplicates from 8, 5, 4, 1, 6, 1",
    "expect": "list<8, 5, 4, 1, 6>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "whats 159 plus 145?",
@@ -10235,7 +10235,7 @@
   {
    "say": "sort these numbers: 11, 20, 33",
    "expect": "list<11, 20, 33>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "50 / 10",
@@ -10250,12 +10250,12 @@
   {
    "say": "what are the unique values in 2, 1, 8, 5, 4, 3",
    "expect": "list<2, 1, 8, 5, 4, 3>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "what is the sum of 45, 34, 5",
    "expect": "84",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "whats 32 plus 46. scratch that, 32 plus 18",
@@ -10295,7 +10295,7 @@
   {
    "say": "break committee,strawberry,kubernetes apart at the commas",
    "expect": "list<\"committee\", \"strawberry\", \"kubernetes\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "is 74 even",
@@ -10315,17 +10315,17 @@
   {
    "say": "make PARALLEL lowercase",
    "expect": "\"parallel\"",
-   "category": "lower"
+   "category": "text-lower"
   },
   {
    "say": "remove the duplicates from 5, 1, 3, 6, 1, 4",
    "expect": "list<5, 1, 3, 6, 4>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "lowercase KEYBOARD",
    "expect": "\"keyboard\"",
-   "category": "lower"
+   "category": "text-lower"
   },
   {
    "say": "59 mod 9",
@@ -10345,7 +10345,7 @@
   {
    "say": "first item in 17, 6, 38, 29",
    "expect": "17",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "one more reverse parallel ?",
@@ -10355,7 +10355,7 @@
   {
    "say": "what is the biggest of 51, 35, 23",
    "expect": "51",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "what is the length of banana",
@@ -10365,12 +10365,12 @@
   {
    "say": "what is the biggest of 54, 4, 46",
    "expect": "54",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "first item in 17, 7, 12, 29",
    "expect": "17",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "whats 102 plus 88?",
@@ -10380,7 +10380,7 @@
   {
    "say": "remove the duplicates from 6, 4, 7, 7, 5, 3",
    "expect": "list<6, 4, 7, 5, 3>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "hey quick one, 73 minus 136",
@@ -10395,7 +10395,7 @@
   {
    "say": "break strawberry,assessment,hello apart at the commas",
    "expect": "list<\"strawberry\", \"assessment\", \"hello\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "ok so whats 200 times 27 lol",
@@ -10415,12 +10415,12 @@
   {
    "say": "does assessment begin with as",
    "expect": "true",
-   "category": "starts-with"
+   "category": "text-starts-with"
   },
   {
    "say": "what is the minimum of 43, 35, 40",
    "expect": "35",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "10 to the power of 3",
@@ -10450,22 +10450,22 @@
   {
    "say": "what is kubernetes backwards",
    "expect": "\"setenrebuk\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "split banana,realization,concept on commas",
    "expect": "list<\"banana\", \"realization\", \"concept\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "whats the largest number in 53, 20, 17, 33",
    "expect": "53",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "sort these numbers: 33, 10, 18, 5, 12",
    "expect": "list<5, 10, 12, 18, 33>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "hey quick one, 358 plus 68",
@@ -10480,7 +10480,7 @@
   {
    "say": "spell parallel backwards",
    "expect": "\"lellarap\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "what is 29 times 56",
@@ -10490,7 +10490,7 @@
   {
    "say": "smallest of 18, 40, 1, 55, 13",
    "expect": "1",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "hey quick one, 209 minus 40",
@@ -10515,12 +10515,12 @@
   {
    "say": "how many numbers are in 59, 32, 7, 56",
    "expect": "4",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "does coffee start with c",
    "expect": "true",
-   "category": "starts-with"
+   "category": "text-starts-with"
   },
   {
    "say": "reverse spoon. actually no, possession",
@@ -10530,7 +10530,7 @@
   {
    "say": "sort these numbers: 7, 34, 13",
    "expect": "list<7, 13, 34>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "how many m characters in commitete",
@@ -10550,12 +10550,12 @@
   {
    "say": "does kubernetes contain zqx",
    "expect": "false",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "how many numbers are in 46, 27, 7, 4, 28",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "261 * 117",
@@ -10565,12 +10565,12 @@
   {
    "say": "what is the biggest of 8, 40, 6, 35, 34, 23",
    "expect": "40",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "what is banana backwards",
    "expect": "\"ananab\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "reverse the list 28, 20, 5",
@@ -10580,7 +10580,7 @@
   {
    "say": "does spoon begin with sp",
    "expect": "true",
-   "category": "starts-with"
+   "category": "text-starts-with"
   },
   {
    "say": "is -20 negative",
@@ -10590,7 +10590,7 @@
   {
    "say": "how many numbers are in 6, 45, 56",
    "expect": "3",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "reverse committee. actually no, science",
@@ -10600,12 +10600,12 @@
   {
    "say": "add up 42, 33, 45, 57, 18, 59",
    "expect": "254",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "first 3 characters of mississippi",
    "expect": "\"mis\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "is 16 bigger than 4",
@@ -10615,7 +10615,7 @@
   {
    "say": "smallest of 14, 20, 43, 58",
    "expect": "14",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "56 mod 4",
@@ -10625,7 +10625,7 @@
   {
    "say": "put 15, 29, 21, 37, 9 in order",
    "expect": "list<9, 15, 21, 29, 37>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "80 mod 8",
@@ -10650,12 +10650,12 @@
   {
    "say": "add up 13, 51, 46, 29",
    "expect": "139",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "max of 36, 36, 46, 25, 9, 17",
    "expect": "46",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "hey reverse science",
@@ -10675,12 +10675,12 @@
   {
    "say": "swap every h in hello for z",
    "expect": "\"zello\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "lowercase SPOON",
    "expect": "\"spoon\"",
-   "category": "lower"
+   "category": "text-lower"
   },
   {
    "say": "um how many b characters in banana if you can",
@@ -10690,7 +10690,7 @@
   {
    "say": "max of 52, 24, 35",
    "expect": "52",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "whats 200 plus 184?",
@@ -10700,7 +10700,7 @@
   {
    "say": "break hello,bookkeeper,spoon apart at the commas",
    "expect": "list<\"hello\", \"bookkeeper\", \"spoon\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "how long is the word keyboard",
@@ -10710,7 +10710,7 @@
   {
    "say": "what is the biggest of 2, 12, 54, 33",
    "expect": "54",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "hey how many h characters in hello real quick",
@@ -10725,7 +10725,7 @@
   {
    "say": "sort these numbers: 12, 5, 12, 12, 17",
    "expect": "list<5, 12, 12, 12, 17>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "reverse the list 12, 5, 12, 12, 17",
@@ -10735,7 +10735,7 @@
   {
    "say": "sort 40, 8, 4",
    "expect": "list<4, 8, 40>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "how many times does \"f\" appear in coffee",
@@ -10745,12 +10745,12 @@
   {
    "say": "count of 54, 31, 13, 20",
    "expect": "4",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "first item in 8, 14, 28, 21",
    "expect": "8",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "another one whats 9 plus 10 lol",
@@ -10760,17 +10760,17 @@
   {
    "say": "first 3 characters of science",
    "expect": "\"sci\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "what is the product of 12, 11, 30, 23",
    "expect": "91080",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "what is the minimum of 31, 29, 32",
    "expect": "29",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "quick one how many p characters in possession ?",
@@ -10780,7 +10780,7 @@
   {
    "say": "replace \"m\" with \"z\" in mississippi",
    "expect": "\"zississippi\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "is 16 bigger than 23",
@@ -10790,17 +10790,17 @@
   {
    "say": "smallest of 7, 6, 31, 17",
    "expect": "6",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "what is the biggest of 41, 21, 7, 14, 18, 43",
    "expect": "43",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "give me 1 to 6",
    "expect": "list<1, 2, 3, 4, 5, 6>",
-   "category": "range"
+   "category": "list-range"
   },
   {
    "say": "what is 85 plus 51, no wait, 85 plus 76",
@@ -10810,7 +10810,7 @@
   {
    "say": "total of 5, 55, 2",
    "expect": "62",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "is 28 bigger than 5",
@@ -10820,12 +10820,12 @@
   {
    "say": "make kubernetes uppercase",
    "expect": "\"KUBERNETES\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "how many numbers are in 8, 41, 50, 19, 54",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "whats 59 plus 29. scratch that, 59 plus 81",
@@ -10845,17 +10845,17 @@
   {
    "say": "first item in 6, 1, 37, 2",
    "expect": "6",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "sort 2, 12, 38, 3, 5",
    "expect": "list<2, 3, 5, 12, 38>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "what is the minimum of 5, 38, 58, 17, 37, 25",
    "expect": "5",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "whats 51 plus 79. scratch that, 51 plus 53",
@@ -10865,7 +10865,7 @@
   {
    "say": "max of 31, 51, 30, 51, 48",
    "expect": "51",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "raise 40 to the 2",
@@ -10875,7 +10875,7 @@
   {
    "say": "sort these numbers: 20, 20, 13, 35",
    "expect": "list<13, 20, 20, 35>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "reverse spoon sorry i meant concept",
@@ -10925,7 +10925,7 @@
   {
    "say": "first 2 characters of keyboard",
    "expect": "\"ke\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "sorry whats 137 plus 55 if you can",
@@ -10935,12 +10935,12 @@
   {
    "say": "whats the largest number in 19, 29, 9",
    "expect": "29",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "does banana contain ana",
    "expect": "true",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "um whats 2 minus 71",
@@ -10960,7 +10960,7 @@
   {
    "say": "count of 6, 60, 6",
    "expect": "3",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "lol ok how many r characters in bookkeeper ?",
@@ -10980,7 +10980,7 @@
   {
    "say": "smallest of 59, 32, 7, 56",
    "expect": "7",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "reverse the list 6, 35, 28",
@@ -11005,7 +11005,7 @@
   {
    "say": "what are the unique values in 5, 2, 9, 8, 3, 7",
    "expect": "list<5, 2, 9, 8, 3, 7>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "quick one whats 136 minus 74 if you can",
@@ -11020,7 +11020,7 @@
   {
    "say": "what is the first of 10, 20, 15, 1",
    "expect": "10",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "reverse banana. actually no, realization",
@@ -11040,7 +11040,7 @@
   {
    "say": "does assessment start with a",
    "expect": "true",
-   "category": "starts-with"
+   "category": "text-starts-with"
   },
   {
    "say": "is 9 even",
@@ -11050,7 +11050,7 @@
   {
    "say": "split banana,mississippi,science on commas",
    "expect": "list<\"banana\", \"mississippi\", \"science\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "ok wait reverse bookkeeper thanks",
@@ -11070,12 +11070,12 @@
   {
    "say": "what is the first of 39, 26, 36, 5",
    "expect": "39",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "smallest of 37, 41, 21, 23",
    "expect": "21",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "is 29 bigger than 11",
@@ -11085,7 +11085,7 @@
   {
    "say": "does spoon end with qz",
    "expect": "false",
-   "category": "ends-with"
+   "category": "text-ends-with"
   },
   {
    "say": "um how many i characters in science thanks",
@@ -11115,12 +11115,12 @@
   {
    "say": "put 31, 3, 15, 4 in order",
    "expect": "list<3, 4, 15, 31>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "count of 11, 42, 12, 47, 41",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "alright whats 5 plus 73 if you can",
@@ -11130,17 +11130,17 @@
   {
    "say": "swap every m in mississippi for z",
    "expect": "\"zississippi\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "uppercase bookkeeper",
    "expect": "\"BOOKKEEPER\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "does possession begin with po",
    "expect": "true",
-   "category": "starts-with"
+   "category": "text-starts-with"
   },
   {
    "say": "one more whats 136 plus 62",
@@ -11160,12 +11160,12 @@
   {
    "say": "what is the sum of 16, 53, 54, 1",
    "expect": "124",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "shout assessment",
    "expect": "\"ASSESSMENT\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "is 3 bigger than 28",
@@ -11180,7 +11180,7 @@
   {
    "say": "how many numbers are in 9, 15, 41, 14, 57",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "divide 273 by 7",
@@ -11190,7 +11190,7 @@
   {
    "say": "what is the first of 16, 3, 13, 34",
    "expect": "16",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "is 116 even?",
@@ -11200,7 +11200,7 @@
   {
    "say": "what is the sum of 48, 34, 11, 44, 20",
    "expect": "157",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "is 30 even?",
@@ -11210,12 +11210,12 @@
   {
    "say": "what is the biggest of 30, 21, 51, 15",
    "expect": "51",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "is iss in mississippi?",
    "expect": "true",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "ok wait whats 107 minus 5",
@@ -11225,7 +11225,7 @@
   {
    "say": "uppercase committee",
    "expect": "\"COMMITTEE\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "hey whats 143 times 36 please",
@@ -11235,7 +11235,7 @@
   {
    "say": "what are the unique values in 4, 7, 3, 9, 6, 9",
    "expect": "list<4, 7, 3, 9, 6>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "quick one how many s characters in possession lol",
@@ -11255,7 +11255,7 @@
   {
    "say": "sort 2, 21, 14, 30",
    "expect": "list<2, 14, 21, 30>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "um reverse banana please",
@@ -11270,17 +11270,17 @@
   {
    "say": "what is the minimum of 45, 12, 18, 20, 58",
    "expect": "12",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "count of 17, 52, 43",
    "expect": "3",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "what is the product of 25, 10, 34, 20",
    "expect": "170000",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "number of a letters in banana",
@@ -11300,7 +11300,7 @@
   {
    "say": "add up 10, 59, 9, 34, 9, 38",
    "expect": "159",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "how many w characters in strawberry",
@@ -11370,7 +11370,7 @@
   {
    "say": "put 38, 33, 21, 25 in order",
    "expect": "list<21, 25, 33, 38>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "one more reverse hello real quick",
@@ -11390,7 +11390,7 @@
   {
    "say": "reverse the word spoon",
    "expect": "\"noops\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "reverse assessment sorry i meant strawberry",
@@ -11405,12 +11405,12 @@
   {
    "say": "what is the first of 28, 24, 20, 32",
    "expect": "28",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "shout committee",
    "expect": "\"COMMITTEE\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "reverse the list 2, 21, 14, 30",
@@ -11430,22 +11430,22 @@
   {
    "say": "add up 42, 13, 57, 15",
    "expect": "127",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "what is the product of 31, 1, 17, 19",
    "expect": "10013",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "what is the biggest of 14, 57, 37",
    "expect": "57",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "replace every h in hello with z",
    "expect": "\"zello\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "reverse the list 38, 15, 40, 18, 33",
@@ -11480,17 +11480,17 @@
   {
    "say": "smallest of 52, 57, 21, 48, 3, 55",
    "expect": "3",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "trim the spaces off \"  banana  \"",
    "expect": "\"banana\"",
-   "category": "trim"
+   "category": "text-trim"
   },
   {
    "say": "sort 7, 25, 33, 32, 17",
    "expect": "list<7, 17, 25, 32, 33>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "reverse the list 5, 27, 1, 14, 36",
@@ -11515,12 +11515,12 @@
   {
    "say": "sort 15, 1, 10, 3, 23",
    "expect": "list<1, 3, 10, 15, 23>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "what is the biggest of 4, 5, 19, 1",
    "expect": "19",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "what is 47 plus 28, no wait, 47 plus 16",
@@ -11530,17 +11530,17 @@
   {
    "say": "count of 54, 51, 48, 54, 22, 26",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "what is the biggest of 44, 13, 43, 27, 4",
    "expect": "44",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "how many numbers are in 7, 44, 17, 24, 26, 21",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "reverse keyboard. actually no, parallel",
@@ -11550,7 +11550,7 @@
   {
    "say": "how many numbers are in 45, 57, 31, 39, 10, 8",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "reverse bookkeeper. actually no, possession",
@@ -11570,12 +11570,12 @@
   {
    "say": "whats the largest number in 5, 31, 24, 33",
    "expect": "33",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "break banana,possession,realization apart at the commas",
    "expect": "list<\"banana\", \"possession\", \"realization\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "what is 286 minus 125",
@@ -11585,12 +11585,12 @@
   {
    "say": "how many numbers are in 50, 30, 6",
    "expect": "3",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "what is the biggest of 37, 41, 21, 23",
    "expect": "41",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "is 95 an even number",
@@ -11600,7 +11600,7 @@
   {
    "say": "whats the largest number in 39, 5, 45",
    "expect": "45",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "sorry whats 30 minus 35 lol",
@@ -11620,7 +11620,7 @@
   {
    "say": "does committee end with qz",
    "expect": "false",
-   "category": "ends-with"
+   "category": "text-ends-with"
   },
   {
    "say": "42 * 44",
@@ -11635,7 +11635,7 @@
   {
    "say": "count of 26, 24, 46, 59, 26",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "reverse coffee, no wait, reverse possession",
@@ -11655,12 +11655,12 @@
   {
    "say": "remove the duplicates from 5, 8, 7, 7, 1, 9",
    "expect": "list<5, 8, 7, 1, 9>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "reverse the word mississippi",
    "expect": "\"ippississim\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "hey how many o characters in coffee ?",
@@ -11670,17 +11670,17 @@
   {
    "say": "total of 9, 58, 48, 15, 24, 48",
    "expect": "202",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "strip the whitespace from \"  mississippi  \"",
    "expect": "\"mississippi\"",
-   "category": "trim"
+   "category": "text-trim"
   },
   {
    "say": "does kubernetes end with qz",
    "expect": "false",
-   "category": "ends-with"
+   "category": "text-ends-with"
   },
   {
    "say": "alright reverse assessment thanks",
@@ -11700,7 +11700,7 @@
   {
    "say": "what are the unique values in 7, 3, 9, 3, 7, 3",
    "expect": "list<7, 3, 9>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "how many o characters in kyeboard",
@@ -11715,7 +11715,7 @@
   {
    "say": "is oss in possession?",
    "expect": "true",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "ok wait whats 10 times 40",
@@ -11730,7 +11730,7 @@
   {
    "say": "what is the first of 19, 8, 24, 38",
    "expect": "19",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "hmm reverse coffee",
@@ -11740,7 +11740,7 @@
   {
    "say": "make ASSESSMENT lowercase",
    "expect": "\"assessment\"",
-   "category": "lower"
+   "category": "text-lower"
   },
   {
    "say": "ok wait whats 163 times 32 thanks",
@@ -11755,12 +11755,12 @@
   {
    "say": "what is the sum of 49, 12, 56, 9, 27",
    "expect": "153",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "reverse kubernetes",
    "expect": "\"setenrebuk\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "how many t characters in strabwerry",
@@ -11775,7 +11775,7 @@
   {
    "say": "put 14, 29, 23, 20 in order",
    "expect": "list<14, 20, 23, 29>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "how many o characters are in realization",
@@ -11785,7 +11785,7 @@
   {
    "say": "list the numbers 1 through 7",
    "expect": "list<1, 2, 3, 4, 5, 6, 7>",
-   "category": "range"
+   "category": "list-range"
   },
   {
    "say": "is 53 even?",
@@ -11800,7 +11800,7 @@
   {
    "say": "max of 50, 32, 43, 39",
    "expect": "50",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "how long is the word assessment",
@@ -11830,17 +11830,17 @@
   {
    "say": "what is the sum of 5, 52, 1",
    "expect": "58",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "does coffee begin with co",
    "expect": "true",
-   "category": "starts-with"
+   "category": "text-starts-with"
   },
   {
    "say": "break concept,realization,spoon apart at the commas",
    "expect": "list<\"concept\", \"realization\", \"spoon\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "67 * 162",
@@ -11855,7 +11855,7 @@
   {
    "say": "smallest of 4, 28, 34",
    "expect": "4",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "is 5 negative",
@@ -11870,7 +11870,7 @@
   {
    "say": "sort 13, 10, 24, 33",
    "expect": "list<10, 13, 24, 33>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "sorry reverse coffee",
@@ -11890,12 +11890,12 @@
   {
    "say": "smallest of 4, 60, 6, 17, 11",
    "expect": "4",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "smallest of 5, 30, 44, 40",
    "expect": "5",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "how many r characters in raelization",
@@ -11925,12 +11925,12 @@
   {
    "say": "remove the duplicates from 9, 2, 2, 9, 8, 6",
    "expect": "list<9, 2, 8, 6>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "add up 4, 8, 13, 5, 18, 24",
    "expect": "72",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "reverse the list 25, 8, 9, 32",
@@ -11940,7 +11940,7 @@
   {
    "say": "does bookkeeper contain zqx",
    "expect": "false",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "reverse the list 4, 35, 13",
@@ -11955,7 +11955,7 @@
   {
    "say": "what is the biggest of 14, 22, 44, 5",
    "expect": "44",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "um reverse bookkeeper lol",
@@ -11965,12 +11965,12 @@
   {
    "say": "how many numbers are in 27, 58, 2, 52, 46",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "what is the first of 25, 22, 25, 8",
    "expect": "25",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "um whats 139 times 91",
@@ -12010,7 +12010,7 @@
   {
    "say": "smallest of 39, 37, 22, 50, 13, 1",
    "expect": "1",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "one more whats 36 plus 13",
@@ -12025,27 +12025,27 @@
   {
    "say": "remove the duplicates from 2, 8, 5, 1, 7, 5",
    "expect": "list<2, 8, 5, 1, 7>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "replace every b in banana with z",
    "expect": "\"zanana\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "what are the unique values in 3, 2, 4, 8, 9, 7",
    "expect": "list<3, 2, 4, 8, 9, 7>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "spell banana backwards",
    "expect": "\"ananab\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "count of 56, 1, 4, 7, 43",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "247 - 177",
@@ -12065,7 +12065,7 @@
   {
    "say": "what is the minimum of 32, 50, 41, 58, 14, 1",
    "expect": "1",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "reverse parallel. actually no, bookkeeper",
@@ -12075,12 +12075,12 @@
   {
    "say": "what is the biggest of 26, 8, 32",
    "expect": "32",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "max of 45, 57, 31, 39, 10, 8",
    "expect": "57",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "raise 3 to the 3",
@@ -12090,7 +12090,7 @@
   {
    "say": "does bookkeeper contain ook",
    "expect": "true",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "ok wait whats 185 plus 90 if you can",
@@ -12130,7 +12130,7 @@
   {
    "say": "the first 5 letters of bookkeeper",
    "expect": "\"bookk\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "lol ok how many e characters in parallel please",
@@ -12140,12 +12140,12 @@
   {
    "say": "sort 12, 39, 31, 36, 25",
    "expect": "list<12, 25, 31, 36, 39>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "count of 21, 33, 16",
    "expect": "3",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "is 3 bigger than 23",
@@ -12155,27 +12155,27 @@
   {
    "say": "what is bookkeeper backwards",
    "expect": "\"repeekkoob\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "put 37, 21, 8, 3, 37 in order",
    "expect": "list<3, 8, 21, 37, 37>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "first item in 7, 20, 17, 33",
    "expect": "7",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "what is the biggest of 42, 33, 45, 57, 18, 59",
    "expect": "59",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "count of 40, 27, 42, 5, 31, 38",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "one more whats 12 times 13 lol",
@@ -12195,12 +12195,12 @@
   {
    "say": "how many numbers are in 7, 6, 31, 17",
    "expect": "4",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "sort these numbers: 2, 4, 28",
    "expect": "list<2, 4, 28>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "sorry reverse spoon",
@@ -12240,7 +12240,7 @@
   {
    "say": "split committee,kubernetes,coffee on commas",
    "expect": "list<\"committee\", \"kubernetes\", \"coffee\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "ok so how many e characters in recommend lol",
@@ -12260,22 +12260,22 @@
   {
    "say": "break parallel,spoon,committee apart at the commas",
    "expect": "list<\"parallel\", \"spoon\", \"committee\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "first 2 characters of science",
    "expect": "\"sc\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "how many numbers are in 10, 30, 2",
    "expect": "3",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "uppercase keyboard",
    "expect": "\"KEYBOARD\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "what is 250 times 70",
@@ -12285,7 +12285,7 @@
   {
    "say": "add up 10, 30, 2",
    "expect": "42",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "one more reverse hello thanks",
@@ -12310,22 +12310,22 @@
   {
    "say": "does concept start with c",
    "expect": "true",
-   "category": "starts-with"
+   "category": "text-starts-with"
   },
   {
    "say": "break science,possession,recommend apart at the commas",
    "expect": "list<\"science\", \"possession\", \"recommend\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "make spoon uppercase",
    "expect": "\"SPOON\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "what is the product of 17, 6, 38, 29",
    "expect": "112404",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "alright reverse mississippi thanks",
@@ -12335,7 +12335,7 @@
   {
    "say": "count of 21, 54, 14, 2, 25",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "number of e letters in assessment",
@@ -12355,12 +12355,12 @@
   {
    "say": "does mississippi end with qz",
    "expect": "false",
-   "category": "ends-with"
+   "category": "text-ends-with"
   },
   {
    "say": "split recommend,strawberry,parallel on commas",
    "expect": "list<\"recommend\", \"strawberry\", \"parallel\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "is 14 an even number",
@@ -12395,17 +12395,17 @@
   {
    "say": "lowercase HELLO",
    "expect": "\"hello\"",
-   "category": "lower"
+   "category": "text-lower"
   },
   {
    "say": "how many numbers are in 39, 52, 19, 49",
    "expect": "4",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "what is the minimum of 17, 12, 33, 1, 41, 42",
    "expect": "1",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "reverse the list 16, 22, 3, 12, 4",
@@ -12420,7 +12420,7 @@
   {
    "say": "what is the first of 5, 1, 6, 26",
    "expect": "5",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "38 mod 5",
@@ -12430,27 +12430,27 @@
   {
    "say": "whats the largest number in 45, 34, 5",
    "expect": "45",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "what is the minimum of 49, 12, 56, 9, 27",
    "expect": "9",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "shout hello",
    "expect": "\"HELLO\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "what is the minimum of 16, 53, 54, 1",
    "expect": "1",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "does possession end with on",
    "expect": "true",
-   "category": "ends-with"
+   "category": "text-ends-with"
   },
   {
    "say": "so like whats 115 times 38 real quick",
@@ -12460,12 +12460,12 @@
   {
    "say": "what is mississippi backwards",
    "expect": "\"ippississim\"",
-   "category": "reverse"
+   "category": "list-reverse"
   },
   {
    "say": "give me 1 to 3",
    "expect": "list<1, 2, 3>",
-   "category": "range"
+   "category": "list-range"
   },
   {
    "say": "reverse the list 31, 3, 15, 4",
@@ -12490,7 +12490,7 @@
   {
    "say": "first item in 4, 11, 4, 23",
    "expect": "4",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "um whats 176 minus 7 real quick",
@@ -12515,7 +12515,7 @@
   {
    "say": "sort 37, 35, 13, 20, 34",
    "expect": "list<13, 20, 34, 35, 37>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "ok so whats 186 plus 24 ?",
@@ -12575,7 +12575,7 @@
   {
    "say": "what is the sum of 59, 50, 43, 9, 34",
    "expect": "195",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "how many times does \"e\" appear in concept",
@@ -12585,7 +12585,7 @@
   {
    "say": "how many numbers are in 39, 5, 45",
    "expect": "3",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "reverse keyboard. actually no, committee",
@@ -12600,12 +12600,12 @@
   {
    "say": "sort these numbers: 20, 19, 16",
    "expect": "list<16, 19, 20>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "what is the product of 24, 6, 27, 7",
    "expect": "27216",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "reverse possession sorry i meant banana",
@@ -12620,32 +12620,32 @@
   {
    "say": "replace every c in committee with z",
    "expect": "\"zommittee\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "what is the product of 38, 31, 40, 40",
    "expect": "1884800",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "smallest of 41, 21, 7, 14, 18, 43",
    "expect": "7",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "first item in 25, 10, 34, 20",
    "expect": "25",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "uppercase banana",
    "expect": "\"BANANA\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "how many numbers are in 33, 31, 53, 45, 10",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "quick one whats 61 minus 53 ?",
@@ -12655,7 +12655,7 @@
   {
    "say": "what is the minimum of 4, 5, 19, 1",
    "expect": "1",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "reverse the list 18, 29, 33",
@@ -12670,7 +12670,7 @@
   {
    "say": "add up 46, 27, 50, 46, 24, 35",
    "expect": "228",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "so like whats 78 plus 9 lol",
@@ -12685,7 +12685,7 @@
   {
    "say": "first item in 34, 31, 13, 3",
    "expect": "34",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "um reverse mississippi thanks",
@@ -12700,7 +12700,7 @@
   {
    "say": "first item in 2, 18, 35, 32",
    "expect": "2",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "30 to the power of 4",
@@ -12720,7 +12720,7 @@
   {
    "say": "put 19, 18, 20, 6, 14 in order",
    "expect": "list<6, 14, 18, 19, 20>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "what is 45 times 123",
@@ -12730,12 +12730,12 @@
   {
    "say": "add up 53, 35, 39, 54",
    "expect": "181",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "count of 5, 23, 14",
    "expect": "3",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "another one how many s characters in science",
@@ -12800,7 +12800,7 @@
   {
    "say": "the first 2 letters of hello",
    "expect": "\"he\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "reverse the list 19, 33, 3",
@@ -12840,7 +12840,7 @@
   {
    "say": "what is the biggest of 6, 60, 6",
    "expect": "60",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "um how many n characters in science ?",
@@ -12865,7 +12865,7 @@
   {
    "say": "how many numbers are in 46, 27, 50, 46, 24, 35",
    "expect": "6",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "raise 10 to the 2",
@@ -12880,7 +12880,7 @@
   {
    "say": "sort these numbers: 28, 20, 5",
    "expect": "list<5, 20, 28>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "so like how many n characters in realization thanks",
@@ -12895,17 +12895,17 @@
   {
    "say": "what is the product of 37, 29, 18, 17",
    "expect": "328338",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "what is the product of 22, 27, 40, 17",
    "expect": "403920",
-   "category": "product"
+   "category": "math-product"
   },
   {
    "say": "what is the sum of 52, 58, 54, 28",
    "expect": "192",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "sorry reverse banana",
@@ -12915,7 +12915,7 @@
   {
    "say": "what is the sum of 39, 37, 22, 50, 13, 1",
    "expect": "162",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "so like how many n characters in realization please",
@@ -12940,7 +12940,7 @@
   {
    "say": "break realization,possession,hello apart at the commas",
    "expect": "list<\"realization\", \"possession\", \"hello\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "what is the remainder of 42 divided by 6",
@@ -12955,22 +12955,22 @@
   {
    "say": "make concept uppercase",
    "expect": "\"CONCEPT\"",
-   "category": "upper"
+   "category": "text-upper"
   },
   {
    "say": "remove the duplicates from 8, 6, 2, 9, 3, 3",
    "expect": "list<8, 6, 2, 9, 3>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "whats the largest number in 17, 43, 2, 59, 13",
    "expect": "59",
-   "category": "max"
+   "category": "math-max"
   },
   {
    "say": "sort these numbers: 7, 36, 32, 27, 30",
    "expect": "list<7, 27, 30, 32, 36>",
-   "category": "sort"
+   "category": "list-sort"
   },
   {
    "say": "is 17 bigger than 23",
@@ -12990,7 +12990,7 @@
   {
    "say": "what is the minimum of 16, 60, 15, 50, 44, 3",
    "expect": "3",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "ok so reverse banana",
@@ -13050,12 +13050,12 @@
   {
    "say": "how many numbers are in 46, 2, 15, 20, 52",
    "expect": "5",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "first 2 characters of committee",
    "expect": "\"co\"",
-   "category": "substring"
+   "category": "text-substring"
   },
   {
    "say": "can you work out 203 plus 28 for me",
@@ -13065,7 +13065,7 @@
   {
    "say": "how many numbers are in 39, 30, 58",
    "expect": "3",
-   "category": "count"
+   "category": "list-count"
   },
   {
    "say": "one more whats 126 minus 51 please",
@@ -13085,17 +13085,17 @@
   {
    "say": "smallest of 8, 41, 50, 19, 54",
    "expect": "8",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "does realization contain zqx",
    "expect": "false",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "remove the duplicates from 3, 5, 7, 1, 4, 2",
    "expect": "list<3, 5, 7, 1, 4, 2>",
-   "category": "unique"
+   "category": "list-unique"
   },
   {
    "say": "56 / 4",
@@ -13105,7 +13105,7 @@
   {
    "say": "break recommend,parallel,science apart at the commas",
    "expect": "list<\"recommend\", \"parallel\", \"science\">",
-   "category": "split"
+   "category": "text-split"
   },
   {
    "say": "number of o letters in possession",
@@ -13115,22 +13115,22 @@
   {
    "say": "add up 50, 13, 51, 46, 48, 13",
    "expect": "221",
-   "category": "sum"
+   "category": "math-sum"
   },
   {
    "say": "smallest of 34, 47, 20, 4, 50",
    "expect": "4",
-   "category": "min"
+   "category": "math-min"
   },
   {
    "say": "what is the first of 35, 11, 29, 7",
    "expect": "35",
-   "category": "first"
+   "category": "list-first"
   },
   {
    "say": "replace \"c\" with \"z\" in committee",
    "expect": "\"zommittee\"",
-   "category": "replace"
+   "category": "text-replace"
   },
   {
    "say": "another one whats 30 plus 13 thanks",
@@ -13150,7 +13150,7 @@
   {
    "say": "does mississippi contain iss",
    "expect": "true",
-   "category": "contains"
+   "category": "list-contains"
   },
   {
    "say": "sorry whats 158 plus 21",
@@ -13170,7 +13170,7 @@
   {
    "say": "what is the product of 7, 34, 40, 10",
    "expect": "95200",
-   "category": "product"
+   "category": "math-product"
   }
  ]
 }

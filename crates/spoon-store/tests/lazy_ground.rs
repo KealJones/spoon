@@ -15,7 +15,7 @@ fn ground_concepts_cost_no_row_until_something_is_asserted_about_them() {
 
     // Evaluating Add<42, 1> is pure structure over self-describing values.
     // Nothing about it needs the store, so nothing is written.
-    let expression = Concept::call("add", [Concept::int(42), Concept::int(1)]);
+    let expression = Concept::call("math-add", [Concept::int(42), Concept::int(1)]);
     assert_eq!(store.count_concepts().unwrap(), 0);
 
     // Even handing the ground values to the store directly writes no rows:
@@ -92,7 +92,7 @@ fn asserting_a_relationship_materializes_the_ground_value_it_mentions() {
 fn storing_a_computation_writes_rows_for_names_but_not_for_values() {
     let store = Store::open_in_memory().unwrap();
     store
-        .put_concept(&Concept::call("add", [Concept::int(42), Concept::int(1)]))
+        .put_concept(&Concept::call("math-add", [Concept::int(42), Concept::int(1)]))
         .unwrap();
     // The compound and the head `add`. Not 42, not 1.
     assert_eq!(store.count_concepts().unwrap(), 2);

@@ -32,8 +32,8 @@ fn distinct_names_get_distinct_ids() {
     let names = [
         "greg",
         "keal",
-        "add",
-        "sort",
+        "math-add",
+        "list-sort",
         "friend-with",
         "employment",
         "height",
@@ -303,7 +303,7 @@ fn head_symbol_is_none_for_partial_application() {
     // no single symbol to file it under. The store has to fall back to the
     // head's content_id for these.
     let curried = Concept::apply(
-        Concept::call("sort", [Concept::named("descending")]),
+        Concept::call("list-sort", [Concept::named("descending")]),
         vec![Concept::named("friends")],
     );
     assert_eq!(curried.head_symbol(), None);
@@ -325,9 +325,9 @@ fn size_and_depth_count_the_head() {
     assert_eq!(flat.depth(), 2);
 
     let nested = Concept::call(
-        "sum",
+        "math-sum",
         [Concept::call(
-            "map",
+            "list-map",
             [Concept::named("friends"), Concept::named("height")],
         )],
     );
@@ -367,7 +367,7 @@ fn concepts_round_trip_through_json() {
             ],
         ),
         Concept::apply(
-            Concept::call("sort", [Concept::named("descending")]),
+            Concept::call("list-sort", [Concept::named("descending")]),
             vec![Concept::named("friends")],
         ),
     ];

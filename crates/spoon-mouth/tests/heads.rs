@@ -72,14 +72,14 @@ fn cannot_yet_names_what_was_wanted() {
     // internal notation instead hands the reader a concept expression when they
     // asked a question.
     let table = Arc::new(SymbolTable::new());
-    table.intern("reverse");
+    table.intern("list-reverse");
     let mouth = TemplateMouth::new(table);
 
-    let wanted = Concept::call("reverse", [Concept::text("hello")]);
+    let wanted = Concept::call("list-reverse", [Concept::text("hello")]);
     let rendered = mouth.say_native(&Concept::call("cannot-yet", [wanted]), &[]);
 
     assert!(
-        rendered.contains("reverse"),
+        rendered.contains("list-reverse"),
         "should name the capability: {rendered}"
     );
     assert!(

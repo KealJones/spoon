@@ -1,7 +1,7 @@
 {
   "name": "session",
   "note": "Real utterances from the conversation that designed this system. Kept exactly as typed, typos and all, because that is the input Spoon has to survive.",
-  "lines": [
+  "text-lines": [
     "Take a look at this, give me brief high level thoughts and a TLDR of the important parts",
     "how hard do you think it would be to build?",
     "what if you were just adjusting a prior implementation that was used to extract and refine the new proposal",

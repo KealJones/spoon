@@ -101,7 +101,7 @@ fn learns_double_and_the_body_generalizes() {
     // else.
     assert_eq!(
         *body,
-        Concept::call("add", [Concept::hole(0), Concept::hole(0)])
+        Concept::call("math-add", [Concept::hole(0), Concept::hole(0)])
     );
     // The point of learning a capability rather than memorizing the examples:
     // it has to work on an input nobody mentioned.
@@ -121,7 +121,7 @@ fn learns_double_and_the_body_generalizes() {
 fn learns_a_two_argument_capability() {
     let (store, registry) = brain();
     let spec = spec(
-        "sum",
+        "math-sum",
         &[
             (&[Concept::int(2), Concept::int(3)], Concept::int(5)),
             (&[Concept::int(10), Concept::int(4)], Concept::int(14)),
@@ -151,7 +151,7 @@ fn learns_over_text() {
     let outcome = synthesize(&spec, &store, &registry, budget());
     let body = found(&outcome);
 
-    assert!(mentions(body, "upper"), "expected upper, got {body:?}");
+    assert!(mentions(body, "text-upper"), "expected upper, got {body:?}");
     assert_eq!(
         apply(&store, &registry, body, &[Concept::text("spoon")]),
         Concept::text("SPOON")
@@ -196,7 +196,7 @@ fn builds_on_a_previously_learned_capability() {
         &store,
         "double",
         "synth-double",
-        Concept::call("add", [Concept::hole(0), Concept::hole(0)]),
+        Concept::call("math-add", [Concept::hole(0), Concept::hole(0)]),
     );
 
     let spec = spec(

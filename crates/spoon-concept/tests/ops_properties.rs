@@ -29,7 +29,7 @@ impl Gen {
         let leaf_only = depth == 0;
         let choice = self.pick(if leaf_only { 4 } else { 6 });
         match choice {
-            0 => Concept::named(["greg", "keal", "add", "sort"][self.pick(4)]),
+            0 => Concept::named(["greg", "keal", "math-add", "list-sort"][self.pick(4)]),
             1 => Concept::int((self.pick(5) as i64) - 2),
             2 => Concept::text(["a", "b", ""][self.pick(3)]),
             3 => {
@@ -286,11 +286,11 @@ fn sharing_a_hole_is_a_different_claim_from_using_two() {
 #[test]
 fn composed_bodies_bind_positionally() {
     // `double` is Add<Hole(0), Hole(0)>. Applied to [21] it becomes Add<21, 21>.
-    let body = Concept::call("add", [Concept::hole(0), Concept::hole(0)]);
+    let body = Concept::call("math-add", [Concept::hole(0), Concept::hole(0)]);
     let bound = substitute_positional(&body, &[Concept::int(21)]);
     assert_eq!(
         bound,
-        Concept::call("add", [Concept::int(21), Concept::int(21)])
+        Concept::call("math-add", [Concept::int(21), Concept::int(21)])
     );
     assert!(is_ground_term(&bound));
 }
@@ -300,7 +300,7 @@ fn missing_positional_arguments_leave_holes_standing() {
     // Under-applying is not an error at this layer. The result is a concept
     // that is still meaningful and still has a visible gap, which is what lets
     // the evaluator report a placeholder instead of inventing a value.
-    let body = Concept::call("add", [Concept::hole(0), Concept::hole(1)]);
+    let body = Concept::call("math-add", [Concept::hole(0), Concept::hole(1)]);
     let bound = substitute_positional(&body, &[Concept::int(21)]);
     assert_eq!(bound.arg(0), Some(&Concept::int(21)));
     assert_eq!(bound.arg(1), Some(&Concept::hole(1)));
@@ -319,7 +319,7 @@ fn ground_term_asks_about_completeness_not_identity() {
     assert!(!named.is_ground());
     assert!(is_ground_term(&named), "no holes means ground as a term");
 
-    let gappy = Concept::call("add", [Concept::int(1), Concept::hole(0)]);
+    let gappy = Concept::call("math-add", [Concept::int(1), Concept::hole(0)]);
     assert!(!gappy.is_ground());
     assert!(!is_ground_term(&gappy));
 }

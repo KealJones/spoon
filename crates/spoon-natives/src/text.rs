@@ -73,7 +73,7 @@ fn out_of_range(native: &str, index: usize, len: usize) -> EvalError {
 fn concat(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     let mut out = String::new();
     for a in args {
-        out.push_str(want_text("concat", a)?);
+        out.push_str(want_text("text-concat", a)?);
     }
     Ok(Concept::text(out))
 }
@@ -81,10 +81,10 @@ fn concat(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// An empty separator is refused. Rust would happily split on it and hand back
 /// empty strings at both ends, which is a result nobody asks for on purpose.
 fn split(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let text = want_text("split", &args[0])?;
-    let sep = want_text("split", &args[1])?;
+    let text = want_text("text-split", &args[0])?;
+    let sep = want_text("text-split", &args[1])?;
     if sep.is_empty() {
-        return Err(native_error("split", "an empty separator has no meaning"));
+        return Err(native_error("text-split", "an empty separator has no meaning"));
     }
     Ok(make_list(text.split(sep).map(Concept::text).collect()))
 }
@@ -92,11 +92,11 @@ fn split(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// Elements must already be text. `Join<Map<List<1, 2>, to-text>, ",">` is the
 /// spelling for anything else, and it says what it is doing.
 fn join(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let items = want_list("join", &args[0])?;
-    let sep = want_text("join", &args[1])?;
+    let items = want_list("text-join", &args[0])?;
+    let sep = want_text("text-join", &args[1])?;
     let mut parts = Vec::with_capacity(items.len());
     for item in items.iter() {
-        parts.push(want_text("join", item)?);
+        parts.push(want_text("text-join", item)?);
     }
     Ok(Concept::text(parts.join(sep)))
 }
@@ -105,7 +105,7 @@ fn join(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// the same as one written anywhere else. A final newline does not produce a
 /// trailing empty line.
 fn lines(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let text = want_text("lines", &args[0])?;
+    let text = want_text("text-lines", &args[0])?;
     Ok(make_list(text.lines().map(Concept::text).collect()))
 }
 
@@ -117,26 +117,26 @@ fn lines(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// character. Case mapping is not a per-character substitution in general,
 /// which is why this cannot be done by indexing.
 fn upper(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    Ok(Concept::text(want_text("upper", &args[0])?.to_uppercase()))
+    Ok(Concept::text(want_text("text-upper", &args[0])?.to_uppercase()))
 }
 
 fn lower(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    Ok(Concept::text(want_text("lower", &args[0])?.to_lowercase()))
+    Ok(Concept::text(want_text("text-lower", &args[0])?.to_lowercase()))
 }
 
 fn trim(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    Ok(Concept::text(want_text("trim", &args[0])?.trim()))
+    Ok(Concept::text(want_text("text-trim", &args[0])?.trim()))
 }
 
 /// An empty needle is refused: replacing nothing with something inserts the
 /// replacement between every character, which is never what was meant.
 fn replace(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let text = want_text("replace", &args[0])?;
-    let from = want_text("replace", &args[1])?;
-    let to = want_text("replace", &args[2])?;
+    let text = want_text("text-replace", &args[0])?;
+    let from = want_text("text-replace", &args[1])?;
+    let to = want_text("text-replace", &args[2])?;
     if from.is_empty() {
         return Err(native_error(
-            "replace",
+            "text-replace",
             "an empty search string has no meaning",
         ));
     }
@@ -150,14 +150,14 @@ fn text_length(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 }
 
 fn starts_with(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let text = want_text("starts-with", &args[0])?;
-    let prefix = want_text("starts-with", &args[1])?;
+    let text = want_text("text-starts-with", &args[0])?;
+    let prefix = want_text("text-starts-with", &args[1])?;
     Ok(Concept::bool(text.starts_with(prefix)))
 }
 
 fn ends_with(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let text = want_text("ends-with", &args[0])?;
-    let suffix = want_text("ends-with", &args[1])?;
+    let text = want_text("text-ends-with", &args[0])?;
+    let suffix = want_text("text-ends-with", &args[1])?;
     Ok(Concept::bool(text.ends_with(suffix)))
 }
 
@@ -173,19 +173,19 @@ fn text_contains(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// Character indices, end exclusive. Out-of-range bounds are an error rather
 /// than a clamp, for the same reason `Slice` refuses to quietly shorten a list.
 fn substring(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let text = want_text("substring", &args[0])?;
-    let start = want_count("substring", &args[1])?;
-    let end = want_count("substring", &args[2])?;
+    let text = want_text("text-substring", &args[0])?;
+    let start = want_count("text-substring", &args[1])?;
+    let end = want_count("text-substring", &args[2])?;
     let len = char_count(text);
     if start > len {
-        return Err(out_of_range("substring", start, len));
+        return Err(out_of_range("text-substring", start, len));
     }
     if end > len {
-        return Err(out_of_range("substring", end, len));
+        return Err(out_of_range("text-substring", end, len));
     }
     if start > end {
         return Err(native_error(
-            "substring",
+            "text-substring",
             format!("start {start} is past end {end}"),
         ));
     }
@@ -194,11 +194,11 @@ fn substring(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 }
 
 fn char_at(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let text = want_text("char-at", &args[0])?;
-    let index = want_count("char-at", &args[1])?;
+    let text = want_text("text-char-at", &args[0])?;
+    let index = want_count("text-char-at", &args[1])?;
     match text.chars().nth(index) {
         Some(c) => Ok(Concept::text(c.to_string())),
-        None => Err(out_of_range("char-at", index, char_count(text))),
+        None => Err(out_of_range("text-char-at", index, char_count(text))),
     }
 }
 
@@ -243,25 +243,25 @@ fn pad(native: &str, args: &[Concept], on_left: bool) -> EvalResult {
 }
 
 fn pad_left(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    pad("pad-left", args, true)
+    pad("text-pad-left", args, true)
 }
 
 fn pad_right(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    pad("pad-right", args, false)
+    pad("text-pad-right", args, false)
 }
 
 /// Capped before anything is allocated. `Repeat<"ab", 10000000000>` is a single
 /// small concept that asks for twenty gigabytes, and the evaluator's node
 /// budget cannot see it coming because the result is one node either way.
 fn repeat(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let text = want_text("repeat", &args[0])?;
-    let count = want_count("repeat", &args[1])?;
+    let text = want_text("text-repeat", &args[0])?;
+    let count = want_count("text-repeat", &args[1])?;
     let total = char_count(text)
         .checked_mul(count)
-        .ok_or_else(|| native_error("repeat", "requested length overflows"))?;
+        .ok_or_else(|| native_error("text-repeat", "requested length overflows"))?;
     if total > MAX_REPEAT_CHARS {
         return Err(native_error(
-            "repeat",
+            "text-repeat",
             format!("{total} characters exceeds the {MAX_REPEAT_CHARS} character cap"),
         ));
     }
@@ -278,7 +278,7 @@ fn repeat(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 fn to_text(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     let ground = args[0]
         .as_ground()
-        .ok_or_else(|| type_error("to-text", "a ground value", &args[0]))?;
+        .ok_or_else(|| type_error("text-to-text", "a ground value", &args[0]))?;
     let out = match ground {
         Ground::Bool(b) => b.to_string(),
         Ground::Int(i) => i.to_string(),
@@ -287,7 +287,7 @@ fn to_text(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
         Ground::Bytes(b) => b.iter().map(|byte| format!("{byte:02x}")).collect(),
         Ground::DateTime(d) => d.to_rfc3339(),
         Ground::Json(j) => serde_json::to_string(j.value())
-            .map_err(|e| native_error("to-text", format!("json will not render: {e}")))?,
+            .map_err(|e| native_error("text-to-text", format!("json will not render: {e}")))?,
     };
     Ok(Concept::text(out))
 }
@@ -296,19 +296,19 @@ fn to_text(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// would put a number Spoon then reasons from where there was never one.
 /// Surrounding whitespace is tolerated, since it carries no meaning either way.
 fn parse_int(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let text = want_text("parse-int", &args[0])?;
+    let text = want_text("text-parse-int", &args[0])?;
     text.trim()
         .parse::<i64>()
         .map(Concept::int)
-        .map_err(|e| native_error("parse-int", format!("{text:?} is not an integer: {e}")))
+        .map_err(|e| native_error("text-parse-int", format!("{text:?} is not an integer: {e}")))
 }
 
 fn parse_float(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let text = want_text("parse-float", &args[0])?;
+    let text = want_text("text-parse-float", &args[0])?;
     text.trim()
         .parse::<f64>()
         .map(Concept::float)
-        .map_err(|e| native_error("parse-float", format!("{text:?} is not a number: {e}")))
+        .map_err(|e| native_error("text-parse-float", format!("{text:?} is not a number: {e}")))
 }
 
 // ---------------------------------------------------------------------------
@@ -321,9 +321,9 @@ fn parse_float(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// reader would call characters rather than into fragments that cannot be put
 /// back together.
 fn chars(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let text = want_text("chars", &args[0])?;
+    let text = want_text("text-chars", &args[0])?;
     Ok(Concept::call(
-        "list",
+        "list-list",
         text.chars()
             .map(|c| Concept::text(c.to_string()))
             .collect::<Vec<_>>(),
@@ -332,45 +332,45 @@ fn chars(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 
 pub fn register(registry: &mut NativeRegistry) {
     registry.pure(
-        "chars",
+        "text-chars",
         chars,
         Arity::Exact(1),
         "a string taken apart into a list of one-character strings; use it only when the answer really is a list",
     );
     registry.pure(
-        "concat",
+        "text-concat",
         concat,
         Arity::Any,
         "several strings joined end to end",
     );
     registry.pure(
-        "split",
+        "text-split",
         split,
         Arity::Exact(2),
         "a string cut apart at every separator; gives back a list of strings",
     );
     registry.pure(
-        "join",
+        "text-join",
         join,
         Arity::Exact(2),
         "a list of strings run together with a separator between them; gives back a string, so it is how a list of characters becomes a word again",
     );
     registry.pure(
-        "lines",
+        "text-lines",
         lines,
         Arity::Exact(1),
         "a list of the lines of a string",
     );
-    registry.pure("upper", upper, Arity::Exact(1), "a string in upper case");
-    registry.pure("lower", lower, Arity::Exact(1), "a string in lower case");
+    registry.pure("text-upper", upper, Arity::Exact(1), "a string in upper case");
+    registry.pure("text-lower", lower, Arity::Exact(1), "a string in lower case");
     registry.pure(
-        "trim",
+        "text-trim",
         trim,
         Arity::Exact(1),
         "a string without leading or trailing whitespace",
     );
     registry.pure(
-        "replace",
+        "text-replace",
         replace,
         Arity::Exact(3),
         "a string with every occurrence of one substring swapped for another",
@@ -382,13 +382,13 @@ pub fn register(registry: &mut NativeRegistry) {
         "how many characters a string has; gives back a number",
     );
     registry.pure(
-        "starts-with",
+        "text-starts-with",
         starts_with,
         Arity::Exact(2),
         "whether a string begins with another",
     );
     registry.pure(
-        "ends-with",
+        "text-ends-with",
         ends_with,
         Arity::Exact(2),
         "whether a string ends with another",
@@ -400,49 +400,49 @@ pub fn register(registry: &mut NativeRegistry) {
         "whether a string holds another anywhere inside it",
     );
     registry.pure(
-        "substring",
+        "text-substring",
         substring,
         Arity::Exact(3),
         "part of a string, from a start index up to but not including an end index; gives back a string",
     );
     registry.pure(
-        "char-at",
+        "text-char-at",
         char_at,
         Arity::Exact(2),
         "the character of a string at a zero-based index",
     );
     registry.pure(
-        "pad-left",
+        "text-pad-left",
         pad_left,
         Arity::Between(2, 3),
         "a string padded at the front to a width, with spaces or a given character",
     );
     registry.pure(
-        "pad-right",
+        "text-pad-right",
         pad_right,
         Arity::Between(2, 3),
         "a string padded at the end to a width, with spaces or a given character",
     );
     registry.pure(
-        "repeat",
+        "text-repeat",
         repeat,
         Arity::Exact(2),
         "a string repeated a number of times",
     );
     registry.pure(
-        "to-text",
+        "text-to-text",
         to_text,
         Arity::Exact(1),
         "the text form of a ground value",
     );
     registry.pure(
-        "parse-int",
+        "text-parse-int",
         parse_int,
         Arity::Exact(1),
         "an integer read from a string",
     );
     registry.pure(
-        "parse-float",
+        "text-parse-float",
         parse_float,
         Arity::Exact(1),
         "a float read from a string",

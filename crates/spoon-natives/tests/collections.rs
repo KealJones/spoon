@@ -74,7 +74,7 @@ fn why_failed(store: &Store, reg: &NativeRegistry, c: &Concept) -> String {
 }
 
 fn list(items: impl IntoIterator<Item = Concept>) -> Concept {
-    Concept::call("list", items)
+    Concept::call("list-list", items)
 }
 
 fn ints(values: impl IntoIterator<Item = i64>) -> Concept {
@@ -95,11 +95,11 @@ fn list_builds_a_compound_headed_by_list() {
     let out = value(
         &store,
         &reg,
-        &Concept::call("list", [Concept::int(1), Concept::int(2)]),
+        &Concept::call("list-list", [Concept::int(1), Concept::int(2)]),
     );
     assert_eq!(out, ints([1, 2]));
     assert_eq!(out.arity(), 2);
-    assert_eq!(value(&store, &reg, &Concept::call("list", [])), ints([]));
+    assert_eq!(value(&store, &reg, &Concept::call("list-list", [])), ints([]));
 }
 
 #[test]
@@ -107,15 +107,15 @@ fn first_last_and_nth_read_positions() {
     let (store, reg) = brain();
     let l = ints([10, 20, 30]);
     assert_eq!(
-        value(&store, &reg, &Concept::call("first", [l.clone()])),
+        value(&store, &reg, &Concept::call("list-first", [l.clone()])),
         Concept::int(10)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("last", [l.clone()])),
+        value(&store, &reg, &Concept::call("list-last", [l.clone()])),
         Concept::int(30)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("nth", [l, Concept::int(1)])),
+        value(&store, &reg, &Concept::call("list-nth", [l, Concept::int(1)])),
         Concept::int(20)
     );
 }
@@ -124,19 +124,19 @@ fn first_last_and_nth_read_positions() {
 fn count_and_is_empty_describe_size() {
     let (store, reg) = brain();
     assert_eq!(
-        value(&store, &reg, &Concept::call("count", [ints([1, 2, 3])])),
+        value(&store, &reg, &Concept::call("list-count", [ints([1, 2, 3])])),
         Concept::int(3)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("count", [ints([])])),
+        value(&store, &reg, &Concept::call("list-count", [ints([])])),
         Concept::int(0)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("is-empty", [ints([])])),
+        value(&store, &reg, &Concept::call("list-is-empty", [ints([])])),
         Concept::bool(true)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("is-empty", [ints([1])])),
+        value(&store, &reg, &Concept::call("list-is-empty", [ints([1])])),
         Concept::bool(false)
     );
 }
@@ -148,7 +148,7 @@ fn append_and_prepend_keep_the_order_they_were_written_in() {
         value(
             &store,
             &reg,
-            &Concept::call("append", [ints([1]), Concept::int(2), Concept::int(3)])
+            &Concept::call("list-append", [ints([1]), Concept::int(2), Concept::int(3)])
         ),
         ints([1, 2, 3])
     );
@@ -156,13 +156,13 @@ fn append_and_prepend_keep_the_order_they_were_written_in() {
         value(
             &store,
             &reg,
-            &Concept::call("prepend", [ints([3]), Concept::int(1), Concept::int(2)])
+            &Concept::call("list-prepend", [ints([3]), Concept::int(1), Concept::int(2)])
         ),
         ints([1, 2, 3]),
         "extra arguments should not come out reversed"
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("append", [ints([])])),
+        value(&store, &reg, &Concept::call("list-append", [ints([])])),
         ints([])
     );
 }
@@ -174,20 +174,20 @@ fn concat_lists_and_reverse() {
         value(
             &store,
             &reg,
-            &Concept::call("concat-lists", [ints([1, 2]), ints([]), ints([3])])
+            &Concept::call("list-concat", [ints([1, 2]), ints([]), ints([3])])
         ),
         ints([1, 2, 3])
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("concat-lists", [])),
+        value(&store, &reg, &Concept::call("list-concat", [])),
         ints([])
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("reverse", [ints([1, 2, 3])])),
+        value(&store, &reg, &Concept::call("list-reverse", [ints([1, 2, 3])])),
         ints([3, 2, 1])
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("reverse", [ints([])])),
+        value(&store, &reg, &Concept::call("list-reverse", [ints([])])),
         ints([])
     );
 }
@@ -200,7 +200,7 @@ fn slice_takes_a_half_open_range() {
         value(
             &store,
             &reg,
-            &Concept::call("slice", [l.clone(), Concept::int(1), Concept::int(3)])
+            &Concept::call("list-slice", [l.clone(), Concept::int(1), Concept::int(3)])
         ),
         ints([2, 3])
     );
@@ -208,7 +208,7 @@ fn slice_takes_a_half_open_range() {
         value(
             &store,
             &reg,
-            &Concept::call("slice", [l.clone(), Concept::int(2), Concept::int(2)])
+            &Concept::call("list-slice", [l.clone(), Concept::int(2), Concept::int(2)])
         ),
         ints([]),
         "an empty range is empty, not an error"
@@ -216,7 +216,7 @@ fn slice_takes_a_half_open_range() {
     let message = why_failed(
         &store,
         &reg,
-        &Concept::call("slice", [l, Concept::int(0), Concept::int(9)]),
+        &Concept::call("list-slice", [l, Concept::int(0), Concept::int(9)]),
     );
     assert!(
         message.contains('9') && message.contains('4'),
@@ -232,7 +232,7 @@ fn contains_index_of_and_unique() {
         value(
             &store,
             &reg,
-            &Concept::call("contains", [l.clone(), Concept::int(2)])
+            &Concept::call("list-contains", [l.clone(), Concept::int(2)])
         ),
         Concept::bool(true)
     );
@@ -240,7 +240,7 @@ fn contains_index_of_and_unique() {
         value(
             &store,
             &reg,
-            &Concept::call("contains", [l.clone(), Concept::int(9)])
+            &Concept::call("list-contains", [l.clone(), Concept::int(9)])
         ),
         Concept::bool(false)
     );
@@ -248,17 +248,17 @@ fn contains_index_of_and_unique() {
         value(
             &store,
             &reg,
-            &Concept::call("index-of", [l.clone(), Concept::int(2)])
+            &Concept::call("list-index-of", [l.clone(), Concept::int(2)])
         ),
         Concept::int(1),
         "index-of reports the first match"
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("unique", [l.clone()])),
+        value(&store, &reg, &Concept::call("list-unique", [l.clone()])),
         ints([1, 2, 3])
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("unique", [ints([])])),
+        value(&store, &reg, &Concept::call("list-unique", [ints([])])),
         ints([])
     );
 
@@ -266,9 +266,9 @@ fn contains_index_of_and_unique() {
     let message = why_failed(
         &store,
         &reg,
-        &Concept::call("index-of", [l, Concept::int(9)]),
+        &Concept::call("list-index-of", [l, Concept::int(9)]),
     );
-    assert!(message.contains("index-of"), "got {message}");
+    assert!(message.contains("list-index-of"), "got {message}");
 }
 
 #[test]
@@ -276,12 +276,12 @@ fn flatten_goes_exactly_one_level() {
     let (store, reg) = brain();
     let nested = list([ints([1, 2]), Concept::int(3), list([ints([4])])]);
     assert_eq!(
-        value(&store, &reg, &Concept::call("flatten", [nested])),
+        value(&store, &reg, &Concept::call("list-flatten", [nested])),
         list([Concept::int(1), Concept::int(2), Concept::int(3), ints([4])]),
         "the doubly nested list should have come out one level shallower, not flat"
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("flatten", [ints([])])),
+        value(&store, &reg, &Concept::call("list-flatten", [ints([])])),
         ints([])
     );
 }
@@ -294,16 +294,16 @@ fn flatten_goes_exactly_one_level() {
 fn out_of_range_access_names_the_index_and_the_length() {
     let (store, reg) = brain();
 
-    let message = why_failed(&store, &reg, &Concept::call("first", [ints([])]));
+    let message = why_failed(&store, &reg, &Concept::call("list-first", [ints([])]));
     assert!(message.contains("out of range"), "got {message}");
 
-    let message = why_failed(&store, &reg, &Concept::call("last", [ints([])]));
+    let message = why_failed(&store, &reg, &Concept::call("list-last", [ints([])]));
     assert!(message.contains("out of range"), "got {message}");
 
     let message = why_failed(
         &store,
         &reg,
-        &Concept::call("nth", [ints([1, 2, 3]), Concept::int(7)]),
+        &Concept::call("list-nth", [ints([1, 2, 3]), Concept::int(7)]),
     );
     assert!(
         message.contains("index 7") && message.contains("length 3"),
@@ -313,7 +313,7 @@ fn out_of_range_access_names_the_index_and_the_length() {
     let message = why_failed(
         &store,
         &reg,
-        &Concept::call("nth", [ints([1, 2, 3]), Concept::int(-1)]),
+        &Concept::call("list-nth", [ints([1, 2, 3]), Concept::int(-1)]),
     );
     assert!(message.contains("negative index -1"), "got {message}");
 }
@@ -331,13 +331,13 @@ fn a_learned_composed_realization_works_as_a_mapper() {
     learn(
         &store,
         "double",
-        Concept::call("add", [Concept::hole(0), Concept::hole(0)]),
+        Concept::call("math-add", [Concept::hole(0), Concept::hole(0)]),
     );
     assert_eq!(
         value(
             &store,
             &reg,
-            &Concept::call("map", [ints([1, 2, 3]), Concept::named("double")])
+            &Concept::call("list-map", [ints([1, 2, 3]), Concept::named("double")])
         ),
         ints([2, 4, 6])
     );
@@ -349,13 +349,13 @@ fn map_over_an_empty_list_is_empty() {
     learn(
         &store,
         "double",
-        Concept::call("add", [Concept::hole(0), Concept::hole(0)]),
+        Concept::call("math-add", [Concept::hole(0), Concept::hole(0)]),
     );
     assert_eq!(
         value(
             &store,
             &reg,
-            &Concept::call("map", [ints([]), Concept::named("double")])
+            &Concept::call("list-map", [ints([]), Concept::named("double")])
         ),
         ints([])
     );
@@ -368,7 +368,7 @@ fn map_also_accepts_a_native_as_its_function() {
         value(
             &store,
             &reg,
-            &Concept::call("map", [texts(["a", "b"]), Concept::named("upper")])
+            &Concept::call("list-map", [texts(["a", "b"]), Concept::named("text-upper")])
         ),
         texts(["A", "B"])
     );
@@ -380,7 +380,7 @@ fn filter_find_all_and_any_take_a_composed_predicate() {
     learn(
         &store,
         "big",
-        Concept::call("gt", [Concept::hole(0), Concept::int(2)]),
+        Concept::call("logic-gt", [Concept::hole(0), Concept::int(2)]),
     );
     let l = ints([1, 2, 3, 4]);
     let big = Concept::named("big");
@@ -389,7 +389,7 @@ fn filter_find_all_and_any_take_a_composed_predicate() {
         value(
             &store,
             &reg,
-            &Concept::call("filter", [l.clone(), big.clone()])
+            &Concept::call("list-filter", [l.clone(), big.clone()])
         ),
         ints([3, 4])
     );
@@ -397,7 +397,7 @@ fn filter_find_all_and_any_take_a_composed_predicate() {
         value(
             &store,
             &reg,
-            &Concept::call("find", [l.clone(), big.clone()])
+            &Concept::call("list-find", [l.clone(), big.clone()])
         ),
         Concept::int(3)
     );
@@ -405,34 +405,34 @@ fn filter_find_all_and_any_take_a_composed_predicate() {
         value(
             &store,
             &reg,
-            &Concept::call("all", [l.clone(), big.clone()])
+            &Concept::call("list-all", [l.clone(), big.clone()])
         ),
         Concept::bool(false)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("any", [l, big.clone()])),
+        value(&store, &reg, &Concept::call("list-any", [l, big.clone()])),
         Concept::bool(true)
     );
 
     // Empty list: `all` is vacuously true, `any` has nothing to find.
     assert_eq!(
-        value(&store, &reg, &Concept::call("all", [ints([]), big.clone()])),
+        value(&store, &reg, &Concept::call("list-all", [ints([]), big.clone()])),
         Concept::bool(true)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("any", [ints([]), big.clone()])),
+        value(&store, &reg, &Concept::call("list-any", [ints([]), big.clone()])),
         Concept::bool(false)
     );
     assert_eq!(
         value(
             &store,
             &reg,
-            &Concept::call("filter", [ints([]), big.clone()])
+            &Concept::call("list-filter", [ints([]), big.clone()])
         ),
         ints([])
     );
 
-    let message = why_failed(&store, &reg, &Concept::call("find", [ints([1, 2]), big]));
+    let message = why_failed(&store, &reg, &Concept::call("list-find", [ints([1, 2]), big]));
     assert!(message.contains("no element satisfied"), "got {message}");
 }
 
@@ -443,9 +443,9 @@ fn a_predicate_that_does_not_return_a_boolean_is_a_type_error() {
     let message = why_failed(
         &store,
         &reg,
-        &Concept::call("filter", [ints([1, 2]), Concept::named("same")]),
+        &Concept::call("list-filter", [ints([1, 2]), Concept::named("same")]),
     );
-    assert!(message.contains("filter"), "got {message}");
+    assert!(message.contains("list-filter"), "got {message}");
 }
 
 #[test]
@@ -456,8 +456,8 @@ fn reduce_folds_from_an_explicit_initial_value() {
             &store,
             &reg,
             &Concept::call(
-                "reduce",
-                [ints([1, 2, 3]), Concept::named("add"), Concept::int(10)]
+                "list-reduce",
+                [ints([1, 2, 3]), Concept::named("math-add"), Concept::int(10)]
             )
         ),
         Concept::int(16)
@@ -471,7 +471,7 @@ fn reduce_over_an_empty_list_returns_the_initial_value_untouched() {
         value(
             &store,
             &reg,
-            &Concept::call("reduce", [ints([]), Concept::named("add"), Concept::int(7)])
+            &Concept::call("list-reduce", [ints([]), Concept::named("math-add"), Concept::int(7)])
         ),
         Concept::int(7)
     );
@@ -485,7 +485,7 @@ fn sort_by_orders_by_a_key_function() {
         value(
             &store,
             &reg,
-            &Concept::call("sort-by", [ints([3, 1, 2]), Concept::named("same")])
+            &Concept::call("list-sort-by", [ints([3, 1, 2]), Concept::named("same")])
         ),
         ints([1, 2, 3])
     );
@@ -493,7 +493,7 @@ fn sort_by_orders_by_a_key_function() {
         value(
             &store,
             &reg,
-            &Concept::call("sort-by", [ints([]), Concept::named("same")])
+            &Concept::call("list-sort-by", [ints([]), Concept::named("same")])
         ),
         ints([])
     );
@@ -506,7 +506,7 @@ fn sort_by_is_stable_and_reproduces_across_runs() {
     // shuffle differently each run.
     let (store, reg) = brain();
     let input = texts(["bb", "aa", "cc", "dd"]);
-    let call = Concept::call("sort-by", [input.clone(), Concept::named("text-length")]);
+    let call = Concept::call("list-sort-by", [input.clone(), Concept::named("text-length")]);
     let first = value(&store, &reg, &call);
     assert_eq!(first, input, "equal keys should have preserved input order");
     for _ in 0..10 {
@@ -522,7 +522,7 @@ fn sort_by_refuses_keys_that_have_no_shared_order() {
     let message = why_failed(
         &store,
         &reg,
-        &Concept::call("sort-by", [mixed, Concept::named("same")]),
+        &Concept::call("list-sort-by", [mixed, Concept::named("same")]),
     );
     assert!(message.contains("no shared order"), "got {message}");
 
@@ -531,9 +531,9 @@ fn sort_by_refuses_keys_that_have_no_shared_order() {
     let message = why_failed(
         &store,
         &reg,
-        &Concept::call("sort-by", [compounds, Concept::named("same")]),
+        &Concept::call("list-sort-by", [compounds, Concept::named("same")]),
     );
-    assert!(message.contains("sort-by"), "got {message}");
+    assert!(message.contains("list-sort-by"), "got {message}");
 }
 
 #[test]
@@ -542,13 +542,13 @@ fn group_by_collects_in_first_appearance_order() {
     learn(
         &store,
         "initial",
-        Concept::call("char-at", [Concept::hole(0), Concept::int(0)]),
+        Concept::call("text-char-at", [Concept::hole(0), Concept::int(0)]),
     );
     let out = value(
         &store,
         &reg,
         &Concept::call(
-            "group-by",
+            "list-group-by",
             [
                 texts(["apple", "berry", "avocado"]),
                 Concept::named("initial"),
@@ -566,7 +566,7 @@ fn group_by_collects_in_first_appearance_order() {
         value(
             &store,
             &reg,
-            &Concept::call("group-by", [texts([]), Concept::named("initial")])
+            &Concept::call("list-group-by", [texts([]), Concept::named("initial")])
         ),
         list([])
     );
@@ -580,18 +580,18 @@ fn group_by_collects_in_first_appearance_order() {
 fn sum_and_product_widen_only_when_a_float_is_present() {
     let (store, reg) = brain();
     assert_eq!(
-        value(&store, &reg, &Concept::call("sum", [ints([1, 2, 3])])),
+        value(&store, &reg, &Concept::call("math-sum", [ints([1, 2, 3])])),
         Concept::int(6)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("product", [ints([2, 3, 4])])),
+        value(&store, &reg, &Concept::call("math-product", [ints([2, 3, 4])])),
         Concept::int(24)
     );
     assert_eq!(
         value(
             &store,
             &reg,
-            &Concept::call("sum", [list([Concept::int(1), Concept::float(0.5)])])
+            &Concept::call("math-sum", [list([Concept::int(1), Concept::float(0.5)])])
         ),
         Concept::float(1.5)
     );
@@ -599,7 +599,7 @@ fn sum_and_product_widen_only_when_a_float_is_present() {
         value(
             &store,
             &reg,
-            &Concept::call("product", [list([Concept::int(2), Concept::float(2.5)])])
+            &Concept::call("math-product", [list([Concept::int(2), Concept::float(2.5)])])
         ),
         Concept::float(5.0)
     );
@@ -609,11 +609,11 @@ fn sum_and_product_widen_only_when_a_float_is_present() {
 fn sum_of_an_empty_list_is_zero_and_product_is_one() {
     let (store, reg) = brain();
     assert_eq!(
-        value(&store, &reg, &Concept::call("sum", [ints([])])),
+        value(&store, &reg, &Concept::call("math-sum", [ints([])])),
         Concept::int(0)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("product", [ints([])])),
+        value(&store, &reg, &Concept::call("math-product", [ints([])])),
         Concept::int(1)
     );
 }
@@ -622,24 +622,24 @@ fn sum_of_an_empty_list_is_zero_and_product_is_one() {
 fn min_and_max_widen_and_refuse_an_empty_list() {
     let (store, reg) = brain();
     assert_eq!(
-        value(&store, &reg, &Concept::call("min-of", [ints([3, 1, 2])])),
+        value(&store, &reg, &Concept::call("list-min-of", [ints([3, 1, 2])])),
         Concept::int(1)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("max-of", [ints([3, 1, 2])])),
+        value(&store, &reg, &Concept::call("list-max-of", [ints([3, 1, 2])])),
         Concept::int(3)
     );
     assert_eq!(
         value(
             &store,
             &reg,
-            &Concept::call("max-of", [list([Concept::int(3), Concept::float(1.5)])])
+            &Concept::call("list-max-of", [list([Concept::int(3), Concept::float(1.5)])])
         ),
         Concept::float(3.0),
         "any float in the list widens the answer"
     );
 
-    for native in ["min-of", "max-of"] {
+    for native in ["list-min-of", "list-max-of"] {
         let message = why_failed(&store, &reg, &Concept::call(native, [ints([])]));
         assert!(
             message.contains("empty list has no extreme value"),
@@ -654,7 +654,7 @@ fn sum_reports_overflow_rather_than_wrapping() {
     let message = why_failed(
         &store,
         &reg,
-        &Concept::call("sum", [list([Concept::int(i64::MAX), Concept::int(1)])]),
+        &Concept::call("math-sum", [list([Concept::int(i64::MAX), Concept::int(1)])]),
     );
     assert!(message.contains("overflow"), "got {message}");
 }
@@ -669,12 +669,12 @@ fn operations_nest_because_they_are_ordinary_concepts() {
     learn(
         &store,
         "double",
-        Concept::call("add", [Concept::hole(0), Concept::hole(0)]),
+        Concept::call("math-add", [Concept::hole(0), Concept::hole(0)]),
     );
     let expr = Concept::call(
-        "sum",
+        "math-sum",
         [Concept::call(
-            "map",
+            "list-map",
             [ints([1, 2, 3]), Concept::named("double")],
         )],
     );
@@ -683,14 +683,14 @@ fn operations_nest_because_they_are_ordinary_concepts() {
     learn(
         &store,
         "big",
-        Concept::call("gt", [Concept::hole(0), Concept::int(2)]),
+        Concept::call("logic-gt", [Concept::hole(0), Concept::int(2)]),
     );
     let expr = Concept::call(
-        "count",
+        "list-count",
         [Concept::call(
-            "filter",
+            "list-filter",
             [
-                Concept::call("map", [ints([1, 2, 3]), Concept::named("double")]),
+                Concept::call("list-map", [ints([1, 2, 3]), Concept::named("double")]),
                 Concept::named("big"),
             ],
         )],
@@ -708,46 +708,46 @@ fn every_native_refuses_a_wrong_typed_argument_instead_of_panicking() {
     let (store, reg) = brain();
     let not_a_list = Concept::int(7);
     let not_a_number = Concept::text("nope");
-    let f = Concept::named("upper");
+    let f = Concept::named("text-upper");
 
     let bad: Vec<Concept> = vec![
-        Concept::call("first", [not_a_list.clone()]),
-        Concept::call("last", [not_a_list.clone()]),
-        Concept::call("nth", [not_a_list.clone(), Concept::int(0)]),
-        Concept::call("nth", [ints([1]), not_a_number.clone()]),
-        Concept::call("count", [not_a_list.clone()]),
-        Concept::call("is-empty", [not_a_list.clone()]),
-        Concept::call("append", [not_a_list.clone(), Concept::int(1)]),
-        Concept::call("prepend", [not_a_list.clone(), Concept::int(1)]),
-        Concept::call("concat-lists", [ints([1]), not_a_list.clone()]),
-        Concept::call("reverse", [not_a_list.clone()]),
+        Concept::call("list-first", [not_a_list.clone()]),
+        Concept::call("list-last", [not_a_list.clone()]),
+        Concept::call("list-nth", [not_a_list.clone(), Concept::int(0)]),
+        Concept::call("list-nth", [ints([1]), not_a_number.clone()]),
+        Concept::call("list-count", [not_a_list.clone()]),
+        Concept::call("list-is-empty", [not_a_list.clone()]),
+        Concept::call("list-append", [not_a_list.clone(), Concept::int(1)]),
+        Concept::call("list-prepend", [not_a_list.clone(), Concept::int(1)]),
+        Concept::call("list-concat", [ints([1]), not_a_list.clone()]),
+        Concept::call("list-reverse", [not_a_list.clone()]),
         Concept::call(
-            "slice",
+            "list-slice",
             [not_a_list.clone(), Concept::int(0), Concept::int(0)],
         ),
-        Concept::call("slice", [ints([1]), not_a_number.clone(), Concept::int(1)]),
-        Concept::call("slice", [ints([1, 2]), Concept::int(2), Concept::int(1)]),
-        Concept::call("contains", [not_a_list.clone(), Concept::int(1)]),
-        Concept::call("index-of", [not_a_list.clone(), Concept::int(1)]),
-        Concept::call("unique", [not_a_list.clone()]),
-        Concept::call("flatten", [not_a_list.clone()]),
-        Concept::call("map", [not_a_list.clone(), f.clone()]),
-        Concept::call("filter", [not_a_list.clone(), f.clone()]),
-        Concept::call("reduce", [not_a_list.clone(), f.clone(), Concept::int(0)]),
-        Concept::call("sort-by", [not_a_list.clone(), f.clone()]),
-        Concept::call("find", [not_a_list.clone(), f.clone()]),
-        Concept::call("all", [not_a_list.clone(), f.clone()]),
-        Concept::call("any", [not_a_list.clone(), f.clone()]),
-        Concept::call("group-by", [not_a_list.clone(), f.clone()]),
-        Concept::call("sum", [not_a_list.clone()]),
-        Concept::call("sum", [list([not_a_number.clone()])]),
-        Concept::call("product", [not_a_list.clone()]),
-        Concept::call("min-of", [list([not_a_number.clone()])]),
-        Concept::call("max-of", [not_a_list.clone()]),
+        Concept::call("list-slice", [ints([1]), not_a_number.clone(), Concept::int(1)]),
+        Concept::call("list-slice", [ints([1, 2]), Concept::int(2), Concept::int(1)]),
+        Concept::call("list-contains", [not_a_list.clone(), Concept::int(1)]),
+        Concept::call("list-index-of", [not_a_list.clone(), Concept::int(1)]),
+        Concept::call("list-unique", [not_a_list.clone()]),
+        Concept::call("list-flatten", [not_a_list.clone()]),
+        Concept::call("list-map", [not_a_list.clone(), f.clone()]),
+        Concept::call("list-filter", [not_a_list.clone(), f.clone()]),
+        Concept::call("list-reduce", [not_a_list.clone(), f.clone(), Concept::int(0)]),
+        Concept::call("list-sort-by", [not_a_list.clone(), f.clone()]),
+        Concept::call("list-find", [not_a_list.clone(), f.clone()]),
+        Concept::call("list-all", [not_a_list.clone(), f.clone()]),
+        Concept::call("list-any", [not_a_list.clone(), f.clone()]),
+        Concept::call("list-group-by", [not_a_list.clone(), f.clone()]),
+        Concept::call("math-sum", [not_a_list.clone()]),
+        Concept::call("math-sum", [list([not_a_number.clone()])]),
+        Concept::call("math-product", [not_a_list.clone()]),
+        Concept::call("list-min-of", [list([not_a_number.clone()])]),
+        Concept::call("list-max-of", [not_a_list.clone()]),
         // Arity mismatches are caught before the native ever runs.
-        Concept::call("first", []),
-        Concept::call("nth", [ints([1])]),
-        Concept::call("map", [ints([1])]),
+        Concept::call("list-first", []),
+        Concept::call("list-nth", [ints([1])]),
+        Concept::call("list-map", [ints([1])]),
     ];
 
     for expr in bad {
@@ -767,33 +767,33 @@ fn a_predicate_whose_function_does_not_exist_leaves_the_call_unfinished() {
     let message = why_failed(
         &store,
         &reg,
-        &Concept::call("filter", [ints([1]), Concept::named("nonesuch")]),
+        &Concept::call("list-filter", [ints([1]), Concept::named("nonesuch")]),
     );
-    assert!(message.contains("filter"), "got {message}");
+    assert!(message.contains("list-filter"), "got {message}");
 }
 
 #[test]
 fn sort_orders_a_list_by_its_own_elements() {
     let (store, reg) = brain();
     assert_eq!(
-        value(&store, &reg, &Concept::call("sort", [ints([3, 1, 2])])),
+        value(&store, &reg, &Concept::call("list-sort", [ints([3, 1, 2])])),
         ints([1, 2, 3])
     );
     assert_eq!(
         value(
             &store,
             &reg,
-            &Concept::call("sort", [texts(["pear", "apple", "fig"])])
+            &Concept::call("list-sort", [texts(["pear", "apple", "fig"])])
         ),
         texts(["apple", "fig", "pear"])
     );
     // Already ordered, and an empty list, both stay themselves.
     assert_eq!(
-        value(&store, &reg, &Concept::call("sort", [ints([1, 2, 3])])),
+        value(&store, &reg, &Concept::call("list-sort", [ints([1, 2, 3])])),
         ints([1, 2, 3])
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("sort", [ints([])])),
+        value(&store, &reg, &Concept::call("list-sort", [ints([])])),
         ints([])
     );
 }
@@ -803,8 +803,8 @@ fn sort_refuses_values_with_no_shared_order() {
     // Guessing an order between 1 and "one" would sort silently and wrongly.
     let (store, reg) = brain();
     let mixed = list([Concept::int(1), Concept::text("one")]);
-    let message = why_failed(&store, &reg, &Concept::call("sort", [mixed]));
-    assert!(message.contains("sort"), "got {message}");
+    let message = why_failed(&store, &reg, &Concept::call("list-sort", [mixed]));
+    assert!(message.contains("list-sort"), "got {message}");
 }
 
 #[test]
@@ -813,20 +813,20 @@ fn reverse_gives_back_the_shape_it_was_given() {
     // gave back list<"a", "n", ...> unless something remembered to join it.
     let (store, reg) = brain();
     assert_eq!(
-        value(&store, &reg, &Concept::call("reverse", [Concept::text("banana")])),
+        value(&store, &reg, &Concept::call("list-reverse", [Concept::text("banana")])),
         Concept::text("ananab")
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("reverse", [ints([1, 2, 3])])),
+        value(&store, &reg, &Concept::call("list-reverse", [ints([1, 2, 3])])),
         ints([3, 2, 1])
     );
     // By character, not by byte, or an accented word comes back broken.
     assert_eq!(
-        value(&store, &reg, &Concept::call("reverse", [Concept::text("café")])),
+        value(&store, &reg, &Concept::call("list-reverse", [Concept::text("café")])),
         Concept::text("éfac")
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("reverse", [Concept::text("")])),
+        value(&store, &reg, &Concept::call("list-reverse", [Concept::text("")])),
         Concept::text("")
     );
 }

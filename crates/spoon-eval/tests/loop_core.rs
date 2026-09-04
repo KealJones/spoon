@@ -24,7 +24,7 @@ fn n_add(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     for a in args {
         match a.as_ground().and_then(Ground::as_i64) {
             Some(v) => total += v,
-            None => return Err(type_error("add", "an integer", a)),
+            None => return Err(type_error("math-add", "an integer", a)),
         }
     }
     Ok(Concept::int(total))
@@ -37,7 +37,7 @@ fn n_if(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     let taken = match cond.as_ground().and_then(Ground::as_bool) {
         Some(true) => &args[1],
         Some(false) => &args[2],
-        None => return Err(type_error("if", "a boolean", &cond)),
+        None => return Err(type_error("logic-if", "a boolean", &cond)),
     };
     ctx.eval(taken)
 }
@@ -57,9 +57,9 @@ fn n_counter(ctx: &mut dyn Ctx, _args: &[Concept]) -> EvalResult {
 
 fn registry() -> NativeRegistry {
     let mut r = NativeRegistry::new();
-    r.pure("add", n_add, Arity::AtLeast(1), "sum integers");
+    r.pure("math-add", n_add, Arity::AtLeast(1), "sum integers");
     r.register(
-        "if",
+        "logic-if",
         n_if,
         Arity::Exact(3),
         ArgStrategy::Lazy,
@@ -161,11 +161,11 @@ fn arguments_still_reduce_under_an_unrealized_head() {
     // Height<Add<1, 2>> becomes Height<3>, which is strictly more useful to
     // whoever reads it than the unreduced form.
     let store = Store::open_in_memory().unwrap();
-    put_native(&store, "add", "native-add", "add", Effect::Pure);
+    put_native(&store, "math-add", "native-add", "math-add", Effect::Pure);
     let reg = registry();
     let expr = Concept::call(
         "height",
-        [Concept::call("add", [Concept::int(1), Concept::int(2)])],
+        [Concept::call("math-add", [Concept::int(1), Concept::int(2)])],
     );
     let mut ev = Evaluator::new(&store, &reg).with_budget(Budget::deterministic());
     assert_eq!(
@@ -181,22 +181,22 @@ fn arguments_still_reduce_under_an_unrealized_head() {
 #[test]
 fn a_native_realization_computes() {
     let store = Store::open_in_memory().unwrap();
-    put_native(&store, "add", "native-add", "add", Effect::Pure);
+    put_native(&store, "math-add", "native-add", "math-add", Effect::Pure);
     let reg = registry();
     let mut ev = Evaluator::new(&store, &reg).with_budget(Budget::deterministic());
-    let expr = Concept::call("add", [Concept::int(42), Concept::int(1)]);
+    let expr = Concept::call("math-add", [Concept::int(42), Concept::int(1)]);
     assert_eq!(ev.evaluate(&expr).value(), Some(&Concept::int(43)));
 }
 
 #[test]
 fn nested_applications_reduce_innermost_first_when_the_native_is_eager() {
     let store = Store::open_in_memory().unwrap();
-    put_native(&store, "add", "native-add", "add", Effect::Pure);
+    put_native(&store, "math-add", "native-add", "math-add", Effect::Pure);
     let reg = registry();
     let expr = Concept::call(
-        "add",
+        "math-add",
         [
-            Concept::call("add", [Concept::int(1), Concept::int(2)]),
+            Concept::call("math-add", [Concept::int(1), Concept::int(2)]),
             Concept::int(3),
         ],
     );
@@ -209,12 +209,12 @@ fn a_lazy_native_does_not_evaluate_the_branch_it_did_not_take() {
     // This is the case that forces outermost-first rewriting. Under eager
     // evaluation the failing branch would run and take the whole thing down.
     let store = Store::open_in_memory().unwrap();
-    put_native(&store, "if", "native-if", "if", Effect::Pure);
+    put_native(&store, "logic-if", "native-if", "logic-if", Effect::Pure);
     put_native(&store, "boom", "native-boom", "boom", Effect::Pure);
     let reg = registry();
 
     let expr = Concept::call(
-        "if",
+        "logic-if",
         [
             Concept::bool(true),
             Concept::int(7),
@@ -230,13 +230,13 @@ fn a_composed_realization_binds_holes_positionally() {
     // `double` is Add<Hole(0), Hole(0)>. This is how a learned capability is
     // stored: as concepts, not as code.
     let store = Store::open_in_memory().unwrap();
-    put_native(&store, "add", "native-add", "add", Effect::Pure);
+    put_native(&store, "math-add", "native-add", "math-add", Effect::Pure);
     put_spec(
         &store,
         "double",
         "composed-double",
         RealizationSpec::Composed {
-            body: Concept::call("add", [Concept::hole(0), Concept::hole(0)]),
+            body: Concept::call("math-add", [Concept::hole(0), Concept::hole(0)]),
         },
         Effect::Pure,
     );
@@ -251,13 +251,13 @@ fn composed_realizations_compose() {
     // triple built on double, which is built on add. Nothing special happens at
     // any layer: it is the same loop three times.
     let store = Store::open_in_memory().unwrap();
-    put_native(&store, "add", "native-add", "add", Effect::Pure);
+    put_native(&store, "math-add", "native-add", "math-add", Effect::Pure);
     put_spec(
         &store,
         "double",
         "composed-double",
         RealizationSpec::Composed {
-            body: Concept::call("add", [Concept::hole(0), Concept::hole(0)]),
+            body: Concept::call("math-add", [Concept::hole(0), Concept::hole(0)]),
         },
         Effect::Pure,
     );
@@ -267,7 +267,7 @@ fn composed_realizations_compose() {
         "composed-triple",
         RealizationSpec::Composed {
             body: Concept::call(
-                "add",
+                "math-add",
                 [
                     Concept::hole(0),
                     Concept::call("double", [Concept::hole(0)]),
@@ -380,12 +380,12 @@ fn a_realization_cannot_understate_the_authority_its_native_needs() {
     // The stored realization claims Pure while the native opens a socket. The
     // evaluator takes the maximum of the two, so the claim buys nothing.
     let store = Store::open_in_memory().unwrap();
-    put_native(&store, "fetch", "sneaky", "touch-network", Effect::Pure);
+    put_native(&store, "io-fetch", "sneaky", "touch-network", Effect::Pure);
     let reg = registry();
     let mut ev = Evaluator::new(&store, &reg)
         .with_budget(Budget::deterministic())
         .with_permission(PermissionMode::AskWrites);
-    let out = ev.evaluate(&Concept::call("fetch", []));
+    let out = ev.evaluate(&Concept::call("io-fetch", []));
     assert!(
         matches!(
             out,
@@ -403,7 +403,7 @@ fn bypass_runs_what_ask_writes_would_suspend() {
     let store = Store::open_in_memory().unwrap();
     put_native(
         &store,
-        "fetch",
+        "io-fetch",
         "native-fetch",
         "touch-network",
         Effect::Network,
@@ -413,7 +413,7 @@ fn bypass_runs_what_ask_writes_would_suspend() {
         .with_budget(Budget::deterministic())
         .with_permission(PermissionMode::Bypass);
     assert_eq!(
-        ev.evaluate(&Concept::call("fetch", [])).value(),
+        ev.evaluate(&Concept::call("io-fetch", [])).value(),
         Some(&Concept::text("fetched"))
     );
 }
@@ -421,7 +421,7 @@ fn bypass_runs_what_ask_writes_would_suspend() {
 #[test]
 fn always_ask_suspends_even_a_read() {
     let store = Store::open_in_memory().unwrap();
-    put_native(&store, "peek", "native-peek", "add", Effect::Read);
+    put_native(&store, "peek", "native-peek", "math-add", Effect::Read);
     let reg = registry();
     let mut ev = Evaluator::new(&store, &reg)
         .with_budget(Budget::deterministic())
@@ -465,11 +465,11 @@ fn runaway_recursion_hits_a_limit_instead_of_hanging() {
 #[test]
 fn a_node_budget_stops_a_long_computation() {
     let store = Store::open_in_memory().unwrap();
-    put_native(&store, "add", "native-add", "add", Effect::Pure);
+    put_native(&store, "math-add", "native-add", "math-add", Effect::Pure);
     let reg = registry();
     let mut expr = Concept::int(0);
     for i in 0..200 {
-        expr = Concept::call("add", [expr, Concept::int(i)]);
+        expr = Concept::call("math-add", [expr, Concept::int(i)]);
     }
     let mut ev = Evaluator::new(&store, &reg).with_budget(Budget::deterministic().with_nodes(10));
     assert!(matches!(ev.evaluate(&expr), Outcome::Exhausted { .. }));
@@ -485,11 +485,11 @@ fn a_pure_result_is_computed_once_per_evaluation() {
     // answer. The counter native notes each run, so a repeated subterm that ran
     // twice would show up as two notes.
     let store = Store::open_in_memory().unwrap();
-    put_native(&store, "add", "native-add", "add", Effect::Pure);
+    put_native(&store, "math-add", "native-add", "math-add", Effect::Pure);
     put_native(&store, "counter", "native-counter", "counter", Effect::Pure);
     let reg = registry();
     let shared = Concept::call("counter", []);
-    let expr = Concept::call("add", [shared.clone(), shared]);
+    let expr = Concept::call("math-add", [shared.clone(), shared]);
     let mut ev = Evaluator::new(&store, &reg).with_budget(Budget::deterministic());
     assert_eq!(ev.evaluate(&expr).value(), Some(&Concept::int(2)));
     let runs = ev
@@ -529,7 +529,7 @@ fn neural_realizations_are_not_selectable_without_a_seat() {
     let store = Store::open_in_memory().unwrap();
     put_spec(
         &store,
-        "describe",
+        "store-describe",
         "neural-describe",
         RealizationSpec::Neural {
             prompt: Concept::text("describe this"),
@@ -539,7 +539,7 @@ fn neural_realizations_are_not_selectable_without_a_seat() {
     );
     put_spec(
         &store,
-        "describe",
+        "store-describe",
         "composed-describe",
         RealizationSpec::Composed {
             body: Concept::text("a fallback description"),
@@ -549,7 +549,7 @@ fn neural_realizations_are_not_selectable_without_a_seat() {
     let reg = registry();
     let mut ev = Evaluator::new(&store, &reg).with_budget(Budget::deterministic());
     assert_eq!(
-        ev.evaluate(&Concept::call("describe", [Concept::named("greg")]))
+        ev.evaluate(&Concept::call("store-describe", [Concept::named("greg")]))
             .value(),
         Some(&Concept::text("a fallback description")),
         "the composed fallback should have been chosen"
@@ -590,9 +590,9 @@ fn evidence_is_committed_only_when_the_caller_says_so() {
     // A speculative evaluation that gets thrown away should not teach Spoon
     // anything, so writing outcomes back is a separate, explicit step.
     let store = Store::open_in_memory().unwrap();
-    put_native(&store, "add", "native-add", "add", Effect::Pure);
+    put_native(&store, "math-add", "native-add", "math-add", Effect::Pure);
     let reg = registry();
-    let expr = Concept::call("add", [Concept::int(1), Concept::int(2)]);
+    let expr = Concept::call("math-add", [Concept::int(1), Concept::int(2)]);
 
     let mut ev = Evaluator::new(&store, &reg)
         .with_budget(Budget::deterministic())

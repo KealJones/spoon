@@ -74,7 +74,7 @@ const FAREWELL: &[&str] = &["bye", "goodbye", "later", "see ya", "cya", "night"]
 /// with a greeting.
 const SMALL_TALK: &[&str] = &[
     "there", "you", "u", "how", "hows", "how's", "are", "is", "it", "going", "goin", "on",
-    "doing", "doin", "up", "whats", "what's", "wassup", "wasup", "good", "well", "all",
+    "doing", "doin", "up", "whats", "what's", "wassup", "wasup", "good", "well", "list-all",
     "right", "alright", "man", "dude", "girl", "bro", "buddy", "friend", "again", "morning",
     "afternoon", "evening", "everyone", "everybody", "yall", "y'all", "spoon", "lol", "haha",
 ];
@@ -208,10 +208,10 @@ impl NativeEars {
         let left: i64 = tokens[0].parse().ok()?;
         let right: i64 = tokens[2].parse().ok()?;
         let op = match tokens[1] {
-            "+" => "add",
-            "-" => "sub",
-            "*" | "x" => "mul",
-            "/" => "div",
+            "+" => "math-add",
+            "-" => "math-sub",
+            "*" | "x" => "math-mul",
+            "/" => "math-div",
             _ => return None,
         };
         Some(Concept::call(

@@ -139,7 +139,7 @@ def strings():
         out.append(case(random.choice([
             f"reverse the word {w}", f"reverse {w}", f"spell {w} backwards",
             f"what is {w} backwards",
-        ]), f'"{w[::-1]}"', "reverse"))
+        ]), f'"{w[::-1]}"', "list-reverse"))
     for _ in range(many(40)):
         w = random.choice(WORDS)
         out.append(case(random.choice([
@@ -150,20 +150,20 @@ def strings():
         w = random.choice(WORDS)
         out.append(case(random.choice([
             f"uppercase {w}", f"make {w} uppercase", f"shout {w}",
-        ]), f'"{w.upper()}"', "upper"))
+        ]), f'"{w.upper()}"', "text-upper"))
     for _ in range(many(30)):
         w = random.choice(WORDS)
         sub = w[1:4]
         out.append(case(random.choice([
             f"does {w} contain {sub}", f"is {sub} in {w}?",
-        ]), "true", "contains"))
+        ]), "true", "list-contains"))
         other = "zqx"
-        out.append(case(f"does {w} contain {other}", "false", "contains"))
+        out.append(case(f"does {w} contain {other}", "false", "list-contains"))
     for _ in range(many(25)):
         w = random.choice(WORDS)
         out.append(case(random.choice([
             f"does {w} start with {w[0]}", f"does {w} begin with {w[:2]}",
-        ]), "true", "starts-with"))
+        ]), "true", "text-starts-with"))
     return out
 
 
@@ -176,18 +176,18 @@ def collections():
             f"what is the sum of {shown}",
             f"add up {shown}",
             f"total of {shown}",
-        ]), str(sum(xs)), "sum"))
+        ]), str(sum(xs)), "math-sum"))
         out.append(case(random.choice([
             f"what is the biggest of {shown}",
             f"whats the largest number in {shown}",
             f"max of {shown}",
-        ]), str(max(xs)), "max"))
+        ]), str(max(xs)), "math-max"))
         out.append(case(random.choice([
             f"smallest of {shown}", f"what is the minimum of {shown}",
-        ]), str(min(xs)), "min"))
+        ]), str(min(xs)), "math-min"))
         out.append(case(random.choice([
             f"how many numbers are in {shown}", f"count of {shown}",
-        ]), str(len(xs)), "count"))
+        ]), str(len(xs)), "list-count"))
     return out
 
 
@@ -201,7 +201,7 @@ def lists():
             f"the numbers from 1 to {hi}",
             f"list the numbers 1 through {hi}",
             f"give me 1 to {hi}",
-        ]), want, "range"))
+        ]), want, "list-range"))
     for _ in range(many(40)):
         hi = random.choice([6, 8, 10, 12])
         evens = [i for i in range(1, hi + 1) if i % 2 == 0]
@@ -218,7 +218,7 @@ def lists():
             f"sort {shown}",
             f"put {shown} in order",
             f"sort these numbers: {shown}",
-        ]), want, "sort"))
+        ]), want, "list-sort"))
         rev = "list<" + ", ".join(str(x) for x in reversed(xs)) + ">"
         out.append(case(f"reverse the list {shown}", rev, "reverse-list"))
     for _ in range(many(30)):
@@ -228,16 +228,16 @@ def lists():
         out.append(case(random.choice([
             f"remove the duplicates from {shown}",
             f"what are the unique values in {shown}",
-        ]), want, "unique"))
+        ]), want, "list-unique"))
     for _ in range(many(30)):
         xs = [random.randint(1, 40) for _ in range(4)]
         shown = ", ".join(str(x) for x in xs)
         out.append(case(random.choice([
             f"what is the first of {shown}",
             f"first item in {shown}",
-        ]), str(xs[0]), "first"))
+        ]), str(xs[0]), "list-first"))
         out.append(case(f"what is the product of {shown}", str(
-            xs[0] * xs[1] * xs[2] * xs[3]), "product"))
+            xs[0] * xs[1] * xs[2] * xs[3]), "math-product"))
     return out
 
 
@@ -247,7 +247,7 @@ def more_strings():
         w = random.choice(WORDS)
         out.append(case(random.choice([
             f"lowercase {w.upper()}", f"make {w.upper()} lowercase",
-        ]), f'"{w}"', "lower"))
+        ]), f'"{w}"', "text-lower"))
     for _ in range(many(30)):
         w = random.choice(WORDS)
         a, b = w[0], "z"
@@ -255,14 +255,14 @@ def more_strings():
             f"replace every {a} in {w} with {b}",
             f"swap every {a} in {w} for {b}",
             f'replace "{a}" with "{b}" in {w}',
-        ]), f'"{w.replace(a, b)}"', "replace"))
+        ]), f'"{w.replace(a, b)}"', "text-replace"))
     for _ in range(many(30)):
         w = random.choice(WORDS)
         n = random.randint(2, min(5, len(w) - 1))
         out.append(case(random.choice([
             f"the first {n} letters of {w}",
             f"first {n} characters of {w}",
-        ]), f'"{w[:n]}"', "substring"))
+        ]), f'"{w[:n]}"', "text-substring"))
     for _ in range(many(30)):
         parts = random.sample(WORDS, 3)
         joined = ",".join(parts)
@@ -270,17 +270,17 @@ def more_strings():
         out.append(case(random.choice([
             f"split {joined} on commas",
             f"break {joined} apart at the commas",
-        ]), want, "split"))
+        ]), want, "text-split"))
     for _ in range(many(25)):
         w = random.choice(WORDS)
-        out.append(case(f"does {w} end with {w[-2:]}", "true", "ends-with"))
-        out.append(case(f"does {w} end with qz", "false", "ends-with"))
+        out.append(case(f"does {w} end with {w[-2:]}", "true", "text-ends-with"))
+        out.append(case(f"does {w} end with qz", "false", "text-ends-with"))
     for _ in range(many(25)):
         w = random.choice(WORDS)
         out.append(case(random.choice([
             f'trim the spaces off "  {w}  "',
             f'strip the whitespace from "  {w}  "',
-        ]), f'"{w}"', "trim"))
+        ]), f'"{w}"', "text-trim"))
     return out
 
 
@@ -289,8 +289,8 @@ def logic():
     for _ in range(many(40)):
         a, b = random.choice([True, False]), random.choice([True, False])
         sa, sb = str(a).lower(), str(b).lower()
-        out.append(case(f"is {sa} and {sb}", str(a and b).lower(), "and"))
-        out.append(case(f"is {sa} or {sb}", str(a or b).lower(), "or"))
+        out.append(case(f"is {sa} and {sb}", str(a and b).lower(), "logic-and"))
+        out.append(case(f"is {sa} or {sb}", str(a or b).lower(), "logic-or"))
     for _ in range(many(20)):
         n = random.randint(-40, 40)
         out.append(case(f"is {n} negative", str(n < 0).lower(), "sign"))

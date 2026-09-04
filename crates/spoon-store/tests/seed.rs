@@ -15,7 +15,7 @@ fn populated() -> Store {
 
     store.register_symbol("friend-with").unwrap();
     store.register_symbol("Greg").unwrap();
-    store.register_symbol("add").unwrap();
+    store.register_symbol("math-add").unwrap();
 
     let friendship = Concept::call(
         "friend-with",
@@ -68,7 +68,7 @@ fn populated() -> Store {
 
     store
         .put_realization(&Realization {
-            target: Concept::named("add"),
+            target: Concept::named("math-add"),
             name: "add/native".into(),
             spec: RealizationSpec::Native {
                 native: NativeId::new("arith.add"),

@@ -50,7 +50,7 @@ fn why_failed(store: &Store, reg: &NativeRegistry, c: &Concept) -> String {
 }
 
 fn texts(values: impl IntoIterator<Item = &'static str>) -> Concept {
-    Concept::call("list", values.into_iter().map(Concept::text))
+    Concept::call("list-list", values.into_iter().map(Concept::text))
 }
 
 // ---------------------------------------------------------------------------
@@ -64,20 +64,20 @@ fn concat_joins_text_and_refuses_anything_else() {
         value(
             &store,
             &reg,
-            &Concept::call("concat", [Concept::text("spo"), Concept::text("on")])
+            &Concept::call("text-concat", [Concept::text("spo"), Concept::text("on")])
         ),
         Concept::text("spoon")
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("concat", [])),
+        value(&store, &reg, &Concept::call("text-concat", [])),
         Concept::text("")
     );
     let message = why_failed(
         &store,
         &reg,
-        &Concept::call("concat", [Concept::text("n = "), Concept::int(42)]),
+        &Concept::call("text-concat", [Concept::text("n = "), Concept::int(42)]),
     );
-    assert!(message.contains("concat"), "got {message}");
+    assert!(message.contains("text-concat"), "got {message}");
 }
 
 #[test]
@@ -87,7 +87,7 @@ fn split_produces_a_list_and_join_consumes_one() {
         value(
             &store,
             &reg,
-            &Concept::call("split", [Concept::text("a,b,c"), Concept::text(",")])
+            &Concept::call("text-split", [Concept::text("a,b,c"), Concept::text(",")])
         ),
         texts(["a", "b", "c"])
     );
@@ -95,7 +95,7 @@ fn split_produces_a_list_and_join_consumes_one() {
         value(
             &store,
             &reg,
-            &Concept::call("split", [Concept::text(""), Concept::text(",")])
+            &Concept::call("text-split", [Concept::text(""), Concept::text(",")])
         ),
         texts([""])
     );
@@ -103,7 +103,7 @@ fn split_produces_a_list_and_join_consumes_one() {
         value(
             &store,
             &reg,
-            &Concept::call("join", [texts(["a", "b"]), Concept::text("-")])
+            &Concept::call("text-join", [texts(["a", "b"]), Concept::text("-")])
         ),
         Concept::text("a-b")
     );
@@ -111,7 +111,7 @@ fn split_produces_a_list_and_join_consumes_one() {
         value(
             &store,
             &reg,
-            &Concept::call("join", [texts([]), Concept::text("-")])
+            &Concept::call("text-join", [texts([]), Concept::text("-")])
         ),
         Concept::text("")
     );
@@ -119,7 +119,7 @@ fn split_produces_a_list_and_join_consumes_one() {
     let message = why_failed(
         &store,
         &reg,
-        &Concept::call("split", [Concept::text("abc"), Concept::text("")]),
+        &Concept::call("text-split", [Concept::text("abc"), Concept::text("")]),
     );
     assert!(message.contains("empty separator"), "got {message}");
 }
@@ -128,13 +128,13 @@ fn split_produces_a_list_and_join_consumes_one() {
 fn split_and_join_round_trip_through_a_real_pipeline() {
     let (store, reg) = brain();
     let expr = Concept::call(
-        "join",
+        "text-join",
         [
             Concept::call(
-                "map",
+                "list-map",
                 [
-                    Concept::call("split", [Concept::text("a,b,c"), Concept::text(",")]),
-                    Concept::named("upper"),
+                    Concept::call("text-split", [Concept::text("a,b,c"), Concept::text(",")]),
+                    Concept::named("text-upper"),
                 ],
             ),
             Concept::text("-"),
@@ -150,7 +150,7 @@ fn lines_splits_on_newlines_and_tolerates_carriage_returns() {
         value(
             &store,
             &reg,
-            &Concept::call("lines", [Concept::text("one\ntwo\r\nthree")])
+            &Concept::call("text-lines", [Concept::text("one\ntwo\r\nthree")])
         ),
         texts(["one", "two", "three"])
     );
@@ -158,13 +158,13 @@ fn lines_splits_on_newlines_and_tolerates_carriage_returns() {
         value(
             &store,
             &reg,
-            &Concept::call("lines", [Concept::text("one\n")])
+            &Concept::call("text-lines", [Concept::text("one\n")])
         ),
         texts(["one"]),
         "a trailing newline should not invent an empty last line"
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("lines", [Concept::text("")])),
+        value(&store, &reg, &Concept::call("text-lines", [Concept::text("")])),
         texts([])
     );
 }
@@ -180,7 +180,7 @@ fn case_trim_and_replace() {
         value(
             &store,
             &reg,
-            &Concept::call("upper", [Concept::text("spoon")])
+            &Concept::call("text-upper", [Concept::text("spoon")])
         ),
         Concept::text("SPOON")
     );
@@ -188,7 +188,7 @@ fn case_trim_and_replace() {
         value(
             &store,
             &reg,
-            &Concept::call("lower", [Concept::text("SPOON")])
+            &Concept::call("text-lower", [Concept::text("SPOON")])
         ),
         Concept::text("spoon")
     );
@@ -196,7 +196,7 @@ fn case_trim_and_replace() {
         value(
             &store,
             &reg,
-            &Concept::call("trim", [Concept::text("  hi \n")])
+            &Concept::call("text-trim", [Concept::text("  hi \n")])
         ),
         Concept::text("hi")
     );
@@ -205,7 +205,7 @@ fn case_trim_and_replace() {
             &store,
             &reg,
             &Concept::call(
-                "replace",
+                "text-replace",
                 [
                     Concept::text("a-b-a"),
                     Concept::text("a"),
@@ -220,7 +220,7 @@ fn case_trim_and_replace() {
         &store,
         &reg,
         &Concept::call(
-            "replace",
+            "text-replace",
             [Concept::text("ab"), Concept::text(""), Concept::text("z")],
         ),
     );
@@ -234,7 +234,7 @@ fn upper_and_lower_handle_non_ascii() {
         value(
             &store,
             &reg,
-            &Concept::call("upper", [Concept::text("straße")])
+            &Concept::call("text-upper", [Concept::text("straße")])
         ),
         Concept::text("STRASSE"),
         "case mapping is not a per-character substitution"
@@ -243,7 +243,7 @@ fn upper_and_lower_handle_non_ascii() {
         value(
             &store,
             &reg,
-            &Concept::call("lower", [Concept::text("ÄÖÜ Ñ")])
+            &Concept::call("text-lower", [Concept::text("ÄÖÜ Ñ")])
         ),
         Concept::text("äöü ñ")
     );
@@ -251,7 +251,7 @@ fn upper_and_lower_handle_non_ascii() {
         value(
             &store,
             &reg,
-            &Concept::call("upper", [Concept::text("çğışü")])
+            &Concept::call("text-upper", [Concept::text("çğışü")])
         ),
         Concept::text("ÇĞIŞÜ")
     );
@@ -262,10 +262,10 @@ fn predicates_over_text() {
     let (store, reg) = brain();
     let hay = Concept::text("spoonful");
     for (native, needle, expected) in [
-        ("starts-with", "spoon", true),
-        ("starts-with", "full", false),
-        ("ends-with", "ful", true),
-        ("ends-with", "spoon", false),
+        ("text-starts-with", "spoon", true),
+        ("text-starts-with", "full", false),
+        ("text-ends-with", "ful", true),
+        ("text-ends-with", "spoon", false),
         ("text-contains", "oonf", true),
         ("text-contains", "zzz", false),
     ] {
@@ -324,7 +324,7 @@ fn substring_never_splits_a_character() {
         value(
             &store,
             &reg,
-            &Concept::call("substring", [s.clone(), Concept::int(0), Concept::int(2)])
+            &Concept::call("text-substring", [s.clone(), Concept::int(0), Concept::int(2)])
         ),
         Concept::text("hé"),
         "a byte-indexed slice here would have cut the é in half"
@@ -333,7 +333,7 @@ fn substring_never_splits_a_character() {
         value(
             &store,
             &reg,
-            &Concept::call("substring", [s.clone(), Concept::int(5), Concept::int(6)])
+            &Concept::call("text-substring", [s.clone(), Concept::int(5), Concept::int(6)])
         ),
         Concept::text("🌍")
     );
@@ -341,7 +341,7 @@ fn substring_never_splits_a_character() {
         value(
             &store,
             &reg,
-            &Concept::call("substring", [s.clone(), Concept::int(6), Concept::int(6)])
+            &Concept::call("text-substring", [s.clone(), Concept::int(6), Concept::int(6)])
         ),
         Concept::text(""),
         "an empty range at the very end is empty, not an error"
@@ -350,7 +350,7 @@ fn substring_never_splits_a_character() {
     let message = why_failed(
         &store,
         &reg,
-        &Concept::call("substring", [s.clone(), Concept::int(0), Concept::int(7)]),
+        &Concept::call("text-substring", [s.clone(), Concept::int(0), Concept::int(7)]),
     );
     assert!(
         message.contains("index 7") && message.contains("length 6"),
@@ -359,7 +359,7 @@ fn substring_never_splits_a_character() {
     let message = why_failed(
         &store,
         &reg,
-        &Concept::call("substring", [s, Concept::int(4), Concept::int(2)]),
+        &Concept::call("text-substring", [s, Concept::int(4), Concept::int(2)]),
     );
     assert!(message.contains("start 4 is past end 2"), "got {message}");
 }
@@ -372,7 +372,7 @@ fn char_at_returns_whole_characters() {
         value(
             &store,
             &reg,
-            &Concept::call("char-at", [s.clone(), Concept::int(1)])
+            &Concept::call("text-char-at", [s.clone(), Concept::int(1)])
         ),
         Concept::text("é")
     );
@@ -380,14 +380,14 @@ fn char_at_returns_whole_characters() {
         value(
             &store,
             &reg,
-            &Concept::call("char-at", [s.clone(), Concept::int(5)])
+            &Concept::call("text-char-at", [s.clone(), Concept::int(5)])
         ),
         Concept::text("🌍")
     );
     let message = why_failed(
         &store,
         &reg,
-        &Concept::call("char-at", [s, Concept::int(6)]),
+        &Concept::call("text-char-at", [s, Concept::int(6)]),
     );
     assert!(
         message.contains("index 6") && message.contains("length 6"),
@@ -402,7 +402,7 @@ fn padding_counts_characters_too() {
         value(
             &store,
             &reg,
-            &Concept::call("pad-left", [Concept::text("7"), Concept::int(3)])
+            &Concept::call("text-pad-left", [Concept::text("7"), Concept::int(3)])
         ),
         Concept::text("  7")
     );
@@ -411,7 +411,7 @@ fn padding_counts_characters_too() {
             &store,
             &reg,
             &Concept::call(
-                "pad-left",
+                "text-pad-left",
                 [Concept::text("7"), Concept::int(3), Concept::text("0")]
             )
         ),
@@ -422,7 +422,7 @@ fn padding_counts_characters_too() {
             &store,
             &reg,
             &Concept::call(
-                "pad-right",
+                "text-pad-right",
                 [Concept::text("7"), Concept::int(3), Concept::text("·")]
             )
         ),
@@ -433,7 +433,7 @@ fn padding_counts_characters_too() {
             &store,
             &reg,
             &Concept::call(
-                "pad-left",
+                "text-pad-left",
                 [Concept::text("🌍"), Concept::int(3), Concept::text("🌱")]
             )
         ),
@@ -444,7 +444,7 @@ fn padding_counts_characters_too() {
         value(
             &store,
             &reg,
-            &Concept::call("pad-right", [Concept::text("long"), Concept::int(2)])
+            &Concept::call("text-pad-right", [Concept::text("long"), Concept::int(2)])
         ),
         Concept::text("long"),
         "already wide enough means unchanged, never truncated"
@@ -454,7 +454,7 @@ fn padding_counts_characters_too() {
         &store,
         &reg,
         &Concept::call(
-            "pad-left",
+            "text-pad-left",
             [Concept::text("x"), Concept::int(4), Concept::text("ab")],
         ),
     );
@@ -472,7 +472,7 @@ fn repeat_multiplies_a_string() {
         value(
             &store,
             &reg,
-            &Concept::call("repeat", [Concept::text("ab"), Concept::int(3)])
+            &Concept::call("text-repeat", [Concept::text("ab"), Concept::int(3)])
         ),
         Concept::text("ababab")
     );
@@ -480,7 +480,7 @@ fn repeat_multiplies_a_string() {
         value(
             &store,
             &reg,
-            &Concept::call("repeat", [Concept::text("ab"), Concept::int(0)])
+            &Concept::call("text-repeat", [Concept::text("ab"), Concept::int(0)])
         ),
         Concept::text("")
     );
@@ -492,7 +492,7 @@ fn repeat_past_the_cap_errors_instead_of_allocating() {
     let message = why_failed(
         &store,
         &reg,
-        &Concept::call("repeat", [Concept::text("ab"), Concept::int(1_000_000_000)]),
+        &Concept::call("text-repeat", [Concept::text("ab"), Concept::int(1_000_000_000)]),
     );
     assert!(message.contains("cap"), "got {message}");
 
@@ -501,7 +501,7 @@ fn repeat_past_the_cap_errors_instead_of_allocating() {
     let message = why_failed(
         &store,
         &reg,
-        &Concept::call("repeat", [Concept::text("ab"), Concept::int(i64::MAX)]),
+        &Concept::call("text-repeat", [Concept::text("ab"), Concept::int(i64::MAX)]),
     );
     assert!(
         message.contains("cap") || message.contains("overflow"),
@@ -511,7 +511,7 @@ fn repeat_past_the_cap_errors_instead_of_allocating() {
     let message = why_failed(
         &store,
         &reg,
-        &Concept::call("repeat", [Concept::text("ab"), Concept::int(-1)]),
+        &Concept::call("text-repeat", [Concept::text("ab"), Concept::int(-1)]),
     );
     assert!(message.contains("negative count -1"), "got {message}");
 }
@@ -533,7 +533,7 @@ fn to_text_renders_every_ground_kind() {
     ];
     for (input, expected) in cases {
         assert_eq!(
-            value(&store, &reg, &Concept::call("to-text", [input.clone()])),
+            value(&store, &reg, &Concept::call("text-to-text", [input.clone()])),
             Concept::text(expected),
             "to-text of {input:?}"
         );
@@ -541,7 +541,7 @@ fn to_text_renders_every_ground_kind() {
     let rendered = value(
         &store,
         &reg,
-        &Concept::call("to-text", [Concept::datetime(now())]),
+        &Concept::call("text-to-text", [Concept::datetime(now())]),
     );
     assert_eq!(
         rendered.as_ground().and_then(Ground::as_str),
@@ -559,8 +559,8 @@ fn to_text_refuses_a_concept_with_no_single_text_form() {
             [Concept::named("greg"), Concept::named("workiva")],
         ),
     ] {
-        let message = why_failed(&store, &reg, &Concept::call("to-text", [input.clone()]));
-        assert!(message.contains("to-text"), "got {message} for {input:?}");
+        let message = why_failed(&store, &reg, &Concept::call("text-to-text", [input.clone()]));
+        assert!(message.contains("text-to-text"), "got {message} for {input:?}");
     }
 }
 
@@ -571,7 +571,7 @@ fn parsing_numbers_reports_failure_rather_than_defaulting() {
         value(
             &store,
             &reg,
-            &Concept::call("parse-int", [Concept::text("42")])
+            &Concept::call("text-parse-int", [Concept::text("42")])
         ),
         Concept::int(42)
     );
@@ -579,7 +579,7 @@ fn parsing_numbers_reports_failure_rather_than_defaulting() {
         value(
             &store,
             &reg,
-            &Concept::call("parse-int", [Concept::text("  -7 ")])
+            &Concept::call("text-parse-int", [Concept::text("  -7 ")])
         ),
         Concept::int(-7),
         "surrounding whitespace carries no meaning"
@@ -588,7 +588,7 @@ fn parsing_numbers_reports_failure_rather_than_defaulting() {
         value(
             &store,
             &reg,
-            &Concept::call("parse-float", [Concept::text("1.5")])
+            &Concept::call("text-parse-float", [Concept::text("1.5")])
         ),
         Concept::float(1.5)
     );
@@ -596,17 +596,17 @@ fn parsing_numbers_reports_failure_rather_than_defaulting() {
         value(
             &store,
             &reg,
-            &Concept::call("parse-float", [Concept::text("3")])
+            &Concept::call("text-parse-float", [Concept::text("3")])
         ),
         Concept::float(3.0)
     );
 
     for (native, input) in [
-        ("parse-int", "abc"),
-        ("parse-int", ""),
-        ("parse-int", "1.5"),
-        ("parse-float", "abc"),
-        ("parse-float", ""),
+        ("text-parse-int", "abc"),
+        ("text-parse-int", ""),
+        ("text-parse-int", "1.5"),
+        ("text-parse-float", "abc"),
+        ("text-parse-float", ""),
     ] {
         let message = why_failed(&store, &reg, &Concept::call(native, [Concept::text(input)]));
         assert!(message.contains(native), "got {message}");
@@ -624,39 +624,39 @@ fn every_native_refuses_a_wrong_typed_argument_instead_of_panicking() {
     let t = Concept::text("abc");
 
     let bad: Vec<Concept> = vec![
-        Concept::call("concat", [n.clone()]),
-        Concept::call("split", [n.clone(), t.clone()]),
-        Concept::call("split", [t.clone(), n.clone()]),
-        Concept::call("join", [n.clone(), t.clone()]),
-        Concept::call("join", [Concept::call("list", [n.clone()]), t.clone()]),
-        Concept::call("join", [Concept::call("list", []), n.clone()]),
-        Concept::call("lines", [n.clone()]),
-        Concept::call("upper", [n.clone()]),
-        Concept::call("lower", [n.clone()]),
-        Concept::call("trim", [n.clone()]),
-        Concept::call("replace", [n.clone(), t.clone(), t.clone()]),
+        Concept::call("text-concat", [n.clone()]),
+        Concept::call("text-split", [n.clone(), t.clone()]),
+        Concept::call("text-split", [t.clone(), n.clone()]),
+        Concept::call("text-join", [n.clone(), t.clone()]),
+        Concept::call("text-join", [Concept::call("list-list", [n.clone()]), t.clone()]),
+        Concept::call("text-join", [Concept::call("list-list", []), n.clone()]),
+        Concept::call("text-lines", [n.clone()]),
+        Concept::call("text-upper", [n.clone()]),
+        Concept::call("text-lower", [n.clone()]),
+        Concept::call("text-trim", [n.clone()]),
+        Concept::call("text-replace", [n.clone(), t.clone(), t.clone()]),
         Concept::call("text-length", [n.clone()]),
-        Concept::call("starts-with", [n.clone(), t.clone()]),
-        Concept::call("ends-with", [t.clone(), n.clone()]),
+        Concept::call("text-starts-with", [n.clone(), t.clone()]),
+        Concept::call("text-ends-with", [t.clone(), n.clone()]),
         Concept::call("text-contains", [n.clone(), t.clone()]),
-        Concept::call("substring", [n.clone(), n.clone(), n.clone()]),
-        Concept::call("substring", [t.clone(), t.clone(), n.clone()]),
-        Concept::call("substring", [t.clone(), Concept::int(-1), n.clone()]),
-        Concept::call("char-at", [n.clone(), n.clone()]),
-        Concept::call("char-at", [t.clone(), t.clone()]),
-        Concept::call("pad-left", [n.clone(), n.clone()]),
-        Concept::call("pad-right", [t.clone(), t.clone()]),
-        Concept::call("pad-right", [t.clone(), Concept::int(9_000_000)]),
-        Concept::call("repeat", [n.clone(), n.clone()]),
-        Concept::call("repeat", [t.clone(), t.clone()]),
-        Concept::call("to-text", [Concept::hole(0)]),
-        Concept::call("parse-int", [n.clone()]),
-        Concept::call("parse-float", [n.clone()]),
+        Concept::call("text-substring", [n.clone(), n.clone(), n.clone()]),
+        Concept::call("text-substring", [t.clone(), t.clone(), n.clone()]),
+        Concept::call("text-substring", [t.clone(), Concept::int(-1), n.clone()]),
+        Concept::call("text-char-at", [n.clone(), n.clone()]),
+        Concept::call("text-char-at", [t.clone(), t.clone()]),
+        Concept::call("text-pad-left", [n.clone(), n.clone()]),
+        Concept::call("text-pad-right", [t.clone(), t.clone()]),
+        Concept::call("text-pad-right", [t.clone(), Concept::int(9_000_000)]),
+        Concept::call("text-repeat", [n.clone(), n.clone()]),
+        Concept::call("text-repeat", [t.clone(), t.clone()]),
+        Concept::call("text-to-text", [Concept::hole(0)]),
+        Concept::call("text-parse-int", [n.clone()]),
+        Concept::call("text-parse-float", [n.clone()]),
         // Arity mismatches are caught before the native ever runs.
-        Concept::call("upper", []),
-        Concept::call("substring", [t.clone(), n.clone()]),
-        Concept::call("pad-left", [t.clone()]),
-        Concept::call("pad-left", [t.clone(), n.clone(), t.clone(), t.clone()]),
+        Concept::call("text-upper", []),
+        Concept::call("text-substring", [t.clone(), n.clone()]),
+        Concept::call("text-pad-left", [t.clone()]),
+        Concept::call("text-pad-left", [t.clone(), n.clone(), t.clone(), t.clone()]),
     ];
 
     for expr in bad {

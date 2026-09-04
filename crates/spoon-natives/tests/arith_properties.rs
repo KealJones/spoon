@@ -43,16 +43,16 @@ fn all_integer_arithmetic_stays_integer() {
     // to hold across every operation, not just add.
     let (store, reg) = env();
     let cases = [
-        Concept::call("add", [Concept::int(2), Concept::int(3)]),
-        Concept::call("sub", [Concept::int(9), Concept::int(4)]),
-        Concept::call("mul", [Concept::int(2), Concept::int(3)]),
-        Concept::call("div", [Concept::int(9), Concept::int(3)]),
-        Concept::call("modulo", [Concept::int(9), Concept::int(4)]),
-        Concept::call("neg", [Concept::int(5)]),
-        Concept::call("abs", [Concept::int(-5)]),
-        Concept::call("min", [Concept::int(1), Concept::int(2)]),
-        Concept::call("max", [Concept::int(1), Concept::int(2)]),
-        Concept::call("pow", [Concept::int(2), Concept::int(8)]),
+        Concept::call("math-add", [Concept::int(2), Concept::int(3)]),
+        Concept::call("math-sub", [Concept::int(9), Concept::int(4)]),
+        Concept::call("math-mul", [Concept::int(2), Concept::int(3)]),
+        Concept::call("math-div", [Concept::int(9), Concept::int(3)]),
+        Concept::call("math-modulo", [Concept::int(9), Concept::int(4)]),
+        Concept::call("math-neg", [Concept::int(5)]),
+        Concept::call("math-abs", [Concept::int(-5)]),
+        Concept::call("math-min", [Concept::int(1), Concept::int(2)]),
+        Concept::call("math-max", [Concept::int(1), Concept::int(2)]),
+        Concept::call("math-pow", [Concept::int(2), Concept::int(8)]),
     ];
     for case in cases {
         let out = value(&store, &reg, &case);
@@ -67,11 +67,11 @@ fn all_integer_arithmetic_stays_integer() {
 fn one_float_argument_widens_the_whole_result() {
     let (store, reg) = env();
     let cases = [
-        Concept::call("add", [Concept::int(2), Concept::float(0.5)]),
-        Concept::call("sub", [Concept::float(9.5), Concept::int(4)]),
-        Concept::call("mul", [Concept::int(2), Concept::float(1.5)]),
-        Concept::call("min", [Concept::float(2.5), Concept::int(1)]),
-        Concept::call("max", [Concept::int(1), Concept::float(2.5)]),
+        Concept::call("math-add", [Concept::int(2), Concept::float(0.5)]),
+        Concept::call("math-sub", [Concept::float(9.5), Concept::int(4)]),
+        Concept::call("math-mul", [Concept::int(2), Concept::float(1.5)]),
+        Concept::call("math-min", [Concept::float(2.5), Concept::int(1)]),
+        Concept::call("math-max", [Concept::int(1), Concept::float(2.5)]),
     ];
     for case in cases {
         let out = value(&store, &reg, &case);
@@ -89,7 +89,7 @@ fn integer_division_truncates_and_float_division_does_not() {
         value(
             &store,
             &reg,
-            &Concept::call("div", [Concept::int(7), Concept::int(2)])
+            &Concept::call("math-div", [Concept::int(7), Concept::int(2)])
         ),
         Concept::int(3)
     );
@@ -97,7 +97,7 @@ fn integer_division_truncates_and_float_division_does_not() {
         value(
             &store,
             &reg,
-            &Concept::call("div", [Concept::float(7.0), Concept::int(2)])
+            &Concept::call("math-div", [Concept::float(7.0), Concept::int(2)])
         ),
         Concept::float(3.5)
     );
@@ -115,14 +115,14 @@ fn integer_overflow_is_refused_rather_than_wrapped() {
     let out = eval(
         &store,
         &reg,
-        &Concept::call("add", [Concept::int(i64::MAX), Concept::int(1)]),
+        &Concept::call("math-add", [Concept::int(i64::MAX), Concept::int(1)]),
     );
     assert!(is_error(&out), "overflow produced {out:?}");
 
     let out = eval(
         &store,
         &reg,
-        &Concept::call("mul", [Concept::int(i64::MAX), Concept::int(2)]),
+        &Concept::call("math-mul", [Concept::int(i64::MAX), Concept::int(2)]),
     );
     assert!(is_error(&out), "overflow produced {out:?}");
 }
@@ -136,13 +136,13 @@ fn integer_division_by_zero_errors_but_float_follows_ieee() {
     assert!(is_error(&eval(
         &store,
         &reg,
-        &Concept::call("div", [Concept::int(1), Concept::int(0)])
+        &Concept::call("math-div", [Concept::int(1), Concept::int(0)])
     )));
 
     let out = value(
         &store,
         &reg,
-        &Concept::call("div", [Concept::float(1.0), Concept::float(0.0)]),
+        &Concept::call("math-div", [Concept::float(1.0), Concept::float(0.0)]),
     );
     assert_eq!(
         out.as_ground().and_then(Ground::as_f64),
@@ -159,7 +159,7 @@ fn integers_compare_exactly_beyond_the_float_mantissa() {
     let out = value(
         &store,
         &reg,
-        &Concept::call("lt", [Concept::int(big - 1), Concept::int(big)]),
+        &Concept::call("logic-lt", [Concept::int(big - 1), Concept::int(big)]),
     );
     assert_eq!(
         out,
@@ -186,7 +186,7 @@ fn equality_is_identity_not_numeric_coercion() {
         (Concept::bool(true), Concept::int(1), false),
     ];
     for (a, b, expected) in pairs {
-        let out = value(&store, &reg, &Concept::call("eq", [a.clone(), b.clone()]));
+        let out = value(&store, &reg, &Concept::call("logic-eq", [a.clone(), b.clone()]));
         assert_eq!(out, Concept::bool(expected), "eq({a:?}, {b:?})");
     }
 }
@@ -203,13 +203,13 @@ fn equality_works_on_compounds_too() {
         [Concept::named("keal"), Concept::named("greg")],
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("eq", [f.clone(), f.clone()])),
+        value(&store, &reg, &Concept::call("logic-eq", [f.clone(), f.clone()])),
         Concept::bool(true)
     );
     // Argument order matters: that these mean the same thing is something
     // Symmetric has to establish, not something equality may assume.
     assert_eq!(
-        value(&store, &reg, &Concept::call("eq", [f, g])),
+        value(&store, &reg, &Concept::call("logic-eq", [f, g])),
         Concept::bool(false)
     );
 }
@@ -221,7 +221,7 @@ fn equality_works_on_compounds_too() {
 /// A concept whose only realization always fails, used to prove an argument was
 /// never reduced. If it runs, the surrounding evaluation cannot succeed.
 fn tripwire() -> Concept {
-    Concept::call("div", [Concept::int(1), Concept::int(0)])
+    Concept::call("math-div", [Concept::int(1), Concept::int(0)])
 }
 
 #[test]
@@ -231,7 +231,7 @@ fn conditionals_never_touch_the_branch_they_do_not_take() {
         value(
             &store,
             &reg,
-            &Concept::call("if", [Concept::bool(true), Concept::int(7), tripwire()])
+            &Concept::call("logic-if", [Concept::bool(true), Concept::int(7), tripwire()])
         ),
         Concept::int(7)
     );
@@ -239,7 +239,7 @@ fn conditionals_never_touch_the_branch_they_do_not_take() {
         value(
             &store,
             &reg,
-            &Concept::call("if", [Concept::bool(false), tripwire(), Concept::int(9)])
+            &Concept::call("logic-if", [Concept::bool(false), tripwire(), Concept::int(9)])
         ),
         Concept::int(9)
     );
@@ -252,7 +252,7 @@ fn and_or_short_circuit_on_the_first_decisive_argument() {
         value(
             &store,
             &reg,
-            &Concept::call("and", [Concept::bool(false), tripwire()])
+            &Concept::call("logic-and", [Concept::bool(false), tripwire()])
         ),
         Concept::bool(false)
     );
@@ -260,7 +260,7 @@ fn and_or_short_circuit_on_the_first_decisive_argument() {
         value(
             &store,
             &reg,
-            &Concept::call("or", [Concept::bool(true), tripwire()])
+            &Concept::call("logic-or", [Concept::bool(true), tripwire()])
         ),
         Concept::bool(true)
     );
@@ -275,7 +275,7 @@ fn short_circuiting_does_not_type_check_what_it_skipped() {
         value(
             &store,
             &reg,
-            &Concept::call("and", [Concept::bool(false), Concept::named("nonsense")])
+            &Concept::call("logic-and", [Concept::bool(false), Concept::named("nonsense")])
         ),
         Concept::bool(false)
     );
@@ -294,7 +294,7 @@ fn a_non_boolean_condition_is_an_error_not_a_truthiness_guess() {
         let out = eval(
             &store,
             &reg,
-            &Concept::call("if", [bad.clone(), Concept::int(1), Concept::int(2)]),
+            &Concept::call("logic-if", [bad.clone(), Concept::int(1), Concept::int(2)]),
         );
         assert!(is_error(&out), "{bad:?} was coerced to a boolean: {out:?}");
     }
@@ -309,7 +309,7 @@ fn nested_arithmetic_reduces_through_arbitrary_depth() {
     let (store, reg) = env();
     let mut expr = Concept::int(0);
     for i in 1..=50 {
-        expr = Concept::call("add", [expr, Concept::int(i)]);
+        expr = Concept::call("math-add", [expr, Concept::int(i)]);
     }
     assert_eq!(value(&store, &reg, &expr), Concept::int(1275));
 }
@@ -318,11 +318,11 @@ fn nested_arithmetic_reduces_through_arbitrary_depth() {
 fn predicates_feed_conditionals() {
     let (store, reg) = env();
     let expr = Concept::call(
-        "if",
+        "logic-if",
         [
             Concept::call(
-                "is-even",
-                [Concept::call("add", [Concept::int(1), Concept::int(3)])],
+                "math-is-even",
+                [Concept::call("math-add", [Concept::int(1), Concept::int(3)])],
             ),
             Concept::text("even"),
             Concept::text("odd"),
@@ -345,7 +345,7 @@ fn no_native_panics_on_nonsense_input() {
         Concept::named("nonsense"),
         Concept::text("not a number"),
         Concept::bool(true),
-        Concept::call("list", [Concept::int(1)]),
+        Concept::call("list-list", [Concept::int(1)]),
         Concept::hole(0),
     ];
     for name in reg.names() {

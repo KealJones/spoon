@@ -192,7 +192,7 @@ const OVERFLOW: &str = "integer overflow";
 /// a time makes a deeper term for the evaluator to walk for no gain.
 fn add(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     fold(
-        "add",
+        "math-add",
         args,
         |x, y| x.checked_add(y).ok_or(OVERFLOW),
         |x, y| x + y,
@@ -204,7 +204,7 @@ fn add(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// not write. `Neg` covers the unary case.
 fn sub(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     binary(
-        "sub",
+        "math-sub",
         args,
         |x, y| x.checked_sub(y).ok_or(OVERFLOW),
         |x, y| x - y,
@@ -213,7 +213,7 @@ fn sub(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 
 fn mul(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     fold(
-        "mul",
+        "math-mul",
         args,
         |x, y| x.checked_mul(y).ok_or(OVERFLOW),
         |x, y| x * y,
@@ -229,7 +229,7 @@ fn mul(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// in an `i64`.
 fn div(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     binary(
-        "div",
+        "math-div",
         args,
         |x, y| {
             if y == 0 {
@@ -249,7 +249,7 @@ fn div(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// different concept.
 fn modulo(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     binary(
-        "modulo",
+        "math-modulo",
         args,
         |x, y| {
             if y == 0 {
@@ -265,10 +265,10 @@ fn modulo(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// `checked_neg` matters here: `-i64::MIN` has no `i64` answer, and negating it
 /// with `-` would wrap straight back to `i64::MIN`.
 fn neg(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let value = match Num::of("neg", one("neg", args)?)? {
+    let value = match Num::of("math-neg", one("math-neg", args)?)? {
         Num::Int(i) => Num::Int(
             i.checked_neg()
-                .ok_or_else(|| native_error("neg", OVERFLOW))?,
+                .ok_or_else(|| native_error("math-neg", OVERFLOW))?,
         ),
         Num::Float(f) => Num::Float(-f),
     };
@@ -277,10 +277,10 @@ fn neg(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 
 /// Same overflow story as `neg`: `abs(i64::MIN)` does not fit.
 fn abs(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let value = match Num::of("abs", one("abs", args)?)? {
+    let value = match Num::of("math-abs", one("math-abs", args)?)? {
         Num::Int(i) => Num::Int(
             i.checked_abs()
-                .ok_or_else(|| native_error("abs", OVERFLOW))?,
+                .ok_or_else(|| native_error("math-abs", OVERFLOW))?,
         ),
         Num::Float(f) => Num::Float(f.abs()),
     };
@@ -292,21 +292,21 @@ fn abs(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// promises an all-integer call an integer answer. Breaking that promise
 /// silently would be worse than saying what to do instead.
 fn pow(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let (base, exponent) = pair("pow", args)?;
-    let base = Num::of("pow", base)?;
-    let exponent = Num::of("pow", exponent)?;
+    let (base, exponent) = pair("math-pow", args)?;
+    let base = Num::of("math-pow", base)?;
+    let exponent = Num::of("math-pow", exponent)?;
     match (base, exponent) {
         (Num::Int(b), Num::Int(e)) => {
             if e < 0 {
                 return Err(native_error(
-                    "pow",
+                    "math-pow",
                     "a negative exponent has no integer answer; make the base a float",
                 ));
             }
-            let e = u32::try_from(e).map_err(|_| native_error("pow", OVERFLOW))?;
+            let e = u32::try_from(e).map_err(|_| native_error("math-pow", OVERFLOW))?;
             b.checked_pow(e)
                 .map(Concept::int)
-                .ok_or_else(|| native_error("pow", OVERFLOW))
+                .ok_or_else(|| native_error("math-pow", OVERFLOW))
         }
         _ => Ok(Concept::float(base.as_f64().powf(exponent.as_f64()))),
     }
@@ -355,11 +355,11 @@ fn extremum(native: &str, args: &[Concept], want_smaller: bool) -> EvalResult {
 }
 
 fn min(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    extremum("min", args, true)
+    extremum("math-min", args, true)
 }
 
 fn max(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    extremum("max", args, false)
+    extremum("math-max", args, false)
 }
 
 // ---------------------------------------------------------------------------
@@ -375,12 +375,12 @@ fn max(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// the widening rule applies to arithmetic, not to identity. Use `Lte` and
 /// `Gte` together when you want "same number, either spelling".
 fn eq(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let (a, b) = pair("eq", args)?;
+    let (a, b) = pair("logic-eq", args)?;
     Ok(Concept::bool(a.content_id() == b.content_id()))
 }
 
 fn ne(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let (a, b) = pair("ne", args)?;
+    let (a, b) = pair("logic-ne", args)?;
     Ok(Concept::bool(a.content_id() != b.content_id()))
 }
 
@@ -407,19 +407,19 @@ fn compare(native: &str, args: &[Concept], accept: fn(Ordering) -> bool) -> Eval
 }
 
 fn lt(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    compare("lt", args, Ordering::is_lt)
+    compare("logic-lt", args, Ordering::is_lt)
 }
 
 fn gt(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    compare("gt", args, Ordering::is_gt)
+    compare("logic-gt", args, Ordering::is_gt)
 }
 
 fn lte(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    compare("lte", args, Ordering::is_le)
+    compare("logic-lte", args, Ordering::is_le)
 }
 
 fn gte(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    compare("gte", args, Ordering::is_ge)
+    compare("logic-gte", args, Ordering::is_ge)
 }
 
 // ---------------------------------------------------------------------------
@@ -438,7 +438,7 @@ fn gte(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 fn and(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     for arg in args {
         let value = ctx.eval(arg)?;
-        if !want_bool("and", &value)? {
+        if !want_bool("logic-and", &value)? {
             return Ok(Concept::bool(false));
         }
     }
@@ -449,7 +449,7 @@ fn and(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 fn or(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     for arg in args {
         let value = ctx.eval(arg)?;
-        if want_bool("or", &value)? {
+        if want_bool("logic-or", &value)? {
             return Ok(Concept::bool(true));
         }
     }
@@ -457,15 +457,15 @@ fn or(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 }
 
 fn not(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    Ok(Concept::bool(!want_bool("not", one("not", args)?)?))
+    Ok(Concept::bool(!want_bool("logic-not", one("logic-not", args)?)?))
 }
 
 /// Eager, unlike `and` and `or`. Exclusive or has no decisive argument: both
 /// sides are needed before the answer is known, so laziness would buy nothing
 /// and only make the reduction order harder to reason about.
 fn xor(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let (a, b) = pair("xor", args)?;
-    Ok(Concept::bool(want_bool("xor", a)? != want_bool("xor", b)?))
+    let (a, b) = pair("logic-xor", args)?;
+    Ok(Concept::bool(want_bool("logic-xor", a)? != want_bool("logic-xor", b)?))
 }
 
 /// Reduces the condition and exactly one branch.
@@ -478,13 +478,13 @@ fn xor(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// as a rule, and it silently sends evaluation down a branch nobody chose.
 /// Spoon should say it does not understand.
 fn conditional(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let condition = ctx.eval(one("if", args)?)?;
-    let taken = if want_bool("if", &condition)? {
+    let condition = ctx.eval(one("logic-if", args)?)?;
+    let taken = if want_bool("logic-if", &condition)? {
         args.get(1)
     } else {
         args.get(2)
     };
-    let taken = taken.ok_or_else(|| native_error("if", "expected a condition and two branches"))?;
+    let taken = taken.ok_or_else(|| native_error("logic-if", "expected a condition and two branches"))?;
     ctx.eval(taken)
 }
 
@@ -501,19 +501,19 @@ fn conditional(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// `NaN` is neither. Nothing here can fail on a number.
 fn is_zero(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     Ok(Concept::bool(
-        want_number("is-zero", one("is-zero", args)?)? == 0.0,
+        want_number("math-is-zero", one("math-is-zero", args)?)? == 0.0,
     ))
 }
 
 fn is_positive(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     Ok(Concept::bool(
-        want_number("is-positive", one("is-positive", args)?)? > 0.0,
+        want_number("math-is-positive", one("math-is-positive", args)?)? > 0.0,
     ))
 }
 
 fn is_negative(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     Ok(Concept::bool(
-        want_number("is-negative", one("is-negative", args)?)? < 0.0,
+        want_number("math-is-negative", one("math-is-negative", args)?)? < 0.0,
     ))
 }
 
@@ -525,13 +525,13 @@ fn is_negative(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// so `-3` is odd.
 fn is_even(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     Ok(Concept::bool(
-        want_int("is-even", one("is-even", args)?)? % 2 == 0,
+        want_int("math-is-even", one("math-is-even", args)?)? % 2 == 0,
     ))
 }
 
 fn is_odd(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     Ok(Concept::bool(
-        want_int("is-odd", one("is-odd", args)?)? % 2 != 0,
+        want_int("math-is-odd", one("math-is-odd", args)?)? % 2 != 0,
     ))
 }
 
@@ -545,22 +545,22 @@ fn is_odd(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// was no way to say "keep the true ones" without writing `eq<?0, true>`, which
 /// is the same thing spelled worse.
 fn is_true(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    Ok(Concept::bool(want_bool("is-true", &args[0])?))
+    Ok(Concept::bool(want_bool("logic-is-true", &args[0])?))
 }
 
 fn is_false(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    Ok(Concept::bool(!want_bool("is-false", &args[0])?))
+    Ok(Concept::bool(!want_bool("logic-is-false", &args[0])?))
 }
 
 pub fn register(registry: &mut NativeRegistry) {
     registry.pure(
-        "is-true",
+        "logic-is-true",
         is_true,
         Arity::Exact(1),
         "whether a boolean is true",
     );
     registry.pure(
-        "is-false",
+        "logic-is-false",
         is_false,
         Arity::Exact(1),
         "whether a boolean is false",
@@ -568,80 +568,80 @@ pub fn register(registry: &mut NativeRegistry) {
     // Arithmetic. All pure and eager: nothing here reads the world, and every
     // argument is needed.
     registry.pure(
-        "add",
+        "math-add",
         add,
         Arity::AtLeast(1),
         "sum of numbers; all integers give an integer, any float widens the result to a float",
     );
     registry.pure(
-        "sub",
+        "math-sub",
         sub,
         Arity::Exact(2),
         "the first number minus the second",
     );
-    registry.pure("mul", mul, Arity::AtLeast(1), "product of numbers");
+    registry.pure("math-mul", mul, Arity::AtLeast(1), "product of numbers");
     registry.pure(
-        "div",
+        "math-div",
         div,
         Arity::Exact(2),
         "the first number divided by the second; two integers divide to an integer",
     );
     registry.pure(
-        "modulo",
+        "math-modulo",
         modulo,
         Arity::Exact(2),
         "remainder after dividing the first number by the second, signed like the first",
     );
     registry.pure(
-        "neg",
+        "math-neg",
         neg,
         Arity::Exact(1),
         "the number with its sign flipped",
     );
-    registry.pure("abs", abs, Arity::Exact(1), "how far a number is from zero");
+    registry.pure("math-abs", abs, Arity::Exact(1), "how far a number is from zero");
     registry.pure(
-        "pow",
+        "math-pow",
         pow,
         Arity::Exact(2),
         "the first number raised to the power of the second",
     );
-    registry.pure("min", min, Arity::AtLeast(1), "the smallest of the numbers");
-    registry.pure("max", max, Arity::AtLeast(1), "the largest of the numbers");
+    registry.pure("math-min", min, Arity::AtLeast(1), "the smallest of the numbers");
+    registry.pure("math-max", max, Arity::AtLeast(1), "the largest of the numbers");
 
     // Comparison. Equality is about identity and takes anything; ordering is
     // numeric.
     registry.pure(
-        "eq",
+        "logic-eq",
         eq,
         Arity::Exact(2),
         "true when the two arguments are the same concept",
     );
     registry.pure(
-        "ne",
+        "logic-ne",
         ne,
         Arity::Exact(2),
         "true when the two arguments are different concepts",
     );
     registry.pure(
-        "lt",
+        "logic-lt",
         lt,
         Arity::Exact(2),
         "true when the first number is less than the second",
     );
     registry.pure(
-        "gt",
+        "logic-gt",
         gt,
         Arity::Exact(2),
         "true when the first number is greater than the second",
     );
     registry.pure(
-        "lte",
+        "logic-lte",
         lte,
         Arity::Exact(2),
         "true when the first number is less than or equal to the second",
     );
     registry.pure(
-        "gte",
+        "logic-gte",
         gte,
         Arity::Exact(2),
         "true when the first number is greater than or equal to the second",
@@ -650,7 +650,7 @@ pub fn register(registry: &mut NativeRegistry) {
     // Logic. `and`, `or`, and `if` are lazy because their whole job is to not
     // evaluate something.
     registry.register(
-        "and",
+        "logic-and",
         and,
         Arity::AtLeast(1),
         ArgStrategy::Lazy,
@@ -658,16 +658,16 @@ pub fn register(registry: &mut NativeRegistry) {
         "true when every argument is true; stops at the first false",
     );
     registry.register(
-        "or",
+        "logic-or",
         or,
         Arity::AtLeast(1),
         ArgStrategy::Lazy,
         Effect::Pure,
         "true when any argument is true; stops at the first true",
     );
-    registry.pure("not", not, Arity::Exact(1), "the opposite of a boolean");
+    registry.pure("logic-not", not, Arity::Exact(1), "the opposite of a boolean");
     registry.register(
-        "if",
+        "logic-if",
         conditional,
         Arity::Exact(3),
         ArgStrategy::Lazy,
@@ -675,7 +675,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "the second argument when the condition is true, otherwise the third; only the taken branch runs",
     );
     registry.pure(
-        "xor",
+        "logic-xor",
         xor,
         Arity::Exact(2),
         "true when exactly one of the two booleans is true",
@@ -683,31 +683,31 @@ pub fn register(registry: &mut NativeRegistry) {
 
     // Numeric predicates.
     registry.pure(
-        "is-zero",
+        "math-is-zero",
         is_zero,
         Arity::Exact(1),
         "true when the number is zero",
     );
     registry.pure(
-        "is-positive",
+        "math-is-positive",
         is_positive,
         Arity::Exact(1),
         "true when the number is greater than zero",
     );
     registry.pure(
-        "is-negative",
+        "math-is-negative",
         is_negative,
         Arity::Exact(1),
         "true when the number is less than zero",
     );
     registry.pure(
-        "is-even",
+        "math-is-even",
         is_even,
         Arity::Exact(1),
         "true when the integer divides evenly by two",
     );
     registry.pure(
-        "is-odd",
+        "math-is-odd",
         is_odd,
         Arity::Exact(1),
         "true when the integer does not divide evenly by two",

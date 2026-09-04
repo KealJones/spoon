@@ -55,10 +55,10 @@ fn http_get(url: &str) -> Result<(u16, String), String> {
 }
 
 fn fetch(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let url = want_text("fetch", &args[0])?;
-    let (status, body) = http_get(url).map_err(|e| native_error("fetch", e))?;
+    let url = want_text("io-fetch", &args[0])?;
+    let (status, body) = http_get(url).map_err(|e| native_error("io-fetch", e))?;
     if !(200..300).contains(&status) {
-        return Err(native_error("fetch", format!("{url} answered {status}")));
+        return Err(native_error("io-fetch", format!("{url} answered {status}")));
     }
     Ok(Concept::text(body))
 }
@@ -66,16 +66,16 @@ fn fetch(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// Fetch and parse in one step, because the pair is what anyone actually wants
 /// and keeping them apart means every call site repeats the join.
 fn fetch_json(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let url = want_text("fetch-json", &args[0])?;
-    let (status, body) = http_get(url).map_err(|e| native_error("fetch-json", e))?;
+    let url = want_text("io-fetch-json", &args[0])?;
+    let (status, body) = http_get(url).map_err(|e| native_error("io-fetch-json", e))?;
     if !(200..300).contains(&status) {
         return Err(native_error(
-            "fetch-json",
+            "io-fetch-json",
             format!("{url} answered {status}"),
         ));
     }
     let value: serde_json::Value = serde_json::from_str(&body)
-        .map_err(|e| native_error("fetch-json", format!("{url} did not return JSON: {e}")))?;
+        .map_err(|e| native_error("io-fetch-json", format!("{url} did not return JSON: {e}")))?;
     Ok(Concept::json(value))
 }
 
@@ -97,48 +97,48 @@ fn safe_path(native: &str, raw: &str) -> Result<PathBuf, spoon_eval::EvalError> 
 }
 
 fn read_file(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let raw = want_text("read-file", &args[0])?;
-    let path = safe_path("read-file", raw)?;
+    let raw = want_text("io-read-file", &args[0])?;
+    let path = safe_path("io-read-file", raw)?;
     let text = std::fs::read_to_string(&path)
-        .map_err(|e| native_error("read-file", format!("{}: {e}", path.display())))?;
+        .map_err(|e| native_error("io-read-file", format!("{}: {e}", path.display())))?;
     Ok(Concept::text(text))
 }
 
 fn write_file(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let raw = want_text("write-file", &args[0])?;
-    let body = want_text("write-file", &args[1])?;
-    let path = safe_path("write-file", raw)?;
+    let raw = want_text("io-write-file", &args[0])?;
+    let body = want_text("io-write-file", &args[1])?;
+    let path = safe_path("io-write-file", raw)?;
     if let Some(parent) = path.parent()
         && !parent.as_os_str().is_empty()
     {
         std::fs::create_dir_all(parent)
-            .map_err(|e| native_error("write-file", format!("{}: {e}", parent.display())))?;
+            .map_err(|e| native_error("io-write-file", format!("{}: {e}", parent.display())))?;
     }
     std::fs::write(&path, body)
-        .map_err(|e| native_error("write-file", format!("{}: {e}", path.display())))?;
+        .map_err(|e| native_error("io-write-file", format!("{}: {e}", path.display())))?;
     // The path comes back rather than a bare true, so a plan can keep using it.
     Ok(Concept::text(raw))
 }
 
 fn append_file(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     use std::io::Write;
-    let raw = want_text("append-file", &args[0])?;
-    let body = want_text("append-file", &args[1])?;
-    let path = safe_path("append-file", raw)?;
+    let raw = want_text("io-append-file", &args[0])?;
+    let body = want_text("io-append-file", &args[1])?;
+    let path = safe_path("io-append-file", raw)?;
     let mut file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(&path)
-        .map_err(|e| native_error("append-file", format!("{}: {e}", path.display())))?;
+        .map_err(|e| native_error("io-append-file", format!("{}: {e}", path.display())))?;
     file.write_all(body.as_bytes())
-        .map_err(|e| native_error("append-file", format!("{}: {e}", path.display())))?;
+        .map_err(|e| native_error("io-append-file", format!("{}: {e}", path.display())))?;
     Ok(Concept::text(raw))
 }
 
 fn file_exists(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    let raw = want_text("file-exists", &args[0])?;
+    let raw = want_text("io-file-exists", &args[0])?;
     Ok(Concept::bool(
-        safe_path("file-exists", raw)
+        safe_path("io-file-exists", raw)
             .map(|p| p.exists())
             .unwrap_or(false),
     ))
@@ -157,7 +157,7 @@ fn print(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 
 pub fn register(registry: &mut NativeRegistry) {
     registry.register(
-        "fetch",
+        "io-fetch",
         fetch,
         Arity::Exact(1),
         ArgStrategy::Eager,
@@ -165,7 +165,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "fetch a URL and return the body as text",
     );
     registry.register(
-        "fetch-json",
+        "io-fetch-json",
         fetch_json,
         Arity::Exact(1),
         ArgStrategy::Eager,
@@ -173,7 +173,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "fetch a URL and parse the body as JSON",
     );
     registry.register(
-        "read-file",
+        "io-read-file",
         read_file,
         Arity::Exact(1),
         ArgStrategy::Eager,
@@ -181,7 +181,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "read a file as text",
     );
     registry.register(
-        "write-file",
+        "io-write-file",
         write_file,
         Arity::Exact(2),
         ArgStrategy::Eager,
@@ -189,7 +189,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "write text to a file, creating directories as needed",
     );
     registry.register(
-        "append-file",
+        "io-append-file",
         append_file,
         Arity::Exact(2),
         ArgStrategy::Eager,
@@ -197,7 +197,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "append text to a file",
     );
     registry.register(
-        "file-exists",
+        "io-file-exists",
         file_exists,
         Arity::Exact(1),
         ArgStrategy::Eager,
@@ -205,7 +205,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "whether a path exists",
     );
     registry.register(
-        "print",
+        "io-print",
         print,
         Arity::Exact(1),
         ArgStrategy::Eager,
