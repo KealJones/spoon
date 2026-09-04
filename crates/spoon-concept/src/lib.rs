@@ -33,7 +33,7 @@ pub use concept::{Concept, ContentId};
 pub use id::{ConceptId, Ground, GroundKind, HoleId, JsonBlob, SymbolId, SymbolTable};
 pub use meta::{
     Activation, ConceptMeta, Effect, NativeId, Provenance, Realization, RealizationKind,
-    RealizationSpec, Tier,
+    RealizationSpec, RuleDirection, Tier,
 };
 pub use ops::{
     Bindings, Path, PathStep, PostOrder, PreOrder, alpha_equivalent, anti_unify, at_path,

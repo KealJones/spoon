@@ -3,7 +3,7 @@
 use chrono::Utc;
 use spoon_concept::{
     Activation, Concept, ConceptMeta, Effect, NativeId, Provenance, Realization, RealizationKind,
-    RealizationSpec, SymbolId, Tier,
+    RealizationSpec, RuleDirection, SymbolId, Tier,
 };
 use spoon_store::{Store, StoreError};
 
@@ -39,6 +39,7 @@ fn every_spec() -> Vec<(&'static str, RealizationSpec)> {
                 pattern: Concept::apply(Concept::hole(0), vec![Concept::hole(1), Concept::hole(2)]),
                 condition: Some(Concept::call("symmetric", [Concept::hole(0)])),
                 produce: Concept::apply(Concept::hole(0), vec![Concept::hole(2), Concept::hole(1)]),
+                direction: RuleDirection::Forward,
             },
         ),
         (

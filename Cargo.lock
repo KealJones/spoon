@@ -487,6 +487,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "spoon-infer"
+version = "0.2.0"
+dependencies = [
+ "chrono",
+ "spoon-concept",
+ "spoon-store",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "spoon-natives"
 version = "0.2.0"
 dependencies = [

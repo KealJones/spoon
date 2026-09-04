@@ -3,7 +3,7 @@
 use chrono::Utc;
 use spoon_concept::{
     Activation, Concept, ConceptMeta, Effect, Ground, NativeId, Provenance, Realization,
-    RealizationSpec, Tier,
+    RealizationSpec, RuleDirection, Tier,
 };
 use spoon_store::Store;
 
@@ -87,6 +87,7 @@ fn populated() -> Store {
                 pattern: Concept::apply(Concept::hole(0), vec![Concept::hole(1), Concept::hole(2)]),
                 condition: Some(Concept::call("symmetric", [Concept::hole(0)])),
                 produce: Concept::apply(Concept::hole(0), vec![Concept::hole(2), Concept::hole(1)]),
+                direction: RuleDirection::Forward,
             },
             effect: Effect::Pure,
             activation: Activation::new(now),

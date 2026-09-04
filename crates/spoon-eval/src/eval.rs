@@ -394,7 +394,14 @@ impl<'a> Evaluator<'a> {
                 pattern,
                 condition,
                 produce,
+                direction,
             } => {
+                if !direction.allows_forward() {
+                    return Err(crate::native::native_error(
+                        &realization.name,
+                        "this rule is derivation-only and does not rewrite",
+                    ));
+                }
                 let bindings = generalizes(pattern, concept).ok_or_else(|| {
                     crate::native::native_error(
                         &realization.name,
@@ -560,7 +567,11 @@ impl<'a> Evaluator<'a> {
             RealizationSpec::Neural { .. } => self.neural.is_some(),
             RealizationSpec::External { .. } => self.external.is_some(),
             RealizationSpec::Native { native } => self.registry.contains(native),
-            RealizationSpec::Composed { .. } | RealizationSpec::Rule { .. } => true,
+            RealizationSpec::Composed { .. } => true,
+            // A derivation-only rule is not a way to reduce anything, so it
+            // never competes during evaluation. Letting it in would make it
+            // lose on every attempt and pollute its own evidence.
+            RealizationSpec::Rule { direction, .. } => direction.allows_forward(),
         }
     }
 

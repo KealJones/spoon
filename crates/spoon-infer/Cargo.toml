@@ -1,0 +1,14 @@
+[package]
+name = "spoon-infer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+spoon-concept = { workspace = true }
+spoon-store = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

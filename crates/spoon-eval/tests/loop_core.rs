@@ -4,7 +4,8 @@
 
 use chrono::{TimeZone, Utc};
 use spoon_concept::{
-    Activation, Concept, Effect, Ground, NativeId, Provenance, Realization, RealizationSpec, Tier,
+    Activation, Concept, Effect, Ground, NativeId, Provenance, Realization, RealizationSpec,
+    RuleDirection, Tier,
 };
 use spoon_eval::{
     ArgStrategy, Arity, Budget, Ctx, EvalError, EvalResult, Evaluator, NativeRegistry, Outcome,
@@ -302,6 +303,7 @@ fn a_rule_realization_rewrites_and_its_condition_can_come_from_the_store() {
             pattern: Concept::call("friend-with", [Concept::hole(0), Concept::hole(1)]),
             condition: Some(symmetric.clone()),
             produce: Concept::call("known-friendship", [Concept::hole(1), Concept::hole(0)]),
+            direction: RuleDirection::Forward,
         },
         Effect::Read,
     );
@@ -333,6 +335,7 @@ fn a_rule_whose_condition_fails_does_not_fire() {
             pattern: Concept::call("friend-with", [Concept::hole(0), Concept::hole(1)]),
             condition: Some(Concept::call("symmetric", [Concept::named("friend-with")])),
             produce: Concept::call("known-friendship", [Concept::hole(1), Concept::hole(0)]),
+            direction: RuleDirection::Forward,
         },
         Effect::Read,
     );

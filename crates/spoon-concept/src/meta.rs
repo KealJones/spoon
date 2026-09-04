@@ -116,6 +116,12 @@ pub enum RealizationSpec {
         /// `None` means the rule fires whenever the pattern matches.
         condition: Option<Concept>,
         produce: Concept,
+        /// Which way the rule may be read.
+        ///
+        /// Defaulted so rules stored before directions existed keep behaving
+        /// as they did.
+        #[serde(default)]
+        direction: RuleDirection,
     },
 
     /// An LLM call. `prompt` is a concept template rendered into text;
@@ -134,6 +140,59 @@ impl RealizationSpec {
             RealizationSpec::Rule { .. } => RealizationKind::Rule,
             RealizationSpec::Neural { .. } => RealizationKind::Neural,
             RealizationSpec::External { .. } => RealizationKind::External,
+        }
+    }
+}
+
+/// Which way a rule may be read.
+///
+/// A rule relates an antecedent to a consequent, and the two readings are
+/// genuinely different operations rather than one operation run twice.
+///
+/// Forward is rewriting: the concept in hand matches `pattern`, so replace it
+/// with `produce`. This is lowering and simplification, and it happens during
+/// ordinary evaluation.
+///
+/// Backward is derivation: a goal matches `produce`, so `pattern` becomes the
+/// subgoal to establish. This is how a question gets answered from facts that
+/// were never written down in that exact shape.
+///
+/// The distinction has to be explicit because a rule whose two sides share a
+/// head is only sound in one direction. `Symmetric<FriendWith>` read forward
+/// rewrites `FriendWith<Greg, Keal>` into `FriendWith<Keal, Greg>`, which then
+/// rewrites back, so evaluating a stored fact would bounce until the cycle
+/// detector stopped it. Read backward it answers "is Keal friends with Greg"
+/// from the stored fact, which is what it is for.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Serialize, Deserialize,
+)]
+pub enum RuleDirection {
+    /// Rewriting only. Fires during evaluation, never during derivation.
+    #[default]
+    Forward,
+    /// Derivation only. Consulted when answering a query, never during
+    /// evaluation. The right choice whenever `pattern` and `produce` share a
+    /// head.
+    Backward,
+    /// Sound both ways. Use sparingly: it is easy to believe a rule is
+    /// reversible and be wrong.
+    Both,
+}
+
+impl RuleDirection {
+    pub fn allows_forward(self) -> bool {
+        matches!(self, RuleDirection::Forward | RuleDirection::Both)
+    }
+
+    pub fn allows_backward(self) -> bool {
+        matches!(self, RuleDirection::Backward | RuleDirection::Both)
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            RuleDirection::Forward => "forward",
+            RuleDirection::Backward => "backward",
+            RuleDirection::Both => "both",
         }
     }
 }
