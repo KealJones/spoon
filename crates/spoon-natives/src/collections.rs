@@ -629,7 +629,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "first",
         first,
         Arity::Exact(1),
-        "the first element of a list",
+        "the first element of a list; for the first letters of a word use substring",
     );
     registry.pure("last", last, Arity::Exact(1), "the last element of a list");
     registry.pure(
@@ -672,7 +672,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "reverse",
         reverse,
         Arity::Exact(1),
-        "a list, or a piece of text, in the opposite order",
+        "a list, or a piece of text, in the opposite order; text gives back text",
     );
     registry.pure(
         "sort",
@@ -684,7 +684,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "slice",
         slice,
         Arity::Exact(3),
-        "the elements of a list from a start index up to, but not including, an end index",
+        "part of a list, from a start index up to but not including an end index; gives back a list",
     );
     registry.pure(
         "contains",

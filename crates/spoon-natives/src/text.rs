@@ -335,7 +335,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "chars",
         chars,
         Arity::Exact(1),
-        "a string as a list of characters",
+        "a string taken apart into a list of one-character strings; use it only when the answer really is a list",
     );
     registry.pure(
         "concat",
@@ -347,13 +347,13 @@ pub fn register(registry: &mut NativeRegistry) {
         "split",
         split,
         Arity::Exact(2),
-        "a list of the parts of a string around a separator",
+        "a string cut apart at every separator; gives back a list of strings",
     );
     registry.pure(
         "join",
         join,
         Arity::Exact(2),
-        "a list of strings joined with a separator",
+        "a list of strings run together with a separator between them; gives back a string, so it is how a list of characters becomes a word again",
     );
     registry.pure(
         "lines",
@@ -379,7 +379,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "text-length",
         text_length,
         Arity::Exact(1),
-        "characters in a string",
+        "how many characters a string has; gives back a number",
     );
     registry.pure(
         "starts-with",
@@ -403,7 +403,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "substring",
         substring,
         Arity::Exact(3),
-        "the characters of a string from a start index up to, but not including, an end index",
+        "part of a string, from a start index up to but not including an end index; gives back a string",
     );
     registry.pure(
         "char-at",
