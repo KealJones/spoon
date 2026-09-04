@@ -306,7 +306,7 @@ def setup(say, category):
     return {"say": say, "expect": None, "category": category, "setup": True}
 
 
-def inference():
+def inference(seed):
     """The meta-vocabulary, tested the only way it means anything: say a
     thing, then ask something that was never said.
 
@@ -314,13 +314,17 @@ def inference():
     list of facts that satisfy it, and grading that shape would be grading the
     renderer rather than the inference.
     """
+    # Disjoint casts, so the test half asks about people the training half
+    # never mentioned. Reusing the names would score memory rather than
+    # inference, which is the one thing this suite exists to measure.
     out = []
-    pool = NAMES[:]
-    random.shuffle(pool)
+    rng = random.Random(seed)
+    pool = [f"{n}-{seed}" for n in NAMES]
+    rng.shuffle(pool)
 
     def take(n):
         if len(pool) < n:
-            pool.extend(NAMES)
+            pool.extend(f"{x}-{seed}-{len(pool)}" for x in NAMES)
         return [pool.pop() for _ in range(n)]
 
     for rel, phrase in [("friends-with", "friends with"),
@@ -472,9 +476,12 @@ def main():
     build("graded_train", "The half Spoon is allowed to learn from.", train)
     build("graded_test", "Held out. Never run with teaching on before scoring.", test)
 
-    build("graded_facts",
+    build("graded_facts_train",
           "Say a thing, then ask something that was never said. Order matters.",
-          inference())
+          inference("a"))
+    build("graded_facts_test",
+          "The same shapes about a cast the training half never mentioned.",
+          inference("b"))
 
 
 if __name__ == "__main__":

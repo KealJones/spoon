@@ -1,0 +1,3156 @@
+{
+ "name": "graded_facts_train",
+ "note": "Say a thing, then ask something that was never said. Order matters.",
+ "cases": [
+  {
+   "say": "friends-with is symmetric",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "ivan-a is friends with walter-a",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is walter-a friends with ivan-a",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "bob-a is friends with judy-a",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is judy-a friends with bob-a",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "peggy-a is friends with mallory-a",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is mallory-a friends with peggy-a",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "victor-a is friends with carol-a",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is carol-a friends with victor-a",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "trent-a is friends with erin-a",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is erin-a friends with trent-a",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "dave-a is friends with alice-a",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is alice-a friends with dave-a",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "olivia-a is friends with heidi-a",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is heidi-a friends with olivia-a",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "frank-a is friends with grace-a",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is grace-a friends with frank-a",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "walter-a-15 is friends with victor-a-14",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is victor-a-14 friends with walter-a-15",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "trent-a-13 is friends with peggy-a-12",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-12 friends with trent-a-13",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "olivia-a-11 is friends with mallory-a-10",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is mallory-a-10 friends with olivia-a-11",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "judy-a-9 is friends with ivan-a-8",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is ivan-a-8 friends with judy-a-9",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "heidi-a-7 is friends with grace-a-6",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-6 friends with heidi-a-7",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "frank-a-5 is friends with erin-a-4",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is erin-a-4 friends with frank-a-5",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "dave-a-3 is friends with carol-a-2",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is carol-a-2 friends with dave-a-3",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "bob-a-1 is friends with alice-a-0",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is alice-a-0 friends with bob-a-1",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "walter-a-15 is friends with victor-a-14",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is victor-a-14 friends with walter-a-15",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "trent-a-13 is friends with peggy-a-12",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-12 friends with trent-a-13",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "olivia-a-11 is friends with mallory-a-10",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is mallory-a-10 friends with olivia-a-11",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "judy-a-9 is friends with ivan-a-8",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is ivan-a-8 friends with judy-a-9",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "heidi-a-7 is friends with grace-a-6",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-6 friends with heidi-a-7",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "frank-a-5 is friends with erin-a-4",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is erin-a-4 friends with frank-a-5",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "dave-a-3 is friends with carol-a-2",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is carol-a-2 friends with dave-a-3",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "bob-a-1 is friends with alice-a-0",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is alice-a-0 friends with bob-a-1",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "walter-a-15 is friends with victor-a-14",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is victor-a-14 friends with walter-a-15",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "trent-a-13 is friends with peggy-a-12",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-12 friends with trent-a-13",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "olivia-a-11 is friends with mallory-a-10",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is mallory-a-10 friends with olivia-a-11",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "judy-a-9 is friends with ivan-a-8",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is ivan-a-8 friends with judy-a-9",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "heidi-a-7 is friends with grace-a-6",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-6 friends with heidi-a-7",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "frank-a-5 is friends with erin-a-4",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is erin-a-4 friends with frank-a-5",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "dave-a-3 is friends with carol-a-2",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is carol-a-2 friends with dave-a-3",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "bob-a-1 is friends with alice-a-0",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is alice-a-0 friends with bob-a-1",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "walter-a-15 is friends with victor-a-14",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is victor-a-14 friends with walter-a-15",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "trent-a-13 is friends with peggy-a-12",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-12 friends with trent-a-13",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "olivia-a-11 is friends with mallory-a-10",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is mallory-a-10 friends with olivia-a-11",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "judy-a-9 is friends with ivan-a-8",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is ivan-a-8 friends with judy-a-9",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "married-to is symmetric",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "heidi-a-7 is married to grace-a-6",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-6 married to heidi-a-7",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "frank-a-5 is married to erin-a-4",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is erin-a-4 married to frank-a-5",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "dave-a-3 is married to carol-a-2",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is carol-a-2 married to dave-a-3",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "bob-a-1 is married to alice-a-0",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is alice-a-0 married to bob-a-1",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "walter-a-15 is married to victor-a-14",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is victor-a-14 married to walter-a-15",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "trent-a-13 is married to peggy-a-12",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-12 married to trent-a-13",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "olivia-a-11 is married to mallory-a-10",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is mallory-a-10 married to olivia-a-11",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "judy-a-9 is married to ivan-a-8",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is ivan-a-8 married to judy-a-9",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "heidi-a-7 is married to grace-a-6",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-6 married to heidi-a-7",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "frank-a-5 is married to erin-a-4",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is erin-a-4 married to frank-a-5",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "dave-a-3 is married to carol-a-2",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is carol-a-2 married to dave-a-3",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "bob-a-1 is married to alice-a-0",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is alice-a-0 married to bob-a-1",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "walter-a-15 is married to victor-a-14",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is victor-a-14 married to walter-a-15",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "trent-a-13 is married to peggy-a-12",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-12 married to trent-a-13",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "olivia-a-11 is married to mallory-a-10",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is mallory-a-10 married to olivia-a-11",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "judy-a-9 is married to ivan-a-8",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is ivan-a-8 married to judy-a-9",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "heidi-a-7 is married to grace-a-6",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-6 married to heidi-a-7",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "frank-a-5 is married to erin-a-4",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is erin-a-4 married to frank-a-5",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "dave-a-3 is married to carol-a-2",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is carol-a-2 married to dave-a-3",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "bob-a-1 is married to alice-a-0",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is alice-a-0 married to bob-a-1",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "walter-a-15 is married to victor-a-14",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is victor-a-14 married to walter-a-15",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "trent-a-13 is married to peggy-a-12",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-12 married to trent-a-13",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "olivia-a-11 is married to mallory-a-10",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is mallory-a-10 married to olivia-a-11",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "judy-a-9 is married to ivan-a-8",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is ivan-a-8 married to judy-a-9",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "heidi-a-7 is married to grace-a-6",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-6 married to heidi-a-7",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "frank-a-5 is married to erin-a-4",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is erin-a-4 married to frank-a-5",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "dave-a-3 is married to carol-a-2",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is carol-a-2 married to dave-a-3",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "bob-a-1 is married to alice-a-0",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is alice-a-0 married to bob-a-1",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "walter-a-15 is married to victor-a-14",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is victor-a-14 married to walter-a-15",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "trent-a-13 is married to peggy-a-12",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-12 married to trent-a-13",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "olivia-a-11 is married to mallory-a-10",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is mallory-a-10 married to olivia-a-11",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "judy-a-9 is married to ivan-a-8",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is ivan-a-8 married to judy-a-9",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "heidi-a-7 is married to grace-a-6",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-6 married to heidi-a-7",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "frank-a-5 is married to erin-a-4",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is erin-a-4 married to frank-a-5",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "dave-a-3 is married to carol-a-2",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is carol-a-2 married to dave-a-3",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "bob-a-1 is married to alice-a-0",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is alice-a-0 married to bob-a-1",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "sibling-of is symmetric",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "walter-a-15 is a sibling of victor-a-14",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is victor-a-14 a sibling of walter-a-15",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "trent-a-13 is a sibling of peggy-a-12",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-12 a sibling of trent-a-13",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "olivia-a-11 is a sibling of mallory-a-10",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is mallory-a-10 a sibling of olivia-a-11",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "judy-a-9 is a sibling of ivan-a-8",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is ivan-a-8 a sibling of judy-a-9",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "heidi-a-7 is a sibling of grace-a-6",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-6 a sibling of heidi-a-7",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "frank-a-5 is a sibling of erin-a-4",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is erin-a-4 a sibling of frank-a-5",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "dave-a-3 is a sibling of carol-a-2",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is carol-a-2 a sibling of dave-a-3",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "bob-a-1 is a sibling of alice-a-0",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is alice-a-0 a sibling of bob-a-1",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "walter-a-15 is a sibling of victor-a-14",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is victor-a-14 a sibling of walter-a-15",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "trent-a-13 is a sibling of peggy-a-12",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-12 a sibling of trent-a-13",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "olivia-a-11 is a sibling of mallory-a-10",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is mallory-a-10 a sibling of olivia-a-11",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "judy-a-9 is a sibling of ivan-a-8",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is ivan-a-8 a sibling of judy-a-9",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "heidi-a-7 is a sibling of grace-a-6",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-6 a sibling of heidi-a-7",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "frank-a-5 is a sibling of erin-a-4",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is erin-a-4 a sibling of frank-a-5",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "dave-a-3 is a sibling of carol-a-2",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is carol-a-2 a sibling of dave-a-3",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "bob-a-1 is a sibling of alice-a-0",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is alice-a-0 a sibling of bob-a-1",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "walter-a-15 is a sibling of victor-a-14",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is victor-a-14 a sibling of walter-a-15",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "trent-a-13 is a sibling of peggy-a-12",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-12 a sibling of trent-a-13",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "olivia-a-11 is a sibling of mallory-a-10",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is mallory-a-10 a sibling of olivia-a-11",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "judy-a-9 is a sibling of ivan-a-8",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is ivan-a-8 a sibling of judy-a-9",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "heidi-a-7 is a sibling of grace-a-6",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-6 a sibling of heidi-a-7",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "frank-a-5 is a sibling of erin-a-4",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is erin-a-4 a sibling of frank-a-5",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "dave-a-3 is a sibling of carol-a-2",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is carol-a-2 a sibling of dave-a-3",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "bob-a-1 is a sibling of alice-a-0",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is alice-a-0 a sibling of bob-a-1",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "walter-a-15 is a sibling of victor-a-14",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is victor-a-14 a sibling of walter-a-15",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "trent-a-13 is a sibling of peggy-a-12",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-12 a sibling of trent-a-13",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "olivia-a-11 is a sibling of mallory-a-10",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is mallory-a-10 a sibling of olivia-a-11",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "judy-a-9 is a sibling of ivan-a-8",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is ivan-a-8 a sibling of judy-a-9",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "heidi-a-7 is a sibling of grace-a-6",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-6 a sibling of heidi-a-7",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "frank-a-5 is a sibling of erin-a-4",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is erin-a-4 a sibling of frank-a-5",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "dave-a-3 is a sibling of carol-a-2",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is carol-a-2 a sibling of dave-a-3",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "bob-a-1 is a sibling of alice-a-0",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is alice-a-0 a sibling of bob-a-1",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "walter-a-15 is a sibling of victor-a-14",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is victor-a-14 a sibling of walter-a-15",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "trent-a-13 is a sibling of peggy-a-12",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-12 a sibling of trent-a-13",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "olivia-a-11 is a sibling of mallory-a-10",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is mallory-a-10 a sibling of olivia-a-11",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "judy-a-9 is a sibling of ivan-a-8",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is ivan-a-8 a sibling of judy-a-9",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "part-of is transitive",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "heidi-a-7 is part of grace-a-6",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "grace-a-6 is part of frank-a-5",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is heidi-a-7 part of frank-a-5",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "erin-a-4 is part of dave-a-3",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "dave-a-3 is part of carol-a-2",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is erin-a-4 part of carol-a-2",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "walter-a-17 is part of victor-a-16",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "victor-a-16 is part of trent-a-15",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is walter-a-17 part of trent-a-15",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "peggy-a-14 is part of olivia-a-13",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "olivia-a-13 is part of mallory-a-12",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-14 part of mallory-a-12",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "judy-a-11 is part of ivan-a-10",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "ivan-a-10 is part of heidi-a-9",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is judy-a-11 part of heidi-a-9",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "grace-a-8 is part of frank-a-7",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "frank-a-7 is part of erin-a-6",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-8 part of erin-a-6",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "dave-a-5 is part of carol-a-4",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "carol-a-4 is part of bob-a-3",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is dave-a-5 part of bob-a-3",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "alice-a-2 is part of bob-a-1",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "bob-a-1 is part of alice-a-0",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is alice-a-2 part of alice-a-0",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "walter-a-15 is part of victor-a-14",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "victor-a-14 is part of trent-a-13",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is walter-a-15 part of trent-a-13",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "peggy-a-12 is part of olivia-a-11",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "olivia-a-11 is part of mallory-a-10",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-12 part of mallory-a-10",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "judy-a-9 is part of ivan-a-8",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "ivan-a-8 is part of heidi-a-7",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is judy-a-9 part of heidi-a-7",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "grace-a-6 is part of frank-a-5",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "frank-a-5 is part of erin-a-4",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-6 part of erin-a-4",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "dave-a-3 is part of carol-a-2",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "carol-a-2 is part of bob-a-1",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is dave-a-3 part of bob-a-1",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "walter-a-16 is part of victor-a-15",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "victor-a-15 is part of trent-a-14",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is walter-a-16 part of trent-a-14",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "peggy-a-13 is part of olivia-a-12",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "olivia-a-12 is part of mallory-a-11",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-13 part of mallory-a-11",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "judy-a-10 is part of ivan-a-9",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "ivan-a-9 is part of heidi-a-8",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is judy-a-10 part of heidi-a-8",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "grace-a-7 is part of frank-a-6",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "frank-a-6 is part of erin-a-5",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-7 part of erin-a-5",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "dave-a-4 is part of carol-a-3",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "carol-a-3 is part of bob-a-2",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is dave-a-4 part of bob-a-2",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "walter-a-17 is part of victor-a-16",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "victor-a-16 is part of trent-a-15",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is walter-a-17 part of trent-a-15",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "peggy-a-14 is part of olivia-a-13",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "olivia-a-13 is part of mallory-a-12",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-14 part of mallory-a-12",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "judy-a-11 is part of ivan-a-10",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "ivan-a-10 is part of heidi-a-9",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is judy-a-11 part of heidi-a-9",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "grace-a-8 is part of frank-a-7",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "frank-a-7 is part of erin-a-6",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-8 part of erin-a-6",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "dave-a-5 is part of carol-a-4",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "carol-a-4 is part of bob-a-3",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is dave-a-5 part of bob-a-3",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "alice-a-2 is part of alice-a-1",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "alice-a-1 is part of alice-a-0",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is alice-a-2 part of alice-a-0",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "walter-a-15 is part of victor-a-14",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "victor-a-14 is part of trent-a-13",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is walter-a-15 part of trent-a-13",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "peggy-a-12 is part of olivia-a-11",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "olivia-a-11 is part of mallory-a-10",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-12 part of mallory-a-10",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "judy-a-9 is part of ivan-a-8",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "ivan-a-8 is part of heidi-a-7",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is judy-a-9 part of heidi-a-7",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "grace-a-6 is part of frank-a-5",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "frank-a-5 is part of erin-a-4",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-6 part of erin-a-4",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "dave-a-3 is part of carol-a-2",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "carol-a-2 is part of bob-a-1",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is dave-a-3 part of bob-a-1",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "walter-a-16 is part of victor-a-15",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "victor-a-15 is part of trent-a-14",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is walter-a-16 part of trent-a-14",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "ancestor-of is transitive",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "peggy-a-13 is an ancestor of olivia-a-12",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "olivia-a-12 is an ancestor of mallory-a-11",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-13 an ancestor of mallory-a-11",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "judy-a-10 is an ancestor of ivan-a-9",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "ivan-a-9 is an ancestor of heidi-a-8",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is judy-a-10 an ancestor of heidi-a-8",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "grace-a-7 is an ancestor of frank-a-6",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "frank-a-6 is an ancestor of erin-a-5",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-7 an ancestor of erin-a-5",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "dave-a-4 is an ancestor of carol-a-3",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "carol-a-3 is an ancestor of bob-a-2",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is dave-a-4 an ancestor of bob-a-2",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "walter-a-17 is an ancestor of victor-a-16",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "victor-a-16 is an ancestor of trent-a-15",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is walter-a-17 an ancestor of trent-a-15",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "peggy-a-14 is an ancestor of olivia-a-13",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "olivia-a-13 is an ancestor of mallory-a-12",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-14 an ancestor of mallory-a-12",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "judy-a-11 is an ancestor of ivan-a-10",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "ivan-a-10 is an ancestor of heidi-a-9",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is judy-a-11 an ancestor of heidi-a-9",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "grace-a-8 is an ancestor of frank-a-7",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "frank-a-7 is an ancestor of erin-a-6",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-8 an ancestor of erin-a-6",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "dave-a-5 is an ancestor of carol-a-4",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "carol-a-4 is an ancestor of bob-a-3",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is dave-a-5 an ancestor of bob-a-3",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "alice-a-2 is an ancestor of alice-a-1",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "alice-a-1 is an ancestor of alice-a-0",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is alice-a-2 an ancestor of alice-a-0",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "walter-a-15 is an ancestor of victor-a-14",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "victor-a-14 is an ancestor of trent-a-13",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is walter-a-15 an ancestor of trent-a-13",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "peggy-a-12 is an ancestor of olivia-a-11",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "olivia-a-11 is an ancestor of mallory-a-10",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-12 an ancestor of mallory-a-10",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "judy-a-9 is an ancestor of ivan-a-8",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "ivan-a-8 is an ancestor of heidi-a-7",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is judy-a-9 an ancestor of heidi-a-7",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "grace-a-6 is an ancestor of frank-a-5",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "frank-a-5 is an ancestor of erin-a-4",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-6 an ancestor of erin-a-4",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "dave-a-3 is an ancestor of carol-a-2",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "carol-a-2 is an ancestor of bob-a-1",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is dave-a-3 an ancestor of bob-a-1",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "walter-a-16 is an ancestor of victor-a-15",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "victor-a-15 is an ancestor of trent-a-14",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is walter-a-16 an ancestor of trent-a-14",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "peggy-a-13 is an ancestor of olivia-a-12",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "olivia-a-12 is an ancestor of mallory-a-11",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-13 an ancestor of mallory-a-11",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "judy-a-10 is an ancestor of ivan-a-9",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "ivan-a-9 is an ancestor of heidi-a-8",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is judy-a-10 an ancestor of heidi-a-8",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "grace-a-7 is an ancestor of frank-a-6",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "frank-a-6 is an ancestor of erin-a-5",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-7 an ancestor of erin-a-5",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "dave-a-4 is an ancestor of carol-a-3",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "carol-a-3 is an ancestor of bob-a-2",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is dave-a-4 an ancestor of bob-a-2",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "walter-a-17 is an ancestor of victor-a-16",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "victor-a-16 is an ancestor of trent-a-15",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is walter-a-17 an ancestor of trent-a-15",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "peggy-a-14 is an ancestor of olivia-a-13",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "olivia-a-13 is an ancestor of mallory-a-12",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-14 an ancestor of mallory-a-12",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "judy-a-11 is an ancestor of ivan-a-10",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "ivan-a-10 is an ancestor of heidi-a-9",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is judy-a-11 an ancestor of heidi-a-9",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "grace-a-8 is an ancestor of frank-a-7",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "frank-a-7 is an ancestor of erin-a-6",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-8 an ancestor of erin-a-6",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "dave-a-5 is an ancestor of carol-a-4",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "carol-a-4 is an ancestor of bob-a-3",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is dave-a-5 an ancestor of bob-a-3",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "alice-a-2 is an ancestor of alice-a-1",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "alice-a-1 is an ancestor of alice-a-0",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is alice-a-2 an ancestor of alice-a-0",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "walter-a-15 is an ancestor of victor-a-14",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "victor-a-14 is an ancestor of trent-a-13",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is walter-a-15 an ancestor of trent-a-13",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "peggy-a-12 is an ancestor of olivia-a-11",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "olivia-a-11 is an ancestor of mallory-a-10",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-12 an ancestor of mallory-a-10",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "judy-a-9 is an ancestor of ivan-a-8",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "ivan-a-8 is an ancestor of heidi-a-7",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is judy-a-9 an ancestor of heidi-a-7",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "grace-a-6 is an ancestor of frank-a-5",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "frank-a-5 is an ancestor of erin-a-4",
+   "expect": null,
+   "category": "transitive",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-6 an ancestor of erin-a-4",
+   "expect": "true",
+   "category": "transitive"
+  },
+  {
+   "say": "parent-of is the inverse of child-of",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "dave-a-3 is the parent of carol-a-2",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is carol-a-2 the child of dave-a-3",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "bob-a-1 is the parent of alice-a-0",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is alice-a-0 the child of bob-a-1",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "walter-a-15 is the parent of victor-a-14",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is victor-a-14 the child of walter-a-15",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "trent-a-13 is the parent of peggy-a-12",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-12 the child of trent-a-13",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "olivia-a-11 is the parent of mallory-a-10",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is mallory-a-10 the child of olivia-a-11",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "judy-a-9 is the parent of ivan-a-8",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is ivan-a-8 the child of judy-a-9",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "heidi-a-7 is the parent of grace-a-6",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-6 the child of heidi-a-7",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "frank-a-5 is the parent of erin-a-4",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is erin-a-4 the child of frank-a-5",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "dave-a-3 is the parent of carol-a-2",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is carol-a-2 the child of dave-a-3",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "bob-a-1 is the parent of alice-a-0",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is alice-a-0 the child of bob-a-1",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "walter-a-15 is the parent of victor-a-14",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is victor-a-14 the child of walter-a-15",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "trent-a-13 is the parent of peggy-a-12",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-12 the child of trent-a-13",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "olivia-a-11 is the parent of mallory-a-10",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is mallory-a-10 the child of olivia-a-11",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "judy-a-9 is the parent of ivan-a-8",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is ivan-a-8 the child of judy-a-9",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "heidi-a-7 is the parent of grace-a-6",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-6 the child of heidi-a-7",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "frank-a-5 is the parent of erin-a-4",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is erin-a-4 the child of frank-a-5",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "dave-a-3 is the parent of carol-a-2",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is carol-a-2 the child of dave-a-3",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "bob-a-1 is the parent of alice-a-0",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is alice-a-0 the child of bob-a-1",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "walter-a-15 is the parent of victor-a-14",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is victor-a-14 the child of walter-a-15",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "trent-a-13 is the parent of peggy-a-12",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-12 the child of trent-a-13",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "olivia-a-11 is the parent of mallory-a-10",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is mallory-a-10 the child of olivia-a-11",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "judy-a-9 is the parent of ivan-a-8",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is ivan-a-8 the child of judy-a-9",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "heidi-a-7 is the parent of grace-a-6",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-6 the child of heidi-a-7",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "frank-a-5 is the parent of erin-a-4",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is erin-a-4 the child of frank-a-5",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "dave-a-3 is the parent of carol-a-2",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is carol-a-2 the child of dave-a-3",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "bob-a-1 is the parent of alice-a-0",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is alice-a-0 the child of bob-a-1",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "walter-a-15 is the parent of victor-a-14",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is victor-a-14 the child of walter-a-15",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "trent-a-13 is the parent of peggy-a-12",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-12 the child of trent-a-13",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "olivia-a-11 is the parent of mallory-a-10",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is mallory-a-10 the child of olivia-a-11",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "judy-a-9 is the parent of ivan-a-8",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is ivan-a-8 the child of judy-a-9",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "heidi-a-7 is the parent of grace-a-6",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is grace-a-6 the child of heidi-a-7",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "frank-a-5 is the parent of erin-a-4",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is erin-a-4 the child of frank-a-5",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "dave-a-3 is the parent of carol-a-2",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is carol-a-2 the child of dave-a-3",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "bob-a-1 is the parent of alice-a-0",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is alice-a-0 the child of bob-a-1",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "walter-a-15 is the parent of victor-a-14",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is victor-a-14 the child of walter-a-15",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "trent-a-13 is the parent of peggy-a-12",
+   "expect": null,
+   "category": "inverse",
+   "setup": true
+  },
+  {
+   "say": "is peggy-a-12 the child of trent-a-13",
+   "expect": "true",
+   "category": "inverse"
+  },
+  {
+   "say": "a olivia-a-11-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a olivia-a-11-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a mallory-a-10-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a mallory-a-10-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a judy-a-9-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a judy-a-9-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a ivan-a-8-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a ivan-a-8-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a heidi-a-7-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a heidi-a-7-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a grace-a-6-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a grace-a-6-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a frank-a-5-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a frank-a-5-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a erin-a-4-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a erin-a-4-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a dave-a-3-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a dave-a-3-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a carol-a-2-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a carol-a-2-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a bob-a-1-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a bob-a-1-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a alice-a-0-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a alice-a-0-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a walter-a-15-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a walter-a-15-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a victor-a-14-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a victor-a-14-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a trent-a-13-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a trent-a-13-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a peggy-a-12-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a peggy-a-12-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a olivia-a-11-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a olivia-a-11-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a mallory-a-10-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a mallory-a-10-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a judy-a-9-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a judy-a-9-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a ivan-a-8-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a ivan-a-8-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a heidi-a-7-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a heidi-a-7-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a grace-a-6-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a grace-a-6-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a frank-a-5-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a frank-a-5-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a erin-a-4-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a erin-a-4-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a dave-a-3-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a dave-a-3-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a carol-a-2-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a carol-a-2-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a bob-a-1-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a bob-a-1-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a alice-a-0-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a alice-a-0-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a walter-a-15-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a walter-a-15-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  },
+  {
+   "say": "a victor-a-14-fish is a subtype of fish",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "a fish is a subtype of animal",
+   "expect": null,
+   "category": "subtype",
+   "setup": true
+  },
+  {
+   "say": "is a victor-a-14-fish an animal",
+   "expect": "true",
+   "category": "subtype"
+  }
+ ]
+}

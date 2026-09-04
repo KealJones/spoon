@@ -1,5 +1,5 @@
 {
- "name": "smoke_facts",
+ "name": "smoke_facts_train",
  "note": "Say a thing, then ask something that was never said. Order matters.",
  "cases": [
   {
@@ -9,73 +9,73 @@
    "setup": true
   },
   {
-   "say": "frank is friends with carol",
+   "say": "ivan-a is friends with walter-a",
    "expect": null,
    "category": "symmetric",
    "setup": true
   },
   {
-   "say": "is carol friends with frank",
+   "say": "is walter-a friends with ivan-a",
    "expect": "true",
    "category": "symmetric"
   },
   {
-   "say": "olivia is friends with walter",
+   "say": "bob-a is friends with judy-a",
    "expect": null,
    "category": "symmetric",
    "setup": true
   },
   {
-   "say": "is walter friends with olivia",
+   "say": "is judy-a friends with bob-a",
    "expect": "true",
    "category": "symmetric"
   },
   {
-   "say": "grace is friends with erin",
+   "say": "peggy-a is friends with mallory-a",
    "expect": null,
    "category": "symmetric",
    "setup": true
   },
   {
-   "say": "is erin friends with grace",
+   "say": "is mallory-a friends with peggy-a",
    "expect": "true",
    "category": "symmetric"
   },
   {
-   "say": "victor is friends with trent",
+   "say": "victor-a is friends with carol-a",
    "expect": null,
    "category": "symmetric",
    "setup": true
   },
   {
-   "say": "is trent friends with victor",
+   "say": "is carol-a friends with victor-a",
    "expect": "true",
    "category": "symmetric"
   },
   {
-   "say": "heidi is friends with peggy",
+   "say": "trent-a is friends with erin-a",
    "expect": null,
    "category": "symmetric",
    "setup": true
   },
   {
-   "say": "is peggy friends with heidi",
+   "say": "is erin-a friends with trent-a",
    "expect": "true",
    "category": "symmetric"
   },
   {
-   "say": "ivan is friends with alice",
+   "say": "dave-a is friends with alice-a",
    "expect": null,
    "category": "symmetric",
    "setup": true
   },
   {
-   "say": "is alice friends with ivan",
+   "say": "is alice-a friends with dave-a",
    "expect": "true",
    "category": "symmetric"
   },
   {
-   "say": "mallory is friends with dave",
+   "say": "olivia-a is friends with heidi-a",
    "expect": null,
    "category": "symmetric",
    "setup": true

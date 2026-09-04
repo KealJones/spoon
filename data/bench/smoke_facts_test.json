@@ -1,0 +1,84 @@
+{
+ "name": "smoke_facts_test",
+ "note": "The same shapes about a cast the training half never mentioned.",
+ "cases": [
+  {
+   "say": "friends-with is symmetric",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "carol-b is friends with ivan-b",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is ivan-b friends with carol-b",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "victor-b is friends with walter-b",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is walter-b friends with victor-b",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "judy-b is friends with mallory-b",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is mallory-b friends with judy-b",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "olivia-b is friends with bob-b",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is bob-b friends with olivia-b",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "erin-b is friends with alice-b",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is alice-b friends with erin-b",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "trent-b is friends with frank-b",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  },
+  {
+   "say": "is frank-b friends with trent-b",
+   "expect": "true",
+   "category": "symmetric"
+  },
+  {
+   "say": "grace-b is friends with peggy-b",
+   "expect": null,
+   "category": "symmetric",
+   "setup": true
+  }
+ ]
+}
