@@ -85,12 +85,69 @@ pub fn reconcile(steps: &[Concept], store: &Store, symbols: &SymbolTable) -> Rec
         }
     }
 
-    let rewritten = steps.iter().map(|s| rewrite(s, &decided)).collect();
+    let rewritten: Vec<Concept> = steps.iter().map(|s| rewrite(s, &decided)).collect();
+    let rewritten = rewritten
+        .iter()
+        .map(|s| words_where_text_is_wanted(s, store, symbols))
+        .collect();
     Reconciliation {
         steps: rewritten,
         synonyms,
         rewrites,
     }
+}
+
+/// A bare name handed to something that computes on text is a word.
+///
+/// The ears write "reverse kubernetes" as `reverse<kubernetes>` about as often
+/// as `reverse<"kubernetes">`, and the first one fails: the native is given a
+/// named concept where it wanted text. It was the largest single group of
+/// wrong answers in the corpus, spread across reverse, upper, lower and every
+/// other text operation.
+///
+/// The head is what makes this safe to decide. A native realization is code
+/// that will compute on its arguments, so a name it has never heard of can
+/// only have been meant as the word itself. `owns<john, dog>` is untouched
+/// because nothing realizes `owns`: it is a fact, john and dog are entities,
+/// and turning them into strings would be exactly wrong.
+fn words_where_text_is_wanted(
+    step: &Concept,
+    store: &Store,
+    symbols: &SymbolTable,
+) -> Concept {
+    let Concept::Compound { head, args } = step else {
+        return step.clone();
+    };
+    let computes = store
+        .realizations_for(head)
+        .unwrap_or_default()
+        .iter()
+        .any(|r| matches!(r.spec, spoon_concept::RealizationSpec::Native { .. }));
+
+    let args: Vec<Concept> = args
+        .iter()
+        .map(|arg| {
+            if !computes {
+                return words_where_text_is_wanted(arg, store, symbols);
+            }
+            let Some(id) = arg.as_symbol() else {
+                return words_where_text_is_wanted(arg, store, symbols);
+            };
+            // Only a name the store has never heard of. One it knows is a
+            // concept somebody established, and passing it on unchanged is
+            // how that stays true.
+            let unknown = store.symbol_name(id).ok().flatten().is_none()
+                && store
+                    .realizations_for(arg)
+                    .map(|r| r.is_empty())
+                    .unwrap_or(true);
+            match (unknown, symbols.resolve(id)) {
+                (true, Some(name)) => Concept::text(&*name),
+                _ => arg.clone(),
+            }
+        })
+        .collect();
+    Concept::apply((**head).clone(), args)
 }
 
 /// Store whatever reconciliation learned, so the same near-miss is an exact hit

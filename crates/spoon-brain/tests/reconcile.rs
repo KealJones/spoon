@@ -149,3 +149,59 @@ fn nested_structure_is_rewritten_throughout() {
         Some(spoon_concept::SymbolId::of("friends"))
     );
 }
+
+#[test]
+fn a_bare_word_given_to_a_native_becomes_text() {
+    // The ears write "reverse kubernetes" as reverse<kubernetes> about as
+    // often as reverse<"kubernetes">, and the first one failed: a native given
+    // a named concept where it wanted text. It was the largest single group of
+    // wrong answers in the corpus.
+    let store = Store::open_in_memory().expect("store");
+    let registry = spoon_natives::bootstrap();
+    spoon_natives::seed_bootstrap(&store, &registry).expect("seed");
+    let symbols = SymbolTable::new();
+    let word = symbols.intern("kubernetes");
+
+    let step = Concept::call("reverse", [Concept::symbol(word)]);
+    let out = reconcile(std::slice::from_ref(&step), &store, &symbols);
+
+    assert_eq!(
+        out.steps[0],
+        Concept::call("reverse", [Concept::text("kubernetes")])
+    );
+}
+
+#[test]
+fn an_entity_in_a_fact_is_left_alone() {
+    // Nothing realizes `owns`, so it is a claim rather than a computation, and
+    // john and dog are entities. Turning them into strings would be exactly
+    // wrong: every later question about john would miss.
+    let store = Store::open_in_memory().expect("store");
+    let registry = spoon_natives::bootstrap();
+    spoon_natives::seed_bootstrap(&store, &registry).expect("seed");
+    let symbols = SymbolTable::new();
+    let john = symbols.intern("john");
+    let dog = symbols.intern("dog");
+
+    let step = Concept::call("owns", [Concept::symbol(john), Concept::symbol(dog)]);
+    let out = reconcile(std::slice::from_ref(&step), &store, &symbols);
+
+    assert_eq!(out.steps[0], step);
+}
+
+#[test]
+fn a_name_the_store_knows_survives_a_native() {
+    // Somebody established it as a concept. Passing it on unchanged is how
+    // that stays true.
+    let store = Store::open_in_memory().expect("store");
+    let registry = spoon_natives::bootstrap();
+    spoon_natives::seed_bootstrap(&store, &registry).expect("seed");
+    let symbols = SymbolTable::new();
+    let greg = symbols.intern("greg");
+    store.register_symbol("greg").expect("register");
+
+    let step = Concept::call("reverse", [Concept::symbol(greg)]);
+    let out = reconcile(std::slice::from_ref(&step), &store, &symbols);
+
+    assert_eq!(out.steps[0], step);
+}

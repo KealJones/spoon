@@ -35,3 +35,4 @@ fn a_bare_greeting_is_still_a_greeting() {
         assert!(greeted(say), "{say:?} lost its greeting");
     }
 }
+
