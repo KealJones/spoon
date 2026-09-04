@@ -1,0 +1,19 @@
+[package]
+name = "spoon-learn"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+spoon-concept = { workspace = true }
+spoon-store = { workspace = true }
+spoon-eval = { workspace = true }
+spoon-natives = { workspace = true }
+spoon-seat = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
