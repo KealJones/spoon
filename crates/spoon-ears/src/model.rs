@@ -9,7 +9,7 @@
 use std::sync::Arc;
 
 use spoon_concept::{Concept, SymbolTable, parse};
-use spoon_seat::{Ears, Heard, LlmClient, LlmError, Message, Seat};
+use spoon_seat::{Ears, Heard, LlmClient, LlmError, Message, Seat, Turn};
 
 use crate::native::NativeEars;
 
@@ -123,11 +123,21 @@ Reply with the steps and nothing else. No prose, no explanation, no code fences.
 
 #[async_trait::async_trait]
 impl Ears for ModelEars {
-    async fn hear(&self, text: &str, vocabulary: &[Arc<str>]) -> Result<Heard, LlmError> {
-        let messages = [
-            Message::system(Self::prompt(vocabulary)),
-            Message::user(text.to_string()),
-        ];
+    async fn hear(
+        &self,
+        text: &str,
+        vocabulary: &[Arc<str>],
+        recent: &[Turn],
+    ) -> Result<Heard, LlmError> {
+        // Recent turns go in as prior exchanges rather than as a block of
+        // prose, because that is the shape a chat model is trained to resolve
+        // references against.
+        let mut messages = vec![Message::system(Self::prompt(vocabulary))];
+        for turn in recent {
+            messages.push(Message::user(turn.said.to_string()));
+            messages.push(Message::assistant(turn.understood.to_string()));
+        }
+        messages.push(Message::user(text.to_string()));
         let reply = self.client.chat(Seat::Ears, &messages).await?;
 
         let table = SymbolTable::new();

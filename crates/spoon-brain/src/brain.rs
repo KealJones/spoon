@@ -9,7 +9,9 @@ use spoon_ears::PhrasingIndex;
 use spoon_eval::{Budget, Evaluator, NativeRegistry, Outcome, PermissionMode};
 use spoon_infer::{DeriveBudget, DiscriminationTree, Engine};
 use spoon_learn::{SynthBudget, SynthOutcome, synthesize};
-use spoon_seat::{Ears, Heard, Mouth, Seat, SeatCounters, Spec, Teacher, TeacherAsk, TeacherReply};
+use spoon_seat::{
+    Ears, Heard, Mouth, Seat, SeatCounters, Spec, Teacher, TeacherAsk, TeacherReply, Turn,
+};
 use spoon_store::Store;
 use spoon_store::pairs::PairSource;
 
@@ -141,7 +143,7 @@ impl Brain {
 
         // ---- ears ----
         let ears_started = Instant::now();
-        let (heard, ears_path) = self.hear(text, &mut metrics).await;
+        let (heard, ears_path) = self.hear(session, text, &mut metrics).await;
         // Record spellings in the session table so everything downstream can
         // print words instead of hex. They are deliberately NOT persisted here:
         // the store's symbol set is what reconciliation treats as established
@@ -260,7 +262,12 @@ impl Brain {
             .find(|e| e.correction.is_none() && e.reply.starts_with("noted")))
     }
 
-    async fn hear(&mut self, text: &str, metrics: &mut TurnMetrics) -> (Heard, EarsPath) {
+    async fn hear(
+        &mut self,
+        session: &str,
+        text: &str,
+        metrics: &mut TurnMetrics,
+    ) -> (Heard, EarsPath) {
         // Native first, always. Every turn the model does not handle is the
         // weaning curve moving.
         if let Some(heard) = self.ears.hear_native(text) {
@@ -279,7 +286,8 @@ impl Brain {
             return (heard, EarsPath::Native);
         }
         let vocabulary = self.vocabulary();
-        match self.ears.hear(text, &vocabulary).await {
+        let recent = self.recent_turns(session);
+        match self.ears.hear(text, &vocabulary, &recent).await {
             Ok(heard) => {
                 metrics.ears_model += 1;
                 (heard, EarsPath::Model)
@@ -289,6 +297,39 @@ impl Brain {
                 (Heard::native(Vec::new(), 0.0), EarsPath::Failed)
             }
         }
+    }
+
+    /// The last few turns of this session, oldest first.
+    ///
+    /// Half of ordinary speech refers backwards. "that is called a palindrome"
+    /// is not interpretable on its own, and reading each utterance in isolation
+    /// is why it came back as a synonym pointing at an unbound hole: the ears
+    /// correctly knew something was missing and had no way to find it.
+    fn recent_turns(&self, session: &str) -> Vec<Turn> {
+        const WINDOW: usize = 4;
+        let mut turns: Vec<Turn> = self
+            .store
+            .recent_episodes(WINDOW, Some(session))
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|json| serde_json::from_str::<Episode>(json).ok())
+            .map(|e| Turn {
+                said: Arc::from(e.user_text.as_str()),
+                // What it was read as, not what was said back. The ears are
+                // being reminded of their own prior output so a reference can
+                // resolve to a concept rather than to prose.
+                understood: Arc::from(
+                    e.steps
+                        .iter()
+                        .map(|s| render(s, &self.symbols))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                        .as_str(),
+                ),
+            })
+            .collect();
+        turns.reverse();
+        turns
     }
 
     /// Concept names worth showing the ears, most useful first.

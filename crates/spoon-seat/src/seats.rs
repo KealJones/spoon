@@ -23,6 +23,14 @@ impl Seat {
     }
 }
 
+/// A turn already taken, as context for reading the next one.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Turn {
+    pub said: Arc<str>,
+    /// The concept it was read as, rendered.
+    pub understood: Arc<str>,
+}
+
 /// What the ears produce from one utterance.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Heard {
@@ -74,7 +82,18 @@ pub trait Ears: Send + Sync {
     /// already ranked by activation, most useful first. Passing the whole
     /// vocabulary would be both slower and worse: a prompt listing everything
     /// Spoon knows buries the handful of concepts this user actually uses.
-    async fn hear(&self, text: &str, vocabulary: &[Arc<str>]) -> Result<Heard, LlmError>;
+    ///
+    /// `recent` is the last few turns, newest last, each as what was said and
+    /// what it was read as. Without it every utterance is heard in isolation,
+    /// and half of ordinary speech refers backwards: "that is called a
+    /// palindrome" is not interpretable at all on its own, and the honest
+    /// reading of it is a hole where the referent should be.
+    async fn hear(
+        &self,
+        text: &str,
+        vocabulary: &[Arc<str>],
+        recent: &[Turn],
+    ) -> Result<Heard, LlmError>;
 
     /// A reading produced without consulting a model, or `None` when the native
     /// path does not recognize the utterance. Always tried first.

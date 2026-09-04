@@ -8,7 +8,7 @@
 use std::sync::Arc;
 
 use spoon_concept::Concept;
-use spoon_seat::{Ears, Heard, LlmError};
+use spoon_seat::{Ears, Heard, LlmError, Turn};
 
 /// Filler that carries no meaning and only confuses matching.
 const FILLER: &[&str] = &[
@@ -193,7 +193,12 @@ impl Default for NativeEars {
 impl Ears for NativeEars {
     /// With no model configured there is nothing further to try, so a miss is a
     /// miss. Saying so beats inventing a reading.
-    async fn hear(&self, text: &str, _vocabulary: &[Arc<str>]) -> Result<Heard, LlmError> {
+    async fn hear(
+        &self,
+        text: &str,
+        _vocabulary: &[Arc<str>],
+        _recent: &[Turn],
+    ) -> Result<Heard, LlmError> {
         self.hear_native(text).ok_or(LlmError::NoSeat("ears"))
     }
 
