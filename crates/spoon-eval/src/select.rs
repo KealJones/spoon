@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
-use spoon_concept::{Concept, Realization, Tier};
+use spoon_concept::{Activation, Concept, Realization, Tier};
 
 /// One candidate with the reasoning behind its rank, kept so the trace can
 /// record not just what was chosen but what it beat.
@@ -29,18 +29,60 @@ const FIT_STEP: f64 = 0.25;
 /// unreachable by evidence alone. Deprecating one is a deliberate act.
 const MIN_FIT: f64 = 0.05;
 
-/// Candidates within this fraction of the top score are considered
-/// interchangeable for the purpose of exploration.
-const EXPLORE_BAND: f64 = 0.5;
-
-/// Probability of exploring instead of exploiting.
-pub const DEFAULT_EPSILON: f64 = 0.05;
-
 /// How close two scores must be to count as a tie rather than a ranking.
 ///
 /// Generous enough to catch realizations that differ only by floating point,
 /// which is what two fresh ones with identical history actually are.
 pub const TIE_EPSILON: f64 = 1e-9;
+
+/// Draw a plausible success rate from what has actually been observed.
+///
+/// Thompson sampling. Each realization's success rate is a Beta posterior over
+/// its own record: `Beta(successes + 1, failures + 1)`, which starts uniform
+/// when nothing is known and tightens as evidence arrives. Selection samples
+/// from each posterior and takes the highest draw.
+///
+/// This replaces an exploration rate and an optimism bonus, both of which were
+/// numbers picked by hand to paper over the same problem. A realization that
+/// has never run has a flat posterior, so it draws high often enough to get
+/// tried without being handed a turn it did not earn. One proven over fifty
+/// uses has a posterior concentrated near its rate and rarely draws low enough
+/// to lose. Nothing needs tuning: the width of each belief is the uncertainty,
+/// and the uncertainty is what decides how much to gamble.
+///
+/// A newcomer arriving against an incumbent at 0.9 gets tried roughly a tenth
+/// of the time at first, and either climbs or stops being drawn. That is the
+/// answer to "how does anything ever displace an established realization",
+/// and it falls out of the statistics rather than being legislated.
+fn sample_belief(activation: &Activation, rng: &mut Rng) -> f64 {
+    let wins = activation.successes + 1;
+    let losses = activation.failures + 1;
+    let a = sample_gamma(wins, rng);
+    let b = sample_gamma(losses, rng);
+    if a + b <= 0.0 { 0.5 } else { a / (a + b) }
+}
+
+/// A draw from `Gamma(shape, 1)` for a whole-number shape.
+///
+/// The sum of `shape` exponential draws, which is exact for integer shape and
+/// needs no special functions. Summing logs rather than multiplying uniforms
+/// avoids underflow once the counts get large.
+///
+/// Capped because the cost is linear in the count and the payoff is not: past a
+/// few hundred observations the posterior is tight enough that further
+/// narrowing changes no decision, so the cap costs accuracy nobody can use.
+fn sample_gamma(shape: u64, rng: &mut Rng) -> f64 {
+    const CAP: u64 = 256;
+    let draws = shape.min(CAP);
+    let mut total = 0.0;
+    for _ in 0..draws {
+        // Guarded away from zero: ln(0) is negative infinity.
+        let u = rng.next_f64().max(f64::MIN_POSITIVE);
+        total -= u.ln();
+    }
+    // Scale back up when the count was capped, so the mean stays right.
+    total * (shape as f64 / draws as f64)
+}
 
 /// Squash an ACT-R base level into `[0, 1)`.
 ///
@@ -56,18 +98,43 @@ fn squash(base_level: f64) -> f64 {
 ///
 /// `score = success_rate * context_fit * (1 + activation_bonus)`
 ///
-/// Every factor is smoothed or floored so that a brand new realization scores
-/// low but non-zero. Without that, the first realization to arrive would win
-/// forever: it would be the only one ever selected, so it would be the only one
-/// ever to accumulate evidence.
-pub fn score(realization: Arc<Realization>, context_fit: f64, now: DateTime<Utc>) -> Scored {
+/// The belief term is a draw from the posterior rather than its mean, which is
+/// what lets an unproven realization ever be chosen. Scoring by the mean alone
+/// makes the first realization to arrive win forever: it is the only one
+/// selected, so it is the only one that accumulates evidence, so it stays the
+/// only one selected.
+///
+/// Pass `None` for the mean instead of a draw, which is what a deterministic
+/// run and the inspector both want.
+pub fn score(
+    realization: Arc<Realization>,
+    context_fit: f64,
+    now: DateTime<Utc>,
+    rng: Option<&mut Rng>,
+) -> Scored {
     let success_rate = realization.activation.success_rate();
     let activation_bonus = realization
         .activation
         .base_level(now)
         .map(squash)
         .unwrap_or(0.0);
-    let score = success_rate * context_fit * (1.0 + activation_bonus);
+    let belief = match rng {
+        Some(rng) => sample_belief(&realization.activation, rng),
+        None => success_rate,
+    };
+    // Activation is deliberately NOT a factor here.
+    //
+    // It measures how recently and often something has been used, and using it
+    // to choose double-counts: how often a realization has run is already what
+    // makes its posterior tight, and multiplying by it again hands the
+    // incumbent up to twice the score for no evidence it is better. That single
+    // term was enough to keep an untried realization at exactly zero percent of
+    // turns even with sampling in place.
+    //
+    // It stays on `Scored` because it is the right measure elsewhere: ranking
+    // which concepts to show the ears is a recency question, and choosing
+    // between two ways of doing one thing is not.
+    let score = belief * context_fit;
     Scored {
         realization,
         score,
@@ -125,50 +192,27 @@ pub fn is_selectable(realization: &Realization) -> bool {
     realization.tier != Tier::Deprecated
 }
 
-/// Pick an index to try first, exploring occasionally.
+/// Which candidate to try first.
 ///
-/// Pure exploitation is self-defeating here. A realization that is never
-/// selected never accumulates evidence, so it can never justify being
-/// selected, and whichever arrived first wins permanently.
+/// Almost always the top of the ranking, because with Thompson sampling the
+/// ranking already is the exploration: each score came from a draw against that
+/// realization's own posterior, so an uncertain one rises on its own a share of
+/// the time proportional to how uncertain it is. An exploration rate layered on
+/// top would be exploring twice, and the epsilon it needs is exactly the
+/// hand-tuned number sampling exists to remove.
 ///
-/// Exploration is suppressed for anything above a pure effect: trying an
-/// unproven realization to learn from it is reasonable for a computation and
-/// irresponsible for something that spends money or deletes data.
+/// The one thing sampling does not settle is a deterministic run, where scores
+/// are posterior means and two realizations with identical records genuinely
+/// tie. Settling that by name would hand every turn to whichever sorts first.
 pub fn choose_first(ranked: &[Scored], explore: bool, rng: &mut Rng) -> usize {
     if ranked.len() < 2 || !explore {
         return 0;
     }
-
-    // An exact tie is decided by a coin, not by the name.
-    //
-    // Ranking breaks ties alphabetically so a deterministic run reproduces, and
-    // that is fine as an ordering and wrong as a choice: two realizations that
-    // have never run score identically, so the one whose name sorts first would
-    // take every turn but the rare exploratory one. A synthesized body and a
-    // taught body of the same concept are exactly that case, and "synth" sorts
-    // before "taught" for reasons that have nothing to do with which is better.
-    //
-    // Spreading the tie is what lets evidence accumulate on both, which is the
-    // only thing that can separate them later.
     let tied = ranked
         .iter()
         .take_while(|s| (ranked[0].score - s.score).abs() < TIE_EPSILON)
         .count();
-    if tied > 1 {
-        return rng.below(tied);
-    }
-
-    if rng.next_f64() >= DEFAULT_EPSILON {
-        return 0;
-    }
-    let top = ranked[0].score;
-    let threshold = top * EXPLORE_BAND;
-    let band = ranked
-        .iter()
-        .take_while(|s| s.score >= threshold)
-        .count()
-        .max(1);
-    rng.below(band)
+    if tied > 1 { rng.below(tied) } else { 0 }
 }
 
 /// Small xorshift generator.

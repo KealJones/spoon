@@ -244,7 +244,9 @@ async fn realizations(State(brain): State<Shared>, Query(f): Query<Filter>) -> i
                 // twenty times last month, and only the activation shows that.
                 "success_rate": r.activation.success_rate(),
                 "activation": r.activation.base_level(now),
-                "score": spoon_eval::score(std::sync::Arc::new(r.clone()), 0.5, now).score,
+                "score": // Reported as the posterior mean, not a draw: a number in a table
+                // that changed on every refresh would be unreadable.
+                spoon_eval::score(std::sync::Arc::new(r.clone()), 0.5, now, None).score,
                 "last_used": r.activation.last_used_at,
             })
         })

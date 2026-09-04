@@ -577,14 +577,21 @@ impl<'a> Evaluator<'a> {
 
     fn rank(&mut self, candidates: Vec<Arc<Realization>>) -> Vec<Scored> {
         let now = self.now;
-        let scored: Vec<Scored> = candidates
-            .into_iter()
-            .map(|r| {
-                let evidence = self.evidence_for(&r);
-                let fit = select::context_fit(&evidence, &self.situation);
-                select::score(r, fit, now)
-            })
-            .collect();
+        // Deterministic runs score by the posterior mean; live ones draw from
+        // it. Sampling is what makes an uncertain realization rise sometimes,
+        // and a benchmark that needs to reproduce cannot have that.
+        let deterministic = self.budget.is_deterministic();
+        let mut scored: Vec<Scored> = Vec::new();
+        for r in candidates {
+            let evidence = self.evidence_for(&r);
+            let fit = select::context_fit(&evidence, &self.situation);
+            let s = if deterministic {
+                select::score(r, fit, now, None)
+            } else {
+                select::score(r, fit, now, Some(&mut self.rng))
+            };
+            scored.push(s);
+        }
         select::rank(scored)
     }
 
