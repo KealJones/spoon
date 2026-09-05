@@ -178,12 +178,7 @@ fn concat_lists(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// shape of its argument, the same way `want_list` already accepts a JSON
 /// array because refusing it would mean a conversion step nobody asked for.
 ///
-/// Reversed by character, not by byte, so a word with an accent in it comes
-/// back as a word rather than as broken bytes.
 fn reverse(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    if let Some(text) = args[0].as_ground().and_then(|g| g.as_str()) {
-        return Ok(Concept::text(text.chars().rev().collect::<String>()));
-    }
     let mut items = want_list("list-reverse", &args[0])?.to_vec();
     items.reverse();
     Ok(make_list(items))
@@ -942,7 +937,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "list-reverse",
         reverse,
         Arity::Exact(1),
-        "a list, or a piece of text, in the opposite order; text gives back text",
+        "a list in the opposite order; use text-reverse for strings",
     );
     registry.pure(
         "list-sort",
