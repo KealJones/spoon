@@ -21,7 +21,7 @@ use spoon_eval::{EvalError, NativeRegistry, type_error};
 /// so a store query returning many rows does not make this module depend on
 /// that one for a single constructor.
 pub(crate) fn list_of(items: Vec<Concept>) -> Concept {
-    Concept::call("list-list", items)
+    Concept::call("list-of", items)
 }
 
 /// Pull text out of a concept, or say precisely what was wrong.

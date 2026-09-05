@@ -39,7 +39,7 @@ fn value(store: &Store, reg: &NativeRegistry, c: &Concept) -> Concept {
 }
 
 fn list(items: impl IntoIterator<Item = Concept>) -> Concept {
-    Concept::call("list-list", items)
+    Concept::call("list-of", items)
 }
 
 fn ints(values: impl IntoIterator<Item = i64>) -> Concept {

@@ -187,6 +187,25 @@ pub fn status(cli: &Cli) -> Result<()> {
     Ok(())
 }
 
+pub fn clean(cli: &Cli) -> Result<()> {
+    let store = open_store(cli)?;
+    let report = store.purge_stale_pairs()?;
+    println!(
+        "phrasings: removed {} stale, kept {}",
+        report.removed, report.kept
+    );
+    if !report.examples.is_empty() {
+        println!("examples of removed:");
+        for ex in &report.examples {
+            println!("  {ex}");
+        }
+    }
+    if report.removed == 0 {
+        println!("brain is clean");
+    }
+    Ok(())
+}
+
 pub fn export(cli: &Cli, out: Option<&Path>) -> Result<()> {
     let store = open_store(cli)?;
     let seed = store.export_seed("spoon")?;

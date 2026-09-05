@@ -74,7 +74,7 @@ fn why_failed(store: &Store, reg: &NativeRegistry, c: &Concept) -> String {
 }
 
 fn list(items: impl IntoIterator<Item = Concept>) -> Concept {
-    Concept::call("list-list", items)
+    Concept::call("list-of", items)
 }
 
 fn ints(values: impl IntoIterator<Item = i64>) -> Concept {
@@ -95,11 +95,11 @@ fn list_builds_a_compound_headed_by_list() {
     let out = value(
         &store,
         &reg,
-        &Concept::call("list-list", [Concept::int(1), Concept::int(2)]),
+        &Concept::call("list-of", [Concept::int(1), Concept::int(2)]),
     );
     assert_eq!(out, ints([1, 2]));
     assert_eq!(out.arity(), 2);
-    assert_eq!(value(&store, &reg, &Concept::call("list-list", [])), ints([]));
+    assert_eq!(value(&store, &reg, &Concept::call("list-of", [])), ints([]));
 }
 
 #[test]
@@ -1014,7 +1014,7 @@ fn flat_map_maps_then_flattens_one_level() {
     learn(
         &store,
         "pair-with-self",
-        Concept::call("list-list", [Concept::hole(0), Concept::hole(0)]),
+        Concept::call("list-of", [Concept::hole(0), Concept::hole(0)]),
     );
     assert_eq!(
         value(

@@ -45,7 +45,7 @@ fn why_failed(store: &Store, reg: &NativeRegistry, c: &Concept) -> String {
 }
 
 fn list(items: impl IntoIterator<Item = Concept>) -> Concept {
-    Concept::call("list-list", items)
+    Concept::call("list-of", items)
 }
 
 // ---------------------------------------------------------------------------

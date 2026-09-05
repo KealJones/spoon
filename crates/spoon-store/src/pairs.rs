@@ -281,4 +281,50 @@ impl Store {
         let n: i64 = conn.query_row("SELECT COUNT(*) FROM pairs", [], |row| row.get(0))?;
         Ok(n.max(0) as usize)
     }
+
+    /// Remove phrasings whose concepts reference symbols not in the store.
+    ///
+    /// After a rename, stored phrasings still hold the old SymbolIds. The
+    /// template builder would load them, the evaluator would find no
+    /// realization under the dead name, and the turn would silently return
+    /// garbage. Better to drop them and let the system relearn.
+    pub fn purge_stale_pairs(&self) -> Result<PurgeReport> {
+        let known: std::collections::HashSet<spoon_concept::SymbolId> = self
+            .all_symbols()?
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect();
+        let pairs = self.all_pairs(usize::MAX)?;
+        let mut removed = 0u32;
+        let mut kept = 0u32;
+        let mut examples: Vec<String> = Vec::new();
+        for pair in &pairs {
+            let stale = pair.steps.iter().any(|step| {
+                spoon_concept::pre_order(step).any(|node| {
+                    node.as_symbol().is_some_and(|sym| !known.contains(&sym))
+                })
+            });
+            if stale {
+                self.forget_pair(pair.id)?;
+                removed += 1;
+                if examples.len() < 5 {
+                    examples.push(pair.utterance.clone());
+                }
+            } else {
+                kept += 1;
+            }
+        }
+        Ok(PurgeReport {
+            removed,
+            kept,
+            examples,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PurgeReport {
+    pub removed: u32,
+    pub kept: u32,
+    pub examples: Vec<String>,
 }

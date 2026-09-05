@@ -77,6 +77,8 @@ enum Command {
     },
     /// Load a seed.
     Import { file: PathBuf },
+    /// Remove stale phrasings that reference dead symbols.
+    Clean,
     /// What this brain knows.
     Status,
     /// Evaluate a concept expression directly, with no ears and no mouth.
@@ -126,6 +128,7 @@ async fn main() -> anyhow::Result<()> {
                 build::bench(&cli, suite).await
             }
         }
+        Command::Clean => build::clean(&cli),
         Command::Doctor { limit } => build::doctor(&cli, limit),
         Command::Export { ref out } => build::export(&cli, out.as_deref()),
         Command::Import { ref file } => build::import(&cli, file),

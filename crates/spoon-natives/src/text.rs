@@ -559,7 +559,7 @@ fn text_reverse(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 fn chars(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     let text = want_text("text-chars", &args[0])?;
     Ok(Concept::call(
-        "list-list",
+        "list-of",
         text.chars()
             .map(|c| Concept::text(c.to_string()))
             .collect::<Vec<_>>(),

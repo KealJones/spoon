@@ -410,7 +410,7 @@ fn pathological_bodies_do_not_take_the_process_down() {
     for _ in 0..2000 {
         deep = Concept::call("math-add", [deep, Concept::int(1)]);
     }
-    let wide = Concept::call("list-list", (0..5000).map(Concept::int).collect::<Vec<_>>());
+    let wide = Concept::call("list-of", (0..5000).map(Concept::int).collect::<Vec<_>>());
     let shallow: Vec<Concept> = (1..=3)
         .map(|k| {
             Concept::call(

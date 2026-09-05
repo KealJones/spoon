@@ -823,7 +823,7 @@ impl Brain {
                     0 => Concept::call("unknown", [goal.clone()]),
                     _ if holes(goal).is_empty() => Concept::bool(true),
                     _ => Concept::call(
-                        "list-list",
+                        "list-of",
                         derived.iter().map(|d| d.goal.clone()).collect::<Vec<_>>(),
                     ),
                 }))

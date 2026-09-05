@@ -112,5 +112,12 @@ pub fn seed_bootstrap(store: &Store, registry: &NativeRegistry) -> Result<SeedSt
         }
     }
 
+    // Broader check: phrasings referencing symbols the store has never heard
+    // of. This catches stale phrasings left over from a rename that the
+    // orphan check above missed (it only looks at heads that just died THIS
+    // run, not symbols that were already dead from a previous rename).
+    let report = store.purge_stale_pairs()?;
+    stats.forgotten += report.removed as usize;
+
     Ok(stats)
 }

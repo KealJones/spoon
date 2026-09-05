@@ -211,7 +211,7 @@ fn to_value(native: &str, c: &Concept, depth: usize) -> Result<Value, EvalError>
             )),
         };
     }
-    if c.head_symbol() == Some(SymbolId::of("list-list")) {
+    if c.head_symbol() == Some(SymbolId::of("list-of")) {
         let mut out = Vec::with_capacity(c.arity());
         for item in c.args() {
             out.push(to_value(native, item, depth + 1)?);

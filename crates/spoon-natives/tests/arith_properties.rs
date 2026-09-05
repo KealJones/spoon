@@ -345,7 +345,7 @@ fn no_native_panics_on_nonsense_input() {
         Concept::named("nonsense"),
         Concept::text("not a number"),
         Concept::bool(true),
-        Concept::call("list-list", [Concept::int(1)]),
+        Concept::call("list-of", [Concept::int(1)]),
         Concept::hole(0),
     ];
     for name in reg.names() {

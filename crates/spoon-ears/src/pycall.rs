@@ -168,7 +168,7 @@ impl<'a> PyParser<'a> {
     fn list_literal(&mut self) -> Result<Concept, PyParseError> {
         self.advance(); // skip [
         let items = self.arg_list(b']')?;
-        Ok(Concept::call("list-list", items))
+        Ok(Concept::call("list-of", items))
     }
 
     fn name_or_call(&mut self) -> Result<Concept, PyParseError> {
@@ -367,7 +367,7 @@ mod tests {
     #[test]
     fn list_literal() {
         let c = p("[1, 2, 3]");
-        assert_eq!(c.head_symbol(), Some(spoon_concept::SymbolId::of("list-list")));
+        assert_eq!(c.head_symbol(), Some(spoon_concept::SymbolId::of("list-of")));
         assert_eq!(c.args().len(), 3);
     }
 

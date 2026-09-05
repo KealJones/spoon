@@ -41,7 +41,7 @@ fn a_stalled_capability_is_not_an_answer() {
     let stalled = Concept::call(
         "count-matching",
         [
-            Concept::call("list-list", [Concept::text("f"), Concept::text("o")]),
+            Concept::call("list-of", [Concept::text("f"), Concept::text("o")]),
             Concept::text("r"),
         ],
     );
@@ -70,17 +70,17 @@ fn an_unasserted_made_up_head_is_not_an_answer() {
 #[test]
 fn a_realized_head_is_an_answer_even_unasserted() {
     let store = store();
-    realize(&store, "list-list");
+    realize(&store, "list-of");
     assert!(is_answer(
         &store,
-        &Concept::call("list-list", [Concept::int(1), Concept::int(2)])
+        &Concept::call("list-of", [Concept::int(1), Concept::int(2)])
     ));
 }
 
 #[test]
 fn a_stall_nested_inside_a_realized_head_is_caught() {
     let store = store();
-    realize(&store, "list-list");
-    let nested = Concept::call("list-list", [Concept::call("mystery", [Concept::int(1)])]);
+    realize(&store, "list-of");
+    let nested = Concept::call("list-of", [Concept::call("mystery", [Concept::int(1)])]);
     assert!(!is_answer(&store, &nested));
 }

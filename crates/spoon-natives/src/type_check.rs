@@ -19,7 +19,7 @@ use spoon_eval::{Arity, Ctx, EvalResult, NativeRegistry, native_error, type_erro
 // ---------------------------------------------------------------------------
 
 fn is_list(c: &Concept) -> bool {
-    c.head_symbol() == Some(SymbolId::of("list-list"))
+    c.head_symbol() == Some(SymbolId::of("list-of"))
         || matches!(c.as_ground(), Some(Ground::Json(blob)) if blob.value().is_array())
 }
 

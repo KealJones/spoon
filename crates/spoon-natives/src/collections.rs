@@ -31,7 +31,7 @@ use spoon_eval::{
 /// Read the elements of a list concept.
 pub(crate) fn want_list(native: &str, c: &Concept) -> Result<Vec<Concept>, spoon_eval::EvalError> {
     if let Some(head) = c.head_symbol()
-        && head == SymbolId::of("list-list")
+        && head == SymbolId::of("list-of")
     {
         return Ok(c.args().to_vec());
     }
@@ -49,7 +49,7 @@ pub(crate) fn want_list(native: &str, c: &Concept) -> Result<Vec<Concept>, spoon
 
 /// Build a list concept from elements.
 pub(crate) fn make_list(items: Vec<Concept>) -> Concept {
-    Concept::call("list-list", items)
+    Concept::call("list-of", items)
 }
 
 /// A non-negative index. Negative indices are rejected rather than wrapped
@@ -890,7 +890,7 @@ pub fn register(registry: &mut NativeRegistry) {
         "the integers between two bounds, both included",
     );
     registry.pure(
-        "list-list",
+        "list-of",
         list,
         Arity::Any,
         "build a list from the given elements",

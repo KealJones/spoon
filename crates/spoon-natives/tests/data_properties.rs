@@ -114,7 +114,7 @@ fn a_write_buried_inside_a_pure_looking_call_is_still_gated() {
     let expr = Concept::call(
         "list-map",
         [
-            Concept::call("list-list", [claim.clone()]),
+            Concept::call("list-of", [claim.clone()]),
             Concept::named("store-assert"),
         ],
     );
@@ -372,7 +372,7 @@ fn describe_keeps_the_preference_order_it_was_given() {
     assert_eq!(
         out,
         Concept::call(
-            "list-list",
+            "list-of",
             [
                 Concept::text("Greg"),
                 Concept::text("Greg Littlefield"),
@@ -403,7 +403,7 @@ fn no_native_panics_on_nonsense_arguments() {
         Concept::int(-1),
         Concept::json(serde_json::json!(null)),
         Concept::hole(0),
-        Concept::call("list-list", [Concept::bool(true)]),
+        Concept::call("list-of", [Concept::bool(true)]),
     ];
     for name in reg.names() {
         for arity in 0..4usize {

@@ -745,7 +745,7 @@
       "source": "common"
     },
     {
-      "lemma": "list-list",
+      "lemma": "list-of",
       "plural": "lists",
       "hypernym": "entity",
       "source": "common"
@@ -4205,7 +4205,7 @@
       ]
     },
     {
-      "lemma": "list-list",
+      "lemma": "list-of",
       "third": "lists",
       "past": "listed",
       "arity": 1,

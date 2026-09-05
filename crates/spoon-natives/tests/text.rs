@@ -50,7 +50,7 @@ fn why_failed(store: &Store, reg: &NativeRegistry, c: &Concept) -> String {
 }
 
 fn texts(values: impl IntoIterator<Item = &'static str>) -> Concept {
-    Concept::call("list-list", values.into_iter().map(Concept::text))
+    Concept::call("list-of", values.into_iter().map(Concept::text))
 }
 
 // ---------------------------------------------------------------------------
@@ -997,8 +997,8 @@ fn every_native_refuses_a_wrong_typed_argument_instead_of_panicking() {
         Concept::call("text-split", [n.clone(), t.clone()]),
         Concept::call("text-split", [t.clone(), n.clone()]),
         Concept::call("text-join", [n.clone(), t.clone()]),
-        Concept::call("text-join", [Concept::call("list-list", [n.clone()]), t.clone()]),
-        Concept::call("text-join", [Concept::call("list-list", []), n.clone()]),
+        Concept::call("text-join", [Concept::call("list-of", [n.clone()]), t.clone()]),
+        Concept::call("text-join", [Concept::call("list-of", []), n.clone()]),
         Concept::call("text-lines", [n.clone()]),
         Concept::call("text-upper", [n.clone()]),
         Concept::call("text-lower", [n.clone()]),

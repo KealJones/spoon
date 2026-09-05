@@ -79,7 +79,7 @@ fn owns(who: &str, what: &str) -> Concept {
 fn items(c: &Concept) -> Vec<Concept> {
     assert_eq!(
         c.head_symbol(),
-        Some(spoon_concept::SymbolId::of("list-list")),
+        Some(spoon_concept::SymbolId::of("list-of")),
         "expected a list, got {c:?}"
     );
     c.args().to_vec()
@@ -746,7 +746,7 @@ fn to_json_renders_ground_values_and_lists() {
     );
     assert_eq!(
         render(Concept::call(
-            "list-list",
+            "list-of",
             [Concept::int(1), text("two"), Concept::bool(false)]
         )),
         text(r#"[1,"two",false]"#)
