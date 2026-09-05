@@ -118,6 +118,8 @@ pub fn seed_bootstrap(store: &Store, registry: &NativeRegistry) -> Result<SeedSt
     // run, not symbols that were already dead from a previous rename).
     let report = store.purge_stale_pairs()?;
     stats.forgotten += report.removed as usize;
+    let retired_realizations = store.purge_stale_realizations()?;
+    stats.retired += retired_realizations as usize;
 
     Ok(stats)
 }

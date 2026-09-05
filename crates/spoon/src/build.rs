@@ -190,17 +190,19 @@ pub fn status(cli: &Cli) -> Result<()> {
 pub fn clean(cli: &Cli) -> Result<()> {
     let store = open_store(cli)?;
     let report = store.purge_stale_pairs()?;
+    let retired = store.purge_stale_realizations()?;
     println!(
         "phrasings: removed {} stale, kept {}",
         report.removed, report.kept
     );
+    println!("realizations: retired {retired} stale");
     if !report.examples.is_empty() {
-        println!("examples of removed:");
+        println!("examples of removed phrasings:");
         for ex in &report.examples {
             println!("  {ex}");
         }
     }
-    if report.removed == 0 {
+    if report.removed == 0 && retired == 0 {
         println!("brain is clean");
     }
     Ok(())

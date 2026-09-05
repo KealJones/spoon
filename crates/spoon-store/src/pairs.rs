@@ -318,13 +318,55 @@ impl Store {
             removed,
             kept,
             examples,
+            realizations_retired: 0,
         })
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct PurgeReport {
     pub removed: u32,
     pub kept: u32,
     pub examples: Vec<String>,
+    pub realizations_retired: u32,
+}
+
+impl Store {
+    /// Remove learned realizations whose bodies reference dead symbols.
+    pub fn purge_stale_realizations(&self) -> Result<u32> {
+        let known: std::collections::HashSet<spoon_concept::SymbolId> = self
+            .all_symbols()?
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect();
+        let all = self.all_realizations()?;
+        let mut retired = 0u32;
+        for r in &all {
+            if matches!(r.provenance, spoon_concept::Provenance::Bootstrap) {
+                continue;
+            }
+            let body_concepts: Vec<&spoon_concept::Concept> = match &r.spec {
+                spoon_concept::RealizationSpec::Composed { body } => {
+                    spoon_concept::pre_order(body).collect()
+                }
+                spoon_concept::RealizationSpec::Rule {
+                    pattern, produce, ..
+                } => {
+                    let mut v: Vec<&spoon_concept::Concept> =
+                        spoon_concept::pre_order(pattern).collect();
+                    v.extend(spoon_concept::pre_order(produce));
+                    v
+                }
+                _ => continue,
+            };
+            let stale = body_concepts
+                .iter()
+                .any(|node| node.as_symbol().is_some_and(|sym| !known.contains(&sym)));
+            if stale {
+                self.retire_realization(&r.name)?;
+                retired += 1;
+            }
+        }
+        Ok(retired)
+    }
 }
