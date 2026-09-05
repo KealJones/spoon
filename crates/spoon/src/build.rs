@@ -29,13 +29,15 @@ pub fn brain_path(cli: &Cli) -> Result<PathBuf> {
     if let Some(path) = &cli.db {
         return Ok(path.clone());
     }
+    // Config file path, if set.
+    if let Ok(settings) = Config::load() {
+        if let Some(db) = settings.database.as_ref().and_then(|d| d.path.as_ref()) {
+            return Ok(db.clone());
+        }
+    }
     let home = std::env::var("HOME").context("HOME is not set")?;
     let dir = PathBuf::from(home).join(".spoon");
     std::fs::create_dir_all(&dir)?;
-    // Deliberately not spoon.db: that is the v1 brain, whose schema this build
-    // cannot read. Keeping a separate file means an existing v1 brain survives
-    // untouched rather than being half-migrated into something neither system
-    // can open.
     Ok(dir.join("spoon-v2.db"))
 }
 
@@ -64,15 +66,6 @@ fn permission(mode: &str) -> PermissionMode {
 /// Build a brain, seeding a fresh one so it can actually do something.
 pub async fn assemble(cli: &Cli) -> Result<(Brain, spoon_ears::EarsFormatFlag)> {
     let settings = Config::load()?;
-    // The v1 config points database.path at a v1 brain, whose schema this
-    // build cannot read. Opening it would create v2 tables inside a file v1
-    // still needs, so it is refused loudly rather than honored.
-    if let Some(db) = settings.database.as_ref().and_then(|d| d.path.as_ref()) {
-        eprintln!(
-            "ignoring database.path {} in config: v2 uses its own brain file",
-            db.display()
-        );
-    }
     let ears_model = seat_model(&cli.ears_model, Config::model(&settings.ears)).to_string();
     let mouth_model = seat_model(&cli.mouth_model, Config::model(&settings.mouth)).to_string();
     let teacher_model =
