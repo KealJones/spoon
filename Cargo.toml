@@ -1,58 +1,55 @@
 [workspace]
 resolver = "2"
-members = [
-    "crates/spoon-core",
-    "crates/spoon-graph",
-    "crates/spoon-exec",
-    "crates/spoon-episode",
-    "crates/spoon-reason",
-    "crates/spoon-credit",
-    "crates/spoon-adapt",
-    "crates/spoon-intuition",
-    "crates/spoon-capability",
-    "crates/spoon-engine",
-    "crates/spoon-server",
-    "crates/spoon-sandbox",
-    "crates/spoon-net",
-    "crates/spoon-secret",
-    "crates/spoon-forge",
-]
+members = ["crates/*"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license = "MIT"
 
 [workspace.dependencies]
-spoon-core = { path = "crates/spoon-core" }
-spoon-graph = { path = "crates/spoon-graph" }
-spoon-exec = { path = "crates/spoon-exec" }
-spoon-episode = { path = "crates/spoon-episode" }
-spoon-reason = { path = "crates/spoon-reason" }
-spoon-credit = { path = "crates/spoon-credit" }
-spoon-adapt = { path = "crates/spoon-adapt" }
-spoon-intuition = { path = "crates/spoon-intuition" }
-spoon-capability = { path = "crates/spoon-capability" }
-spoon-engine = { path = "crates/spoon-engine" }
-spoon-sandbox = { path = "crates/spoon-sandbox" }
-spoon-net = { path = "crates/spoon-net" }
-spoon-secret = { path = "crates/spoon-secret" }
-spoon-forge = { path = "crates/spoon-forge" }
+spoon-concept = { path = "crates/spoon-concept" }
+spoon-store = { path = "crates/spoon-store" }
+spoon-eval = { path = "crates/spoon-eval" }
+spoon-natives = { path = "crates/spoon-natives" }
+spoon-infer = { path = "crates/spoon-infer" }
+spoon-brain = { path = "crates/spoon-brain" }
+spoon-learn = { path = "crates/spoon-learn" }
+spoon-teach = { path = "crates/spoon-teach" }
+spoon-mouth = { path = "crates/spoon-mouth" }
+spoon-ears = { path = "crates/spoon-ears" }
+spoon-seat = { path = "crates/spoon-seat" }
 
-serde = { version = "1", features = ["derive"] }
+serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
-uuid = { version = "1", features = ["v4", "serde"] }
-rusqlite = { version = "0.32", features = ["bundled"] }
+anyhow = "1"
 thiserror = "2"
-unicode-segmentation = "1.12"
-unicode-normalization = "0.1"
-regex = "1"
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
-sha2 = "0.10"
-md-5 = "0.10"
-base64 = "0.22"
-rand = "0.9"
-axum = "0.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+rusqlite = { version = "0.37", features = ["bundled", "serde_json"] }
 tokio = { version = "1", features = ["full"] }
-tokio-stream = "0.1"
+reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"], default-features = false }
+axum = { version = "0.8", features = ["macros"] }
 tower-http = { version = "0.6", features = ["cors"] }
+clap = { version = "4", features = ["derive"] }
+chrono = { version = "0.4", features = ["serde"] }
+regex = "1"
+rand = "0.9"
+indexmap = { version = "2", features = ["serde"] }
+futures = "0.3"
+tokio-stream = "0.1"
+strsim = "0.11"
+blake3 = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+unicode-segmentation = "1"
+rust-stemmers = "1"
+async-trait = "0.1"
+parking_lot = "0.12"
+tempfile = "3"
+
+[profile.release]
+opt-level = 3
+debug = 1
+
+[profile.dev]
+opt-level = 1

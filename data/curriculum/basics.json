@@ -1,0 +1,23 @@
+{
+  "name": "basics",
+  "note": "Ordinary turns, run in order. Nothing here takes a special path: a lesson is a conversation, because a lesson that behaved differently would not be teaching the thing that gets used.",
+  "lessons": [
+    "friendship is symmetric",
+    "marriage is symmetric",
+    "sibling is symmetric",
+    "parent-of is the inverse of child-of",
+    "employs is the inverse of works-for",
+    "part-of is transitive",
+    "ancestor-of is transitive",
+    "subtype-of is transitive",
+    "a dog is a subtype of animal",
+    "a cat is a subtype of animal",
+    "an animal is a subtype of living-thing",
+    "a person is a subtype of animal",
+    "animals are alive by default",
+    "people have two arms by default",
+    "\"pup\" means dog",
+    "\"kitty\" means cat",
+    "\"folks\" means person"
+  ]
+}

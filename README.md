@@ -1,109 +1,81 @@
 # Spoon
 
-A local, inspectable executable knowledge engine. It records episodes, runs
-procedures, and keeps teacher advice provisional until local checks land.
+A persistent, self-extending semantic cognitive system.
 
-The teacher authors **Spoonlang** (a small infix surface language). The engine
-compiles that to `pure_expr_v2` IR, admits it, and reuses it. Untagged JSON AST
-lessons still compile if you send them by hand.
+Spoon is an experiment in building an intelligent system whose accumulated
+knowledge, reasoning methods, and executable abilities exist outside the fixed
+parameters and finite context window of a large language model. LLMs serve as
+Spoon's ears (language in), mouth (language out), and teacher (filling knowledge
+gaps) - but the persistent cognitive substrate is Spoon's own.
 
-Implementation honesty: [`STATUS.md`](STATUS.md).
+## Architecture
 
-## Requirements
+Everything in Spoon is a **Concept**. Concepts come in three shapes:
 
-Rust/Cargo, Node.js 24+, pnpm. For teaching from chat or `ask`, a local
-[Ollama](https://ollama.com) model. `qwen3.8:27b` follows Spoonlang. Tiny models
-copy prompt examples and miss the schema.
+```rust
+enum Concept {
+    Atomic(ConceptId),                                   // Greg, Add, 42
+    Compound { head: Box<Concept>, args: Vec<Concept> }, // FriendWith<Greg, Keal>
+    Hole(HoleId),                                        // placeholder in patterns
+}
+
+enum ConceptId {
+    Named(SymbolId),   // greg, add, sort, friend-with
+    Ground(Ground),    // 42, "hello", true, {json}
+}
+```
+
+Entities, relationships, expressions, programs, and inference rules are all
+concepts. There are no privileged primitives: `42` is an atomic concept whose
+identity is its value, and it costs no database row until something is asserted
+about it.
+
+There is no separate IR. Evaluation is term rewriting. A concept like `Sort` has
+one or more **realizations** (native Rust, composed concepts, rewrite rules, LLM
+calls, external processes). Execution means: find a realization for the head
+concept, apply it, recurse. Realizations compete, and experience decides which
+one wins in a given context.
+
+Concepts infer other relationships through meta-concepts like `Symmetric`,
+`InverseOf`, and `TransitiveClosure`. These are not magic: they are concepts
+whose realizations happen to be rewrite rules.
+
+The LLM ears decompose messy human language into flat concept sequences. The
+vocabulary self-ranks by usage (ACT-R activation), so the most useful concepts
+sit at the top of the LLM prompt. Unknown words get structurally placed and
+resolved through synonym lookup or Teacher assistance.
+
+## Status
+
+**v2 architecture pivot in progress.** See `PIVOT_PLAN.md` for the staged
+development plan and `docs/CONCEPT-IR-DESIGN.md` for the core design rationale.
+
+v1 code in `crates/` (345 tests, typed CAN, Earley parser, synthesis, episodes)
+is retained as reference. It proved out many pieces but used a rigid
+Concept/Action/Fact/Clause representation that the unified v2 model replaces.
+
+## Design Documents
+
+| Document | Contents |
+|---|---|
+| `PIVOT_PLAN.md` | Re-architecture stages, crate structure, success criteria, timeline |
+| `docs/CONCEPT-IR-DESIGN.md` | Core design: concepts, evaluation, inference, ears, vocabulary ranking |
+| `docs/EVALUATION.md` | Evaluator contract: budgets, realization selection, effect authority, tracing |
+| `docs/PRIOR_ART_MEMO.md` | Relevant algorithms and system precedents |
+| `AGENTS.md` | Agent instructions, hard rules, pick-up procedure |
+
+## Prior Iterations
+
+- `ekg` / `ekg-ai`: earlier implementations exploring the same ideas
+- The Spoon whitepaper describes the full vision this system is working toward
+
+## Quick Start
 
 ```bash
-pnpm install
-ollama pull qwen3.8:27b
+cargo check                       # fast compile
+cargo test --workspace            # all tests
+cargo run -p spoon -- repl        # talk to it
+cargo run -p spoon -- serve       # OpenAI API on :8787
 ```
 
-## Start the HTTP server (chat UI)
-
-```bash
-pnpm serve
-```
-
-Open <http://127.0.0.1:4318>. Named sessions restore episode history. The pinned
-Global chat has no session and does not recall.
-
-`pnpm serve` is `cargo run -p spoon-server -- --http --port 4318`. It loads the
-same `~/.spoon/config.json` as the CLI. Override the port with `--port` on the
-binary. Environment variables still override file values. `SPOON_TEACHER_URL` /
-`SPOON_OLLAMA_URL` default to `http://localhost:11434`. Without Ollama, unknown
-questions abstain.
-
-## CLI
-
-The CLI spawns the same server over stdio. Build once, then:
-
-```bash
-cargo build -p spoon-server
-SPOON_DB=./spoon.db \
-SPOON_TEACHER=ollama \
-SPOON_TEACHER_MODEL=qwen3.8:27b \
-  pnpm spoon ask --explain "what is twenty five percent of eighty?"
-```
-
-```bash
-pnpm spoon ask --quiet "what is double 7?"
-pnpm spoon teach --explain "extract arr[0].name from a supplied object"
-pnpm spoon chat
-pnpm spoon config show --sources
-pnpm spoon capability list
-```
-
-`teach` is the explicit authoring boundary. A normal `ask` does not become a
-teach just because the teacher returned a lesson. `--teacher off` checks
-retention.
-
-Config stacks `~/.spoon/config.json`, project `.spoon/config.json`, then
-`.spoon/config.local.json`.
-
-## Spoonlang (teacher wire)
-
-The JSON envelope is `{ "source": "<spoonlang>", "interpretations": [] }`.
-Example source:
-
-```
-kind reusable_lesson
-concept percent: defeasible_general
-  "A proportion of a quantity, expressed as parts per hundred"
-proc percent_of(percent: number, of: number)
-  name "PERCENT OF"
-  (percent * of) / 100
-example percent_of(50, 100) => 50
-```
-
-Stable facts with no inputs to transform use `kind answer_only`. Effectful work
-uses `cap("spoon.native", "web.fetch", { url: url })` with advertised ids only.
-
-## Inspector
-
-```bash
-cargo build -p spoon-server
-SPOON_DB=./spoon.db pnpm inspect
-```
-
-Open <http://127.0.0.1:4317>. Read-only episode narratives.
-
-## Packages
-
-- [`@spoon/cli`](packages/cli/README.md) — commands and stdio chat
-- [`@spoon/sdk`](packages/sdk/README.md) — TypeScript JSON-RPC client
-- [`@spoon/teacher`](packages/teacher/README.md) — Claude, Codex, Cursor, OpenAI, Ollama, human
-- [`@spoon/inspector`](packages/inspector/README.md) — dashboard
-- `crates/` — core, graph, exec, engine, HTTP/JSON-RPC server
-
-## Checks
-
-```bash
-cargo test --workspace --all-targets
-pnpm test
-pnpm typecheck
-```
-
-Spoon stores data in SQLite. Imported capabilities are quarantined and need
-local permission grants.
+Rust, one binary, SQLite persistence. Optional: Ollama for the three LLM seats.

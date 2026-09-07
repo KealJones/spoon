@@ -1,0 +1,16 @@
+[package]
+name = "spoon-seat"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+spoon-concept = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+parking_lot = { workspace = true }
+async-trait = { workspace = true }

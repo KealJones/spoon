@@ -1,0 +1,366 @@
+//! The model path.
+//!
+//! The model's job is narrow on purpose: decompose an utterance into a short
+//! sequence of concept operations drawn from a vocabulary it is handed. It is
+//! not asked to compute anything, resolve anything, or decide anything. Its
+//! output has to parse into concepts, so a hallucination fails loudly instead
+//! of becoming a confident wrong answer.
+
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use spoon_concept::{Concept, SymbolTable, parse};
+use spoon_seat::{Ears, Heard, LlmClient, LlmError, Message, Seat, Turn};
+
+use crate::native::NativeEars;
+use crate::pycall;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EarsFormat {
+    AngleBracket,
+    PythonCall,
+}
+
+/// Shared flag toggling Python-style ears format at runtime.
+#[derive(Clone, Default)]
+pub struct EarsFormatFlag(Arc<AtomicBool>);
+
+impl EarsFormatFlag {
+    pub fn new(python: bool) -> Self {
+        EarsFormatFlag(Arc::new(AtomicBool::new(python)))
+    }
+
+    pub fn get(&self) -> EarsFormat {
+        if self.0.load(Ordering::Relaxed) {
+            EarsFormat::PythonCall
+        } else {
+            EarsFormat::AngleBracket
+        }
+    }
+
+    pub fn set(&self, format: EarsFormat) {
+        self.0.store(format == EarsFormat::PythonCall, Ordering::Relaxed);
+    }
+
+    pub fn toggle(&self) -> EarsFormat {
+        let was_python = self.0.fetch_xor(true, Ordering::Relaxed);
+        if was_python { EarsFormat::AngleBracket } else { EarsFormat::PythonCall }
+    }
+}
+
+pub struct ModelEars {
+    client: LlmClient,
+    native: NativeEars,
+    format_flag: EarsFormatFlag,
+}
+
+impl ModelEars {
+    pub fn new(client: LlmClient) -> Self {
+        ModelEars {
+            client,
+            native: NativeEars::new(),
+            format_flag: EarsFormatFlag::default(),
+        }
+    }
+
+    pub fn with_format(self, format: EarsFormat) -> Self {
+        self.format_flag.set(format);
+        self
+    }
+
+    pub fn with_format_flag(mut self, flag: EarsFormatFlag) -> Self {
+        self.format_flag = flag;
+        self
+    }
+
+    pub fn format_flag(&self) -> &EarsFormatFlag {
+        &self.format_flag
+    }
+
+    /// Built fresh each turn from the activation-ranked vocabulary, so the
+    /// concepts this user actually reaches for sit at the top where the model
+    /// will see them.
+    fn prompt(vocabulary: &[String], rules: &[String]) -> String {
+        // Rules the Teacher wrote after earlier mistakes. Placed last so they
+        // are the final thing read before the utterance, which is where a
+        // correction does the most good.
+        let learned = if rules.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "\n\nLearned from earlier mistakes:\n{}",
+                rules
+                    .iter()
+                    .map(|r| format!("- {r}"))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            )
+        };
+        // One per line, because each carries a shape and a description now and
+        // a comma-separated run of those is unreadable.
+        let known = vocabulary.join("\n  ");
+        format!(
+            r#"You translate messy human speech into concept expressions. You never compute, resolve, or answer anything. You only translate.
+
+Write ONE line per step, in the order the speaker said them. Each line is one of:
+
+assert-that<CONCEPT>   the speaker is stating something true
+ask<CONCEPT>           the speaker is asking whether something holds, or asking for a value
+do<CONCEPT>            the speaker wants something done or computed
+chat<CONCEPT>          social talk with no request in it
+correction<STEP>       the speaker is repairing what they just said; STEP is the replacement
+
+A list is written list<a, b, c> with the items as separate arguments. Never
+write list<[a, b, c]>: that is a list of one thing, the bracketed value itself,
+which is almost never what someone means.
+
+Where a function is wanted, write an expression with ?0 standing for each
+element. This is how you say "compare against this value", which has no name:
+
+  "how many r's in strawberry"  -> ask<count<filter<chars<"strawberry">, eq<?0, "r">>>>
+  "double each of them"         -> do<map<?0, mul<?0, 2>>>
+  "the ones over 4"             -> do<filter<?0, gt<?0, 4>>>
+
+A CONCEPT is written Head<Arg, Arg>. Arguments are concepts, quoted "text", numbers, true/false, or ?0 for something unspecified. Names are kebab-case.
+
+Examples:
+  "john has a dog"             -> assert-that<owns<john, dog>>
+  "who owns a dog"             -> ask<owns<?0, dog>>
+  "is keal friends with greg"  -> ask<friends<keal, greg>>
+  "add 2 and 3"                -> do<add<2, 3>>
+  "biggest of 4, 9, 2 and 7"   -> do<max-of<list<4, 9, 2, 7>>>
+  "hey"                        -> chat<greet<>>
+  "the weights, no the scores" -> do<sum<weights>>
+                                  correction<do<sum<scores>>>
+
+A statement ABOUT a relation is still a statement, so it is assert-that. These
+shapes matter and have exact spellings:
+
+  "friendship is symmetric"        -> assert-that<symmetric<friends>>
+  "X is the inverse of Y"          -> assert-that<inverse-of<X, Y>>
+  "part-of is transitive"          -> assert-that<transitive<part-of>>
+  "a dog is a subtype of animal"   -> assert-that<subtype-of<dog, animal>>
+  "rex is a dog"                   -> assert-that<participates<rex, dog>>
+  "animals are alive by default"   -> assert-that<default-expectation<animal, alive, true>>
+  "\"pup\" means dog"              -> assert-that<synonym<"pup", dog>>
+
+Use the plain relation name, not a noun form: "friendship is symmetric" is
+about the relation `friends`, so write symmetric<friends>. Naming it
+`friendship` makes a second, unrelated concept.
+
+Multi-step requests use let, binding a name to each intermediate result:
+
+  "fetch the todos and count them"
+      -> do<json-length<fetch-json<"https://example.com/todos">>>
+  "get the json and add up the scores"
+      -> do<sum<pluck<fetch-json<"URL">, "score">>>
+
+If a word means nothing you can express, write it as unknown<"the word"> inside the concept rather than guessing.
+
+Concepts currently known:\n  {known}
+
+Prefer a known concept. Invent a new kebab-case name only when nothing fits.
+Reply with the steps and nothing else. No prose, no explanation, no code fences.{learned}"#
+        )
+    }
+
+    fn prompt_python(vocabulary: &[String], rules: &[String]) -> String {
+        let learned = if rules.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "\n\nLearned from earlier mistakes:\n{}",
+                rules
+                    .iter()
+                    .map(|r| format!("# {r}"))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            )
+        };
+        let known = vocabulary.join("\n  ");
+        format!(
+            r#"You translate messy human speech into Python function calls. You never compute, resolve, or answer anything. You only translate.
+
+First write a comment explaining your interpretation, then write the function call.
+
+Each step is one of these wrapper functions:
+  assert_that(CONCEPT)   - the speaker is stating something true
+  ask(CONCEPT)           - the speaker is asking whether something holds, or asking for a value
+  do(CONCEPT)            - the speaker wants something done or computed
+  chat(CONCEPT)          - social talk with no request in it
+  correction(STEP)       - the speaker is repairing what they just said; STEP is the replacement
+
+Arguments are: strings "text", numbers, True/False, function calls, or ?0 for an unknown/placeholder.
+Lists are written as Python lists: [1, 2, 3]
+Lambda for predicates: lambda x: math_gt(x, 4)
+
+Examples:
+  "john has a dog"
+  # Statement: john owns a dog
+  assert_that(owns(john, dog))
+
+  "who owns a dog"
+  # Question: who is the owner of a dog (unknown subject)
+  ask(owns(?0, dog))
+
+  "is keal friends with greg"
+  # Question: are keal and greg friends
+  ask(friends(keal, greg))
+
+  "add 2 and 3"
+  # Computation: add two numbers
+  do(math_add(2, 3))
+
+  "how many r's in strawberry"
+  # Computation: count characters matching "r" in "strawberry"
+  ask(list_count(list_filter(text_chars("strawberry"), lambda x: logic_eq(x, "r"))))
+
+  "biggest of 4, 9, 2 and 7"
+  # Computation: find the maximum of a list
+  do(list_max_of([4, 9, 2, 7]))
+
+  "reverse banana"
+  # Computation: reverse the text "banana"
+  do(text_reverse("banana"))
+
+  "the ones over 4"
+  # Computation: filter elements greater than 4
+  do(list_filter(?0, lambda x: logic_gt(x, 4)))
+
+  "hey"
+  # Social: greeting
+  chat(greet())
+
+  "friendship is symmetric"
+  # Statement about a relation
+  assert_that(symmetric(friends))
+
+Functions available (use underscores, they map to the concept names):
+  {known}
+
+Prefer a known function. Invent a new snake_case name only when nothing fits.
+Reply with ONLY the comment and function call per step. No other prose.{learned}"#
+        )
+    }
+
+    /// Read the model's reply back into concepts.
+    ///
+    /// A line that does not parse is dropped rather than guessed at, and any
+    /// `unknown<"word">` it contains is collected as a lead for the Teacher. If
+    /// nothing parses the whole reading fails, which is correct: the model
+    /// produced something Spoon cannot act on.
+    fn parse_steps(reply: &str, table: &SymbolTable) -> (Vec<Concept>, Vec<Arc<str>>) {
+        let mut steps = Vec::new();
+        let mut unknown = Vec::new();
+        for line in reply.lines() {
+            let line = line.trim().trim_start_matches("- ").trim();
+            if line.is_empty() || line.starts_with("```") {
+                continue;
+            }
+            let Ok(concept) = parse(line, table) else {
+                continue;
+            };
+            for node in spoon_concept::pre_order(&concept) {
+                if node.head_symbol() == Some(spoon_concept::SymbolId::of("unknown"))
+                    && let Some(word) = node
+                        .arg(0)
+                        .and_then(|a| a.as_ground())
+                        .and_then(|g| g.as_str())
+                {
+                    unknown.push(Arc::from(word));
+                }
+            }
+            steps.push(concept);
+        }
+        (steps, unknown)
+    }
+
+    fn parse_python_steps(reply: &str, table: &SymbolTable) -> (Vec<Concept>, Vec<Arc<str>>) {
+        let mut steps = Vec::new();
+        let mut unknown = Vec::new();
+        let (metadata, exprs) = pycall::split_metadata(reply);
+        // Metadata (# comments) capture intent - stored but not parsed as concepts
+        let _ = metadata; // TODO: attach to Heard once we add an intent field
+        for line in &exprs {
+            let line = line.trim().trim_start_matches("- ").trim();
+            if line.is_empty() || line.starts_with("```") {
+                continue;
+            }
+            let Ok(concept) = pycall::parse_pycall(line, table) else {
+                // Fall back to angle-bracket parse in case the model mixed formats
+                if let Ok(concept) = parse(line, table) {
+                    steps.push(concept);
+                }
+                continue;
+            };
+            for node in spoon_concept::pre_order(&concept) {
+                if node.head_symbol() == Some(spoon_concept::SymbolId::of("unknown"))
+                    && let Some(word) = node
+                        .arg(0)
+                        .and_then(|a| a.as_ground())
+                        .and_then(|g| g.as_str())
+                {
+                    unknown.push(Arc::from(word));
+                }
+            }
+            steps.push(concept);
+        }
+        (steps, unknown)
+    }
+}
+
+#[async_trait::async_trait]
+impl Ears for ModelEars {
+    async fn hear(
+        &self,
+        text: &str,
+        vocabulary: &[String],
+        recent: &[Turn],
+        rules: &[String],
+    ) -> Result<Heard, LlmError> {
+        let format = self.format_flag.get();
+        let system_prompt = match format {
+            EarsFormat::AngleBracket => Self::prompt(vocabulary, rules),
+            EarsFormat::PythonCall => Self::prompt_python(vocabulary, rules),
+        };
+        let mut messages = vec![Message::system(system_prompt)];
+        for turn in recent {
+            messages.push(Message::user(turn.said.to_string()));
+            messages.push(Message::assistant(turn.understood.to_string()));
+        }
+        messages.push(Message::user(text.to_string()));
+        let (reply, exchange) = self
+            .client
+            .chat_with_exchange(Seat::Ears, &messages)
+            .await?;
+
+        let table = SymbolTable::new();
+        let (steps, unknown) = match format {
+            EarsFormat::AngleBracket => Self::parse_steps(&reply, &table),
+            EarsFormat::PythonCall => Self::parse_python_steps(&reply, &table),
+        };
+        if steps.is_empty() {
+            return Err(LlmError::Unusable {
+                seat: "ears",
+                detail: format!("nothing parsed from: {reply}"),
+            });
+        }
+        // Confidence drops with each word the model could not place, because a
+        // reading full of holes is a reading Spoon should be less willing to
+        // act on.
+        let confidence = (0.85 - 0.15 * unknown.len() as f64).max(0.2);
+        let names = table.entries().into_iter().map(|(_, name)| name).collect();
+        Ok(Heard {
+            steps,
+            unknown,
+            confidence,
+            used_model: true,
+            names,
+            exchange: Some(exchange),
+        })
+    }
+
+    fn hear_native(&self, text: &str) -> Option<Heard> {
+        self.native.hear_native(text)
+    }
+}

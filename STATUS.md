@@ -1,112 +1,422 @@
-# Spoon Implementation Status
+# Spoon v2: status log
 
-Last audited: 2026-08-23
+Newest entry first. Each entry: DONE / IN PROGRESS / NEXT.
+"Done" means it runs, not that a type exists.
+Decisions in PIVOT_PLAN.md; rules in AGENTS.md; design in docs/CONCEPT-IR-DESIGN.md.
 
-This is the human-facing source of truth for what Spoon actually does today.
-It deliberately does not treat a type, stub, fixture, mock, passing unit test,
-or public method as proof that a subsystem is fully implemented.
+---
 
-## Status meanings
+## 2026-09-03  The config was never read, and the bench never checked answers
 
-- **FULL** — the documented scope is publicly reachable, integrated into the
-  real Spoon workflow, failure/adversarial tested, and production-real wherever
-  it performs host effects.
-- **PARTIAL** — useful real behavior exists, but one or more required public,
-  integration, safety, or completeness paths are missing.
-- **SCAFFOLD** — declarations, schemas, fixtures, mocks, or isolated machinery
-  exist, but the claimed behavior is not usable end to end.
-- **MISSING** — no meaningful implementation exists yet.
-- **IN FLIGHT** — currently being changed; never infer completion until fresh
-  evidence is recorded here.
+Two findings that invalidate most of what this log said about the Teacher.
 
-Evidence levels are: **D** declared, **C** compiled, **U** unit-executed, **R**
-publicly reachable, **I** integrated, **A** adversarially tested, **P**
-production-real. See the Implementation Reality Gate in
-[`IMPLEMENTATION-PLAN.md`](IMPLEMENTATION-PLAN.md).
+**The Teacher was never the model it was set to.** `~/.spoon/config.json` has
+said `qwen3.8:27b` for a while, and Spoon had never opened the file. All three
+seats ran the `qwen3.5:4b` default. The entry above, "the model in the seat is
+not good enough for this class of problem", was measuring a model nobody chose.
+Flags now override the file, the file overrides the default, and `database.path`
+is refused rather than honored: it points at a v1 brain whose schema this build
+cannot read.
 
-## Honest summary
+**The bench never checked whether an answer was right.** It reported which ears
+path ran and how many gaps appeared, which is why "it cannot answer anything"
+stayed invisible while every number on the report looked healthy. Suites now
+carry expected results and the runner scores them by category, grading the
+result concept rather than the reply, since the mouth is a language model and
+grading its prose measures the mouth's mood.
 
-- Fully implemented against the complete implementation plan: **no major
-  subsystem yet**.
-- Actually useful today: neutral values/expressions, SQLite knowledge and
-  episode stores, deterministic procedure execution and replay, a working
-  Teacher cycle for bounded learned procedures, several CLI/server/SDK paths,
-  capability bundle lifecycle machinery, a broader bounded Unicode/text/
-  collection/JSON intrinsic slice, a locally integrated scoped-file bridge, and
-  a core-only grounded language-structure/renderer slice.
-- Not actually present today: broad autonomous capability acquisition, a real
-  OS sandbox, secret references, an executable seed forge, general language
-  meaning/intent competence, general programming knowledge, or a complete pure
-  standard library.
+BASELINE  280/336 (83%) on held-out cases, native ears 42%.
 
-## System status
+DONE
+- Graded bench with per-category scoring, `--no-teaching`, and setup turns.
+- 3787 generated cases over 38 categories, split 70/30 train and test, with the
+  split taken per category and deduplicated by utterance first.
+- Reverse works on text, which also collapsed `reverse-text` from an
+  eight-node synthesis target to three nodes. The test asserting enumeration
+  could not reach it now asserts that it can. Nothing about the search improved.
+- `sort` exists under the name people use.
+- A stall is no longer reported as an answer, in three separate places: a
+  half-reduced ask, a stuck `Move::Do`, and a value containing holes.
+- The turn re-runs the interior once after learning something, so a turn that
+  synthesizes exactly what it needs stops answering "unknown".
+- Retiring a native retires everything that still names it: its realization,
+  the phrasings that produce it, and the Teacher's durable advice about it.
+  A brain with history failed where a fresh brain succeeded, because only the
+  old one had the bad memories.
+- A greeting is a whole turn or it is not one. "hey quick one, 356 minus 43"
+  used to answer hello.
+- The inspector shows a concept in full: kind, description, realizations with
+  their bodies and scores, declared properties, and where it appears.
 
-| System part | Status | Fully implemented? | Highest proven level | What is real now | What blocks FULL |
-| --- | --- | --- | --- | --- | --- |
-| Neutral value model | PARTIAL | No | I | Null, bool, signed integer, float, text, list, and string-keyed map persist and execute across core/graph/engine paths. | Bytes, exact decimal/big integer, tagged result/option/error, richer type/schema semantics. |
-| Portable expression IR | PARTIAL | No | I/A | Literals, variables, arithmetic/logic, calls, conditionals, lexical bindings, lists, index/field, map/filter/reduce, bounded `map_from_entries`, versioned pure intrinsics, and exact-version `CallExact` dependency calls execute and serialize. Teacher aliases resolve only from a bounded engine snapshot and persist the dependency revision. | Richer collection forms, recoverable errors, and independent allocation/depth/output budgets. |
-| Pure text/collection/JSON/numeric library | PARTIAL | No | R/I (bounded rich-procedure slices) | Bounded Unicode normalization, trim variants, grapheme substring/split, lexical `text_tokenize` with byte spans, strict/optional dot/bracket paths plus RFC-style JSON Pointer, immutable JSON Pointer set/delete, null-only variadic `coalesce`, structural collection find-index, bounded `map_from_entries` object construction, search/count/repeat/concat, list/map copy transforms, deterministic sort/unique/flatten/zip/range, JSON parse/stringify, conversions, and finite-safe numeric abs/sign/min/max/clamp/rounding/power/strict integer quotient/remainder execute in the evaluator. Real Rust-stdio SDK tests admit and reuse Teacher-OFF letter-count, word-token-count, and JSON Pointer default procedures. | The quote binder is positional syntax and the tokenizer is lexical only—not semantic intent/paraphrase understanding. Dot/bracket update parity, JSON Patch/Merge Patch, procedure-accessible schema validation, predicate-based find/any/all, case folding, regex, encodings, hashes, exact decimal/rational arithmetic, transcendental math, and a complete standard-library surface remain. |
-| Procedure evaluator | PARTIAL | No | I | Scoped deterministic execution, contracts, budgets, traces, nested calls, failures, and version-pinned replay work. | Call-depth/allocation/time cancellation limits, richer error handling, complete intrinsic library, effect dependency bridge. |
-| SQLite knowledge graph | PARTIAL | No | I/A | Versioned concept/relationship/procedure storage, atomic bundles, traversal, dependency detection, lifecycle checks, and recovery tests are real. | Language/programming schemas, richer indexes/query planning, complete migration/performance/adversarial exit evidence. |
-| Episode/session memory | PARTIAL | No | I | Durable episodes, query/update, observed facts, explicit local working-directory provenance, session visibility, recall modes, feedback, and recovery machinery exist. The working directory is metadata only and does not transfer authority. | Full current workspace revalidation, broader long-horizon retention/forgetting/reconciliation evidence, complete session UX/adversarial matrix, and broader provenance redaction policy. |
-| Context and reasoning | PARTIAL | No | I | Context assembly, activation/ranking paths, ambiguity preservation, assumptions, and ladder traces exist. | Broad learned semantic interpretation, compositional goal reasoning, robust clarification/reference/dialogue behavior, stronger held-out evidence. |
-| Cognitive cycle | PARTIAL | No | I | Interpret/context/run/ask/evaluate/persist paths work for current bounded scenarios; unknown tasks can ask or abstain. | Autonomous capability selection/acquisition, full credit/adapt loop integration on every path, effectful procedure execution, broader recovery and benchmark evidence. |
-| Teacher adapters | PARTIAL | No | R/I (Codex only) | Claude CLI, Codex CLI, OpenAI, Ollama, and human transport/protocol code has mocked-transport tests. A live Codex CLI run now crossed the provider boundary through the public CLI after a provider-safe JSON envelope was added for recursive schemas. | Real end-to-end evidence for Claude/OpenAI/Ollama/human, resilience/timeout/cancellation parity, and cost/telemetry completeness. |
-| Learned lesson admission | PARTIAL | No | R/I (Codex CLI, Engine, SDK slices) | `pure_expr_v2` tests compile, execute, persist, reject unsafe drafts, compose bounded exact-version pure dependencies, and reuse with Teacher disabled. A clean live Codex CLI smoke learned `double`, answered 14, then with Teacher disabled answered held-out `double 11` as 22. A real Rust-stdio SDK test also admits and retains the rich quoted letter-counter procedure. | Broader real-backend/generalization cases, multiple declared/generated tests, richer public lesson authoring helpers, and promotion criteria. |
-| Credit assignment/replay | PARTIAL | No | I/A | Version-pinned replay, trace-based attribution, failure analysis, and counterfactual-related structures/tests exist. | Complete causal attribution across effectful/composed skills, calibrated evidence, broader adversarial and long-horizon validation. |
-| Adaptation/reconciliation | PARTIAL | No | I/A | Planned mutations, lifecycle controls, contradiction/refinement handling, regression gating, and recovery machinery exist. | Complete autonomous candidate lab, broader rollback/recovery proofs, general learned procedure repair and dependency migration. |
-| Intuition/local learning | PARTIAL | No | I | Local ranking/representation artifacts, activation, training/evaluation APIs, and telemetry exist. | Broad semantic competence, robust generalization across domains, calibrated model selection, sustained Teacher-reduction evidence. |
-| Capability bundle format | PARTIAL | No | I/A | Typed procedures/dependencies/tests/schemas/provenance, deterministic content IDs, import/export, quarantine, reconstruction, local revalidation, and grant non-transfer are real. | Publisher signatures/registry, compatibility resolver/cache/lockfile, repair/migration/rollback, independent seed-forge publication workflow. |
-| Capability discovery/acquisition | SCAFFOLD | No | R | Supplied interface descriptions can produce typed candidates through public RPC/SDK paths; fixture validation machinery exists. | Cognitive-cycle gap detection, real interface inspection, multiple candidate synthesis, generated tests, atomic candidate lab, autonomous admission/promotion. |
-| Network primitive | SCAFFOLD | No | U | Exact-host policy, bounds, receipts, and injected adapter contract are tested. | Complete HTTP model, a configured real transport, public invocation path, egress protections, timeouts/redirects/streaming/adversarial integration. |
-| File primitives | PARTIAL | No | R/I/A (local integration) | `capability.invoke` uses a server-configured scoped adapter for real temporary-directory read/write. Tests prove persistent grants, revocation, bounds, receipt redaction, symlink-escape denial, and unsupported-family failure; the current workspace gate passes. | Learned-procedure/cognitive-cycle selection, broader filesystem operations, real SDK-invocation integration, and production deployment. |
-| Observation primitive | PARTIAL | No | R | A hard-coded `clock` observation is exposed through RPC and emits a redacted receipt. | Durable local grants, ordinary learned-procedure integration, and randomness/monotonic time/environment/platform/resource/user/device observation families. |
-| Sandboxed execution | SCAFFOLD | No | U fixture | Policy, receipt, adapter boundary, and deterministic fixture executor exist. It explicitly spawns no process. | A real OS/container/WASI sandbox, executable identity, mounts/network/env/secrets/resource enforcement, public integration, escape/timeout tests. |
-| Secrets/identity | MISSING | No | D | The plan and bundle rejection rules recognize that secrets must not transfer. | Opaque secret references, JIT adapter-only resolution, redaction enforcement, scopes/expiry/rotation, signing/verification identities. |
-| Permission/grant system | PARTIAL | No | I/A through direct API | Local grants/revocation, ask/workspace/full-access policy, mandatory denials, and invocation-time checks exist in direct Rust paths. | Complete public invocation/config UX, cognitive-cycle use, secret-aware permissions, fresh end-to-end revocation evidence through real adapters. |
-| Server JSON-RPC | PARTIAL | No | R/I | Knowledge, episodes, cycles, sessions, metrics, capability lifecycle, observation, scoped-file `capability.invoke`, and deterministic `language.render` paths are implemented and tested. The renderer accepts bounded typed plans and returns redacted audit/omission metadata; it does not independently verify caller evidence references. | Learned capability invocation/cognitive selection, evidence-backed Engine response-plan construction, all new grammar/schema integration, transport hardening, and production proof. |
-| TypeScript SDK | PARTIAL | No | R/I | Typed client methods include capability invocation and bounded response-plan rendering; focused mapping tests and a real Rust-stdio renderer integration test pass. | Complete parity for every public server feature, current rich lesson coverage, real SDK capability-invocation process integration, and packaging release proof. |
-| CLI | PARTIAL | No | R/I | Ask/chat/session/config/admin/benchmark flows and Teacher/Judge routing exist with tests. | Full current end-to-end matrix, capability invocation/acquisition UX, seed forge commands, richer explanations and stable packaging. |
-| Inspector | PARTIAL | No | R | Bounded graph/episode/telemetry projections and inspector server machinery exist. | Complete operational UI, capability/seed/candidate lab visibility, current production integration and accessibility/performance evidence. |
-| Benchmark system | PARTIAL | No | U | Catalog/fixture schemas and an unverified runner define acquisition/retention/generalization phases, Teacher/Judge adapters, and report shapes. | An executed public benchmark report, real Judge evidence, broader catalog coverage, stricter structural learning metrics, seed-curriculum runner, and stable longitudinal comparisons. |
-| Seed curricula | SCAFFOLD | No | D | Strict schema-valid language, structured-data, and programming curriculum manifests define demonstrations, counterexamples, held-out gates, learned structures, privacy, and clean-import policy. | Seed-forge runner, clean-instance teaching, actual Teacher-OFF evidence, privacy filtering execution, export, second-clean-instance reconstruction/revalidation. |
-| Seed forge | MISSING | No | D | Architecture and workflow are specified. | Every executable step: curriculum runner, structural inspection, Teacher ablation, safe export, independent import/revalidation, publication report/signing. |
-| Language meaning and intent | PARTIAL | No | U | Core has bounded serializable UTF-8 token streams with byte-accurate spans, typed intent frames/slots/scope/ambiguity values, and dialogue moves. Five focused tests cover Unicode offsets, round-trip serialization, and bounds. | No semantic parser, learned surface-to-intent mapping, entity/reference resolution, conversational state, clarification policy, curriculum runner, or Teacher-OFF language evidence. |
-| Conversational generation without LM | PARTIAL | No | I | Core plus public Server/SDK `language.render` accept typed response plans and content-free format/tone options. The deterministic renderer preserves supplied evidence-referenced claim text, omits unsupported claims, rejects evidence-free claims, and returns redacted audit metadata. It explicitly marks supplied evidence as unverified by this endpoint and never returns raw provenance. | No grammar/renderer procedures, natural varied generation, response-plan construction in Engine, dialogue-state integration, server-side evidence resolution, or grounding benchmark. |
-| Programming knowledge/coding | MISSING | No | D | Architecture and curriculum targets include a bidirectional semantic Spoon-IR ↔ typed-code bridge; generic file/sandbox machinery is incomplete. | Repository/source/AST/symbol knowledge, parser/toolchain adapters, IR lowering/code lifting and differential equivalence, safe patch/test loops, grounded explanations, acquisition and Teacher-OFF benchmarks. |
-| Configuration and sessions | PARTIAL | No | R/I | A CLI hierarchical resolver plus session RPC/SDK paths exist; the server consumes projected environment settings. | Full adversarial matrix, migration/atomicity validation after current changes, interactive grant UX, shared server/SDK hierarchy, and stable release proof. |
-| Admin/security controls | PARTIAL | No | I/A | Authenticated admin mutations, lifecycle checks, trust receipts, grant denials, bundle quarantine, and several adversarial tests exist. | Complete threat-model closure, secrets/identity, production adapter hardening, fuzzing and current full-gate proof. |
-| Documentation | PARTIAL | No | R | Architecture/plan, crate READMEs, benchmark docs, primitive inventory, handoff, and this status file exist. | Keep claims synchronized automatically with evidence; finish user guides, executable examples, migration/release docs. |
-| Full build/release gate | PARTIAL | No | Current workspace checks + provider smoke | After the structured primitive work, `cargo fmt --all -- --check`, full Rust workspace tests, strict Clippy, TypeScript tests (including the JSON Pointer SDK retention case), typecheck, build, depcheck, and `git diff --check` all pass. | An executed benchmark/report and a clean release package. |
+NEXT
+- Run `scripts/overnight.sh`: baseline, curriculum, train with teaching on,
+  score the held-out half with teaching off. The number that matters is whether
+  training moves the test score off 83%.
+- The ears leave words as bare concept names, so `ends-with<parallel, "el">`
+  fails where `ends-with<"parallel", "el">` works. Teaching should fix this by
+  storing phrasings; if it does not, that is the next real bug.
+- Turns that produce no result at all: the ears returned zero steps.
 
-## Current in-flight work
+---
 
-These are not complete until their results are merged into the table above and
-fresh checks are recorded:
+## 2026-09-03  Correction: the Teacher result was the prompt talking to itself
 
-1. Public permissioned capability invocation with a concrete scoped-file host adapter.
-2. Candidate-laboratory and autonomous capability acquisition integration.
+An earlier entry claimed the Teacher, once fixed, produced
+`join<reverse<chars<?0>>, "">` for reversing text. That was true and worthless.
+The prompt contained
 
-## Related sources of truth
+```
+COMPOSE reverse-text = join<reverse<chars<?0>>, "">
+```
 
-- [`IMPLEMENTATION-PLAN.md`](IMPLEMENTATION-PLAN.md) — target architecture,
-  sequence, and exit criteria.
-- [`PRIMITIVE-CAPABILITY-INVENTORY.md`](PRIMITIVE-CAPABILITY-INVENTORY.md) —
-  operation-level checklist and reality-audit correction log.
-- [`.agents/scratchpad/spoon/HANDOFF.md`](.agents/scratchpad/spoon/HANDOFF.md) —
-  current recovery instructions and in-flight ownership.
-- `~/.codex/skills/implementation-reality-audit` — reusable audit workflow that
-  prevents declared/compiled/mock-only machinery from being reported as usable.
+as a few-shot example, so the model was handing back the answer it had just been
+shown. Keal spotted it; the measurement was teaching to the test and should
+never have been reported as a capability.
 
-## Update rule
+MEASURED PROPERLY
+The give-away was replaced with unrelated examples (`average`, `longest`) and
+the same question asked five times: **0 of 5 correct**. The format is fine, the
+reasoning is not. What it actually produces is
+`COMPOSE reverse = map<chars<?0>, upper>`: syntactically perfect and reverses
+nothing.
 
-Any change that claims a subsystem or phase became implemented must update this
-file in the same workstream with:
+So with a 4B model in the Teacher seat, string reversal is not learnable by
+either route. Search cannot reach eight nodes and the Teacher cannot write them.
 
-1. the highest contiguous evidence level actually demonstrated;
-2. the public entrypoint and real adapter/workflow involved;
-3. exact tests or benchmark proof;
-4. remaining gaps; and
-5. a downgrade when later evidence disproves the claim.
+WHAT THIS DOES SAY
+Verification works, and is the reason a wrong answer costs nothing. Every one of
+those bodies fails the examples and is discarded, so the outcome is an honest
+"could not do it" rather than a stored realization that quietly returns
+nonsense. The pipeline is sound; the model in the seat is not good enough for
+this class of problem.
 
-When evidence conflicts, the weaker status wins.
+The Teacher defaults to qwen3.5:4b, the same local model as the ears and the
+mouth. `SPOON_TEACHER_URL`, `SPOON_TEACHER_KEY` and `SPOON_TEACHER_MODEL` point
+it at a frontier model, and that is the experiment worth running before drawing
+any conclusion about what the architecture can learn.
+
+LESSON, worth keeping
+A few-shot example that contains the answer to the evaluation makes the
+evaluation meaningless. Anything measured against a prompt has to be measured
+against a prompt that does not contain the answer, and the check for that is
+mechanical: search the prompt for the expected output before trusting a result.
+
+---
+
+## 2026-09-03  The Teacher was broken in three ways, and the learning loop is one fix short
+
+WHAT WAS WRONG WITH THE TEACHER
+Asked how to build a missing capability, it replied with a synonym. Asked for
+examples, it produced "malformed synonym". Three causes, all mine:
+
+1. **There was no EXAMPLES reply form at all.** The prompt offered SYNONYM,
+   CONCEPT, COMPOSE and UNKNOWN. `TeacherReply::Spec` was therefore
+   unreachable, which means the synthesizer had never once been fed in the
+   entire history of this system. Synthesis was tested and worked and was wired
+   into the brain, and nothing could reach it.
+2. **Every question got the same menu of four forms**, and a 4B model handed a
+   menu reliably picks the cheapest item on it. Each ask now names the one form
+   that answers it, with UNKNOWN as the only alternative.
+3. **The Teacher was never told what concepts exist.** Asked to build string
+   reversal it answered, correctly given what it knew, that no concept turns a
+   string into a list, while `chars` sat in the store unmentioned. It now gets
+   the same activation-ranked vocabulary the ears get.
+
+With those fixed it produces exactly the right things:
+```
+COMPOSE  -> join<reverse<chars<?0>>, "">
+EXAMPLES -> "ab" -> "ba" ; "hello" -> "olleh" ; "a" -> "a"
+```
+
+THE ONE REMAINING BREAK, stated precisely
+The Teacher answers about a concept it names itself. Asked how to reverse a
+string it proposes `reverse-text`, while the gap the interior actually hit is
+`reverse` applied to text. The composition is correct and gets stored, and
+nothing ever calls it, because no utterance produces `reverse-text`.
+
+The fix is to bind the Teacher's answer to the concept that failed rather than
+to the name it invented, which is the same name-reconciliation problem already
+solved for the ears and not yet applied here. That is the next thing to do and
+it is a small change.
+
+A SECOND FINDING, from a run that did learn
+Before the example minimum was raised, synthesis returned
+`replace<"helloworld", "hello", ?0>` for string reversal: a body that fits two
+examples perfectly and has learned nothing. Constants drawn from the examples
+are what make `mul<?0, 3>` reachable, and the same mechanism lets a body
+memorize. The minimum is now three examples.
+
+An explicit guard rejecting bodies that embed an expected answer was written,
+tried, and reverted: it broke `at-least-ten`, where the constant 10 is both a
+needed constant and an expected output. The comment predicting that exact cost
+was written before the test proved it, which is the useful part. More examples
+is the honest fix; a cleverer guard needs evidence this one does not have.
+
+ALSO IN THIS ROUND
+- Gaps now include realizations that exist and fail on the given arguments, not
+  only heads with no realization at all. `reverse` can reverse a list and was
+  handed a string, which is a gap in what Spoon can do.
+- A regression I introduced and fixed within the hour: treating any irreducible
+  expression as a fact turned unknown capability requests into stored facts, so
+  no gap was reported and the Teacher was never asked. Only the declarative
+  meta-vocabulary counts now.
+
+---
+
+## 2026-09-03  Stages 4-7: it holds a conversation (437 tests, 0 warnings)
+
+DONE, verified against a real brain with a real local model (qwen3.5:4b)
+- `spoon-seat`: one HTTP client, three seats, separate counters.
+- `spoon-ears`: native path first, model on a miss. Model gets an
+  activation-ranked vocabulary, not the whole store.
+- `spoon-mouth`: template is the reference, model makes it human, output is
+  checked against the values it was told to keep.
+- `spoon-teach`: proposes synonyms, concepts, and compositions. Never code.
+- `spoon-brain`: the turn loop, episodes, and the resolver that turns a flat
+  heard sequence into moves.
+- `spoon`: repl, stdio, serve (OpenAI-compatible + inspector with a live chat
+  tab), bench, doctor, export, import, status.
+
+THE THESIS, DEMONSTRATED END TO END
+```
+> greg is friends with keal      noted: friends<greg, keal>
+> friends is symmetric           noted: symmetric<friends>
+> is keal friends with greg?     yes
+```
+Nobody stored that answer. It was derived from one fact and one declared
+property, through the general meta-rule, from messy typed English.
+
+Also working, model on, against ~/.spoon/spoon-v2.db:
+- `whats 2 plus 3` -> 5, `calculate 12 times 4` -> 48
+- `can u double 21 for me` -> 42
+- `john has a dog` -> `noted: owns<john, dog>`, then `who owns a dog?` ->
+  `list<owns<john, dog>>`, and still answered after a restart.
+- 36-utterance bench of real messages from the design conversation: 34 of 36
+  produced a sensible reading, 2 outright failures, `interior_model_calls` 0.
+
+BUGS THE FIRST REAL RUN FOUND (all fixed)
+1. Chat went through evaluation, so `greet<>` found no realization, logged a
+   capability gap, and turned a hello into a report about what Spoon cannot do.
+2. Names printed as hex. Ids are derived from names, so parsing teaches the
+   store nothing about spelling, and the ears were throwing away the table they
+   had just filled.
+3. The mouth held a symbol table snapshot from startup, so anything learned
+   mid-conversation was unreadable exactly when Spoon had just learned it.
+4. The mouth padded replies with invented trivia that passed the value check
+   because the value was still in there somewhere.
+
+KNOWN LIMITATIONS, stated plainly
+- **The ears invent vocabulary.** "friendship is symmetric" and "greg is
+  friends with keal" produced `symmetric<friendship>` and `friends<greg, keal>`,
+  which do not connect. The meta-rule is fine; the names disagree. This is
+  exactly what `Synonym` and the Teacher are for and neither is wired into the
+  ears' naming yet. It is the single biggest gap.
+- **No synthesis.** Stage 5's learn-from-examples is not built. The Teacher can
+  hand back a composition and it is stored, but Spoon cannot yet infer a
+  capability from worked examples.
+- **No consolidation.** Repeated structure is never promoted to a named
+  abstraction, so the library does not compress.
+- **No credit assignment.** Episodes record what happened, including which
+  realization failed, but nothing reads them to apportion blame yet.
+- **Corrections are not wired.** `Episode::correction` exists and is always
+  None; saying "no, wrong" does not yet retract anything.
+- **The native ears are thin.** Social and arithmetic only, so the weaning
+  number sits at 14 percent and will not move until phrasing induction exists.
+- **Left-recursive rules under-answer.** Sound, not complete. See the Stage 3
+  entry.
+
+NEXT, in the order that would matter most
+1. Wire `Synonym` into the ears so an invented name resolves to an existing
+   concept instead of forking the vocabulary.
+2. Corrections: retract, re-store, and update realization evidence.
+3. Synthesis from examples, which is what makes the Teacher's specs useful.
+4. Phrasing induction, so accepted model readings become native ones.
+5. Consolidation.
+
+---
+
+## 2026-09-03  Stage 2 complete: evaluator and 98 bootstrap natives (380 tests, 0 warnings)
+
+DONE
+- `spoon-eval`: the evaluation loop, budgets, realization selection with
+  exploration, effect authority, per-turn purity-gated caching, and the trace.
+  Written by the orchestrator; it is the architectural heart.
+- `spoon-natives`: 98 bootstrap concepts across arithmetic, logic, collections,
+  text, store access, JSON, and time. None privileged: each is an ordinary
+  concept that ships with a Native realization.
+- `seed_bootstrap` stores a realization plus metadata for every registered
+  native, so a fresh brain can actually reach them. Registering code is not the
+  same as the concept existing.
+
+HIGHER-ORDER FUNCTIONS NEED NO MACHINERY, which is the payoff of one
+representation
+- `Map`, `Filter`, `Reduce`, `SortBy`, `Find`, `All`, `Any`, `GroupBy` apply
+  their function argument by building `Concept::apply(f, args)` and handing it
+  back to the evaluator.
+- `Map<List<1,2,3>, double>` where `double` is a stored `Composed` body of
+  `Add<Hole(0), Hole(0)>` gives `List<2,4,6>`. `triple` built on `double` maps
+  too. Nothing in `Map` knows the difference between a native and something
+  Spoon learned yesterday.
+
+THE THREE OPEN QUESTIONS ARE SETTLED (recorded in docs/EVALUATION.md section 10)
+- Outermost-first rewriting. Innermost cannot express a conditional at all:
+  `If<true, 7, Boom<>>` would reduce the branch it never takes.
+- Context is an explicit list of situation concepts matched against stored
+  `WorksWellWith` / `WorksPoorlyWith` claims, so contextual fit is learned.
+- Exploratory failures count at full weight. The trace marks which applications
+  were exploratory, so the data to revisit it exists.
+
+FURTHER DECISIONS WORTH REMEMBERING
+- No realization is not an error. `FriendWith<Greg, Keal>` is a fact and
+  reduces to itself; `Height<Add<1,2>>` becomes `Height<3>`. `Outcome::Stuck`
+  is reserved for realizations existing and all of them failing.
+- Missing machinery excludes a realization from selection rather than failing
+  it at apply time, so a brain with no LLM seat is coherent and the
+  alternatives still get their turn.
+- Effect is the maximum of the realization's claim and its native's
+  declaration. There is a test for the attack: a `Pure` claim over a
+  network-touching native is still gated.
+- Evidence is committed explicitly via `commit_evidence()`. A speculative
+  evaluation that gets thrown away teaches Spoon nothing.
+- Int and Float are distinct identities, so arithmetic widens rather than
+  conflating. Int/Int comparison stays in i64: past 2^53 an f64 cannot separate
+  adjacent integers and `Lt` would quietly answer false for two different
+  numbers.
+
+OPEN, worth revisiting when a call site pushes back
+- `index-of` and `find` error when nothing matches rather than returning a
+  sentinel. Defensible (a sentinel is a value the caller can forget to check)
+  but it may force awkward double traversal. There is no `Maybe` concept yet;
+  introducing one is a design decision, not a patch.
+- `to-text` refuses named concepts, since a name's meaning lives in the store
+  rather than in its spelling. The mouth may want a different answer.
+
+TESTS: 380 passing. 153 in `spoon-concept`, 41 in `spoon-store`, 24 in
+`spoon-eval`, 162 in `spoon-natives`. 63 of those are orchestrator property
+suites written against the laws rather than the implementations, including the
+one that matters most here: a write buried inside `Map` is still gated, so the
+permission layer cannot be laundered through a higher-order call.
+
+NEXT (Stage 3: inference)
+The evaluator already applies `Rule` realizations forward when the pattern
+matches the concept in hand. Stage 3 is the backward direction and the
+machinery it needs.
+1. `spoon-infer`: full two-way unification with an occurs check, and a
+   discrimination-tree index so rule lookup does not scan.
+2. Backward chaining: when a query has no direct assertion, collect rules whose
+   `produce` could yield the shape and try them, sharing the evaluator budget.
+3. Bootstrap meta-concepts: `Symmetric`, `InverseOf`, `TransitiveClosure`,
+   `DefaultExpectation` (defeasible: direct evidence about Greg beats an
+   inherited expectation about people), `Synonym`.
+4. Cycle handling is already in place via the in-progress goal set; confirm it
+   holds for backward chains too.
+
+---
+
+## 2026-09-03  Stage 1 complete: concept substrate and store (194 tests, 0 warnings)
+
+DONE, all wired and exercised through tests
+- `spoon-concept`: the whole representation. `Concept` in three shapes,
+  `ConceptId` split into `Named`/`Ground`, stable blake3 `ContentId`, symbol
+  interning, `Realization`/`Activation`/`Provenance`/`Tier`/`Effect`.
+- `spoon-concept::ops`: traversal, `Path` addressing, `Bindings`, substitution,
+  `alpha_equivalent`, `generalizes` (one-way matching), `anti_unify` (Plotkin
+  least general generalization). Unchanged subtrees reuse their `Arc`, asserted
+  with `ptr_eq` rather than assumed.
+- `spoon-concept::text`: the angle-bracket notation, render and parse, exact
+  inverses. Grammar in `text/mod.rs`.
+- `spoon-store`: SQLite with a real migration runner, participant index,
+  bi-temporal assertions, concept metadata with a derived surface-form index,
+  realizations, symbol names, deterministic seed export/import.
+
+THE CORE PROPERTY HOLDS, with a test named after it
+- `Add<42, 1>` writes zero rows for its literals. `put_meta` or an assertion
+  about `42` materializes exactly one. Ground values inside a stored compound
+  are still participant-indexed, so `concepts_containing(160)` finds the pull
+  request without 160 owning a row.
+
+BUGS FOUND DURING REVIEW (all fixed)
+1. `JsonBlob` had `#[serde(skip)]` on its digest, so any `Ground::Json`
+   deserialized with a zeroed digest and a different `content_id`. Every JSON
+   concept in a reloaded brain would have stopped matching itself. Now
+   serializes as the bare `Value` and rebuilds the digest on the way in.
+2. `Ground::Float` could not survive JSON at all: `serde_json` writes NaN and
+   the infinities as `null`, which then refuses to read back as `f64`. A
+   concept carrying one was writable and permanently unreadable. Non-finite
+   values now encode as `"NaN"` / `"inf"` / `"-inf"`; finite ones stay bare
+   numbers so seeds remain readable. The store's defensive write-time rejection
+   was removed once the contract was correct.
+3. The store lowercased symbol names on write and used last-write-wins, while
+   `SymbolTable::intern` preserves casing and is first-write-wins. The same
+   brain printed a symbol differently before and after a reload. Aligned.
+
+GOTCHA worth remembering
+- `SymbolId::of` lowercases and trims but does not touch separators, because
+  collapsing them would merge `co-op` with `coop`. So `FriendWith` and
+  `friend-with` are two different concepts. Kebab-case is the convention for
+  code and seeds; PascalCase in prose is readability only. Recorded in
+  AGENTS.md.
+
+TESTS: 194 passing. 153 in `spoon-concept` (40 identity contract, 43 ops, 19
+orchestrator property checks, 35 text, 14 text property checks, 2 doctests),
+41 in `spoon-store`. The property suites were written independently of the
+implementations to check the laws the rest of the system leans on, not to
+re-run the implementer's own cases.
+
+NEXT (Stage 2: evaluator)
+Contract is written: `docs/EVALUATION.md`. It settles budgets (nodes + time +
+depth together), the selection score with explicit exploration, effect
+authority that cannot be laundered through composition, per-turn caching gated
+on purity, and the evaluation trace credit assignment needs. Three questions
+are deliberately left open in section 10 for the implementer to settle and
+record: normalization order, how context is represented for `context_fit`, and
+whether exploratory failures should be weighted less.
+
+1. `spoon-eval`: the evaluator core, `Outcome`, budgets, the native registry.
+2. Bootstrap natives: arithmetic, comparison, collections, text, logic, store
+   ops, IO. Roughly 50 to 100 concepts, each a concept with a Native
+   realization, none of them privileged.
+3. Realization selection with evidence and exploration.
+4. `spoon-infer`: unification and rule application on top of the same loop.
+
+---
+
+## 2026-09-03  Architecture pivot begins
+
+DONE
+- `PIVOT_PLAN.md`: 7-stage re-architecture from rigid CAN to a unified Concept
+  model.
+- `docs/CONCEPT-IR-DESIGN.md`: core design - one Concept type in three shapes
+  (atomic / compound / hole), evaluation as term rewriting, inference through
+  meta-concept rules, LLM ears producing concept sequences, self-ranking
+  vocabulary.
+- `AGENTS.md`: rewritten for v2 architecture.
+- `docs/PRIOR_ART_MEMO.md`: trimmed to algorithms relevant to v2.
+- Removed: old STATUS.md (v1 log), PLAN.md (v1 decisions), docs/SCE.md
+  (controlled English - replaced by concept-based ears).
+
+DESIGN DECISION (settled after going back and forth)
+- There is no separate "Atom" type. Everything is a `Concept`. Atomic and
+  compound are shapes a concept takes, not different categories. The earlier
+  4-variant sketch with a `Val` variant was a privileged primitive and got cut.
+- Ground values (numbers, strings, bools, json) are atomic concepts whose
+  identity IS their value: `Atomic(Ground(Int(42)))`. Self-describing, so no
+  store row is needed until something is asserted about them. `Add<42, 1>` hits
+  the store zero times; `Synonym<"forty-two", 42>` materializes a row for 42.
+  This is how `#160` can become a real PullRequest concept without every integer
+  in every computation earning a database entry.
+- `Hole` is the only shape that is not a concept: a gap inside rule patterns.
+
+v1 code in `crates/` remains as reference. It is not the active codebase.
+
+NEXT (Stage 1: Concept Substrate)
+1. New crate `spoon-concept`: Concept enum, ConceptId (Named/Ground), Ground,
+   HoleId, symbol interning, structural equality + hashing.
+2. New crate `spoon-store`: Store trait, SQLite impl, multi-index
+   (head, participant, structure hash, time), lazy materialization for ground
+   concepts.
+3. Bootstrap: seed ~50 core concepts (arithmetic, comparison, collections,
+   text, logic, store ops) with Native realizations.
+4. Tests: insert/query/round-trip/restart-survival; verify ground concepts cost
+   zero rows until asserted about.
+5. Export/import for the new concept format.

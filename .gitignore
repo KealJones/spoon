@@ -1,19 +1,7 @@
-/target
+target/
 *.db
-*.db-journal
-*.db-wal
 *.db-shm
-node_modules/
-dist/
-.env
+*.db-wal
 .DS_Store
-.spoon/config.local.json
-.spoon/admin-receipts.jsonl
-
-# Local agent scratchpads and archived reference material. These are useful
-# during development but are not part of the Spoon source distribution.
-/.agents/scratchpad/
-/WHAT-IS-EKG-v3.md
-/ekg-benchmark-suite.zip
-/benchmark-report.json
-/benchmark-report.md
+data/bench/results/
+.claude/worktrees/

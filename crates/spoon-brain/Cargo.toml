@@ -1,0 +1,26 @@
+[package]
+name = "spoon-brain"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+spoon-concept = { workspace = true }
+spoon-store = { workspace = true }
+spoon-eval = { workspace = true }
+spoon-infer = { workspace = true }
+spoon-natives = { workspace = true }
+spoon-learn = { workspace = true }
+spoon-ears = { workspace = true }
+spoon-seat = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+strsim = { workspace = true }
+rust-stemmers = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

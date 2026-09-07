@@ -1,0 +1,13 @@
+[package]
+name = "spoon-concept"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+blake3 = { workspace = true }
+chrono = { workspace = true }
+parking_lot = { workspace = true }
+thiserror = { workspace = true }
