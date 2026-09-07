@@ -45,13 +45,25 @@ pub fn apply(
         ..Default::default()
     };
 
-    // Withdraw whatever that turn asserted.
-    if let Some(claim) = &previous.result
-        && previous.reply.starts_with("noted")
-    {
+    // New episodes carry exactly the rows they created, regardless of how the
+    // mouth described them. Other assertions of the same concept stay intact.
+    if let Some(assertions) = &previous.assertions {
+        for (id, claim) in assertions {
+            if store.retract(spoon_store::AssertionId(*id), at)? {
+                correction.retracted.push(claim.clone());
+            }
+        }
+    } else if let Some(claim) = &previous.result
+        && previous.reply.starts_with("noted") {
+        // Compatibility for episodes written before assertion lineage existed.
         for record in store.live_assertions(claim)? {
-            store.retract(record.id, at)?;
-            correction.retracted.push(claim.clone());
+            if store.retract(record.id, at)? { correction.retracted.push(claim.clone()); }
+        }
+    }
+    if let Some(pair) = previous.phrasing {
+        match store.record_pair_outcome(pair, false) {
+            Ok(()) | Err(spoon_store::StoreError::MissingRecord { .. }) => {}
+            Err(err) => return Err(err),
         }
     }
 
@@ -59,8 +71,9 @@ pub fn apply(
     // blameless and the interpretation at fault, which is why this is evidence
     // rather than a verdict: one bad outcome nudges the score, it does not
     // condemn.
+    let mut seen = std::collections::HashSet::new();
     for (name, succeeded) in &previous.realizations {
-        if !succeeded {
+        if !succeeded || !seen.insert(name) {
             continue;
         }
         match store.record_realization_use(name, false, at) {

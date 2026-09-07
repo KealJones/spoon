@@ -125,3 +125,21 @@ fn a_phrasing_pointing_at_a_retired_head_is_forgotten() {
     assert_eq!(left.len(), 1);
     assert_eq!(left[0].id, keep);
 }
+
+#[test]
+fn restart_seeding_preserves_the_evidence_from_user_feedback() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("brain.db");
+    let registry = spoon_natives::bootstrap();
+    let before = {
+        let store = Store::open(&path).unwrap();
+        seed_bootstrap(&store, &registry).unwrap();
+        store.record_realization_use("native-math-add", true, Utc::now()).unwrap();
+        store.record_realization_use("native-math-add", false, Utc::now()).unwrap();
+        store.realization_by_name("native-math-add").unwrap().unwrap().activation
+    };
+    let store = Store::open(&path).unwrap();
+    seed_bootstrap(&store, &registry).unwrap();
+    let after = store.realization_by_name("native-math-add").unwrap().unwrap().activation;
+    assert_eq!(after, before, "startup must not erase what the user taught us");
+}

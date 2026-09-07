@@ -72,6 +72,18 @@ pub struct Episode {
     /// What the ears made of it.
     pub steps: Vec<Concept>,
     pub ears_path: EarsPath,
+    /// Effective request when this turn is a retry of an earlier request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_text: Option<String>,
+    /// The exact stored example that supplied the reading, including before restart.
+    #[serde(default)]
+    pub phrasing: Option<i64>,
+    /// Assertion row identities created by this turn. None denotes a legacy episode.
+    #[serde(default)]
+    pub assertions: Option<Vec<(i64, Concept)>>,
+    /// Earlier episode explicitly rejected by this turn.
+    #[serde(default)]
+    pub correction_of: Option<u64>,
     pub unknown_words: Vec<String>,
     /// The goal the interior actually tried to satisfy.
     pub goal: Option<Concept>,
