@@ -29,11 +29,31 @@ pub struct Database {
     pub path: Option<PathBuf>,
 }
 
+/// One seat's model and how to reach it.
+///
+/// `provider` was read and thrown away for as long as the file existed, which
+/// is why a teacher pointed at a frontier endpoint quietly ran against the
+/// local default. It now selects the transport.
+///
+/// `base_url` for an `openai` provider has to include the version prefix, so
+/// `https://api.openai.com/v1` rather than the bare host: the client appends
+/// `/chat/completions` and nothing else.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct Seat {
+    /// `ollama` (the default) or `openai`, meaning any OpenAI-compatible
+    /// endpoint rather than that vendor specifically.
     pub provider: Option<String>,
     pub model: Option<String>,
+    #[serde(rename = "baseUrl")]
+    pub base_url: Option<String>,
+    /// Environment variable holding the key, not the key itself. A config file
+    /// with a secret in it ends up in a git diff eventually.
+    #[serde(rename = "apiKeyEnv")]
+    pub api_key_env: Option<String>,
+    /// Seconds. A 27b model on a laptop needs more than the 20s a 4b wants.
+    #[serde(rename = "timeoutSecs")]
+    pub timeout_secs: Option<u64>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -57,12 +77,7 @@ impl Config {
         let Ok(text) = std::fs::read_to_string(&path) else {
             return Ok(Config::default());
         };
-        serde_json::from_str(&text)
-            .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))
-    }
-
-    pub fn model(seat: &Option<Seat>) -> Option<&str> {
-        seat.as_ref()?.model.as_deref()
+        serde_json::from_str(&text).map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))
     }
 
     /// The permission mode, translated from the file's spelling.

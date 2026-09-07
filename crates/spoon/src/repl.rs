@@ -6,7 +6,7 @@ use anyhow::Result;
 use spoon_seat::Seat;
 
 use crate::Cli;
-use crate::build::assemble;
+use crate::build::{assemble, assemble_with_ears};
 
 pub async fn run(cli: &Cli) -> Result<()> {
     let (mut brain, _ears_flag) = assemble(cli).await?;
@@ -223,7 +223,12 @@ pub async fn bench(cli: &Cli, suite: &str) -> Result<()> {
         };
 
         if graded && case.setup {
-            println!("{:<4} {:<52} {:<22} (setup)", i + 1, short(&case.say, 50), short(&got, 20));
+            println!(
+                "{:<4} {:<52} {:<22} (setup)",
+                i + 1,
+                short(&case.say, 50),
+                short(&got, 20)
+            );
         } else if graded {
             let ok = case.accepts(&got);
             if ok {
@@ -372,8 +377,8 @@ pub async fn bench_compare_ears(cli: &Cli, suite: &str) -> Result<()> {
         let marker = match (ab_ok, py_ok) {
             (true, true) => format!("{}", i + 1),
             (false, false) => format!("{}x", i + 1),
-            (true, false) => format!("{}~", i + 1),  // AB won
-            (false, true) => format!("{}+", i + 1),  // PY won
+            (true, false) => format!("{}~", i + 1), // AB won
+            (false, true) => format!("{}+", i + 1), // PY won
         };
         println!(
             "{:<4} {:<40} {:<18} {:<18} {}",
@@ -405,6 +410,186 @@ pub async fn bench_compare_ears(cli: &Cli, suite: &str) -> Result<()> {
     if ab_only > 0 {
         println!("\n--- angle-bracket wins ({ab_only}) ---");
     }
+
+    Ok(())
+}
+
+/// Run one suite through two ears models and compare.
+///
+/// Accuracy alone does not settle the choice, because the ears run on every
+/// utterance and a model that is three points better and twenty times slower
+/// is worse in a conversation. Latency is reported per case for that reason.
+///
+/// The two brains differ only in the ears model. Mouth and Teacher come from
+/// the ordinary configuration, so a difference here is a difference in reading.
+pub async fn bench_compare_models(
+    cli: &Cli,
+    suite: &str,
+    spec: &str,
+    limit: Option<usize>,
+) -> Result<()> {
+    let (left_model, right_model) = spec
+        .split_once(',')
+        .ok_or_else(|| anyhow::anyhow!("--compare-models wants two models, as A,B"))?;
+    let left_model = left_model.trim();
+    let right_model = right_model.trim();
+    if left_model.is_empty() || right_model.is_empty() {
+        anyhow::bail!("--compare-models wants two models, as A,B");
+    }
+
+    let path = format!("data/bench/{suite}.json");
+    let raw =
+        std::fs::read_to_string(&path).map_err(|e| anyhow::anyhow!("cannot read {path}: {e}"))?;
+    let corpus: serde_json::Value = serde_json::from_str(&raw)?;
+    let mut cases: Vec<Case> = corpus["cases"]
+        .as_array()
+        .map(|a| serde_json::from_value(serde_json::Value::Array(a.clone())))
+        .transpose()?
+        .unwrap_or_default();
+
+    if cases.is_empty() {
+        anyhow::bail!("no graded cases in {path}");
+    }
+    if let Some(n) = limit {
+        cases.truncate(n);
+    }
+
+    if !cli.ephemeral {
+        // Both brains open the same file, so a phrasing one of them learns is
+        // on the native path for the other by the next case, and the numbers
+        // stop being about the models.
+        println!("note: both brains share the persistent brain, so what one");
+        println!("      learns the other gets for free. Rerun with --ephemeral");
+        println!("      to measure the models rather than the leakage.\n");
+    }
+
+    let (mut left, _) = assemble_with_ears(cli, Some(left_model)).await?;
+    let (mut right, _) = assemble_with_ears(cli, Some(right_model)).await?;
+
+    let mut left_right_count = 0usize;
+    let mut right_right_count = 0usize;
+    let mut both_right = 0usize;
+    let mut both_wrong = 0usize;
+    let mut left_only = 0usize;
+    let mut right_only = 0usize;
+    let mut left_millis = 0u128;
+    let mut right_millis = 0u128;
+    let mut left_model_calls = 0u64;
+    let mut right_model_calls = 0u64;
+    // Separated from a wrong answer on purpose. A seat that timed out or
+    // returned unreadable output is a configuration problem, and counting it
+    // as a misreading blames the model for something it may never have said.
+    let mut left_failed = 0u64;
+    let mut right_failed = 0u64;
+    let total = cases.iter().filter(|c| !c.setup).count();
+    let started = std::time::Instant::now();
+
+    println!(
+        "{:<5} {:<38} {:<16} {:<16} {}",
+        "#",
+        "utterance",
+        truncate(left_model, 14),
+        truncate(right_model, 14),
+        "want"
+    );
+    println!("{}", "-".repeat(110));
+
+    for (i, case) in cases.iter().enumerate() {
+        let left_started = std::time::Instant::now();
+        let left_result = left.turn("bench-left", &case.say).await?;
+        let left_elapsed = left_started.elapsed().as_millis();
+
+        let right_started = std::time::Instant::now();
+        let right_result = right.turn("bench-right", &case.say).await?;
+        let right_elapsed = right_started.elapsed().as_millis();
+
+        match left_result.episode.ears_path {
+            spoon_brain::EarsPath::Model => left_model_calls += 1,
+            spoon_brain::EarsPath::Failed => left_failed += 1,
+            spoon_brain::EarsPath::Native => {}
+        }
+        match right_result.episode.ears_path {
+            spoon_brain::EarsPath::Model => right_model_calls += 1,
+            spoon_brain::EarsPath::Failed => right_failed += 1,
+            spoon_brain::EarsPath::Native => {}
+        }
+
+        let left_got = left_result
+            .episode
+            .result
+            .as_ref()
+            .map(|c| left.render(c))
+            .unwrap_or_else(|| "-".to_string());
+        let right_got = right_result
+            .episode
+            .result
+            .as_ref()
+            .map(|c| right.render(c))
+            .unwrap_or_else(|| "-".to_string());
+
+        if case.setup {
+            println!("{:<5} {:<38} (setup)", i + 1, truncate(&case.say, 36));
+            continue;
+        }
+
+        left_millis += left_elapsed;
+        right_millis += right_elapsed;
+
+        let left_ok = case.accepts(&left_got);
+        let right_ok = case.accepts(&right_got);
+
+        if left_ok {
+            left_right_count += 1;
+        }
+        if right_ok {
+            right_right_count += 1;
+        }
+        match (left_ok, right_ok) {
+            (true, true) => both_right += 1,
+            (false, false) => both_wrong += 1,
+            (true, false) => left_only += 1,
+            (false, true) => right_only += 1,
+        }
+
+        let marker = match (left_ok, right_ok) {
+            (true, true) => format!("{}", i + 1),
+            (false, false) => format!("{}x", i + 1),
+            (true, false) => format!("{}~", i + 1),
+            (false, true) => format!("{}+", i + 1),
+        };
+        println!(
+            "{:<5} {:<38} {:<16} {:<16} {}",
+            marker,
+            truncate(&case.say, 36),
+            truncate(&left_got, 14),
+            truncate(&right_got, 14),
+            truncate(&case.wanted(), 18),
+        );
+    }
+
+    let elapsed = started.elapsed();
+    let mean = |millis: u128| millis as f64 / total.max(1) as f64 / 1000.0;
+    println!("\n{total} graded cases in {elapsed:?}");
+    println!(
+        "{:<16} {:>4}/{total} ({:>3.0}%)  {:>6.2}s per case  {:>4} ears calls  {:>3} ears failures",
+        left_model,
+        left_right_count,
+        100.0 * left_right_count as f64 / total as f64,
+        mean(left_millis),
+        left_model_calls,
+        left_failed,
+    );
+    println!(
+        "{:<16} {:>4}/{total} ({:>3.0}%)  {:>6.2}s per case  {:>4} ears calls  {:>3} ears failures",
+        right_model,
+        right_right_count,
+        100.0 * right_right_count as f64 / total as f64,
+        mean(right_millis),
+        right_model_calls,
+        right_failed,
+    );
+    println!("\nboth right: {both_right}  both wrong: {both_wrong}");
+    println!("{left_model} only: {left_only}  {right_model} only: {right_only}");
 
     Ok(())
 }

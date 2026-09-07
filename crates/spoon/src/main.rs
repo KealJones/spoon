@@ -64,6 +64,16 @@ enum Command {
         /// Run each case with both angle-bracket and Python ears, compare results.
         #[arg(long)]
         compare_ears: bool,
+        /// Run each case through two ears models and compare, as `A,B`.
+        ///
+        /// Reports accuracy and seconds per case for each, because the ears
+        /// run on every utterance and a slower model has to earn it.
+        #[arg(long, value_name = "A,B")]
+        compare_models: Option<String>,
+        /// Stop after this many cases. A model comparison on a large suite
+        /// takes hours, and the ranking is usually clear long before the end.
+        #[arg(long)]
+        limit: Option<usize>,
     },
     /// What is this brain failing at?
     Doctor {
@@ -121,8 +131,12 @@ async fn main() -> anyhow::Result<()> {
         Command::Bench {
             ref suite,
             compare_ears,
+            ref compare_models,
+            limit,
         } => {
-            if compare_ears {
+            if let Some(spec) = compare_models {
+                crate::repl::bench_compare_models(&cli, suite, spec, limit).await
+            } else if compare_ears {
                 crate::repl::bench_compare_ears(&cli, suite).await
             } else {
                 build::bench(&cli, suite).await

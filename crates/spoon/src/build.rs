@@ -16,10 +16,56 @@ use crate::Cli;
 use crate::config::Config;
 
 const DEFAULT_MODEL: &str = "qwen3.5:4b";
+const DEFAULT_OPENAI_URL: &str = "https://api.openai.com/v1";
 
-/// Which model a seat should use: flag, then config file, then default.
-fn seat_model<'a>(flag: &'a Option<String>, configured: Option<&'a str>) -> &'a str {
-    flag.as_deref().or(configured).unwrap_or(DEFAULT_MODEL)
+/// How to reach one seat: flag, then config file, then built-in default.
+///
+/// Resolved per seat rather than once for the process, because the seats want
+/// different things. The ears run on every utterance and a slow one is felt
+/// immediately, while the Teacher runs on a miss and is the only seat where a
+/// large or remote model earns its latency.
+fn seat_config(
+    flag: &Option<String>,
+    configured: Option<&crate::config::Seat>,
+    default_model: &str,
+) -> Result<LlmConfig> {
+    let model = flag
+        .as_deref()
+        .or_else(|| configured.and_then(|s| s.model.as_deref()))
+        .unwrap_or(default_model);
+
+    let provider = configured
+        .and_then(|s| s.provider.as_deref())
+        .unwrap_or("ollama");
+
+    let mut config = match provider {
+        "ollama" => LlmConfig::ollama(model),
+        "openai" => {
+            // The variable is named in the config; the key itself never is.
+            // An absent key is not an error: a local llama.cpp or vLLM server
+            // speaks this protocol and wants no auth at all.
+            let key = configured
+                .and_then(|s| s.api_key_env.as_deref())
+                .or(Some("OPENAI_API_KEY"))
+                .and_then(|name| std::env::var(name).ok())
+                .filter(|k| !k.is_empty());
+            let url = configured
+                .and_then(|s| s.base_url.as_deref())
+                .unwrap_or(DEFAULT_OPENAI_URL);
+            LlmConfig::openai(url, model, key)
+        }
+        other => anyhow::bail!(
+            "unknown provider {other:?} in ~/.spoon/config.json; expected \"ollama\" or \"openai\""
+        ),
+    };
+
+    if let Some(url) = configured.and_then(|s| s.base_url.as_deref()) {
+        config.base_url = url.to_string();
+    }
+    if let Some(secs) = configured.and_then(|s| s.timeout_secs) {
+        config = config.with_timeout(std::time::Duration::from_secs(secs));
+    }
+    Ok(config)
 }
 
 /// Whichever implementations the configuration ended up with.
@@ -65,11 +111,28 @@ fn permission(mode: &str) -> PermissionMode {
 
 /// Build a brain, seeding a fresh one so it can actually do something.
 pub async fn assemble(cli: &Cli) -> Result<(Brain, spoon_ears::EarsFormatFlag)> {
+    assemble_with_ears(cli, None).await
+}
+
+/// Build a brain with the ears pointed at a specific model.
+///
+/// The override exists for the comparison bench, which needs two brains that
+/// differ in exactly one thing. It takes precedence over both the flag and the
+/// config file, since it is the more specific request.
+pub async fn assemble_with_ears(
+    cli: &Cli,
+    ears_override: Option<&str>,
+) -> Result<(Brain, spoon_ears::EarsFormatFlag)> {
     let settings = Config::load()?;
-    let ears_model = seat_model(&cli.ears_model, Config::model(&settings.ears)).to_string();
-    let mouth_model = seat_model(&cli.mouth_model, Config::model(&settings.mouth)).to_string();
-    let teacher_model =
-        seat_model(&cli.teacher_model, Config::model(&settings.teacher)).to_string();
+    let ears = seat_config(
+        &ears_override
+            .map(str::to_string)
+            .or_else(|| cli.ears_model.clone()),
+        settings.ears.as_ref(),
+        DEFAULT_MODEL,
+    )?;
+    let mouth = seat_config(&cli.mouth_model, settings.mouth.as_ref(), DEFAULT_MODEL)?;
+    let teacher = seat_config(&cli.teacher_model, settings.teacher.as_ref(), DEFAULT_MODEL)?;
     let permissions = cli
         .permissions
         .as_deref()
@@ -91,31 +154,27 @@ pub async fn assemble(cli: &Cli) -> Result<(Brain, spoon_ears::EarsFormatFlag)> 
     let online = if cli.offline {
         false
     } else {
-        LlmClient::new(LlmConfig::ollama(&ears_model), counters.clone())
+        LlmClient::new(ears.clone(), counters.clone())
             .reachable()
             .await
     };
 
     let teaching = online && !cli.no_teaching;
-    let ears_format_flag = spoon_ears::EarsFormatFlag::new(
-        std::env::var("SPOON_EARS_PYTHON").is_ok(),
-    );
+    let ears_format_flag =
+        spoon_ears::EarsFormatFlag::new(std::env::var("SPOON_EARS_PYTHON").is_ok());
     let (ears, mouth, teacher): SeatTrio = if online {
         (
             Box::new(
-                ModelEars::new(LlmClient::new(
-                    LlmConfig::ollama(&ears_model),
-                    counters.clone(),
-                ))
-                .with_format_flag(ears_format_flag.clone()),
+                ModelEars::new(LlmClient::new(ears.clone(), counters.clone()))
+                    .with_format_flag(ears_format_flag.clone()),
             ),
             Box::new(ModelMouth::new(
-                LlmClient::new(LlmConfig::ollama(&mouth_model), counters.clone()),
+                LlmClient::new(mouth, counters.clone()),
                 table.clone(),
             )),
             teaching.then(|| {
                 Box::new(ModelTeacher::new(
-                    LlmClient::new(LlmConfig::ollama(&teacher_model), counters.clone()),
+                    LlmClient::new(teacher, counters.clone()),
                     table.clone(),
                 )) as Box<dyn Teacher>
             }),
@@ -139,7 +198,10 @@ pub async fn assemble(cli: &Cli) -> Result<(Brain, spoon_ears::EarsFormatFlag)> 
         teacher,
         counters,
     };
-    Ok((Brain::new(store, registry, table, seats, config)?, ears_format_flag))
+    Ok((
+        Brain::new(store, registry, table, seats, config)?,
+        ears_format_flag,
+    ))
 }
 
 pub fn status(cli: &Cli) -> Result<()> {
@@ -445,9 +507,9 @@ pub async fn eval(cli: &Cli, expression: &str) -> Result<()> {
     let concept = spoon_concept::parse(expression, &table)
         .map_err(|e| anyhow::anyhow!("cannot parse {expression:?}: {e}"))?;
 
-    let mut evaluator =
-        spoon_eval::Evaluator::new(&store, &registry)
-            .with_permission(permission(cli.permissions.as_deref().unwrap_or("ask-writes")));
+    let mut evaluator = spoon_eval::Evaluator::new(&store, &registry).with_permission(permission(
+        cli.permissions.as_deref().unwrap_or("ask-writes"),
+    ));
     let outcome = evaluator.evaluate(&concept);
     let trace = evaluator.trace();
 
@@ -490,4 +552,73 @@ pub async fn eval(cli: &Cli, expression: &str) -> Result<()> {
     }
     let _ = evaluator.commit_evidence();
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Seat as SeatConfig;
+    use spoon_seat::Transport;
+
+    fn seat(provider: &str, model: &str) -> SeatConfig {
+        SeatConfig {
+            provider: Some(provider.to_string()),
+            model: Some(model.to_string()),
+            ..SeatConfig::default()
+        }
+    }
+
+    #[test]
+    fn no_configuration_falls_back_to_the_default_model() {
+        let config = seat_config(&None, None, DEFAULT_MODEL).unwrap();
+        assert_eq!(config.model, DEFAULT_MODEL);
+        assert_eq!(config.transport, Transport::Ollama);
+    }
+
+    #[test]
+    fn config_file_beats_the_default() {
+        let seat = seat("ollama", "qwen3.8:27b");
+        let config = seat_config(&None, Some(&seat), DEFAULT_MODEL).unwrap();
+        assert_eq!(config.model, "qwen3.8:27b");
+    }
+
+    #[test]
+    fn flag_beats_the_config_file() {
+        let seat = seat("ollama", "qwen3.8:27b");
+        let flag = Some("qwen3.5:0.8b".to_string());
+        let config = seat_config(&flag, Some(&seat), DEFAULT_MODEL).unwrap();
+        assert_eq!(config.model, "qwen3.5:0.8b");
+    }
+
+    /// The whole point of reading `provider`: a seat can now be somewhere else.
+    #[test]
+    fn openai_provider_selects_the_openai_transport() {
+        let seat = seat("openai", "gpt-4o");
+        let config = seat_config(&None, Some(&seat), DEFAULT_MODEL).unwrap();
+        assert_eq!(config.transport, Transport::OpenAi);
+        assert_eq!(config.base_url, DEFAULT_OPENAI_URL);
+    }
+
+    #[test]
+    fn base_url_and_timeout_override_the_provider_defaults() {
+        let seat = SeatConfig {
+            provider: Some("openai".to_string()),
+            model: Some("local".to_string()),
+            base_url: Some("http://localhost:8080/v1".to_string()),
+            api_key_env: None,
+            timeout_secs: Some(90),
+        };
+        let config = seat_config(&None, Some(&seat), DEFAULT_MODEL).unwrap();
+        assert_eq!(config.base_url, "http://localhost:8080/v1");
+        assert_eq!(config.timeout, std::time::Duration::from_secs(90));
+    }
+
+    /// A typo in the provider used to be silently ignored, which is how the
+    /// teacher ran on the wrong model for a week.
+    #[test]
+    fn an_unknown_provider_is_an_error_rather_than_a_default() {
+        let seat = seat("anthropic", "claude");
+        let error = seat_config(&None, Some(&seat), DEFAULT_MODEL).unwrap_err();
+        assert!(error.to_string().contains("unknown provider"));
+    }
 }
