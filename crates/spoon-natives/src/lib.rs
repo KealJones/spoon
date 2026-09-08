@@ -15,6 +15,7 @@ pub mod data;
 pub mod io;
 pub mod map;
 pub mod set;
+pub mod source;
 pub mod text;
 pub mod type_check;
 
@@ -35,6 +36,7 @@ pub fn bootstrap() -> NativeRegistry {
     type_check::register(&mut registry);
     map::register(&mut registry);
     set::register(&mut registry);
+    source::register(&mut registry);
     ctrl::register(&mut registry);
     registry
 }

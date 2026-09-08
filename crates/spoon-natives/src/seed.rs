@@ -63,6 +63,8 @@ pub fn seed_bootstrap(store: &Store, registry: &NativeRegistry) -> Result<SeedSt
         stats.realizations += 1;
     }
 
+    crate::source::seed(store)?;
+
     // Only bootstrap natives are ours to retire. A learned composed body or a
     // rule the Teacher wrote is not made stale by a Rust rename, and dropping
     // one would throw away the evidence behind it.

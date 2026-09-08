@@ -6,6 +6,28 @@ Decisions in PIVOT_PLAN.md; rules in AGENTS.md; design in docs/CONCEPT-IR-DESIGN
 
 ---
 
+## 2026-09-08  Source Concepts execute and persist evidence
+
+DONE
+- Added `wikidata` as a persisted source Concept with `supports` relationships.
+- Added a composed `research-search` realization that runs URL construction,
+  JSON fetch, evidence creation, and evidence persistence as one visible path.
+- Added `source-register` for user-provided URL templates and environment-backed
+  credential references. Secret values are never written to the store.
+- Added a real Wikidata smoke path and restart-safe source tests.
+
+VERIFIED
+- Six focused source tests passed.
+- `cargo test --workspace` passed, including doctests.
+- `SPOON_DEBUG=1 cargo run -p spoon -- --ephemeral --offline --permissions bypass eval 'research-search<wikidata, "Ada Lovelace">'` returned a persisted `research-result` and showed all four pipeline stages.
+
+NEXT
+- Add authenticated source realizations that resolve credential references at
+  effect time without exposing secrets to Concepts or traces.
+- Add source schema discovery and response normalization for a second source.
+
+---
+
 ## 2026-09-06  Learned feedback survives restart
 
 DONE
