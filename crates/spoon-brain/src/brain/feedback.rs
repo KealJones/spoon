@@ -40,6 +40,9 @@ impl Brain {
     }
 
     pub(super) fn remember_pair(&mut self, text: &str, steps: &[Concept], source: PairSource) -> spoon_store::Result<i64> {
+        for step in steps {
+            self.remember_names(step);
+        }
         let pair = self.store.put_pair(text, steps, source)?;
         // Keep source, identity and evidence exactly aligned with restart behavior.
         self.phrasing = PhrasingIndex::from_store(&self.store)?;

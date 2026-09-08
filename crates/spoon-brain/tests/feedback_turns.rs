@@ -3,7 +3,7 @@
 
 use async_trait::async_trait;
 use spoon_brain::{Brain, BrainConfig, EarsPath, Seats};
-use spoon_concept::Concept;
+use spoon_concept::{Concept, SymbolId};
 use spoon_eval::Budget;
 use spoon_seat::{
     Ears, Heard, LlmError, Mouth, MouthReply, SeatCounters, Taught, Teacher, TeacherAsk,
@@ -40,6 +40,7 @@ impl Ears for Reading {
             )],
             0.9,
         );
+        heard.names.push(Arc::from("ask"));
         heard.used_model = true;
         Ok(heard)
     }
@@ -149,6 +150,11 @@ async fn negative_feedback_relearns_the_original_request_and_survives_restart() 
         );
         let wrong = b.turn("s", "shipping for 7").await.unwrap();
         assert_eq!(result(&wrong), Some(14));
+        assert_eq!(
+            b.store().symbol_name(SymbolId::of("ask")).unwrap().as_deref(),
+            Some("ask"),
+            "a learned phrasing must persist the names in its stored reading"
+        );
         assert!(
             !wrong.episode.realizations.is_empty(),
             "a question must retain the computation's trace"

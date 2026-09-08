@@ -163,8 +163,7 @@ impl Brain {
                         original,
                         corrected.join("; ")
                     ));
-                    let pair = self.store.put_pair(text, &steps, PairSource::Confirmed)?;
-                    self.phrasing = PhrasingIndex::from_store(&self.store)?;
+                    let pair = self.remember_pair(text, &steps, PairSource::Confirmed)?;
                     // A rule outlives the sentence that produced it, so it is
                     // stored as an ordinary concept and read back into the ears
                     // prompt. The prompt stops being a fixed string somebody

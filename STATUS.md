@@ -6,6 +6,31 @@ Decisions in PIVOT_PLAN.md; rules in AGENTS.md; design in docs/CONCEPT-IR-DESIGN
 
 ---
 
+## 2026-09-06  Learned feedback survives restart
+
+DONE
+- Bootstrap refreshes no longer replace accumulated realization activation.
+  A native implementation can be refreshed on startup while preserving the
+  successes and failures learned against its durable realization name.
+- Learned model readings persist the symbol spellings used by their stored
+  steps before the phrasing index is rebuilt. This keeps valid phrasings from
+  being removed as stale after restart.
+- Teacher-corrected readings use the same durable pair path as ordinary model
+  readings.
+- Added a regression assertion for the `ask` wrapper symbol and verified the
+  restart feedback path.
+
+VERIFIED
+- Focused seed tests: 4 passed.
+- Focused feedback-turn tests: 3 passed.
+- Workspace tests and doctests: all passed.
+
+NEXT
+- Finish the remaining feedback-loop edge cases and bounded capability-teaching
+  chain described in the previous entry.
+
+---
+
 ## 2026-09-03  The config was never read, and the bench never checked answers
 
 Two findings that invalidate most of what this log said about the Teacher.

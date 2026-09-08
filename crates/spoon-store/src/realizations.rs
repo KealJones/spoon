@@ -219,7 +219,10 @@ pub(crate) fn write_realization(tx: &Transaction<'_>, r: &Realization) -> Result
             kind       = excluded.kind,
             spec       = excluded.spec,
             effect     = excluded.effect,
-            activation = excluded.activation,
+            -- The name is the durable identity of a realization. Refreshing
+            -- its implementation must not erase evidence collected against
+            -- that identity.
+            activation = realizations.activation,
             provenance = excluded.provenance,
             tier       = excluded.tier",
         params![
