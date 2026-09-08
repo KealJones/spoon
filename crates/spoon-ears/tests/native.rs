@@ -16,6 +16,24 @@ fn greeted(say: &str) -> bool {
 }
 
 
+
+#[test]
+fn research_request_reads_source_and_query_as_concepts() {
+    let heard = NativeEars::new()
+        .hear_native("research Wikidata Ada Lovelace")
+        .expect("native research reading");
+    assert_eq!(
+        heard.steps,
+        vec![Concept::call(
+            "do",
+            [Concept::call(
+                "research-search",
+                [Concept::named("wikidata"), Concept::text("ada lovelace")],
+            )],
+        )]
+    );
+}
+
 #[test]
 fn a_greeting_with_a_request_attached_is_not_a_greeting() {
     // "hey" as the first word used to swallow the whole turn, so

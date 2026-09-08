@@ -15,11 +15,13 @@ DONE
 - Added `source-register` for user-provided URL templates and environment-backed
   credential references. Secret values are never written to the store.
 - Added a real Wikidata smoke path and restart-safe source tests.
+- Added a native ears reading for `research <source> <query>`, so the source pipeline is reachable through the normal chat path.
 
 VERIFIED
 - Six focused source tests passed.
 - `cargo test --workspace` passed, including doctests.
 - `SPOON_DEBUG=1 cargo run -p spoon -- --ephemeral --offline --permissions bypass eval 'research-search<wikidata, "Ada Lovelace">'` returned a persisted `research-result` and showed all four pipeline stages.
+- A real stdio chat turn, `research Wikidata Ada Lovelace`, used native ears and returned the same result through Brain.
 
 NEXT
 - Add authenticated source realizations that resolve credential references at

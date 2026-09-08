@@ -185,6 +185,29 @@ impl NativeEars {
         None
     }
 
+    /// A source research request. The source name is a Concept, so this
+    /// shape works for built-in and user-registered sources alike.
+    fn research(text: &str) -> Option<Concept> {
+        let normalized = Self::normalize(text);
+        let mut parts = normalized.splitn(3, ' ');
+        let verb = parts.next()?;
+        if !matches!(verb, "research" | "search") {
+            return None;
+        }
+        let source = parts.next()?.trim();
+        let query = parts.next()?.trim();
+        if source.is_empty() || query.is_empty() {
+            return None;
+        }
+        Some(Concept::call(
+            "do",
+            [Concept::call(
+                "research-search",
+                [Concept::named(source), Concept::text(query)],
+            )],
+        ))
+    }
+
     /// Arithmetic written the way people actually write it.
     fn arithmetic(text: &str) -> Option<Concept> {
         let n = Self::normalize(text);
@@ -247,6 +270,9 @@ impl Ears for NativeEars {
         }
         if let Some(step) = Self::social(text) {
             return Some(Heard::native(vec![step], 0.95));
+        }
+        if let Some(step) = Self::research(text) {
+            return Some(Heard::native(vec![step], 0.9));
         }
         if let Some(step) = Self::arithmetic(text) {
             return Some(Heard::native(vec![step], 0.9));
