@@ -110,11 +110,7 @@ pub fn reconcile(steps: &[Concept], store: &Store, symbols: &SymbolTable) -> Rec
 /// only have been meant as the word itself. `owns<john, dog>` is untouched
 /// because nothing realizes `owns`: it is a fact, john and dog are entities,
 /// and turning them into strings would be exactly wrong.
-fn words_where_text_is_wanted(
-    step: &Concept,
-    store: &Store,
-    symbols: &SymbolTable,
-) -> Concept {
+fn words_where_text_is_wanted(step: &Concept, store: &Store, symbols: &SymbolTable) -> Concept {
     let Concept::Compound { head, args } = step else {
         return step.clone();
     };

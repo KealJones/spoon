@@ -6,6 +6,77 @@ Decisions in PIVOT_PLAN.md; rules in AGENTS.md; design in docs/CONCEPT-IR-DESIGN
 
 ---
 
+## 2026-09-09  Ears parens vs angle-bracket on graded_core
+
+DONE
+- Ran `spoon bench graded_core --compare-ears` on two ephemeral brains
+  with teaching off. Parens is `do(add(2, 3))`; angle-bracket is
+  `do<add<2, 3>>`. Ears model was `qwen3.5:4b`.
+
+VERIFIED
+- 224 cases in 2274s.
+- parens: 103/224 (46%). angle-bracket: 40/224 (18%).
+- both right 36, both wrong 117, parens only 67, angle only 4.
+- Full table: `data/bench/compare-ears-graded-core-2026-09-09.log`.
+
+NEXT
+- None from this entry. Parens stays the default.
+
+---
+
+## 2026-09-09  Ears, Teacher, and Mouth speak parens
+
+DONE
+- LLM-facing concept spelling is `head(arg, arg)` for all three seats.
+- Default is parens. `SPOON_EARS_ANGLES` switches back.
+- Angle-bracket remains the store/debug form.
+- Teacher and recent-turn context shown to the seats use parens too.
+
+VERIFIED
+- spoon-teach: 4 tests, including paren COMPOSE.
+- spoon-brain teach_meaning and feedback_turns still pass.
+
+NEXT
+- A live 27b/32b Teacher lesson on a real gap.
+
+---
+
+## 2026-09-09  Inspector filter stays focused, concepts open on click
+
+DONE
+- Filter inputs on concepts and realizations no longer remount on each
+  keystroke, so typing does not steal focus.
+- Clicking a concept name opens its detail pane: kind, realizations with
+  bodies and scores, facts, and where it appears. The list shows how many
+  realizations each name has.
+
+NEXT
+- None from this entry.
+
+---
+
+## 2026-09-09  Teacher teaches meaning, not a one-line compose
+
+DONE
+- Capability asks are a lesson: several CONCEPT and COMPOSE lines in one
+  reply. New concepts are allowed. Examples are optional and go to the
+  synthesizer; they are not a gate on keeping the lesson.
+- A composition whose outermost call is its own target is still refused.
+- Teacher timeout defaults to 180s when the config does not set one.
+
+VERIFIED
+- spoon-teach: a lesson can mint two concepts and compose; COMPOSE with no
+  examples parses; the prompt no longer says ONE line / UNKNOWN if unlisted.
+- spoon-brain teach_meaning: minted `adorableness-score`, stored
+  `most-adorable = list-max-of<?0>` with no examples, retried to 3.
+- feedback_turns: 3 passed.
+
+NEXT
+- None from this entry. Spelling is the later entry above.
+
+---
+---
+
 ## 2026-09-08  Source Concepts execute and persist evidence
 
 DONE

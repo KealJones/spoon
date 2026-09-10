@@ -92,7 +92,10 @@ fn asserting_a_relationship_materializes_the_ground_value_it_mentions() {
 fn storing_a_computation_writes_rows_for_names_but_not_for_values() {
     let store = Store::open_in_memory().unwrap();
     store
-        .put_concept(&Concept::call("math-add", [Concept::int(42), Concept::int(1)]))
+        .put_concept(&Concept::call(
+            "math-add",
+            [Concept::int(42), Concept::int(1)],
+        ))
         .unwrap();
     // The compound and the head `add`. Not 42, not 1.
     assert_eq!(store.count_concepts().unwrap(), 2);

@@ -203,15 +203,14 @@ fn an_elliptical_repair_borrows_the_verb_it_left_out() {
     // noun; reading only the part before gets the answer to a question that
     // was withdrawn mid-sentence. Both were happening.
     for (say, want) in [
-        ("reverse banana. actually no, possession", "reverse possession"),
+        (
+            "reverse banana. actually no, possession",
+            "reverse possession",
+        ),
         ("reverse committee. actually no, hello", "reverse hello"),
         ("reverse science sorry i meant banana", "reverse banana"),
     ] {
-        assert_eq!(
-            spoon_brain::repaired(say).as_deref(),
-            Some(want),
-            "{say:?}"
-        );
+        assert_eq!(spoon_brain::repaired(say).as_deref(), Some(want), "{say:?}");
     }
 }
 

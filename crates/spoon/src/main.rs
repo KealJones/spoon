@@ -137,7 +137,7 @@ async fn main() -> anyhow::Result<()> {
             if let Some(spec) = compare_models {
                 crate::repl::bench_compare_models(&cli, suite, spec, limit).await
             } else if compare_ears {
-                crate::repl::bench_compare_ears(&cli, suite).await
+                crate::repl::bench_compare_ears(&cli, suite, limit).await
             } else {
                 build::bench(&cli, suite).await
             }

@@ -84,10 +84,7 @@ fn a_phrasing_pointing_at_a_retired_head_is_forgotten() {
     // answer, while a fresh brain got it right for want of a bad memory.
     let store = Store::open_in_memory().expect("store");
     let registry = spoon_natives::bootstrap();
-    let dead = Concept::call(
-        "count-matching",
-        [Concept::hole(0), Concept::hole(1)],
-    );
+    let dead = Concept::call("count-matching", [Concept::hole(0), Concept::hole(1)]);
 
     store
         .put_realization(&Realization {
@@ -134,12 +131,27 @@ fn restart_seeding_preserves_the_evidence_from_user_feedback() {
     let before = {
         let store = Store::open(&path).unwrap();
         seed_bootstrap(&store, &registry).unwrap();
-        store.record_realization_use("native-math-add", true, Utc::now()).unwrap();
-        store.record_realization_use("native-math-add", false, Utc::now()).unwrap();
-        store.realization_by_name("native-math-add").unwrap().unwrap().activation
+        store
+            .record_realization_use("native-math-add", true, Utc::now())
+            .unwrap();
+        store
+            .record_realization_use("native-math-add", false, Utc::now())
+            .unwrap();
+        store
+            .realization_by_name("native-math-add")
+            .unwrap()
+            .unwrap()
+            .activation
     };
     let store = Store::open(&path).unwrap();
     seed_bootstrap(&store, &registry).unwrap();
-    let after = store.realization_by_name("native-math-add").unwrap().unwrap().activation;
-    assert_eq!(after, before, "startup must not erase what the user taught us");
+    let after = store
+        .realization_by_name("native-math-add")
+        .unwrap()
+        .unwrap()
+        .activation;
+    assert_eq!(
+        after, before,
+        "startup must not erase what the user taught us"
+    );
 }

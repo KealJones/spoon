@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use spoon_concept::{Concept, Ground, SymbolTable, render};
+use spoon_concept::{Concept, ConceptId, Ground, SymbolTable, render};
 use spoon_seat::{LlmClient, LlmError, Message, Mouth, MouthReply, Seat};
 
 /// Deterministic rendering. Offline mode, and the fallback whenever the model
@@ -19,6 +19,48 @@ pub struct TemplateMouth {
     /// at startup prints hex for every one of them. The whole reply becomes
     /// unreadable exactly when Spoon has just learned something.
     table: Arc<SymbolTable>,
+}
+
+/// Render a concept in paren notation for LLM-facing text.
+///
+/// Ground values (strings, numbers, booleans) render the same as in angle
+/// notation. Named atoms and compounds use `head(arg, arg)` form so that any
+/// concept expression appearing in a mouth prompt speaks the same language as
+/// the ears and teacher.
+fn render_pycall_concept(concept: &Concept, table: &SymbolTable) -> String {
+    let mut out = String::new();
+    write_pycall(&mut out, concept, table);
+    out
+}
+
+fn write_pycall(out: &mut String, concept: &Concept, table: &SymbolTable) {
+    match concept {
+        Concept::Atomic(ConceptId::Named(symbol)) => match table.resolve(*symbol) {
+            Some(name) => out.push_str(&name),
+            None => out.push_str(&format!("#{:016x}", symbol.as_u64())),
+        },
+        Concept::Atomic(ConceptId::Ground(_)) => {
+            out.push_str(&render(concept, table));
+        }
+        Concept::Hole(h) => out.push_str(&format!("?{}", h.as_u32())),
+        Concept::Compound { head, args } => {
+            if head.is_compound() {
+                out.push('(');
+                write_pycall(out, head, table);
+                out.push(')');
+            } else {
+                write_pycall(out, head, table);
+            }
+            out.push('(');
+            for (i, arg) in args.iter().enumerate() {
+                if i > 0 {
+                    out.push_str(", ");
+                }
+                write_pycall(out, arg, table);
+            }
+            out.push(')');
+        }
+    }
 }
 
 /// The heads the templates recognize.
@@ -61,7 +103,7 @@ impl TemplateMouth {
             Some(Ground::Int(i)) => i.to_string(),
             Some(Ground::Float(f)) => format!("{f}"),
             Some(Ground::Bool(b)) => if *b { "yes" } else { "no" }.to_string(),
-            _ => render(concept, &self.table),
+            _ => render_pycall_concept(concept, &self.table),
         }
     }
 
@@ -162,7 +204,7 @@ impl ModelMouth {
                 Some(Ground::Int(i)) => i.to_string(),
                 Some(Ground::Float(f)) => format!("{f}"),
                 Some(Ground::Bool(b)) => if *b { "yes" } else { "no" }.to_string(),
-                _ => render(value, table),
+                _ => render_pycall_concept(value, table),
             };
             rendered.trim().is_empty() || text.to_lowercase().contains(&rendered.to_lowercase())
         })

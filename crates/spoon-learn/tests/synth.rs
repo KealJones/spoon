@@ -158,6 +158,131 @@ fn learns_over_text() {
     );
 }
 
+/// Hardcoding a constant into a body is allowed (`triple = mul<?0, 3>`).
+/// What is not allowed is a body that only works because it baked the
+/// example payloads. Random training plus a held-out case of a different
+/// length / value is how that shows up.
+#[test]
+fn random_examples_still_generalize_to_unseen_inputs() {
+    let (store, registry) = brain();
+    let mut rng = SplitMix64::new(0xC0FF_EE00_D15C_0DE5);
+
+    for _ in 0..8 {
+        let texts = rng.distinct_texts(4);
+        let (a, b, c, holdout) = (&texts[0], &texts[1], &texts[2], &texts[3]);
+        let spec = spec(
+            "count",
+            &[
+                (&[Concept::text(a)], Concept::int(a.chars().count() as i64)),
+                (&[Concept::text(b)], Concept::int(b.chars().count() as i64)),
+                (&[Concept::text(c)], Concept::int(c.chars().count() as i64)),
+            ],
+        );
+        let outcome = synthesize(&spec, &store, &registry, budget());
+        let body = found(&outcome);
+        assert_eq!(
+            apply(&store, &registry, body, &[Concept::text(holdout)]),
+            Concept::int(holdout.chars().count() as i64),
+            "body {body:?} memorized {a:?}/{b:?}/{c:?} and missed {holdout:?}"
+        );
+    }
+
+    for _ in 0..8 {
+        let nums = rng.distinct_ints(4, -30, 30);
+        let (n, m, p, holdout) = (nums[0], nums[1], nums[2], nums[3]);
+        let spec = spec(
+            "double",
+            &[
+                (&[Concept::int(n)], Concept::int(n.saturating_mul(2))),
+                (&[Concept::int(m)], Concept::int(m.saturating_mul(2))),
+                (&[Concept::int(p)], Concept::int(p.saturating_mul(2))),
+            ],
+        );
+        let outcome = synthesize(&spec, &store, &registry, budget());
+        let body = found(&outcome);
+        assert_eq!(
+            apply(&store, &registry, body, &[Concept::int(holdout)]),
+            Concept::int(holdout.saturating_mul(2)),
+            "body {body:?} failed to double unseen {holdout}"
+        );
+    }
+
+    for _ in 0..8 {
+        let texts = rng.distinct_texts(4);
+        let (a, b, holdout) = (&texts[0], &texts[1], &texts[3]);
+        let spec = spec(
+            "shout",
+            &[
+                (&[Concept::text(a)], Concept::text(&a.to_uppercase())),
+                (&[Concept::text(b)], Concept::text(&b.to_uppercase())),
+            ],
+        );
+        let outcome = synthesize(&spec, &store, &registry, budget());
+        let body = found(&outcome);
+        assert_eq!(
+            apply(&store, &registry, body, &[Concept::text(holdout)]),
+            Concept::text(&holdout.to_uppercase()),
+            "body {body:?} memorized {a:?}/{b:?} and missed {holdout:?}"
+        );
+    }
+}
+
+struct SplitMix64(u64);
+
+impl SplitMix64 {
+    fn new(seed: u64) -> Self {
+        SplitMix64(seed)
+    }
+
+    fn next(&mut self) -> u64 {
+        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = self.0;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    }
+
+    fn int(&mut self, lo: i64, hi: i64) -> i64 {
+        let span = (hi - lo + 1) as u64;
+        lo + (self.next() % span) as i64
+    }
+
+    fn text(&mut self, min_len: usize, max_len: usize) -> String {
+        let len = self.int(min_len as i64, max_len as i64) as usize;
+        const ALPH: &[u8] = b"abcdefghijklmnopqrstuvwxyz";
+        (0..len)
+            .map(|_| ALPH[self.next() as usize % ALPH.len()] as char)
+            .collect()
+    }
+
+    fn distinct_texts(&mut self, n: usize) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut lengths = std::collections::HashSet::new();
+        while out.len() < n {
+            let t = self.text(3, 10);
+            let distinct_chars = t.chars().collect::<std::collections::HashSet<_>>().len();
+            let len = t.chars().count();
+            if distinct_chars < 2 || lengths.contains(&len) {
+                continue;
+            }
+            lengths.insert(len);
+            out.push(t);
+        }
+        out
+    }
+
+    fn distinct_ints(&mut self, n: usize, lo: i64, hi: i64) -> Vec<i64> {
+        let mut out = Vec::new();
+        while out.len() < n {
+            let v = self.int(lo, hi);
+            if v != 0 && !out.contains(&v) {
+                out.push(v);
+            }
+        }
+        out
+    }
+}
+
 #[test]
 fn prefers_the_smaller_body() {
     let (store, registry) = brain();

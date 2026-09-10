@@ -8,6 +8,7 @@ license.workspace = true
 spoon-concept = { workspace = true }
 spoon-store = { workspace = true }
 spoon-seat = { workspace = true }
+spoon-ears = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }

@@ -85,7 +85,7 @@ impl Teacher for FixReading {
             },
         };
         Ok(Taught {
-            reply,
+            replies: vec![reply],
             exchange: None,
         })
     }
@@ -151,7 +151,10 @@ async fn negative_feedback_relearns_the_original_request_and_survives_restart() 
         let wrong = b.turn("s", "shipping for 7").await.unwrap();
         assert_eq!(result(&wrong), Some(14));
         assert_eq!(
-            b.store().symbol_name(SymbolId::of("ask")).unwrap().as_deref(),
+            b.store()
+                .symbol_name(SymbolId::of("ask"))
+                .unwrap()
+                .as_deref(),
             Some("ask"),
             "a learned phrasing must persist the names in its stored reading"
         );

@@ -186,7 +186,11 @@ fn equality_is_identity_not_numeric_coercion() {
         (Concept::bool(true), Concept::int(1), false),
     ];
     for (a, b, expected) in pairs {
-        let out = value(&store, &reg, &Concept::call("logic-eq", [a.clone(), b.clone()]));
+        let out = value(
+            &store,
+            &reg,
+            &Concept::call("logic-eq", [a.clone(), b.clone()]),
+        );
         assert_eq!(out, Concept::bool(expected), "eq({a:?}, {b:?})");
     }
 }
@@ -203,7 +207,11 @@ fn equality_works_on_compounds_too() {
         [Concept::named("keal"), Concept::named("greg")],
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("logic-eq", [f.clone(), f.clone()])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("logic-eq", [f.clone(), f.clone()])
+        ),
         Concept::bool(true)
     );
     // Argument order matters: that these mean the same thing is something
@@ -231,7 +239,10 @@ fn conditionals_never_touch_the_branch_they_do_not_take() {
         value(
             &store,
             &reg,
-            &Concept::call("logic-if", [Concept::bool(true), Concept::int(7), tripwire()])
+            &Concept::call(
+                "logic-if",
+                [Concept::bool(true), Concept::int(7), tripwire()]
+            )
         ),
         Concept::int(7)
     );
@@ -239,7 +250,10 @@ fn conditionals_never_touch_the_branch_they_do_not_take() {
         value(
             &store,
             &reg,
-            &Concept::call("logic-if", [Concept::bool(false), tripwire(), Concept::int(9)])
+            &Concept::call(
+                "logic-if",
+                [Concept::bool(false), tripwire(), Concept::int(9)]
+            )
         ),
         Concept::int(9)
     );
@@ -275,7 +289,10 @@ fn short_circuiting_does_not_type_check_what_it_skipped() {
         value(
             &store,
             &reg,
-            &Concept::call("logic-and", [Concept::bool(false), Concept::named("nonsense")])
+            &Concept::call(
+                "logic-and",
+                [Concept::bool(false), Concept::named("nonsense")]
+            )
         ),
         Concept::bool(false)
     );
@@ -322,7 +339,10 @@ fn predicates_feed_conditionals() {
         [
             Concept::call(
                 "math-is-even",
-                [Concept::call("math-add", [Concept::int(1), Concept::int(3)])],
+                [Concept::call(
+                    "math-add",
+                    [Concept::int(1), Concept::int(3)],
+                )],
             ),
             Concept::text("even"),
             Concept::text("odd"),

@@ -1,0 +1,262 @@
+# Spoon ears format A/B
+date: 2026-09-09
+suite: graded_core (224 graded cases)
+command: cargo run -p spoon -- --ephemeral --no-teaching bench graded_core --compare-ears
+brains: two fresh in-memory brains, teaching off
+ears model: qwen3.5:4b (binary default; ~/.spoon/config.json does not set ears)
+elapsed: 2274s
+exit: 0
+
+# python column is the paren dialect: do(add(2, 3))
+# angle-bracket column is do<add<2, 3>>
+# markers: (none)=both right  +=parens only  ~=angle only  x=both wrong
+
+# summary
+angle-bracket: 40/224 (18%)
+parens:        103/224 (46%)
+both right: 36  both wrong: 117
+angle-bracket only: 4  parens only: 67
+
+# angle-bracket only
+81~  does spoon end with qz
+82~  does bookkeeper end with qz
+109~ ok wait whats 122 plus 30 thanks
+209~ trim the spaces off "  concept  "
+
+#    utterance                                angle-bracket      python             want
+--------------------------------------------------------------------------------------------------------------
+1    is true and true                         true               true               true
+2+   is false and true                        -                  false              false
+3+   is false and false                       -                  false              false
+4+   is true and false                        -                  false              false
+5    what is 320 divided by 10                32                 32                 32
+6+   divide 312 by 12                         -                  26                 26
+7    what is 330 divided by 10                33                 33                 33
+8    what is 48 divided by 8                  6                  6                  6
+9+   divide 125 by 5                          -                  25                 25
+10+  divide 66 by 6                           -                  11                 11
+11   whats 24 minus 136?                      -112               -112               -112
+12   what is 270 minus 132                    138                138                138
+13   399 - 41                                 358                358                358
+14+  hey quick one, 386 minus 41              -                  345                345
+15+  hey quick one, 168 minus 158             -                  10                 10
+16   102 - 93                                 9                  9                  9
+17+  56 mod 4                                 -                  0                  0
+18+  28 mod 9                                 -                  1                  1
+19+  what is the remainder of 69 divided by... -                  4                  4
+20+  what is the remainder of 43 divided by... -                  3                  3
+21   61 mod 9                                 7                  7                  7
+22   22 mod 9                                 4                  4                  4
+23   33 + 189                                 222                222                222
+24   whats 150 plus 109?                      259                259                259
+25   whats 389 plus 89?                       478                478                478
+26   what is 339 plus 61                      400                400                400
+27   whats 250 plus 152?                      402                402                402
+28+  can you work out 167 plus 40 for me      -                  207                207
+29+  what is 21 to the power of 3             -                  9261               9261
+30+  27 to the power of 4                     -                  531441             531441
+31+  39 to the power of 2                     -                  1521               1521
+32+  what is 5 to the power of 4              unknown<pow<5, 4... 625                625
+33+  29 to the power of 2                     -                  841                841
+34+  raise 25 to the 4                        pow<25, 4>         390625             390625
+35   what is 29 times 56                      1624               1624               1624
+36   whats 87 times 166?                      14442              14442              14442
+37   what is 344 times 102                    35088              35088              35088
+38   what is 240 times 198                    47520              47520              47520
+39   what is 370 times 22                     8140               8140               8140
+40   whats 136 times 94?                      12784              12784              12784
+41+  is 10 bigger than 19                     -                  false              false
+42+  is 86 even?                              -                  true               true
+43+  is 155 even                              -                  false              false
+44+  is 100 even?                             -                  true               true
+45+  is 110 even                              cannot-yet<math-... true               true
+46+  is 13 bigger than 28                     -                  false              false
+47x  does kubernetes contain zqx              -                  cannot-yet<list-... false
+48x  does spoon contain zqx                   -                  cannot-yet<list-... false
+49x  is onc in concept?                       -                  false              true
+50x  is omm in committee?                     unknown<particip... false              true
+51x  is ell in hello?                         -                  false              true
+52x  does hello contain zqx                   -                  cannot-yet<list-... false
+53   whats 48 plus 53. scratch that, 48 plu... 109                109                109
+54+  reverse science sorry i meant banana     -                  "ananab"           "ananab"
+55+  reverse assessment, no wait, reverse b... -                  "repeekkoob"       "repeekkoob"
+56+  reverse hello sorry i meant committee    -                  "eettimmoc"        "eettimmoc"
+57+  reverse concept sorry i meant spoon      -                  "noops"            "noops"
+58+  reverse realization, no wait, reverse ... -                  "noissessop"       "noissessop"
+59x  count of 26, 8, 32                       sum<list<26, 8, ... sum<list<26, 8, ... 3
+60x  count of 26, 24, 46, 59, 26              -                  sum<list<26, 24,... 5
+61x  count of 5, 33, 15                       -                  sum<list<5, 33, ... 3
+62x  how many numbers are in 49, 5, 37, 47,... unknown<sum<list... unknown<count<li... 6
+63x  count of 34, 23, 21                      -                  sum<list<34, 23,... 3
+64x  how many numbers are in 46, 27, 50, 46... unknown<sum<list... unknown<count<li... 6
+65x  number of p letters in spoon             unknown<count<fi... unknown<count<fi... 1
+66x  count the letter d in keyboard           unknown<count<fi... unknown<count<fi... 1
+67x  count the letter c in coffee             -                  unknown<count<fi... 1
+68x  count the letter r in recommend          -                  unknown<count<fi... 1
+69x  how many times does "b" appear in bana... -                  unknown<count-oc... 1
+70x  how many e characters are in concept     unknown<count<fi... unknown<count<fi... 1
+71x  count the letter a in paarllel           -                  unknown<count<fi... 2
+72x  how many e characters in commtitee       unknown<count<fi... unknown<count<fi... 2
+73x  how many z characters in relaization     -                  unknown<count<fi... 1
+74x  count the letter o in sopon              -                  unknown<count<fi... 2
+75x  how many n characters in bnaana          unknown<count<fi... unknown<count<fi... 2
+76x  how many y characters in strabwerry      -                  unknown<count<fi... 1
+77x  does concept end with qz                 -                  unknown<ends-wit... false
+78x  does kubernetes end with qz              -                  unknown<ends-wit... false
+79x  does assessment end with qz              -                  unknown<ends-wit... false
+80x  does coffee end with ee                  unknown<ends-wit... unknown<ends-wit... true
+81~  does spoon end with qz                   false              unknown<ends-wit... false
+82~  does bookkeeper end with qz              false              unknown<ends-wit... false
+83x  the even numbers from 1 to 10            cannot-yet<list-... cannot-yet<logic... list<2, 4, 6, 8, 10>
+84x  the even numbers from 1 to 12            -                  cannot-yet<logic... list<2, 4, 6, 8, 10,...
+85x  which numbers between 1 and 6 are even   -                  unknown<filter<l... list<2, 4, 6>
+86x  the even numbers from 1 to 8             -                  cannot-yet<logic... list<2, 4, 6, 8>
+87x  which numbers between 1 and 8 are even   -                  unknown<filter<l... list<2, 4, 6, 8>
+88x  which numbers between 1 and 10 are eve... cannot-yet<list-... unknown<filter<l... list<2, 4, 6, 8, 10>
+89+  first item in 15, 8, 3, 6                cannot-yet<list-... 15                 15
+90+  what is the first of 13, 13, 35, 33      -                  13                 13
+91+  what is the first of 40, 6, 8, 29        -                  40                 40
+92+  what is the first of 10, 20, 15, 1       -                  10                 10
+93+  what is the first of 9, 12, 21, 26       -                  9                  9
+94+  first item in 9, 16, 30, 4               cannot-yet<list-... 9                  9
+95   lowercase REALIZATION                    "realization"      "realization"      "realization"
+96+  make BOOKKEEPER lowercase                -                  "bookkeeper"       "bookkeeper"
+97+  make CONCEPT lowercase                   -                  "concept"          "concept"
+98+  make HELLO lowercase                     -                  "hello"            "hello"
+99   lowercase BOOKKEEPER                     "bookkeeper"       "bookkeeper"       "bookkeeper"
+100+ make MISSISSIPPI lowercase               -                  "mississippi"      "mississippi"
+101x max of 59, 50, 43, 9, 34                 cannot-yet<math-... max-of<list<59, ... 59
+102x what is the biggest of 2, 12, 54, 33     -                  unknown<max-of<l... 54
+103x what is the biggest of 26, 8, 32         -                  unknown<max-of<l... 32
+104x max of 34, 25, 30, 27                    -                  max-of<list<34, ... 34
+105x whats the largest number in 39, 3, 58,... -                  unknown<max-of<l... 58
+106x max of 16, 57, 5, 57, 36                 max-of<list<16, ... max-of<list<16, ... 57
+107x quick one whats 50 times 58              -                  mul<50, 58>        2900
+108x ok so whats 157 times 32 lol             -                  mul<157, 32>       5024
+109~ ok wait whats 122 plus 30 thanks         152                add<122, 30>       152
+110x hmm whats 128 plus 33 thanks             -                  add<128, 33>       161
+111x one more whats 113 minus 28              -                  sub<113, 28>       85
+112x ok so whats 174 plus 75 if you can       -                  add<174, 75>       249
+113x another one how many o characters in h... -                  unknown<count<fi... 1
+114x another one how many i characters in c... unknown<count<fi... unknown<count<fi... 1
+115x ok so how many t characters in concept   -                  unknown<count<fi... 1
+116x sorry how many e characters in possess... -                  unknown<count<fi... 1
+117x ok wait how many o characters in coffe... unknown<count<fi... unknown<count<fi... 1
+118x lol ok how many y characters in keyboa... -                  unknown<count<fi... 1
+119+ ok wait reverse hello                    -                  "olleh"            "olleh"
+120+ quick one reverse realization if you c... -                  "noitazilaer"      "noitazilaer"
+121  so like reverse keyboard lol             "draobyek"         "draobyek"         "draobyek"
+122+ ok wait reverse strawberry               -                  "yrrebwarts"       "yrrebwarts"
+123+ sorry reverse concept                    -                  "tpecnoc"          "tpecnoc"
+124+ sorry reverse spoon                      -                  "noops"            "noops"
+125x what is the minimum of 29, 16, 32        unknown<math-min... unknown<math-min... 16
+126x smallest of 26, 27, 45, 45, 12           -                  math-min-of<list... 12
+127x what is the minimum of 15, 33, 19        -                  unknown<math-min... 15
+128x smallest of 10, 59, 9, 34, 9, 38         -                  cannot-yet<math-... 9
+129x smallest of 8, 40, 6, 35, 34, 23         -                  cannot-yet<math-... 6
+130x what is the minimum of 39, 3, 58, 3, 2... unknown<math-min... cannot-yet<math-... 3
+131x is false or true                         cannot-yet<logic... false              true
+132x is true or false                         -                  false              true
+133x is true or true                          -                  -                  true
+134+ is false or false                        -                  false              false
+135x what is the product of 20, 24, 34, 34    cannot-yet<math-... cannot-yet<math-... 554880
+136x what is the product of 28, 24, 25, 7     -                  cannot-yet<math-... 117600
+137x what is the product of 31, 1, 17, 19     -                  cannot-yet<math-... 10013
+138x what is the product of 40, 21, 1, 1      -                  cannot-yet<math-... 840
+139x what is the product of 17, 7, 12, 29     -                  cannot-yet<math-... 41412
+140x what is the product of 37, 15, 20, 14    cannot-yet<math-... cannot-yet<math-... 155400
+141x give me 1 to 7                           -                  list-of<1, 2, 3,... list<1, 2, 3, 4, 5, ...
+142x the numbers from 1 to 6                  -                  list-of<1, 2, 3,... list<1, 2, 3, 4, 5, ...
+143x the numbers from 1 to 5                  -                  list-of<1, 2, 3,... list<1, 2, 3, 4, 5>
+144x list the numbers 1 through 4             -                  list-of<1, 2, 3,... list<1, 2, 3, 4>
+145x the numbers from 1 to 8                  list-of<1, 2, 3,... list-of<1, 2, 3,... list<1, 2, 3, 4, 5, ...
+146x give me 1 to 3                           -                  list-of<1, 2, 3>   list<1, 2, 3>
+147+ replace every c in coffee with z         -                  "zoffee"           "zoffee"
+148  replace "s" with "z" in spoon            "zpoon"            "zpoon"            "zpoon"
+149  swap every s in spoon for z              "zpoon"            "zpoon"            "zpoon"
+150  replace "c" with "z" in concept          "zonzept"          "zonzept"          "zonzept"
+151+ swap every c in concept for z            -                  "zonzept"          "zonzept"
+152  replace "b" with "z" in banana           "zanana"           "zanana"           "zanana"
+153x what is recommend backwards              -                  -                  "dnemmocer"
+154+ spell keyboard backwards                 -                  "draobyek"         "draobyek"
+155  what is assessment backwards             "tnemssessa"       "tnemssessa"       "tnemssessa"
+156+ reverse strawberry                       -                  "yrrebwarts"       "yrrebwarts"
+157+ reverse the word bookkeeper              -                  "repeekkoob"       "repeekkoob"
+158+ spell spoon backwards                    -                  "noops"            "noops"
+159x reverse the list 11, 23, 18              cannot-yet<list-... cannot-yet<list-... list<18, 23, 11>
+160x reverse the list 18, 37, 24, 7           -                  "7 ,42 ,73 ,81"    list<7, 24, 37, 18>
+161x reverse the list 8, 19, 7, 13, 38        -                  cannot-yet<list-... list<38, 13, 7, 19, ...
+162x reverse the list 4, 35, 13               -                  cannot-yet<list-... list<13, 35, 4>
+163x reverse the list 27, 10, 21, 10          -                  cannot-yet<list-... list<10, 21, 10, 27>
+164x reverse the list 32, 37, 29              -                  cannot-yet<list-... list<29, 37, 32>
+165x is -18 zero                              cannot-yet<logic... cannot-yet<logic... false
+166+ is 40 negative                           -                  false              false
+167+ is 18 negative                           -                  false              false
+168+ is 19 zero                               -                  false              false
+169+ is 26 zero                               -                  false              false
+170+ is -32 zero                              cannot-yet<logic... false              false
+171x sort these numbers: 10, 10, 8            cannot-yet<list-... cannot-yet<list-... list<8, 10, 10>
+172x sort 38, 37, 40                          -                  cannot-yet<list-... list<37, 38, 40>
+173x sort 13, 10, 24, 33                      -                  cannot-yet<list-... list<10, 13, 24, 33>
+174x put 19, 18, 20, 6, 14 in order           -                  cannot-yet<list-... list<6, 14, 18, 19, ...
+175x sort 18, 36, 1, 4, 19                    -                  cannot-yet<list-... list<1, 4, 18, 19, 3...
+176x sort these numbers: 6, 22, 6, 22         -                  cannot-yet<list-... list<6, 6, 22, 22>
+177x split committee,kubernetes,coffee on c... list-split<"comm... list-split<"comm... list<"committee", "k...
+178x split keyboard,bookkeeper,science on c... -                  cannot-yet<list-... list<"keyboard", "bo...
+179x split keyboard,assessment,possession o... -                  cannot-yet<list-... list<"keyboard", "as...
+180x break realization,banana,recommend apa... -                  cannot-yet<list-... list<"realization", ...
+181x break realization,keyboard,banana apar... -                  cannot-yet<list-... list<"realization", ...
+182x split concept,hello,science on commas    -                  cannot-yet<list-... list<"concept", "hel...
+183  does banana begin with ba                true               true               true
+184+ does spoon start with s                  -                  true               true
+185+ does kubernetes start with k             -                  true               true
+186  does committee begin with co             true               true               true
+187+ does banana start with b                 -                  true               true
+188  does science begin with sc               true               true               true
+189x the first 3 letters of kubernetes        substring<"kuber... substring<"kuber... "kub"
+190x first 2 characters of science            -                  substring<"scien... "sc"
+191x first 2 characters of keyboard           -                  substring<"keybo... "ke"
+192x first 2 characters of mississippi        -                  substring<"missi... "mi"
+193x the first 5 letters of bookkeeper        -                  substring<"bookk... "bookk"
+194x the first 2 letters of science           unknown<substrin... substring<"scien... "sc"
+195x what is the sum of 51, 35, 23            unknown<sum<list... unknown<sum<list... 109
+196x total of 10, 18, 49                      -                  sum<list<10, 18,... 77
+197x what is the sum of 55, 43, 57, 50, 38,... -                  unknown<sum<list... 246
+198x add up 43, 35, 40                        sum<list<43, 35,... sum<list<43, 35,... 118
+199x total of 17, 43, 2, 59, 13               -                  sum<list<17, 43,... 134
+200x what is the sum of 55, 23, 2, 21, 25     -                  unknown<sum<list... 126
+201+ how long is the word realization         cannot-yet<math-... 11                 11
+202+ how long is the word committee           -                  9                  9
+203+ how long is the word science             -                  7                  7
+204x what is the length of science            cannot-yet<math-... unknown<sum<list... 7
+205+ how long is the word parallel            -                  8                  8
+206+ how long is the word kubernetes          -                  10                 10
+207x trim the spaces off "  banana  "         -                  type-to-text<"ba... "banana"
+208x trim the spaces off "  parallel  "       -                  true               "parallel"
+209~ trim the spaces off "  concept  "        "concept"          true               "concept"
+210x strip the whitespace from "  recommend... -                  true               "recommend"
+211x trim the spaces off "  science  "        -                  true               "science"
+212x strip the whitespace from "  committee... -                  true               "committee"
+213x remove the duplicates from 3, 8, 3, 9,... -                  cannot-yet<list-... list<3, 8, 9, 5, 6>
+214x what are the unique values in 6, 5, 5,... cannot-yet<list-... cannot-yet<list-... list<6, 5, 2, 4>
+215x what are the unique values in 7, 3, 5,... -                  cannot-yet<list-... list<7, 3, 5, 9, 1, ...
+216x remove the duplicates from 6, 7, 1, 5,... -                  cannot-yet<list-... list<6, 7, 1, 5, 3>
+217x remove the duplicates from 1, 2, 8, 7,... -                  cannot-yet<list-... list<1, 2, 8, 7, 9>
+218x what are the unique values in 2, 5, 3,... -                  cannot-yet<list-... list<2, 5, 3, 6, 4>
+219  uppercase committee                      "COMMITTEE"        "COMMITTEE"        "COMMITTEE"
+220+ make bookkeeper uppercase                -                  "BOOKKEEPER"       "BOOKKEEPER"
+221  uppercase coffee                         "COFFEE"           "COFFEE"           "COFFEE"
+222  uppercase strawberry                     "STRAWBERRY"       "STRAWBERRY"       "STRAWBERRY"
+223x shout concept                            -                  cannot-yet<text-... "CONCEPT"
+224+ shout parallel                           -                  "PARALLEL"         "PARALLEL"
+
+224 cases in 2274.408162959s
+angle-bracket: 40/224 (18%)
+python:        103/224 (46%)
+
+both right: 36  both wrong: 117
+angle-bracket only: 4  python only: 67
+
+--- python wins (67) ---
+
+--- angle-bracket wins (4) ---

@@ -1520,6 +1520,7 @@ dependencies = [
  "serde",
  "serde_json",
  "spoon-concept",
+ "spoon-ears",
  "spoon-eval",
  "spoon-seat",
  "spoon-store",

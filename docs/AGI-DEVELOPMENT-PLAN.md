@@ -215,7 +215,7 @@ A useful test of acquisition is whether teaching an intermediate capability make
 
 A realization's global success rate conflates different situations. A program may work for nonempty lists and fail for empty lists, or perform well in one domain and poorly in another.
 
-The evaluator already supports situation Concepts. Populate them from actual argument properties, active goals and domain context, then attach observed success or failure to that situation. Verify the public turn path supplies this context; isolated selector tests are insufficient.
+The evaluator already supports situation Concepts. Populate them from actual argument properties, active goals and domain context, then attachbserved success or failure to that situation. Verify the public turn path supplies this context; isolated selector tests are insufficient.
 
 Use the existing `works-well-with` and `works-poorly-with` relationships where appropriate. Learn simple applicability conditions from contrasting examples before inventing a complex context model.
 

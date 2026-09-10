@@ -132,7 +132,17 @@ pub async fn assemble_with_ears(
         DEFAULT_MODEL,
     )?;
     let mouth = seat_config(&cli.mouth_model, settings.mouth.as_ref(), DEFAULT_MODEL)?;
-    let teacher = seat_config(&cli.teacher_model, settings.teacher.as_ref(), DEFAULT_MODEL)?;
+    let mut teacher = seat_config(&cli.teacher_model, settings.teacher.as_ref(), DEFAULT_MODEL)?;
+    if settings
+        .teacher
+        .as_ref()
+        .and_then(|s| s.timeout_secs)
+        .is_none()
+    {
+        // Ears and mouth stay snappy. The Teacher is the large model, and a
+        // lesson is several lines, so twenty seconds is a truncated thought.
+        teacher = teacher.with_timeout(std::time::Duration::from_secs(180));
+    }
     let permissions = cli
         .permissions
         .as_deref()
@@ -161,7 +171,7 @@ pub async fn assemble_with_ears(
 
     let teaching = online && !cli.no_teaching;
     let ears_format_flag =
-        spoon_ears::EarsFormatFlag::new(std::env::var("SPOON_EARS_PYTHON").is_ok());
+        spoon_ears::EarsFormatFlag::new(!std::env::var("SPOON_EARS_ANGLES").is_ok());
     let (ears, mouth, teacher): SeatTrio = if online {
         (
             Box::new(

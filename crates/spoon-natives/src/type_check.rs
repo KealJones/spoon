@@ -44,7 +44,10 @@ fn type_of(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 }
 
 fn is_text(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    Ok(Concept::bool(matches!(args[0].as_ground(), Some(Ground::Text(_)))))
+    Ok(Concept::bool(matches!(
+        args[0].as_ground(),
+        Some(Ground::Text(_))
+    )))
 }
 
 fn is_number(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
@@ -59,7 +62,10 @@ fn is_list_native(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 }
 
 fn is_bool(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    Ok(Concept::bool(matches!(args[0].as_ground(), Some(Ground::Bool(_)))))
+    Ok(Concept::bool(matches!(
+        args[0].as_ground(),
+        Some(Ground::Bool(_))
+    )))
 }
 
 /// True for a named or compound concept that carries meaning through the

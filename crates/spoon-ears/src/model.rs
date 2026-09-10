@@ -39,12 +39,17 @@ impl EarsFormatFlag {
     }
 
     pub fn set(&self, format: EarsFormat) {
-        self.0.store(format == EarsFormat::PythonCall, Ordering::Relaxed);
+        self.0
+            .store(format == EarsFormat::PythonCall, Ordering::Relaxed);
     }
 
     pub fn toggle(&self) -> EarsFormat {
         let was_python = self.0.fetch_xor(true, Ordering::Relaxed);
-        if was_python { EarsFormat::AngleBracket } else { EarsFormat::PythonCall }
+        if was_python {
+            EarsFormat::AngleBracket
+        } else {
+            EarsFormat::PythonCall
+        }
     }
 }
 
@@ -172,74 +177,74 @@ Reply with the steps and nothing else. No prose, no explanation, no code fences.
                 "\n\nLearned from earlier mistakes:\n{}",
                 rules
                     .iter()
-                    .map(|r| format!("# {r}"))
+                    .map(|r| format!("- {r}"))
                     .collect::<Vec<_>>()
                     .join("\n")
             )
         };
         let known = vocabulary.join("\n  ");
         format!(
-            r#"You translate messy human speech into Python function calls. You never compute, resolve, or answer anything. You only translate.
+            r#"You translate messy human speech into concept expressions. You never compute, resolve, or answer anything. You only translate.
 
-First write a comment explaining your interpretation, then write the function call.
+Write ONE line per step, in the order the speaker said them. Each line is one of:
 
-Each step is one of these wrapper functions:
-  assert_that(CONCEPT)   - the speaker is stating something true
-  ask(CONCEPT)           - the speaker is asking whether something holds, or asking for a value
-  do(CONCEPT)            - the speaker wants something done or computed
-  chat(CONCEPT)          - social talk with no request in it
-  correction(STEP)       - the speaker is repairing what they just said; STEP is the replacement
+assert_that(CONCEPT)   the speaker is stating something true
+ask(CONCEPT)           the speaker is asking whether something holds, or asking for a value
+do(CONCEPT)            the speaker wants something done or computed
+chat(CONCEPT)          social talk with no request in it
+correction(STEP)       the speaker is repairing what they just said; STEP is the replacement
 
-Arguments are: strings "text", numbers, True/False, function calls, or ?0 for an unknown/placeholder.
-Lists are written as Python lists: [1, 2, 3]
-Lambda for predicates: lambda x: math_gt(x, 4)
+A list is written list(a, b, c) with the items as separate arguments. Never
+write list([a, b, c]): that is a list of one thing, the bracketed value itself,
+which is almost never what someone means.
+
+Where a function is wanted, write an expression with ?0 standing for each
+element. This is how you say "compare against this value", which has no name:
+
+  "how many r's in strawberry"  -> ask(count(filter(chars("strawberry"), eq(?0, "r"))))
+  "double each of them"         -> do(map(?0, mul(?0, 2)))
+  "the ones over 4"             -> do(filter(?0, gt(?0, 4)))
+
+A CONCEPT is written head(arg, arg). Arguments are concepts, quoted "text", numbers, true/false, or ?0 for something unspecified. Names are kebab-case (hyphens).
 
 Examples:
-  "john has a dog"
-  # Statement: john owns a dog
-  assert_that(owns(john, dog))
+  "john has a dog"             -> assert_that(owns(john, dog))
+  "who owns a dog"             -> ask(owns(?0, dog))
+  "is keal friends with greg"  -> ask(friends(keal, greg))
+  "add 2 and 3"                -> do(add(2, 3))
+  "biggest of 4, 9, 2 and 7"  -> do(max-of(list(4, 9, 2, 7)))
+  "hey"                        -> chat(greet())
+  "the weights, no the scores" -> do(sum(weights))
+                                  correction(do(sum(scores)))
 
-  "who owns a dog"
-  # Question: who is the owner of a dog (unknown subject)
-  ask(owns(?0, dog))
+A statement ABOUT a relation is still a statement, so it is assert_that. These
+shapes matter and have exact spellings:
 
-  "is keal friends with greg"
-  # Question: are keal and greg friends
-  ask(friends(keal, greg))
+  "friendship is symmetric"        -> assert_that(symmetric(friends))
+  "X is the inverse of Y"          -> assert_that(inverse-of(X, Y))
+  "part-of is transitive"          -> assert_that(transitive(part-of))
+  "a dog is a subtype of animal"   -> assert_that(subtype-of(dog, animal))
+  "rex is a dog"                   -> assert_that(participates(rex, dog))
+  "animals are alive by default"   -> assert_that(default-expectation(animal, alive, true))
+  "\"pup\" means dog"              -> assert_that(synonym("pup", dog))
 
-  "add 2 and 3"
-  # Computation: add two numbers
-  do(math_add(2, 3))
+Use the plain relation name, not a noun form: "friendship is symmetric" is
+about the relation `friends`, so write symmetric(friends). Naming it
+`friendship` makes a second, unrelated concept.
 
-  "how many r's in strawberry"
-  # Computation: count characters matching "r" in "strawberry"
-  ask(list_count(list_filter(text_chars("strawberry"), lambda x: logic_eq(x, "r"))))
+Multi-step requests use nested calls:
 
-  "biggest of 4, 9, 2 and 7"
-  # Computation: find the maximum of a list
-  do(list_max_of([4, 9, 2, 7]))
+  "fetch the todos and count them"
+      -> do(json-length(fetch-json("https://example.com/todos")))
+  "get the json and add up the scores"
+      -> do(sum(pluck(fetch-json("URL"), "score")))
 
-  "reverse banana"
-  # Computation: reverse the text "banana"
-  do(text_reverse("banana"))
+If a word means nothing you can express, write it as unknown("the word") inside the concept rather than guessing.
 
-  "the ones over 4"
-  # Computation: filter elements greater than 4
-  do(list_filter(?0, lambda x: logic_gt(x, 4)))
+Concepts currently known:\n  {known}
 
-  "hey"
-  # Social: greeting
-  chat(greet())
-
-  "friendship is symmetric"
-  # Statement about a relation
-  assert_that(symmetric(friends))
-
-Functions available (use underscores, they map to the concept names):
-  {known}
-
-Prefer a known function. Invent a new snake_case name only when nothing fits.
-Reply with ONLY the comment and function call per step. No other prose.{learned}"#
+Prefer a known concept. Invent a new kebab-case name only when nothing fits.
+Reply with the steps and nothing else. No prose, no explanation, no code fences.{learned}"#
         )
     }
 

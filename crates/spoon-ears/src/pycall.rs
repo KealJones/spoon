@@ -1,13 +1,16 @@
-//! Parse Python-style function calls into concepts.
+//! Parse and render Python-style function calls (paren notation).
 //!
-//! The model outputs expressions like `do(text_reverse("banana"))` and this
-//! module turns them into `Concept::call("text-reverse", [Concept::text("banana")])`.
+//! Parses: `do(text_reverse("banana"))` -> `Concept::call("text-reverse", [...])`
+//! Renders: `Concept::call("text-reverse", [...])` -> `do(text-reverse("banana"))`
+//!
+//! This is the canonical LLM-facing notation. Angle-bracket notation is used
+//! internally and in tests/seeds; parens are what the three seats speak.
 //!
 //! Only handles the subset we ask the model for: nested function calls with
 //! string/number/bool literals and `lambda x:` for holes. No variables, no
 //! imports, no control flow.
 
-use spoon_concept::{Concept, SymbolTable};
+use spoon_concept::{Concept, ConceptId, SymbolTable};
 
 #[derive(Debug)]
 pub enum PyParseError {
@@ -317,6 +320,48 @@ fn replace_name(concept: &Concept, name: &str, replacement: Concept) -> Concept 
     }
 }
 
+/// Render a concept in paren notation: `head(arg, arg)` instead of `Head<Arg, Arg>`.
+///
+/// This is the exact inverse of `parse_pycall`. Ground values (strings,
+/// numbers, booleans, holes) use the same spelling as angle notation so they
+/// round-trip cleanly.
+pub fn render_pycall(concept: &Concept, table: &SymbolTable) -> String {
+    let mut out = String::new();
+    write_pycall(&mut out, concept, table);
+    out
+}
+
+fn write_pycall(out: &mut String, concept: &Concept, table: &SymbolTable) {
+    match concept {
+        Concept::Atomic(ConceptId::Named(symbol)) => match table.resolve(*symbol) {
+            Some(name) => out.push_str(&name),
+            None => out.push_str(&format!("#{:016x}", symbol.as_u64())),
+        },
+        Concept::Atomic(ConceptId::Ground(_)) => {
+            // Ground values have the same spelling in both notations.
+            out.push_str(&spoon_concept::render(concept, table));
+        }
+        Concept::Hole(h) => out.push_str(&format!("?{}", h.as_u32())),
+        Concept::Compound { head, args } => {
+            if head.is_compound() {
+                out.push('(');
+                write_pycall(out, head, table);
+                out.push(')');
+            } else {
+                write_pycall(out, head, table);
+            }
+            out.push('(');
+            for (i, arg) in args.iter().enumerate() {
+                if i > 0 {
+                    out.push_str(", ");
+                }
+                write_pycall(out, arg, table);
+            }
+            out.push(')');
+        }
+    }
+}
+
 /// Extract metadata lines (# comments) from the model's output.
 /// Returns (metadata_lines, expression_lines).
 pub fn split_metadata(output: &str) -> (Vec<String>, Vec<String>) {
@@ -348,7 +393,10 @@ mod tests {
     #[test]
     fn simple_call() {
         let c = p("text_reverse(\"banana\")");
-        assert_eq!(c.head_symbol(), Some(spoon_concept::SymbolId::of("text-reverse")));
+        assert_eq!(
+            c.head_symbol(),
+            Some(spoon_concept::SymbolId::of("text-reverse"))
+        );
     }
 
     #[test]
@@ -360,14 +408,20 @@ mod tests {
     #[test]
     fn number_args() {
         let c = p("math_add(2, 3)");
-        assert_eq!(c.head_symbol(), Some(spoon_concept::SymbolId::of("math-add")));
+        assert_eq!(
+            c.head_symbol(),
+            Some(spoon_concept::SymbolId::of("math-add"))
+        );
         assert_eq!(c.args().len(), 2);
     }
 
     #[test]
     fn list_literal() {
         let c = p("[1, 2, 3]");
-        assert_eq!(c.head_symbol(), Some(spoon_concept::SymbolId::of("list-of")));
+        assert_eq!(
+            c.head_symbol(),
+            Some(spoon_concept::SymbolId::of("list-of"))
+        );
         assert_eq!(c.args().len(), 3);
     }
 
@@ -404,5 +458,66 @@ mod tests {
     fn bool_literals() {
         let c = p("logic_if(true, 1, 2)");
         assert_eq!(c.args()[0], Concept::bool(true));
+    }
+
+    // ------------------------------------------------------------------- render
+
+    fn rt(input: &str) -> String {
+        let table = SymbolTable::new();
+        let concept = parse_pycall(input, &table).expect("parse");
+        render_pycall(&concept, &table)
+    }
+
+    #[test]
+    fn render_atomic() {
+        assert_eq!(rt("add"), "add");
+    }
+
+    #[test]
+    fn render_call() {
+        assert_eq!(rt("do(add(2, 3))"), "do(add(2, 3))");
+    }
+
+    #[test]
+    fn render_string_arg() {
+        assert_eq!(rt(r#"do(reverse("banana"))"#), r#"do(reverse("banana"))"#);
+    }
+
+    #[test]
+    fn render_hole() {
+        assert_eq!(rt("map(?0, mul(?0, 2))"), "map(?0, mul(?0, 2))");
+    }
+
+    #[test]
+    fn render_zero_arg_compound() {
+        assert_eq!(rt("greet()"), "greet()");
+    }
+
+    #[test]
+    fn render_pycall_roundtrip() {
+        // parse -> render -> parse: the concept should be identical
+        let inputs = [
+            "do(add(2, 3))",
+            r#"assert-that(owns(john, dog))"#,
+            "ask(count(filter(chars(\"strawberry\"), eq(?0, \"r\"))))",
+            "do(max-of(list(4, 9, 2, 7)))",
+            "do(filter(?0, gt(?0, 4)))",
+        ];
+        for input in inputs {
+            let table = SymbolTable::new();
+            let first = parse_pycall(input, &table).unwrap_or_else(|e| panic!("{input}: {e}"));
+            let rendered = render_pycall(&first, &table);
+            let second =
+                parse_pycall(&rendered, &table).unwrap_or_else(|e| panic!("{rendered}: {e}"));
+            assert_eq!(first, second, "roundtrip failed for {input}");
+        }
+    }
+
+    #[test]
+    fn underscore_names_parse_to_same_concept_as_hyphens() {
+        let table = SymbolTable::new();
+        let a = parse_pycall("max_of(list(1, 2))", &table).unwrap();
+        let b = parse_pycall("max-of(list(1, 2))", &table).unwrap();
+        assert_eq!(a, b, "underscore and hyphen names must be the same concept");
     }
 }

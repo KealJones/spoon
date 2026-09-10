@@ -63,7 +63,10 @@ fn type_of_names_every_shape() {
         (list([Concept::int(1)]), "list"),
         (Concept::json(serde_json::json!({"a": 1})), "json"),
         (Concept::named("greg"), "concept"),
-        (Concept::call("friend-with", [Concept::named("greg")]), "concept"),
+        (
+            Concept::call("friend-with", [Concept::named("greg")]),
+            "concept",
+        ),
     ];
     for (c, expected) in cases {
         assert_eq!(
@@ -92,11 +95,19 @@ fn a_json_array_is_reported_as_a_list() {
 fn type_is_text() {
     let (store, reg) = brain();
     assert_eq!(
-        value(&store, &reg, &Concept::call("type-is-text", [Concept::text("a")])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("type-is-text", [Concept::text("a")])
+        ),
         Concept::bool(true)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("type-is-text", [Concept::int(1)])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("type-is-text", [Concept::int(1)])
+        ),
         Concept::bool(false)
     );
 }
@@ -105,15 +116,27 @@ fn type_is_text() {
 fn type_is_number_covers_int_and_float() {
     let (store, reg) = brain();
     assert_eq!(
-        value(&store, &reg, &Concept::call("type-is-number", [Concept::int(1)])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("type-is-number", [Concept::int(1)])
+        ),
         Concept::bool(true)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("type-is-number", [Concept::float(1.5)])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("type-is-number", [Concept::float(1.5)])
+        ),
         Concept::bool(true)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("type-is-number", [Concept::text("1")])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("type-is-number", [Concept::text("1")])
+        ),
         Concept::bool(false)
     );
 }
@@ -130,7 +153,11 @@ fn type_is_list() {
         Concept::bool(true)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("type-is-list", [Concept::int(1)])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("type-is-list", [Concept::int(1)])
+        ),
         Concept::bool(false)
     );
 }
@@ -139,11 +166,19 @@ fn type_is_list() {
 fn type_is_bool() {
     let (store, reg) = brain();
     assert_eq!(
-        value(&store, &reg, &Concept::call("type-is-bool", [Concept::bool(false)])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("type-is-bool", [Concept::bool(false)])
+        ),
         Concept::bool(true)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("type-is-bool", [Concept::int(0)])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("type-is-bool", [Concept::int(0)])
+        ),
         Concept::bool(false)
     );
 }
@@ -152,7 +187,11 @@ fn type_is_bool() {
 fn type_is_concept_is_true_for_named_and_compound_and_false_for_ground_and_lists() {
     let (store, reg) = brain();
     assert_eq!(
-        value(&store, &reg, &Concept::call("type-is-concept", [Concept::named("greg")])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("type-is-concept", [Concept::named("greg")])
+        ),
         Concept::bool(true)
     );
     assert_eq!(
@@ -167,7 +206,11 @@ fn type_is_concept_is_true_for_named_and_compound_and_false_for_ground_and_lists
         Concept::bool(true)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("type-is-concept", [Concept::int(1)])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("type-is-concept", [Concept::int(1)])
+        ),
         Concept::bool(false)
     );
     assert_eq!(
@@ -188,15 +231,27 @@ fn type_is_concept_is_true_for_named_and_compound_and_false_for_ground_and_lists
 fn type_to_number_parses_int_before_float() {
     let (store, reg) = brain();
     assert_eq!(
-        value(&store, &reg, &Concept::call("type-to-number", [Concept::text("42")])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("type-to-number", [Concept::text("42")])
+        ),
         Concept::int(42)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("type-to-number", [Concept::text("3.5")])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("type-to-number", [Concept::text("3.5")])
+        ),
         Concept::float(3.5)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("type-to-number", [Concept::text("  7  ")])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("type-to-number", [Concept::text("  7  ")])
+        ),
         Concept::int(7)
     );
     let message = why_failed(
@@ -246,18 +301,34 @@ fn type_to_bool_coerces_common_falsy_values() {
 fn type_to_int_truncates_and_passes_through() {
     let (store, reg) = brain();
     assert_eq!(
-        value(&store, &reg, &Concept::call("type-to-int", [Concept::float(3.9)])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("type-to-int", [Concept::float(3.9)])
+        ),
         Concept::int(3)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("type-to-int", [Concept::float(-3.9)])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("type-to-int", [Concept::float(-3.9)])
+        ),
         Concept::int(-3)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("type-to-int", [Concept::int(5)])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("type-to-int", [Concept::int(5)])
+        ),
         Concept::int(5)
     );
-    let message = why_failed(&store, &reg, &Concept::call("type-to-int", [Concept::text("5")]));
+    let message = why_failed(
+        &store,
+        &reg,
+        &Concept::call("type-to-int", [Concept::text("5")]),
+    );
     assert!(message.contains("type-to-int"), "got {message}");
 }
 
@@ -265,11 +336,19 @@ fn type_to_int_truncates_and_passes_through() {
 fn type_to_float_widens_and_passes_through() {
     let (store, reg) = brain();
     assert_eq!(
-        value(&store, &reg, &Concept::call("type-to-float", [Concept::int(5)])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("type-to-float", [Concept::int(5)])
+        ),
         Concept::float(5.0)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("type-to-float", [Concept::float(1.5)])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("type-to-float", [Concept::float(1.5)])
+        ),
         Concept::float(1.5)
     );
 }
@@ -313,7 +392,10 @@ fn type_coerce_dispatches_on_target_type_text() {
         value(
             &store,
             &reg,
-            &Concept::call("type-coerce", [Concept::text("42"), Concept::text("number")])
+            &Concept::call(
+                "type-coerce",
+                [Concept::text("42"), Concept::text("number")]
+            )
         ),
         Concept::int(42)
     );

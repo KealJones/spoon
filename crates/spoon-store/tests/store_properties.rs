@@ -297,7 +297,9 @@ fn every_artifact_kind_survives_a_restart() {
     );
     assert!(store.holds(&concept).unwrap());
 
-    let reloaded = store.realizations_for(&Concept::named("list-sort")).unwrap();
+    let reloaded = store
+        .realizations_for(&Concept::named("list-sort"))
+        .unwrap();
     assert_eq!(reloaded.len(), 1);
     assert_eq!(reloaded[0].spec, realization.spec);
     assert_eq!(reloaded[0].effect, Effect::Pure);

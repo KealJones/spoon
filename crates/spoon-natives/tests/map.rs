@@ -100,11 +100,19 @@ fn from_entries_builds_a_map() {
     ]);
     let out = value(&store, &reg, &Concept::call("map-from-entries", [pairs]));
     assert_eq!(
-        value(&store, &reg, &Concept::call("map-get", [out.clone(), Concept::text("x")])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("map-get", [out.clone(), Concept::text("x")])
+        ),
         Concept::int(1)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("map-get", [out, Concept::text("y")])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("map-get", [out, Concept::text("y")])
+        ),
         Concept::text("hi")
     );
 }
@@ -114,7 +122,11 @@ fn get_reads_a_value_and_errors_on_a_missing_key() {
     let (store, reg) = brain();
     let m = obj(serde_json::json!({"name": "greg"}));
     assert_eq!(
-        value(&store, &reg, &Concept::call("map-get", [m.clone(), Concept::text("name")])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("map-get", [m.clone(), Concept::text("name")])
+        ),
         Concept::text("greg")
     );
     let message = why_failed(
@@ -130,11 +142,19 @@ fn has_key_answers_presence() {
     let (store, reg) = brain();
     let m = obj(serde_json::json!({"a": 1}));
     assert_eq!(
-        value(&store, &reg, &Concept::call("map-has-key", [m.clone(), Concept::text("a")])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("map-has-key", [m.clone(), Concept::text("a")])
+        ),
         Concept::bool(true)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("map-has-key", [m, Concept::text("z")])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("map-has-key", [m, Concept::text("z")])
+        ),
         Concept::bool(false)
     );
 }
@@ -153,11 +173,19 @@ fn set_adds_or_replaces_a_key() {
         &Concept::call("map-set", [m, Concept::text("b"), Concept::int(2)]),
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("map-get", [out.clone(), Concept::text("a")])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("map-get", [out.clone(), Concept::text("a")])
+        ),
         Concept::int(1)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("map-get", [out, Concept::text("b")])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("map-get", [out, Concept::text("b")])
+        ),
         Concept::int(2)
     );
 }
@@ -169,15 +197,27 @@ fn merge_lets_the_second_map_win_on_conflict() {
     let b = obj(serde_json::json!({"b": 2, "c": 3}));
     let out = value(&store, &reg, &Concept::call("map-merge", [a, b]));
     assert_eq!(
-        value(&store, &reg, &Concept::call("map-get", [out.clone(), Concept::text("a")])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("map-get", [out.clone(), Concept::text("a")])
+        ),
         Concept::int(1)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("map-get", [out.clone(), Concept::text("b")])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("map-get", [out.clone(), Concept::text("b")])
+        ),
         Concept::int(2)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("map-get", [out, Concept::text("c")])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("map-get", [out, Concept::text("c")])
+        ),
         Concept::int(3)
     );
 }
@@ -187,7 +227,11 @@ fn pick_and_omit_are_complementary() {
     let (store, reg) = brain();
     let m = obj(serde_json::json!({"a": 1, "b": 2, "c": 3}));
     let keys = list([Concept::text("a"), Concept::text("c")]);
-    let picked = value(&store, &reg, &Concept::call("map-pick", [m.clone(), keys.clone()]));
+    let picked = value(
+        &store,
+        &reg,
+        &Concept::call("map-pick", [m.clone(), keys.clone()]),
+    );
     assert_eq!(
         value(&store, &reg, &Concept::call("map-keys", [picked])),
         list([Concept::text("a"), Concept::text("c")])
@@ -211,14 +255,25 @@ fn update_applies_a_function_to_one_value() {
     let out = value(
         &store,
         &reg,
-        &Concept::call("map-update", [m, Concept::text("count"), Concept::named("double")]),
+        &Concept::call(
+            "map-update",
+            [m, Concept::text("count"), Concept::named("double")],
+        ),
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("map-get", [out.clone(), Concept::text("count")])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("map-get", [out.clone(), Concept::text("count")])
+        ),
         Concept::int(8)
     );
     assert_eq!(
-        value(&store, &reg, &Concept::call("map-get", [out, Concept::text("other")])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("map-get", [out, Concept::text("other")])
+        ),
         Concept::text("untouched")
     );
 }
@@ -230,9 +285,15 @@ fn update_errors_on_a_missing_key() {
     let message = why_failed(
         &store,
         &reg,
-        &Concept::call("map-update", [m, Concept::text("z"), Concept::named("text-upper")]),
+        &Concept::call(
+            "map-update",
+            [m, Concept::text("z"), Concept::named("text-upper")],
+        ),
     );
-    assert!(message.contains("map-update") || message.contains('z'), "got {message}");
+    assert!(
+        message.contains("map-update") || message.contains('z'),
+        "got {message}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -252,7 +313,10 @@ fn every_native_refuses_a_wrong_typed_argument_instead_of_panicking() {
         Concept::call("map-from-entries", [not_a_map.clone()]),
         Concept::call("map-get", [not_a_map.clone(), Concept::text("a")]),
         Concept::call("map-get", [m.clone(), Concept::int(1)]),
-        Concept::call("map-set", [not_a_map.clone(), Concept::text("a"), Concept::int(1)]),
+        Concept::call(
+            "map-set",
+            [not_a_map.clone(), Concept::text("a"), Concept::int(1)],
+        ),
         Concept::call("map-has-key", [not_a_map.clone(), Concept::text("a")]),
         Concept::call("map-merge", [not_a_map.clone(), m.clone()]),
         Concept::call("map-pick", [not_a_map.clone(), list([Concept::text("a")])]),

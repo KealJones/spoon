@@ -107,10 +107,16 @@ fn the_arithmetic_natives_compute() {
         int(24)
     );
     assert_eq!(value(Concept::call("math-div", [int(9), int(3)])), int(3));
-    assert_eq!(value(Concept::call("math-modulo", [int(7), int(3)])), int(1));
+    assert_eq!(
+        value(Concept::call("math-modulo", [int(7), int(3)])),
+        int(1)
+    );
     assert_eq!(value(Concept::call("math-neg", [int(5)])), int(-5));
     assert_eq!(value(Concept::call("math-abs", [int(-5)])), int(5));
-    assert_eq!(value(Concept::call("math-pow", [int(2), int(10)])), int(1024));
+    assert_eq!(
+        value(Concept::call("math-pow", [int(2), int(10)])),
+        int(1024)
+    );
     assert_eq!(
         value(Concept::call("math-min", [int(3), int(1), int(2)])),
         int(1)
@@ -173,8 +179,14 @@ fn division_truncates_toward_zero_between_integers() {
 
 #[test]
 fn modulo_takes_its_sign_from_the_dividend() {
-    assert_eq!(value(Concept::call("math-modulo", [int(-7), int(3)])), int(-1));
-    assert_eq!(value(Concept::call("math-modulo", [int(7), int(-3)])), int(1));
+    assert_eq!(
+        value(Concept::call("math-modulo", [int(-7), int(3)])),
+        int(-1)
+    );
+    assert_eq!(
+        value(Concept::call("math-modulo", [int(7), int(-3)])),
+        int(1)
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -349,7 +361,10 @@ fn equality_is_concept_identity() {
         )),
         yes()
     );
-    assert_eq!(value(Concept::call("logic-ne", [int(42), float(42.0)])), yes());
+    assert_eq!(
+        value(Concept::call("logic-ne", [int(42), float(42.0)])),
+        yes()
+    );
     assert_eq!(value(Concept::call("logic-ne", [int(42), int(42)])), no());
 }
 
@@ -369,11 +384,26 @@ fn equality_compares_the_reduced_arguments() {
 fn ordering_compares_numbers_across_int_and_float() {
     assert_eq!(value(Concept::call("logic-lt", [int(1), int(2)])), yes());
     assert_eq!(value(Concept::call("logic-lt", [int(2), int(1)])), no());
-    assert_eq!(value(Concept::call("logic-gt", [float(2.5), int(2)])), yes());
-    assert_eq!(value(Concept::call("logic-lte", [int(2), float(2.0)])), yes());
-    assert_eq!(value(Concept::call("logic-gte", [int(2), float(2.0)])), yes());
-    assert_eq!(value(Concept::call("logic-lte", [int(3), float(2.0)])), no());
-    assert_eq!(value(Concept::call("logic-gte", [float(1.5), int(2)])), no());
+    assert_eq!(
+        value(Concept::call("logic-gt", [float(2.5), int(2)])),
+        yes()
+    );
+    assert_eq!(
+        value(Concept::call("logic-lte", [int(2), float(2.0)])),
+        yes()
+    );
+    assert_eq!(
+        value(Concept::call("logic-gte", [int(2), float(2.0)])),
+        yes()
+    );
+    assert_eq!(
+        value(Concept::call("logic-lte", [int(3), float(2.0)])),
+        no()
+    );
+    assert_eq!(
+        value(Concept::call("logic-gte", [float(1.5), int(2)])),
+        no()
+    );
 }
 
 #[test]
@@ -403,7 +433,10 @@ fn ordering_refuses_non_numbers_instead_of_guessing() {
 #[test]
 fn the_logic_natives_compute() {
     assert_eq!(value(Concept::call("logic-and", [yes(), yes()])), yes());
-    assert_eq!(value(Concept::call("logic-and", [yes(), yes(), no()])), no());
+    assert_eq!(
+        value(Concept::call("logic-and", [yes(), yes(), no()])),
+        no()
+    );
     assert_eq!(value(Concept::call("logic-or", [no(), no()])), no());
     assert_eq!(value(Concept::call("logic-or", [no(), no(), yes()])), yes());
     assert_eq!(value(Concept::call("logic-not", [yes()])), no());
@@ -411,8 +444,14 @@ fn the_logic_natives_compute() {
     assert_eq!(value(Concept::call("logic-xor", [yes(), no()])), yes());
     assert_eq!(value(Concept::call("logic-xor", [yes(), yes()])), no());
     assert_eq!(value(Concept::call("logic-xor", [no(), no()])), no());
-    assert_eq!(value(Concept::call("logic-if", [yes(), int(1), int(2)])), int(1));
-    assert_eq!(value(Concept::call("logic-if", [no(), int(1), int(2)])), int(2));
+    assert_eq!(
+        value(Concept::call("logic-if", [yes(), int(1), int(2)])),
+        int(1)
+    );
+    assert_eq!(
+        value(Concept::call("logic-if", [no(), int(1), int(2)])),
+        int(2)
+    );
 }
 
 #[test]
@@ -507,7 +546,10 @@ fn the_numeric_predicates_compute() {
     assert_eq!(value(Concept::call("math-is-zero", [int(1)])), no());
 
     assert_eq!(value(Concept::call("math-is-positive", [int(1)])), yes());
-    assert_eq!(value(Concept::call("math-is-positive", [float(0.5)])), yes());
+    assert_eq!(
+        value(Concept::call("math-is-positive", [float(0.5)])),
+        yes()
+    );
     assert_eq!(
         value(Concept::call("math-is-positive", [int(0)])),
         no(),
@@ -515,7 +557,10 @@ fn the_numeric_predicates_compute() {
     );
 
     assert_eq!(value(Concept::call("math-is-negative", [int(-1)])), yes());
-    assert_eq!(value(Concept::call("math-is-negative", [float(-0.5)])), yes());
+    assert_eq!(
+        value(Concept::call("math-is-negative", [float(-0.5)])),
+        yes()
+    );
     assert_eq!(value(Concept::call("math-is-negative", [int(0)])), no());
 
     assert_eq!(value(Concept::call("math-is-even", [int(4)])), yes());
@@ -549,12 +594,7 @@ fn parity_is_an_integer_question() {
 
 #[test]
 fn rounding_passes_integers_through_unchanged() {
-    for native in [
-        "math-floor",
-        "math-ceil",
-        "math-round",
-        "math-trunc",
-    ] {
+    for native in ["math-floor", "math-ceil", "math-round", "math-trunc"] {
         assert_eq!(value(Concept::call(native, [int(5)])), int(5));
         assert_eq!(value(Concept::call(native, [int(-5)])), int(-5));
     }
@@ -563,22 +603,34 @@ fn rounding_passes_integers_through_unchanged() {
 #[test]
 fn floor_and_ceil_round_toward_the_nearer_infinity() {
     assert_eq!(value(Concept::call("math-floor", [float(1.5)])), float(1.0));
-    assert_eq!(value(Concept::call("math-floor", [float(-1.5)])), float(-2.0));
+    assert_eq!(
+        value(Concept::call("math-floor", [float(-1.5)])),
+        float(-2.0)
+    );
     assert_eq!(value(Concept::call("math-ceil", [float(1.5)])), float(2.0));
-    assert_eq!(value(Concept::call("math-ceil", [float(-1.5)])), float(-1.0));
+    assert_eq!(
+        value(Concept::call("math-ceil", [float(-1.5)])),
+        float(-1.0)
+    );
 }
 
 #[test]
 fn round_goes_half_away_from_zero() {
     assert_eq!(value(Concept::call("math-round", [float(1.5)])), float(2.0));
-    assert_eq!(value(Concept::call("math-round", [float(-1.5)])), float(-2.0));
+    assert_eq!(
+        value(Concept::call("math-round", [float(-1.5)])),
+        float(-2.0)
+    );
     assert_eq!(value(Concept::call("math-round", [float(1.4)])), float(1.0));
 }
 
 #[test]
 fn trunc_rounds_toward_zero_unlike_floor() {
     assert_eq!(value(Concept::call("math-trunc", [float(1.9)])), float(1.0));
-    assert_eq!(value(Concept::call("math-trunc", [float(-1.9)])), float(-1.0));
+    assert_eq!(
+        value(Concept::call("math-trunc", [float(-1.9)])),
+        float(-1.0)
+    );
     assert_eq!(
         value(Concept::call("math-floor", [float(-1.9)])),
         float(-2.0),
@@ -588,7 +640,10 @@ fn trunc_rounds_toward_zero_unlike_floor() {
 
 #[test]
 fn fract_is_always_a_float_even_for_an_integer() {
-    assert_eq!(value(Concept::call("math-fract", [float(1.25)])), float(0.25));
+    assert_eq!(
+        value(Concept::call("math-fract", [float(1.25)])),
+        float(0.25)
+    );
     assert_eq!(value(Concept::call("math-fract", [int(5)])), float(0.0));
 }
 
@@ -630,7 +685,10 @@ fn clamp_restricts_to_the_given_bounds() {
 #[test]
 fn clamp_refuses_an_inverted_range_instead_of_panicking() {
     assert_errors(Concept::call("math-clamp", [int(1), int(5), int(3)]));
-    assert_errors(Concept::call("math-clamp", [float(1.0), float(5.0), float(3.0)]));
+    assert_errors(Concept::call(
+        "math-clamp",
+        [float(1.0), float(5.0), float(3.0)],
+    ));
 }
 
 // ---------------------------------------------------------------------------
@@ -640,7 +698,10 @@ fn clamp_refuses_an_inverted_range_instead_of_panicking() {
 #[test]
 fn sqrt_computes_and_always_answers_a_float() {
     assert_eq!(value(Concept::call("math-sqrt", [int(4)])), float(2.0));
-    assert_eq!(value(Concept::call("math-sqrt", [float(2.0)])), float(2.0f64.sqrt()));
+    assert_eq!(
+        value(Concept::call("math-sqrt", [float(2.0)])),
+        float(2.0f64.sqrt())
+    );
 }
 
 #[test]
@@ -653,7 +714,10 @@ fn sqrt_of_a_negative_number_is_refused() {
 fn logarithms_compute_in_their_own_base() {
     assert_eq!(value(Concept::call("math-log", [float(1.0)])), float(0.0));
     assert_eq!(
-        value(Concept::call("math-log", [Concept::float(std::f64::consts::E)])),
+        value(Concept::call(
+            "math-log",
+            [Concept::float(std::f64::consts::E)]
+        )),
         float(1.0)
     );
     assert_eq!(value(Concept::call("math-log2", [int(8)])), float(3.0));
@@ -749,7 +813,10 @@ fn nested_arithmetic_reduces_innermost_first() {
                     "logic-gt",
                     [
                         // Add<7, 3> is 10, Div<10, 4> truncates to 2, and 2 > 1.
-                        Concept::call("math-div", [Concept::call("math-add", [int(7), int(3)]), int(4)]),
+                        Concept::call(
+                            "math-div",
+                            [Concept::call("math-add", [int(7), int(3)]), int(4)]
+                        ),
                         int(1)
                     ]
                 ),

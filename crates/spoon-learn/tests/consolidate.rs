@@ -42,7 +42,10 @@ fn int(v: i64) -> Concept {
 
 /// `Add<Mul<k, 2>, 1>`: the running example, one constant apart each time.
 fn affine(k: i64) -> Concept {
-    Concept::call("math-add", [Concept::call("math-mul", [int(k), int(2)]), int(1)])
+    Concept::call(
+        "math-add",
+        [Concept::call("math-mul", [int(k), int(2)]), int(1)],
+    )
 }
 
 fn brain() -> (Store, NativeRegistry) {
@@ -105,7 +108,10 @@ fn three_bodies_sharing_a_shape_yield_one_abstraction() {
         abstraction.body,
         Concept::call(
             "math-add",
-            [Concept::call("math-mul", [Concept::hole(0), int(2)]), int(1)]
+            [
+                Concept::call("math-mul", [Concept::hole(0), int(2)]),
+                int(1)
+            ]
         )
     );
     assert_eq!(abstraction.arity, 1);
@@ -116,7 +122,10 @@ fn three_bodies_sharing_a_shape_yield_one_abstraction() {
     // saves one node per use and costs four to define, and it overlaps the
     // winner anyway.
     for other in &found {
-        assert_ne!(other.body, Concept::call("math-mul", [Concept::hole(0), int(2)]));
+        assert_ne!(
+            other.body,
+            Concept::call("math-mul", [Concept::hole(0), int(2)])
+        );
     }
 }
 
@@ -310,7 +319,10 @@ fn names_are_readable_and_deterministic() {
 #[test]
 fn colliding_names_get_a_numeric_suffix() {
     let bodies = vec![affine(3), affine(5), affine(7)];
-    let found = consolidate(&bodies, config(&["math-add", "math-mul", "math-add-of-math-mul"]));
+    let found = consolidate(
+        &bodies,
+        config(&["math-add", "math-mul", "math-add-of-math-mul"]),
+    );
     assert_eq!(found[0].name, "math-add-of-math-mul-2");
 
     // Camel case in the store is a word boundary, not a spelling, so the name
@@ -494,7 +506,10 @@ fn eviction_deprecates_rather_than_deletes() {
     // Deprecated is never selected, so the call no longer reduces. The body
     // that used it is left as it is: nothing is silently un-rewritten.
     let out = evaluate(&store, &registry, &call("job-a"));
-    assert_eq!(out.value(), Some(&Concept::call("math-add-of-math-mul", [int(3)])));
+    assert_eq!(
+        out.value(),
+        Some(&Concept::call("math-add-of-math-mul", [int(3)]))
+    );
 }
 
 #[test]

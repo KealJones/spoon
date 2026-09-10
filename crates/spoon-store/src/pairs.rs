@@ -289,20 +289,16 @@ impl Store {
     /// realization under the dead name, and the turn would silently return
     /// garbage. Better to drop them and let the system relearn.
     pub fn purge_stale_pairs(&self) -> Result<PurgeReport> {
-        let known: std::collections::HashSet<spoon_concept::SymbolId> = self
-            .all_symbols()?
-            .into_iter()
-            .map(|(id, _)| id)
-            .collect();
+        let known: std::collections::HashSet<spoon_concept::SymbolId> =
+            self.all_symbols()?.into_iter().map(|(id, _)| id).collect();
         let pairs = self.all_pairs(usize::MAX)?;
         let mut removed = 0u32;
         let mut kept = 0u32;
         let mut examples: Vec<String> = Vec::new();
         for pair in &pairs {
             let stale = pair.steps.iter().any(|step| {
-                spoon_concept::pre_order(step).any(|node| {
-                    node.as_symbol().is_some_and(|sym| !known.contains(&sym))
-                })
+                spoon_concept::pre_order(step)
+                    .any(|node| node.as_symbol().is_some_and(|sym| !known.contains(&sym)))
             });
             if stale {
                 self.forget_pair(pair.id)?;
@@ -334,11 +330,8 @@ pub struct PurgeReport {
 impl Store {
     /// Remove learned realizations whose bodies reference dead symbols.
     pub fn purge_stale_realizations(&self) -> Result<u32> {
-        let known: std::collections::HashSet<spoon_concept::SymbolId> = self
-            .all_symbols()?
-            .into_iter()
-            .map(|(id, _)| id)
-            .collect();
+        let known: std::collections::HashSet<spoon_concept::SymbolId> =
+            self.all_symbols()?.into_iter().map(|(id, _)| id).collect();
         let all = self.all_realizations()?;
         let mut retired = 0u32;
         for r in &all {

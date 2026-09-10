@@ -9,8 +9,8 @@ use axum::response::sse::{Event, Sse};
 use axum::response::{Html, IntoResponse};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use serde_json::json;
 use futures::StreamExt;
+use serde_json::json;
 use spoon_brain::{Brain, EventSink, TurnEvent};
 use tokio::sync::Mutex;
 
@@ -36,7 +36,10 @@ pub async fn run(cli: &Cli, host: &str, port: u16) -> Result<()> {
         .route("/debug/realizations", get(realizations))
         .route("/debug/episodes", get(episodes))
         .route("/debug/episode", get(episode_detail))
-        .route("/debug/ears-format", get(get_ears_format).post(toggle_ears_format))
+        .route(
+            "/debug/ears-format",
+            get(get_ears_format).post(toggle_ears_format),
+        )
         .layer(axum::Extension(ears_flag))
         .with_state(brain);
 
@@ -235,11 +238,28 @@ async fn concepts(State(brain): State<Shared>, Query(f): Query<Filter>) -> impl 
         .unwrap_or_default()
         .into_iter()
         .map(|(_, name)| name)
-        .filter(|n| f.q.as_ref().is_none_or(|q| n.to_lowercase().contains(&q.to_lowercase())))
+        .filter(|n| {
+            f.q.as_ref()
+                .is_none_or(|q| n.to_lowercase().contains(&q.to_lowercase()))
+        })
         .collect();
     names.sort();
     names.dedup();
     names.truncate(f.limit);
+
+    let mut rz_counts: std::collections::HashMap<String, usize> = Default::default();
+    for r in guard.store().all_realizations().unwrap_or_default() {
+        *rz_counts.entry(guard.render(&r.target)).or_default() += 1;
+    }
+    let names: Vec<serde_json::Value> = names
+        .into_iter()
+        .map(|n| {
+            json!({
+                "name": n,
+                "realizations": rz_counts.get(&n).copied().unwrap_or(0),
+            })
+        })
+        .collect();
 
     Json(json!({ "count": rendered.len(), "concepts": rendered, "names": names }))
 }
@@ -255,10 +275,7 @@ struct Named {
 /// all relational: what realizes it, which of those is winning, what has been
 /// said about it, and what it takes part in. Answering those from a flat list
 /// means opening four tabs and holding the join in your head.
-async fn concept_detail(
-    State(brain): State<Shared>,
-    Query(q): Query<Named>,
-) -> impl IntoResponse {
+async fn concept_detail(State(brain): State<Shared>, Query(q): Query<Named>) -> impl IntoResponse {
     let guard = brain.lock().await;
     let store = guard.store();
     let now = chrono::Utc::now();
@@ -273,8 +290,7 @@ async fn concept_detail(
         .unwrap_or_default()
         .into_iter()
         .map(|r| {
-            let scored =
-                spoon_eval::score(std::sync::Arc::new(r.clone()), 0.5, now, None);
+            let scored = spoon_eval::score(std::sync::Arc::new(r.clone()), 0.5, now, None);
             json!({
                 "name": r.name,
                 "kind": r.spec.kind().as_str(),
@@ -309,14 +325,18 @@ async fn concept_detail(
         })
         .collect();
     realizations.sort_by(|a, b| {
-        b["score"].as_f64().partial_cmp(&a["score"].as_f64()).unwrap_or(std::cmp::Ordering::Equal)
+        b["score"]
+            .as_f64()
+            .partial_cmp(&a["score"].as_f64())
+            .unwrap_or(std::cmp::Ordering::Equal)
     });
 
     // Everything mentioning it, split by whether it is the subject or a
     // participant. A concept's meaning is mostly what it takes part in.
     let mentions = store.concepts_containing(id, 200).unwrap_or_default();
-    let (heads, participates): (Vec<_>, Vec<_>) =
-        mentions.iter().partition(|c| c.head_symbol() == concept.as_symbol());
+    let (heads, participates): (Vec<_>, Vec<_>) = mentions
+        .iter()
+        .partition(|c| c.head_symbol() == concept.as_symbol());
 
     let live = |c: &spoon_concept::Concept| store.holds(c).unwrap_or(false);
     let render_all = |v: Vec<&spoon_concept::Concept>| -> Vec<String> {
@@ -330,9 +350,15 @@ async fn concept_detail(
         .filter(|c| live(c))
         .filter(|c| {
             c.head_symbol().is_some_and(|h| {
-                ["symmetric", "transitive", "inverse-of", "subtype-of", "default-expectation"]
-                    .iter()
-                    .any(|n| h == spoon_concept::SymbolId::of(n))
+                [
+                    "symmetric",
+                    "transitive",
+                    "inverse-of",
+                    "subtype-of",
+                    "default-expectation",
+                ]
+                .iter()
+                .any(|n| h == spoon_concept::SymbolId::of(n))
             })
         })
         .map(|c| guard.render(c))
@@ -472,11 +498,8 @@ async fn episode_detail(
     match found {
         Some(mut ep) => {
             if let Ok(episode) = serde_json::from_value::<spoon_brain::Episode>(ep.clone()) {
-                let rendered_steps: Vec<String> = episode
-                    .steps
-                    .iter()
-                    .map(|s| guard.render(s))
-                    .collect();
+                let rendered_steps: Vec<String> =
+                    episode.steps.iter().map(|s| guard.render(s)).collect();
                 ep["steps_rendered"] = serde_json::json!(rendered_steps);
                 if let Some(goal) = &episode.goal {
                     ep["goal_rendered"] = serde_json::json!(guard.render(goal));
@@ -484,11 +507,8 @@ async fn episode_detail(
                 if let Some(result) = &episode.result {
                     ep["result_rendered"] = serde_json::json!(guard.render(result));
                 }
-                let rendered_gaps: Vec<String> = episode
-                    .gaps
-                    .iter()
-                    .map(|g| guard.render(g))
-                    .collect();
+                let rendered_gaps: Vec<String> =
+                    episode.gaps.iter().map(|g| guard.render(g)).collect();
                 ep["gaps_rendered"] = serde_json::json!(rendered_gaps);
             }
             Json(ep).into_response()
@@ -497,14 +517,12 @@ async fn episode_detail(
     }
 }
 
-async fn get_ears_format(
-    axum::Extension(flag): axum::Extension<FormatFlag>,
-) -> impl IntoResponse {
+async fn get_ears_format(axum::Extension(flag): axum::Extension<FormatFlag>) -> impl IntoResponse {
     let format = flag.get();
     Json(json!({
         "format": match format {
             spoon_ears::EarsFormat::AngleBracket => "angle-bracket",
-            spoon_ears::EarsFormat::PythonCall => "python",
+            spoon_ears::EarsFormat::PythonCall => "parens",
         }
     }))
 }
@@ -516,7 +534,7 @@ async fn toggle_ears_format(
     Json(json!({
         "format": match new {
             spoon_ears::EarsFormat::AngleBracket => "angle-bracket",
-            spoon_ears::EarsFormat::PythonCall => "python",
+            spoon_ears::EarsFormat::PythonCall => "parens",
         }
     }))
 }

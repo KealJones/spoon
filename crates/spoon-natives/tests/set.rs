@@ -50,7 +50,11 @@ fn ints(values: impl IntoIterator<Item = i64>) -> Concept {
 fn set_set_dedups_keeping_first_appearance() {
     let (store, reg) = brain();
     assert_eq!(
-        value(&store, &reg, &Concept::call("set-set", [ints([1, 2, 2, 3, 1])])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("set-set", [ints([1, 2, 2, 3, 1])])
+        ),
         ints([1, 2, 3])
     );
     assert_eq!(
@@ -113,7 +117,10 @@ fn symmetric_difference_keeps_elements_in_exactly_one() {
         value(
             &store,
             &reg,
-            &Concept::call("set-symmetric-difference", [ints([1, 2, 3]), ints([2, 3, 4])])
+            &Concept::call(
+                "set-symmetric-difference",
+                [ints([1, 2, 3]), ints([2, 3, 4])]
+            )
         ),
         ints([1, 4])
     );
@@ -160,7 +167,11 @@ fn is_subset_and_is_superset() {
 fn empty_set_is_a_subset_of_anything_including_itself() {
     let (store, reg) = brain();
     assert_eq!(
-        value(&store, &reg, &Concept::call("set-is-subset", [ints([]), ints([])])),
+        value(
+            &store,
+            &reg,
+            &Concept::call("set-is-subset", [ints([]), ints([])])
+        ),
         Concept::bool(true)
     );
     assert_eq!(

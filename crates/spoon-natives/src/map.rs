@@ -51,7 +51,11 @@ fn to_value(native: &str, c: &Concept) -> Result<Value, EvalError> {
             Ground::Text(t) => Ok(Value::String(t.to_string())),
             Ground::DateTime(dt) => Ok(Value::String(dt.to_rfc3339())),
             Ground::Json(blob) => Ok(blob.value().clone()),
-            Ground::Bytes(_) => Err(type_error(native, "a value JSON can hold; bytes are not", c)),
+            Ground::Bytes(_) => Err(type_error(
+                native,
+                "a value JSON can hold; bytes are not",
+                c,
+            )),
         };
     }
     if let Ok(items) = want_list(native, c) {
@@ -111,7 +115,10 @@ fn from_entries(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
         if items.len() != 2 {
             return Err(native_error(
                 "map-from-entries",
-                format!("each entry must be a pair of key and value, got {} elements", items.len()),
+                format!(
+                    "each entry must be a pair of key and value, got {} elements",
+                    items.len()
+                ),
             ));
         }
         let key = want_key("map-from-entries", &items[0])?;

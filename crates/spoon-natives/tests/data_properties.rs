@@ -79,7 +79,11 @@ fn retraction_is_gated_the_same_way_as_assertion() {
     // the other would be a hole.
     let (store, reg) = env();
     let claim = Concept::call("owns", [Concept::named("greg"), Concept::named("dog")]);
-    eval(&store, &reg, &Concept::call("store-assert", [claim.clone()]));
+    eval(
+        &store,
+        &reg,
+        &Concept::call("store-assert", [claim.clone()]),
+    );
     assert!(store.holds(&claim).unwrap());
 
     let retract = Concept::call("store-retract-claim", [claim.clone()]);
@@ -202,7 +206,10 @@ fn a_plucked_number_is_a_number_arithmetic_can_use() {
         [Concept::call(
             "json-pluck",
             [
-                Concept::call("json-field", [Concept::json(payload), Concept::text("probes")]),
+                Concept::call(
+                    "json-field",
+                    [Concept::json(payload), Concept::text("probes")],
+                ),
                 Concept::text("score"),
             ],
         )],
@@ -386,7 +393,11 @@ fn describe_keeps_the_preference_order_it_was_given() {
 #[test]
 fn an_all_hole_pattern_is_refused_rather_than_reading_the_whole_brain() {
     let (store, reg) = env();
-    let out = eval(&store, &reg, &Concept::call("store-recall", [Concept::hole(0)]));
+    let out = eval(
+        &store,
+        &reg,
+        &Concept::call("store-recall", [Concept::hole(0)]),
+    );
     assert!(is_error(&out), "an unanchored recall was allowed: {out:?}");
 }
 

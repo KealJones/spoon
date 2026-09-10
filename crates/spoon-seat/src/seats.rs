@@ -131,7 +131,10 @@ pub struct MouthReply {
 
 impl MouthReply {
     pub fn native(text: String) -> Self {
-        MouthReply { text, exchange: None }
+        MouthReply {
+            text,
+            exchange: None,
+        }
     }
 }
 
@@ -167,6 +170,8 @@ pub enum TeacherAsk {
     Capability {
         concept: Concept,
         attempted: Vec<Arc<str>>,
+        utterance: Arc<str>,
+        unknown: Vec<Arc<str>>,
     },
     /// Input and output examples for a capability, so the synthesizer has
     /// something to search against.
@@ -220,7 +225,8 @@ pub enum TeacherReply {
     },
     /// Examples for the synthesizer.
     Spec(Spec),
-    /// A realization built from concepts Spoon already has.
+    /// A realization built from concepts. Those concepts may be ones Spoon
+    /// already has or ones this same lesson just introduced.
     Composition { target: Concept, body: Concept },
     /// A corrected reading of the utterance, as concept steps.
     ///
@@ -244,24 +250,24 @@ pub enum TeacherReply {
 }
 
 /// What the teacher produced, with the exchange that led to it.
+///
+/// One lesson can introduce several concepts, compose them, and still attach
+/// examples. That is the point of the seat: it teaches, it does not emit a
+/// single compose-from-known line.
 #[derive(Debug, Clone)]
 pub struct Taught {
-    pub reply: TeacherReply,
+    pub replies: Vec<TeacherReply>,
     pub exchange: Option<Exchange>,
 }
 
 /// Fills gaps, and never writes executable bodies by default.
 #[async_trait::async_trait]
 pub trait Teacher: Send + Sync {
-    /// Answer a question about something Spoon could not do.
+    /// Teach Spoon about something it could not do.
     ///
-    /// `vocabulary` is what Spoon currently knows, ranked. Without it the
-    /// Teacher is guessing at what it may compose from and will refuse work it
-    /// could have done: asked to build string reversal it will say no concept
-    /// turns a string into a list, while `chars` sits in the store unmentioned.
-    async fn teach(
-        &self,
-        ask: &TeacherAsk,
-        vocabulary: &[Arc<str>],
-    ) -> Result<Taught, LlmError>;
+    /// `vocabulary` is what Spoon currently knows, ranked, so the Teacher can
+    /// reuse it. The Teacher may also introduce concepts that are not in that
+    /// list: meaning that Spoon does not have yet is the job. The synthesizer
+    /// is the layer that may only compose from what already exists.
+    async fn teach(&self, ask: &TeacherAsk, vocabulary: &[Arc<str>]) -> Result<Taught, LlmError>;
 }

@@ -512,10 +512,7 @@ fn a_phrasing_that_keeps_being_wrong_stops_winning() {
         .expect("pair");
     let mut index = PhrasingIndex::from_store(&store).expect("index");
 
-    let before = index
-        .recognize("make it lowercase")
-        .expect("recognized")
-        .1;
+    let before = index.recognize("make it lowercase").expect("recognized").1;
 
     for _ in 0..6 {
         index.record(id, false);

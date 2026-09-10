@@ -165,7 +165,10 @@ fn arguments_still_reduce_under_an_unrealized_head() {
     let reg = registry();
     let expr = Concept::call(
         "height",
-        [Concept::call("math-add", [Concept::int(1), Concept::int(2)])],
+        [Concept::call(
+            "math-add",
+            [Concept::int(1), Concept::int(2)],
+        )],
     );
     let mut ev = Evaluator::new(&store, &reg).with_budget(Budget::deterministic());
     assert_eq!(

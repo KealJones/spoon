@@ -300,12 +300,12 @@ pub async fn bench(cli: &Cli, suite: &str) -> Result<()> {
     Ok(())
 }
 
-pub async fn bench_compare_ears(cli: &Cli, suite: &str) -> Result<()> {
+pub async fn bench_compare_ears(cli: &Cli, suite: &str, limit: Option<usize>) -> Result<()> {
     let path = format!("data/bench/{suite}.json");
     let raw =
         std::fs::read_to_string(&path).map_err(|e| anyhow::anyhow!("cannot read {path}: {e}"))?;
     let corpus: serde_json::Value = serde_json::from_str(&raw)?;
-    let cases: Vec<Case> = corpus["cases"]
+    let mut cases: Vec<Case> = corpus["cases"]
         .as_array()
         .map(|a| serde_json::from_value(serde_json::Value::Array(a.clone())))
         .transpose()?
@@ -313,6 +313,15 @@ pub async fn bench_compare_ears(cli: &Cli, suite: &str) -> Result<()> {
 
     if cases.is_empty() {
         anyhow::bail!("no graded cases in {path}");
+    }
+    if let Some(n) = limit {
+        cases.truncate(n);
+    }
+
+    if !cli.ephemeral {
+        println!("note: both brains share the persistent brain, so what one");
+        println!("      learns the other gets for free. Rerun with --ephemeral");
+        println!("      to measure the formats rather than the leakage.\n");
     }
 
     let (mut brain_ab, ears_flag_ab) = assemble(cli).await?;

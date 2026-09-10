@@ -141,7 +141,9 @@ fn count(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 }
 
 fn is_empty(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    Ok(Concept::bool(want_list("list-is-empty", &args[0])?.is_empty()))
+    Ok(Concept::bool(
+        want_list("list-is-empty", &args[0])?.is_empty(),
+    ))
 }
 
 fn append(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
@@ -302,10 +304,7 @@ fn chunk(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
         return Err(native_error("list-chunk", "chunk size must be at least 1"));
     }
     Ok(make_list(
-        items
-            .chunks(size)
-            .map(|c| make_list(c.to_vec()))
-            .collect(),
+        items.chunks(size).map(|c| make_list(c.to_vec())).collect(),
     ))
 }
 
@@ -351,7 +350,10 @@ fn window(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     let items = want_list("list-window", &args[0])?;
     let size = want_index("list-window", &args[1])?;
     if size == 0 {
-        return Err(native_error("list-window", "window size must be at least 1"));
+        return Err(native_error(
+            "list-window",
+            "window size must be at least 1",
+        ));
     }
     if size > items.len() {
         return Ok(make_list(Vec::new()));
@@ -636,7 +638,12 @@ fn partition(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// `extremum` does for `min-of`/`max-of`. Keys are ordered with the same
 /// `SortKey` rule as `sort-by`, so the two stay consistent about what counts
 /// as comparable.
-fn extremum_by(ctx: &mut dyn Ctx, native: &str, args: &[Concept], want_greater: bool) -> EvalResult {
+fn extremum_by(
+    ctx: &mut dyn Ctx,
+    native: &str,
+    args: &[Concept],
+    want_greater: bool,
+) -> EvalResult {
     let items = want_list(native, &args[0])?;
     if items.is_empty() {
         return Err(native_error(native, "an empty list has no extreme value"));
@@ -896,7 +903,12 @@ pub fn register(registry: &mut NativeRegistry) {
         Arity::Exact(1),
         "the first element of a list; for the first letters of a word use substring",
     );
-    registry.pure("list-last", last, Arity::Exact(1), "the last element of a list");
+    registry.pure(
+        "list-last",
+        last,
+        Arity::Exact(1),
+        "the last element of a list",
+    );
     registry.pure(
         "list-nth",
         nth,

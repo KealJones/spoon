@@ -84,7 +84,10 @@ fn split(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     let text = want_text("text-split", &args[0])?;
     let sep = want_text("text-split", &args[1])?;
     if sep.is_empty() {
-        return Err(native_error("text-split", "an empty separator has no meaning"));
+        return Err(native_error(
+            "text-split",
+            "an empty separator has no meaning",
+        ));
     }
     Ok(make_list(text.split(sep).map(Concept::text).collect()))
 }
@@ -117,11 +120,15 @@ fn lines(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// character. Case mapping is not a per-character substitution in general,
 /// which is why this cannot be done by indexing.
 fn upper(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    Ok(Concept::text(want_text("text-upper", &args[0])?.to_uppercase()))
+    Ok(Concept::text(
+        want_text("text-upper", &args[0])?.to_uppercase(),
+    ))
 }
 
 fn lower(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    Ok(Concept::text(want_text("text-lower", &args[0])?.to_lowercase()))
+    Ok(Concept::text(
+        want_text("text-lower", &args[0])?.to_lowercase(),
+    ))
 }
 
 fn trim(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
@@ -482,7 +489,9 @@ fn snake_case(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// and doubled-up spaces disappear rather than showing up as empty words.
 fn words(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     let text = want_text("text-words", &args[0])?;
-    Ok(make_list(text.split_whitespace().map(Concept::text).collect()))
+    Ok(make_list(
+        text.split_whitespace().map(Concept::text).collect(),
+    ))
 }
 
 /// An empty needle is refused for the same reason `text-replace` refuses one:
@@ -597,8 +606,18 @@ pub fn register(registry: &mut NativeRegistry) {
         Arity::Exact(1),
         "a list of the lines of a string",
     );
-    registry.pure("text-upper", upper, Arity::Exact(1), "a string in upper case");
-    registry.pure("text-lower", lower, Arity::Exact(1), "a string in lower case");
+    registry.pure(
+        "text-upper",
+        upper,
+        Arity::Exact(1),
+        "a string in upper case",
+    );
+    registry.pure(
+        "text-lower",
+        lower,
+        Arity::Exact(1),
+        "a string in lower case",
+    );
     registry.pure(
         "text-trim",
         trim,

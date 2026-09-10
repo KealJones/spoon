@@ -54,10 +54,13 @@ pub fn apply(
             }
         }
     } else if let Some(claim) = &previous.result
-        && previous.reply.starts_with("noted") {
+        && previous.reply.starts_with("noted")
+    {
         // Compatibility for episodes written before assertion lineage existed.
         for record in store.live_assertions(claim)? {
-            if store.retract(record.id, at)? { correction.retracted.push(claim.clone()); }
+            if store.retract(record.id, at)? {
+                correction.retracted.push(claim.clone());
+            }
         }
     }
     if let Some(pair) = previous.phrasing {

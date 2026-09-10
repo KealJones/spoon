@@ -53,7 +53,10 @@ fn an_asserted_fact_is_an_answer() {
     // Nothing realizes `friend-with` and nothing ever will. It is data, and
     // data is a perfectly good answer.
     let store = store();
-    let fact = Concept::call("friend-with", [Concept::named("greg"), Concept::named("keal")]);
+    let fact = Concept::call(
+        "friend-with",
+        [Concept::named("greg"), Concept::named("keal")],
+    );
     store
         .assert_concept(&fact, Provenance::User { episode: None }, None, None)
         .expect("store-assert");
@@ -63,7 +66,10 @@ fn an_asserted_fact_is_an_answer() {
 #[test]
 fn an_unasserted_made_up_head_is_not_an_answer() {
     let store = store();
-    let made_up = Concept::call("friend-with", [Concept::named("greg"), Concept::named("keal")]);
+    let made_up = Concept::call(
+        "friend-with",
+        [Concept::named("greg"), Concept::named("keal")],
+    );
     assert!(!is_answer(&store, &made_up));
 }
 

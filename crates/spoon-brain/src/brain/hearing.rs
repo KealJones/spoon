@@ -124,7 +124,7 @@ impl Brain {
                 understood: Arc::from(
                     e.steps
                         .iter()
-                        .map(|s| render(s, &self.symbols))
+                        .map(|s| pycall::render_pycall(s, &self.symbols))
                         .collect::<Vec<_>>()
                         .join("\n")
                         .as_str(),
@@ -210,7 +210,7 @@ impl Brain {
                     .map(|e| format!("{} ({})", e.doc, e.arity.describe()))
                     .unwrap_or_else(|| "a native".to_string()),
                 spoon_concept::RealizationSpec::Composed { body } => {
-                    format!("built as {}", render(body, &self.symbols))
+                    format!("built as {}", pycall::render_pycall(body, &self.symbols))
                 }
                 other => format!("a {} realization", other.kind().as_str()),
             };
@@ -224,7 +224,7 @@ impl Brain {
         let given: Vec<String> = gap
             .args()
             .iter()
-            .map(|a| render(a, &self.symbols))
+            .map(|a| pycall::render_pycall(a, &self.symbols))
             .collect();
         if !given.is_empty() {
             out.push(Arc::from(
@@ -283,5 +283,4 @@ impl Brain {
             })
             .collect()
     }
-
 }

@@ -12,7 +12,7 @@ use std::time::Instant;
 
 use chrono::Utc;
 use spoon_concept::{Concept, ConceptMeta, Provenance, SymbolTable, Tier, holes, render};
-use spoon_ears::{NativeEars, PhrasingIndex};
+use spoon_ears::{NativeEars, PhrasingIndex, pycall};
 use spoon_eval::{Budget, Evaluator, NativeRegistry, Outcome, PermissionMode};
 use spoon_infer::{DeriveBudget, DiscriminationTree, Engine};
 use spoon_learn::{SynthBudget, SynthOutcome, synthesize};
@@ -164,16 +164,29 @@ impl Brain {
     ) -> spoon_store::Result<TurnResult> {
         use crate::event::{TurnEvent, emit};
         let sink = sink.as_ref();
-        emit(sink, TurnEvent::TurnStarted { session: session.into(), text: text.into() });
+        emit(
+            sink,
+            TurnEvent::TurnStarted {
+                session: session.into(),
+                text: text.into(),
+            },
+        );
         let started = Instant::now();
         let mut metrics = TurnMetrics::default();
         let previous = self.feedback_target(session, text)?;
         let retry_feedback = previous.is_some() && feedback::retries_request(text);
-        if let Some(previous) = &previous { self.reject_episode(previous, text)?; }
+        if let Some(previous) = &previous {
+            self.reject_episode(previous, text)?;
+        }
         let heard_text = if retry_feedback {
             let e = previous.as_ref().unwrap();
-            e.request_text.as_deref().unwrap_or(&e.user_text).to_string()
-        } else { crate::correct::repaired(text).unwrap_or_else(|| text.into()) };
+            e.request_text
+                .as_deref()
+                .unwrap_or(&e.user_text)
+                .to_string()
+        } else {
+            crate::correct::repaired(text).unwrap_or_else(|| text.into())
+        };
         let feedback_context = previous.as_ref().map(|e| format!(
             "The user rejected the previous answer. Request: {}\nReading: {}\nAnswer: {}\nUser feedback: {}\nReconsider the reading or teach a corrected capability using this feedback.",
             e.request_text.as_deref().unwrap_or(&e.user_text),
@@ -188,32 +201,66 @@ impl Brain {
             let e = previous.as_ref().unwrap();
             // Do not ask the ears to interpret "that's wrong" as a new task.
             (Heard::native(e.steps.clone(), 0.0), e.ears_path)
-        } else { self.hear(session, &heard_text, &mut metrics).await };
-        for name in &heard.names { self.symbols.intern(name); }
+        } else {
+            self.hear(session, &heard_text, &mut metrics).await
+        };
+        for name in &heard.names {
+            self.symbols.intern(name);
+        }
         metrics.millis_ears = ears_started.elapsed().as_millis() as u64;
-        emit(sink, TurnEvent::EarsResult {
-            path: ears_path,
-            steps: heard.steps.iter().map(|s| render(s, &self.symbols)).collect(),
-            unknown: heard.unknown.iter().map(|w| w.to_string()).collect(),
-        });
+        emit(
+            sink,
+            TurnEvent::EarsResult {
+                path: ears_path,
+                steps: heard
+                    .steps
+                    .iter()
+                    .map(|s| render(s, &self.symbols))
+                    .collect(),
+                unknown: heard.unknown.iter().map(|w| w.to_string()).collect(),
+            },
+        );
         let reconciled = crate::reconcile::reconcile(&heard.steps, &self.store, &self.symbols);
         crate::reconcile::remember(&reconciled, &self.store);
         let mut steps = reconciled.steps;
         let mut moves = resolve(&steps, crate::resolve::is_question(&heard_text));
         let mut pair = self.last_pair.take();
-        emit(sink, TurnEvent::InteriorStarted { goal: steps.first().map(|s| render(s, &self.symbols)) });
+        emit(
+            sink,
+            TurnEvent::InteriorStarted {
+                goal: steps.first().map(|s| render(s, &self.symbols)),
+            },
+        );
         // Rejection is applied before any re-execution. A side effect from the
         // rejected turn must never be repeated merely to obtain another answer.
-        let mut attempt = if retry_feedback { Attempt::default() } else { self.execute(&moves, &mut metrics)? };
-        emit(sink, TurnEvent::InteriorResult { result: attempt.result.as_ref().map(|r| render(r, &self.symbols)) });
+        let mut attempt = if retry_feedback {
+            Attempt::default()
+        } else {
+            self.execute(&moves, &mut metrics)?
+        };
+        emit(
+            sink,
+            TurnEvent::InteriorResult {
+                result: attempt.result.as_ref().map(|r| render(r, &self.symbols)),
+            },
+        );
 
-        let went_wrong = !attempt.gaps.is_empty() || !heard.unknown.is_empty()
-            || attempt.result.as_ref().is_none_or(|r| !is_answer(&self.store, r) || is_unknown(r));
-        let spot_check = ears_path == EarsPath::Model && self.config.check_clean_readings > 0
-            && self.next_episode.is_multiple_of(u64::from(self.config.check_clean_readings));
+        let went_wrong = !attempt.gaps.is_empty()
+            || !heard.unknown.is_empty()
+            || attempt
+                .result
+                .as_ref()
+                .is_none_or(|r| !is_answer(&self.store, r) || is_unknown(r));
+        let spot_check = ears_path == EarsPath::Model
+            && self.config.check_clean_readings > 0
+            && self
+                .next_episode
+                .is_multiple_of(u64::from(self.config.check_clean_readings));
         let mut learning = Vec::new();
         let mut teacher_exchanges = Vec::new();
-        if previous.is_some() { learning.push("recorded negative feedback against the earlier turn".into()); }
+        if previous.is_some() {
+            learning.push("recorded negative feedback against the earlier turn".into());
+        }
         let mut changed_reading = false;
         if self.config.teaching && (went_wrong || spot_check || previous.is_some()) {
             let gaps = if retry_feedback {
@@ -221,11 +268,24 @@ impl Brain {
                 // A capability can run successfully and still be what the user
                 // rejected. It is a teaching target even without an exception.
                 let mut gaps = e.gaps.clone();
-                if gaps.is_empty() && let Some(goal) = &e.goal { gaps.push(goal.clone()); }
+                if gaps.is_empty()
+                    && let Some(goal) = &e.goal
+                {
+                    gaps.push(goal.clone());
+                }
                 gaps
-            } else { attempt.gaps.clone() };
-            let taught = self.consult_teacher(&heard_text, &heard, &gaps, &mut metrics,
-                feedback_context.as_deref()).await?;
+            } else {
+                attempt.gaps.clone()
+            };
+            let taught = self
+                .consult_teacher(
+                    &heard_text,
+                    &heard,
+                    &gaps,
+                    &mut metrics,
+                    feedback_context.as_deref(),
+                )
+                .await?;
             learning.extend(taught.notes);
             teacher_exchanges.extend(taught.exchanges);
             if let Some((replacement, replacement_pair)) = taught.reading {
@@ -233,67 +293,130 @@ impl Brain {
                 if let Some(old_pair) = pair {
                     self.store.record_pair_outcome(old_pair, false)?;
                 }
-                let reconciled = crate::reconcile::reconcile(&replacement, &self.store, &self.symbols);
+                let reconciled =
+                    crate::reconcile::reconcile(&replacement, &self.store, &self.symbols);
                 crate::reconcile::remember(&reconciled, &self.store);
                 steps = reconciled.steps;
                 heard.steps = replacement;
                 moves = resolve(&steps, crate::resolve::is_question(&heard_text));
                 pair = Some(replacement_pair);
             }
-            let previous_effect = previous.as_ref().is_some_and(|e| e.trace.iter().any(|s|
-                matches!(s.effect.as_str(), "write" | "network" | "shell")));
+            let previous_effect = previous.as_ref().is_some_and(|e| {
+                e.trace
+                    .iter()
+                    .any(|s| matches!(s.effect.as_str(), "write" | "network" | "shell"))
+            });
             let safe_retry = !attempt.external_effects && !(retry_feedback && previous_effect);
             if safe_retry && (changed_reading || (went_wrong && !learning.is_empty())) {
                 // Roll back only assertions made by this attempt if its reading
                 // was replaced, then use the new moves rather than the old ones.
                 if changed_reading {
-                    for (id, _) in &attempt.assertions { self.store.retract(spoon_store::AssertionId(*id), Utc::now())?; }
+                    for (id, _) in &attempt.assertions {
+                        self.store
+                            .retract(spoon_store::AssertionId(*id), Utc::now())?;
+                    }
                 }
                 // An unchanged rejected assertion must not be reasserted.
-                if changed_reading || (attempt.assertions.is_empty() && !moves.iter().any(|m| matches!(m, Move::Assert(_)))) {
+                if changed_reading
+                    || (attempt.assertions.is_empty()
+                        && !moves.iter().any(|m| matches!(m, Move::Assert(_))))
+                {
                     attempt = self.execute(&moves, &mut metrics)?;
-                    if retry_feedback && previous.as_ref().is_some_and(|e| e.result == attempt.result) {
+                    if retry_feedback
+                        && previous
+                            .as_ref()
+                            .is_some_and(|e| e.result == attempt.result)
+                    {
                         attempt.result = None;
-                        learning.push("the new attempt repeated the rejected answer; no corrected answer yet".into());
+                        learning.push(
+                            "the new attempt repeated the rejected answer; no corrected answer yet"
+                                .into(),
+                        );
                     } else {
                         learning.push("used what it just learned".into());
                     }
                 }
             }
         }
-        let answered = attempt.result.as_ref().is_some_and(|r| is_answer(&self.store, r) && !is_unknown(r));
+        let answered = attempt
+            .result
+            .as_ref()
+            .is_some_and(|r| is_answer(&self.store, r) && !is_unknown(r));
         if let Some(id) = pair {
             self.store.record_pair_outcome(id, answered)?;
             self.phrasing = PhrasingIndex::from_store(&self.store)?;
         }
-        if ears_path == EarsPath::Model && !retry_feedback && !changed_reading
-            && attempt.gaps.is_empty() && !steps.is_empty() && answered {
+        if ears_path == EarsPath::Model
+            && !retry_feedback
+            && !changed_reading
+            && attempt.gaps.is_empty()
+            && !steps.is_empty()
+            && answered
+        {
             pair = Some(self.remember_pair(&heard_text, &steps, PairSource::Model)?);
         }
         emit(sink, TurnEvent::MouthStarted);
         let mouth_started = Instant::now();
         let response = if retry_feedback && attempt.result.is_none() {
             // Record the correction without pretending that relearning succeeded.
-            Concept::call("answer", [Concept::text("I recorded that answer as wrong. I do not have a corrected answer yet.")])
-        } else { self.build_response(&moves, attempt.result.as_ref(), &attempt.gaps, &heard) };
+            Concept::call(
+                "answer",
+                [Concept::text(
+                    "I recorded that answer as wrong. I do not have a corrected answer yet.",
+                )],
+            )
+        } else {
+            self.build_response(&moves, attempt.result.as_ref(), &attempt.gaps, &heard)
+        };
         let must_mention: Vec<_> = attempt.result.iter().cloned().collect();
-        let (reply, mouth_path, mouth_exchange) = self.say(&response, &must_mention, &mut metrics).await;
+        let (reply, mouth_path, mouth_exchange) =
+            self.say(&response, &must_mention, &mut metrics).await;
         metrics.millis_mouth = mouth_started.elapsed().as_millis() as u64;
         metrics.millis_total = started.elapsed().as_millis() as u64;
-        emit(sink, TurnEvent::MouthResult { path: mouth_path, reply: reply.clone() });
+        emit(
+            sink,
+            TurnEvent::MouthResult {
+                path: mouth_path,
+                reply: reply.clone(),
+            },
+        );
         let episode = Episode {
-            id: self.next_episode, at: Utc::now(), session: session.into(), user_text: text.into(),
-            request_text: retry_feedback.then_some(heard_text), phrasing: pair,
-            assertions: Some(attempt.assertions), correction_of: previous.as_ref().map(|e| e.id),
-            steps, ears_path, unknown_words: heard.unknown.iter().map(|w| w.to_string()).collect(),
-            goal: attempt.goal, result: attempt.result, gaps: attempt.gaps,
-            realizations: attempt.realizations, trace: attempt.trace, rules: attempt.rules,
-            learning, reply: reply.clone(), mouth_path, metrics, correction: None,
-            ears_exchange: heard.exchange, teacher_exchanges, mouth_exchange,
+            id: self.next_episode,
+            at: Utc::now(),
+            session: session.into(),
+            user_text: text.into(),
+            request_text: retry_feedback.then_some(heard_text),
+            phrasing: pair,
+            assertions: Some(attempt.assertions),
+            correction_of: previous.as_ref().map(|e| e.id),
+            steps,
+            ears_path,
+            unknown_words: heard.unknown.iter().map(|w| w.to_string()).collect(),
+            goal: attempt.goal,
+            result: attempt.result,
+            gaps: attempt.gaps,
+            realizations: attempt.realizations,
+            trace: attempt.trace,
+            rules: attempt.rules,
+            learning,
+            reply: reply.clone(),
+            mouth_path,
+            metrics,
+            correction: None,
+            ears_exchange: heard.exchange,
+            teacher_exchanges,
+            mouth_exchange,
         };
-        self.store.put_episode(&episode_json(&episode)?, episode.id)?;
+        self.store
+            .put_episode(&episode_json(&episode)?, episode.id)?;
         self.next_episode += 1;
-        emit(sink, TurnEvent::TurnFinished { episode_id: episode.id, millis_total: episode.metrics.millis_total });
+        emit(
+            sink,
+            TurnEvent::TurnFinished {
+                episode_id: episode.id,
+                millis_total: episode.metrics.millis_total,
+            },
+        );
         Ok(TurnResult { reply, episode })
     }
 

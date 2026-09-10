@@ -457,7 +457,10 @@ fn or(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 }
 
 fn not(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
-    Ok(Concept::bool(!want_bool("logic-not", one("logic-not", args)?)?))
+    Ok(Concept::bool(!want_bool(
+        "logic-not",
+        one("logic-not", args)?,
+    )?))
 }
 
 /// Eager, unlike `and` and `or`. Exclusive or has no decisive argument: both
@@ -465,7 +468,9 @@ fn not(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
 /// and only make the reduction order harder to reason about.
 fn xor(_ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     let (a, b) = pair("logic-xor", args)?;
-    Ok(Concept::bool(want_bool("logic-xor", a)? != want_bool("logic-xor", b)?))
+    Ok(Concept::bool(
+        want_bool("logic-xor", a)? != want_bool("logic-xor", b)?,
+    ))
 }
 
 /// Reduces the condition and exactly one branch.
@@ -484,7 +489,8 @@ fn conditional(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     } else {
         args.get(2)
     };
-    let taken = taken.ok_or_else(|| native_error("logic-if", "expected a condition and two branches"))?;
+    let taken =
+        taken.ok_or_else(|| native_error("logic-if", "expected a condition and two branches"))?;
     ctx.eval(taken)
 }
 
@@ -839,15 +845,30 @@ pub fn register(registry: &mut NativeRegistry) {
         Arity::Exact(1),
         "the number with its sign flipped",
     );
-    registry.pure("math-abs", abs, Arity::Exact(1), "how far a number is from zero");
+    registry.pure(
+        "math-abs",
+        abs,
+        Arity::Exact(1),
+        "how far a number is from zero",
+    );
     registry.pure(
         "math-pow",
         pow,
         Arity::Exact(2),
         "the first number raised to the power of the second",
     );
-    registry.pure("math-min", min, Arity::AtLeast(1), "the smallest of the numbers");
-    registry.pure("math-max", max, Arity::AtLeast(1), "the largest of the numbers");
+    registry.pure(
+        "math-min",
+        min,
+        Arity::AtLeast(1),
+        "the smallest of the numbers",
+    );
+    registry.pure(
+        "math-max",
+        max,
+        Arity::AtLeast(1),
+        "the largest of the numbers",
+    );
 
     // Comparison. Equality is about identity and takes anything; ordering is
     // numeric.
@@ -906,7 +927,12 @@ pub fn register(registry: &mut NativeRegistry) {
         Effect::Pure,
         "true when any argument is true; stops at the first true",
     );
-    registry.pure("logic-not", not, Arity::Exact(1), "the opposite of a boolean");
+    registry.pure(
+        "logic-not",
+        not,
+        Arity::Exact(1),
+        "the opposite of a boolean",
+    );
     registry.register(
         "logic-if",
         conditional,
@@ -1025,9 +1051,24 @@ pub fn register(registry: &mut NativeRegistry) {
         Arity::Exact(1),
         "the base-10 logarithm of the number",
     );
-    registry.pure("math-sin", sin, Arity::Exact(1), "the sine of the number, in radians");
-    registry.pure("math-cos", cos, Arity::Exact(1), "the cosine of the number, in radians");
-    registry.pure("math-tan", tan, Arity::Exact(1), "the tangent of the number, in radians");
+    registry.pure(
+        "math-sin",
+        sin,
+        Arity::Exact(1),
+        "the sine of the number, in radians",
+    );
+    registry.pure(
+        "math-cos",
+        cos,
+        Arity::Exact(1),
+        "the cosine of the number, in radians",
+    );
+    registry.pure(
+        "math-tan",
+        tan,
+        Arity::Exact(1),
+        "the tangent of the number, in radians",
+    );
     registry.pure(
         "math-asin",
         asin,

@@ -38,9 +38,9 @@ impl Move {
 /// English marks a yes-or-no question by moving the verb to the front, which
 /// is a syntactic fact and needs no model to see.
 const INTERROGATIVE: &[&str] = &[
-    "is", "are", "was", "were", "am", "do", "does", "did", "can", "could",
-    "will", "would", "should", "has", "have", "had", "who", "what", "which",
-    "where", "when", "why", "how", "whats", "what's", "whos", "who's",
+    "is", "are", "was", "were", "am", "do", "does", "did", "can", "could", "will", "would",
+    "should", "has", "have", "had", "who", "what", "which", "where", "when", "why", "how", "whats",
+    "what's", "whos", "who's",
 ];
 
 /// Is this utterance asking rather than telling?

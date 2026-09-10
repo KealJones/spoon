@@ -107,7 +107,11 @@ fn ctrl_apply(ctx: &mut dyn Ctx, args: &[Concept]) -> EvalResult {
     let func = &args[0];
     let arg_list = ctx.eval(&args[1])?;
     let a = arg_list.args();
-    let items: Vec<Concept> = if a.is_empty() { vec![arg_list] } else { a.to_vec() };
+    let items: Vec<Concept> = if a.is_empty() {
+        vec![arg_list]
+    } else {
+        a.to_vec()
+    };
     call(ctx, func, items)
 }
 

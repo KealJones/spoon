@@ -113,24 +113,46 @@ fn a_synthesized_body_satisfies_every_example_it_was_given() {
 #[test]
 fn a_synthesized_body_generalizes_beyond_its_examples() {
     // Examples are evidence of a rule, not the rule. A body that only handles
-    // the inputs it was shown has memorized rather than learned.
+    // the inputs it was shown has memorized rather than learned. Random
+    // holdouts keep a banana-hack from looking like it generalized.
     let (store, reg) = env();
+    let mut rng = 0xA5A5_5A5A_C0DE_BEEFu64;
+    let mut next = || {
+        rng = rng.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = rng;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    };
+    let mut pick = || (next() % 40) as i64 - 19;
+
+    let mut train = Vec::new();
+    while train.len() < 3 {
+        let n = pick();
+        if n != 0 && train.iter().all(|(x, _)| *x != n) {
+            train.push((n, n.saturating_mul(2)));
+        }
+    }
     let s = spec(
         "double",
-        vec![
-            (vec![Concept::int(3)], Concept::int(6)),
-            (vec![Concept::int(5)], Concept::int(10)),
-        ],
+        train
+            .iter()
+            .map(|(n, d)| (vec![Concept::int(*n)], Concept::int(*d)))
+            .collect(),
     );
     let SynthOutcome::Found { body, .. } = synthesize(&s, &store, &reg, SynthBudget::default())
     else {
         panic!("no body found");
     };
-    for (input, expected) in [(21i64, 42i64), (100, 200), (-4, -8)] {
+    for _ in 0..5 {
+        let input = pick();
+        if train.iter().any(|(n, _)| *n == input) {
+            continue;
+        }
         let bound = substitute_positional(&body, &[Concept::int(input)]);
         assert_eq!(
             eval(&store, &reg, &bound).value(),
-            Some(&Concept::int(expected)),
+            Some(&Concept::int(input.saturating_mul(2))),
             "body {body:?} did not generalize to {input}"
         );
     }

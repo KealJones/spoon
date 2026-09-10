@@ -29,11 +29,15 @@
   .turn .meta { opacity: .5; font-size: .8rem; margin-top: .2rem; }
   .turn .learned { font-size: .8rem; margin-top: .2rem; opacity: .85; }
   pre { margin: .2rem 0; white-space: pre-wrap; word-break: break-word; }
-  .split { display: grid; grid-template-columns: 15rem 1fr; gap: 1.5rem; align-items: start; }
+  .split { display: grid; grid-template-columns: 18rem 1fr; gap: 1.5rem; align-items: start; }
   .names { display: flex; flex-direction: column; max-height: 78vh; overflow: auto; }
+  .name-head { display: flex; justify-content: space-between; padding: .25rem .4rem;
+               opacity: .55; font-size: .8rem; font-weight: 600; }
   button.name { font: inherit; text-align: left; background: none; border: 0; color: inherit;
-                padding: .25rem .4rem; cursor: pointer; border-radius: 3px; }
+                padding: .25rem .4rem; cursor: pointer; border-radius: 3px; width: 100%;
+                display: flex; justify-content: space-between; align-items: baseline; gap: .6rem; }
   button.name:hover { background: #8882; }
+  button.name.on { background: #8883; }
   .detail h1 { font-size: 1.15rem; margin: 0 0 .5rem; }
   .detail h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em;
                opacity: .55; margin: 1.2rem 0 .3rem; font-weight: 600; }
@@ -79,13 +83,19 @@
 const view = document.getElementById('view');
 const history = [];
 let tab = location.hash.split('&')[0].slice(1) || 'chat';
+let filterTimer = null;
+let picked = null;
 
 // --- nav ---
 function selectTab(t) {
+  const switching = t !== tab;
   tab = t;
   document.querySelectorAll('nav button').forEach(x =>
     x.classList.toggle('on', x.dataset.tab === t));
-  location.hash = t;
+  if (switching) {
+    clearTimeout(filterTimer);
+    location.hash = t;
+  }
   render();
 }
 document.querySelectorAll('nav button').forEach(b =>
@@ -97,7 +107,7 @@ window.addEventListener('hashchange', () => {
 
 // --- helpers ---
 const get = (url) => fetch(url).then(r => r.json());
-const esc = (s) => String(s).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+const esc = (s) => String(s).replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
 let earsFormat = 'angle-bracket';
 get('/debug/ears-format').then(r => { earsFormat = r.format; updateFormatButton(); });
 
@@ -196,12 +206,85 @@ function renderChat() {
   }).join('');
 }
 
-let picked = null;
+function hashQ() {
+  return new URLSearchParams(location.hash.split('&').slice(1).join('&')).get('q') || '';
+}
+
+function setHashQ(q) {
+  const next = '#' + tab + (q ? '&q=' + encodeURIComponent(q) : '');
+  if (location.hash !== next) window.history.replaceState(null, '', next);
+}
+
+function bindFilter() {
+  const input = document.getElementById('q');
+  if (!input) return;
+  input.oninput = () => {
+    setHashQ(input.value);
+    clearTimeout(filterTimer);
+    filterTimer = setTimeout(refreshList, 150);
+  };
+}
+
+function conceptEntry(n) {
+  return typeof n === 'string' ? { name: n, realizations: 0 } : n;
+}
+
+function paintConceptNames(names) {
+  const el = document.getElementById('names');
+  if (!el) return;
+  const items = (names || []).map(conceptEntry);
+  el.innerHTML = `<div class="name-head"><span>concept</span><span>rz</span></div>` +
+    (items.map(n =>
+      `<button type="button" class="name${n.name === picked ? ' on' : ''}" data-name="${esc(n.name)}">${esc(n.name)}${
+        n.realizations ? `<span class="n">${n.realizations}</span>` : '<span class="n"></span>'
+      }</button>`
+    ).join('') || '<p class="hint">no matches</p>');
+  document.querySelectorAll('button.name').forEach(b =>
+    b.onclick = () => showConcept(b.dataset.name));
+}
+
+async function refreshList() {
+  const q = document.getElementById('q')?.value || '';
+  if (tab === 'concepts') {
+    const d = await get('/debug/concepts?limit=800&q=' + encodeURIComponent(q));
+    paintConceptNames(d.names || []);
+  } else if (tab === 'realizations') {
+    const d = await get('/debug/realizations?limit=500&q=' + encodeURIComponent(q));
+    const summary = document.getElementById('summary');
+    if (summary) {
+      summary.innerHTML = `<div class="stats">${
+        (d.by_source || []).map(s => `<div class="stat"><b>${s.count}</b><span>${esc(s.source)} &middot; ${
+          num(s.mean_success_rate)} rate &middot; ${s.uses} uses</span></div>`).join('')
+      }</div>`;
+    }
+    const list = document.getElementById('filtered');
+    if (list) {
+      list.innerHTML = table(
+        ['name', 'target', 'source', 'kind', 'effect', 'tier', 'score', 'rate', 'uses', 'ok', 'fail'],
+        d.realizations
+          .slice()
+          .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+          .map(r => [r.name, r.target, r.source, r.kind, r.effect, r.tier,
+                     num(r.score), num(r.success_rate), r.uses, r.successes, r.failures]));
+    }
+  }
+}
 
 async function showConcept(name) {
   picked = name;
-  const d = await get('/debug/concept?name=' + encodeURIComponent(name));
+  document.querySelectorAll('button.name').forEach(b =>
+    b.classList.toggle('on', b.dataset.name === name));
   const detail = document.getElementById('detail');
+  if (!detail) return;
+  detail.innerHTML = '<p class="hint">loading...</p>';
+  let d;
+  try {
+    d = await get('/debug/concept?name=' + encodeURIComponent(name));
+  } catch (err) {
+    detail.innerHTML = `<p class="hint">failed: ${esc(err.message)}</p>`;
+    return;
+  }
+  const rz = d.realizations || [];
   const section = (title, body) => body ? `<h2>${title}</h2>${body}` : '';
   const chips = (xs) => xs && xs.length
     ? `<div>${xs.map(x => `<span class="chip">${esc(x)}</span>`).join('')}</div>` : '';
@@ -214,16 +297,16 @@ async function showConcept(name) {
       <span class="chip strong">${esc(d.kind)}</span>
       ${d.tier ? `<span class="chip">${esc(d.tier)}</span>` : ''}
       ${d.source ? `<span class="chip">${esc(d.source)}</span>` : ''}
-      <span class="chip">${d.realization_count} realization${d.realization_count === 1 ? '' : 's'}</span>
-      <span class="chip">${d.uses} use${d.uses === 1 ? '' : 's'}</span>
+      <span class="chip">${d.realization_count || rz.length} realization${(d.realization_count || rz.length) === 1 ? '' : 's'}</span>
+      <span class="chip">${d.uses || 0} use${d.uses === 1 ? '' : 's'}</span>
       ${d.success_rate != null ? `<span class="chip">${num(d.success_rate)} success</span>` : ''}
     </div>
     ${d.note ? `<p class="note">${esc(d.note)}</p>` : ''}
     ${section('surface forms', chips(d.surface_forms))}
     ${section('declared properties', lines(d.properties))}
-    ${section('how it can be carried out', d.realizations.length ? `<table>
+    ${section('how it can be carried out', rz.length ? `<table>
       <thead><tr><th>name</th><th>kind</th><th>source</th><th>effect</th><th>score</th><th>uses</th><th>ok</th><th>fail</th></tr></thead>
-      <tbody>${d.realizations.map(r => `<tr>
+      <tbody>${rz.map(r => `<tr>
         <td>${esc(r.name)}</td><td>${esc(r.kind)}</td><td>${esc(r.source)}</td>
         <td>${esc(r.effect)}</td><td class="n">${num(r.score)}</td>
         <td class="n">${r.uses}</td><td class="n">${r.successes}</td><td class="n">${r.failures}</td>
@@ -231,7 +314,7 @@ async function showConcept(name) {
       </tbody></table>` : '<p class="hint">nothing realizes it, so it is data</p>')}
     ${section('facts it heads', lines(d.facts))}
     ${section('where it appears', lines(d.appears_in))}
-    <p class="hint">${esc(d.id)}</p>`;
+    <p class="hint">${esc(d.id || '')}</p>`;
 }
 
 function renderEpisodeTimeline(ep) {
@@ -336,31 +419,22 @@ async function render() {
     }</div>`;
     return;
   }
-  const q = new URLSearchParams(location.hash.split('&').slice(1).join('&')).get('q') || '';
-  const filter = `<input id="q" placeholder="filter" value="${esc(q)}">`;
+  const q = hashQ();
   if (tab === 'concepts') {
-    const d = await get('/debug/concepts?limit=800&q=' + encodeURIComponent(q));
-    view.innerHTML = filter +
-      `<div class="split"><div class="names">${
-        d.names.map(n => `<button class="name" data-name="${esc(n)}">${esc(n)}</button>`).join('')
-      }</div><div id="detail" class="detail"><p class="hint">pick a concept</p></div></div>`;
-    document.querySelectorAll('button.name').forEach(b =>
-      b.onclick = () => showConcept(b.dataset.name));
+    view.innerHTML = `<input id="q" placeholder="filter" value="${esc(q)}">` +
+      `<div class="split"><div id="names" class="names"></div><div id="detail" class="detail"><p class="hint">pick a concept</p></div></div>`;
+    bindFilter();
+    await refreshList();
     if (picked) showConcept(picked);
-  } else if (tab === 'realizations') {
-    const d = await get('/debug/realizations?limit=500&q=' + encodeURIComponent(q));
-    const summary = `<div class="stats">${
-      (d.by_source || []).map(s => `<div class="stat"><b>${s.count}</b><span>${esc(s.source)} &middot; ${
-        num(s.mean_success_rate)} rate &middot; ${s.uses} uses</span></div>`).join('')
-    }</div>`;
-    view.innerHTML = summary + filter + table(
-      ['name', 'target', 'source', 'kind', 'effect', 'tier', 'score', 'rate', 'uses', 'ok', 'fail'],
-      d.realizations
-        .slice()
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-        .map(r => [r.name, r.target, r.source, r.kind, r.effect, r.tier,
-                   num(r.score), num(r.success_rate), r.uses, r.successes, r.failures]));
-  } else if (tab === 'episodes') {
+    return;
+  }
+  if (tab === 'realizations') {
+    view.innerHTML = `<div id="summary"></div><input id="q" placeholder="filter" value="${esc(q)}"><div id="filtered"></div>`;
+    bindFilter();
+    await refreshList();
+    return;
+  }
+  if (tab === 'episodes') {
     const d = await get('/debug/episodes?limit=100');
     view.innerHTML = `<table><thead><tr><th>#</th><th>said</th><th>replied</th><th>ears</th><th>gaps</th><th>ms</th></tr></thead><tbody>${
       d.episodes.map(e => {
@@ -382,10 +456,6 @@ async function render() {
         tr.after(detail);
       };
     });
-  }
-  const input = document.getElementById('q');
-  if (input) {
-    input.oninput = () => { location.hash = tab + '&q=' + encodeURIComponent(input.value); render(); };
   }
 }
 
